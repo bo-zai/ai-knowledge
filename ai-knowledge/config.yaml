@@ -1,0 +1,24 @@
+generation:
+  language: zh
+  audience: ai
+  detail_level: detailed
+  include_diagrams: true
+  include_examples: true
+  decision_first: true
+  note: "这是一个面向 AI 读取需求和编写代码的知识树样例，不是项目百科。"
+
+structure:
+  reference: "D:/workspace/CoPaw/.mini-wiki"
+  adapted_for: "AI requirement clarification and coding"
+  output_root: "ai-knowledge"
+  top_level_docs:
+    - index.md
+    - architecture.md
+    - getting-started.md
+    - doc-map.md
+
+principles:
+  - "先边界，后方案"
+  - "先排除错误路径，再定位正确路径"
+  - "先判断外部系统，再判断本地落点"
+  - "先判断事实来源，再决定本地是否可定义"

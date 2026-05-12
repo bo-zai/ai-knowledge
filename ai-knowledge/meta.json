@@ -1,0 +1,32 @@
+{
+  "generator_version": "example-1.0.0",
+  "quality_standard": "ai-oriented-knowledge-tree",
+  "generated_at": "2026-05-12T00:00:00Z",
+  "project": {
+    "name": "knowledge",
+    "type": "documentation-example",
+    "description": "AI-oriented domain knowledge tree sample using a stable wiki-style navigation structure"
+  },
+  "modules": {
+    "wiki/index.md": {
+      "type": "homepage",
+      "audience": ["ai", "engineer"],
+      "purpose": "entry"
+    },
+    "wiki/architecture.md": {
+      "type": "architecture",
+      "audience": ["ai", "engineer"],
+      "purpose": "knowledge-structure"
+    },
+    "wiki/doc-map.md": {
+      "type": "routing-map",
+      "audience": ["ai", "engineer"],
+      "purpose": "question-to-document"
+    },
+    "wiki/getting-started.md": {
+      "type": "usage-guide",
+      "audience": ["ai", "engineer"],
+      "purpose": "read-order"
+    }
+  }
+}
