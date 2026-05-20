@@ -103,6 +103,7 @@ function callsMapperMethod(content: string, mapperClass: string, methodId: strin
   const mapperVar = toCamelCase(mapperClass);
 
   // Match patterns like: mapper.methodId or authMapper.getMenuAuthList
+  // Also match just .methodId() for more lenient matching
   const patterns = [
     `${mapperClass}.${methodId}`,
     `${mapperVar}.${methodId}`,
@@ -110,10 +111,20 @@ function callsMapperMethod(content: string, mapperClass: string, methodId: strin
   ];
 
   for (const pattern of patterns) {
-    const regex = new RegExp(pattern.replace(/\./g, '\\.'), 'g');
-    if (regex.test(content)) {
-      return true;
+    try {
+      const regex = new RegExp(pattern.replace(/\./g, '\\.'), 'g');
+      if (regex.test(content)) {
+        return true;
+      }
+    } catch {
+      // Invalid regex pattern, skip
+      continue;
     }
+  }
+
+  // Fallback: simple string search for methodId
+  if (content.includes(`.${methodId}(`)) {
+    return true;
   }
 
   return false;
