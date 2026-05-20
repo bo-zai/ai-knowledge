@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
+      - id: trailing-whitespace
+  - repo: local
+    hooks:
+      - id: typecheck
+        name: TypeScript type check
+        entry: npm run typecheck
+        language: system
+        pass_filenames: false
+      - id: test
+        name: Vitest
+        entry: npm test
+        language: system
+        pass_filenames: false
