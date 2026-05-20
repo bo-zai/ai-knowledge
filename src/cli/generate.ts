@@ -1,3 +1,4 @@
+import type OpenAI from 'openai';
 import { logger, setLogLevel } from '../shared/logger.js';
 import { getEnvVar } from '../config/env.js';
 import { resolveModelConfig, createOpenAiClient } from '../config/model-config.js';
@@ -111,7 +112,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
 
   // 4. Generate objects
-  const client = createOpenAiClient(modelConfig);
+  const client = await createOpenAiClient(modelConfig);
   const generatedObjects: Array<{ id: string; type: string; content: string; frontmatter: Record<string, unknown> }> = [];
   const failures: Array<{ id: string; type: string; error: string }> = [];
   const warnings: Array<{ id: string; message: string }> = [];
@@ -198,7 +199,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 async function generateObjectForSlice(
   slice: { id: string; kind: string; title: string },
   evidence: unknown,
-  client: ReturnType<typeof createOpenAiClient>,
+  client: OpenAI,
   model: string,
   repoPath: string,
 ): Promise<{ id: string; type: string; content: string; frontmatter: Record<string, unknown> } | null> {

@@ -14,10 +14,9 @@ export function resolveModelConfig(input: Partial<ModelConfig>): ModelConfig {
   };
 }
 
-export function createOpenAiClient(config: ModelConfig): OpenAI {
-  // 动态导入避免副作用
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const OpenAI = require('openai').default;
+export async function createOpenAiClient(config: ModelConfig): Promise<OpenAI> {
+  const mod = await import('openai');
+  const OpenAI = mod.default;
   return new OpenAI({
     baseURL: config.baseUrl,
     apiKey: config.apiKey,
