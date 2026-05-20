@@ -10,9 +10,12 @@
 
 import {
   parseMapperFile,
-  type MapperInfo,
-  type MapperStatement,
-} from './mapper-parser.js';
+  resolveStatementSql,
+  extractTablesFromSql,
+  type MapperDocument,
+  type StatementDraft,
+  type ResolvedStatement,
+} from './index.js';
 import type { DbTableContext } from '../query/index-service.js';
 
 export interface SqlLineageEdge {
@@ -32,17 +35,20 @@ export interface MapperMethodBinding {
   methodId: string;
   javaClass: string;
   javaMethod: string;
-  statements: MapperStatement[];
+  statements: ResolvedStatement[];
 }
 
 /**
- * Build lineage edges from mapper info.
+ * Build lineage edges from mapper document.
  */
-export function buildLineageEdges(mapper: MapperInfo): SqlLineageEdge[] {
+export function buildLineageEdges(mapper: MapperDocument): SqlLineageEdge[] {
   const edges: SqlLineageEdge[] = [];
   const namespace = mapper.namespace;
 
-  for (const stmt of mapper.statements) {
+  // Resolve all statements first
+  const resolvedStatements = mapper.statements.map((stmt) => resolveStatementSql(stmt, mapper));
+
+  for (const stmt of resolvedStatements) {
     // Create method-to-statement edge
     edges.push({
       type: 'QUERIES',
@@ -56,8 +62,8 @@ export function buildLineageEdges(mapper: MapperInfo): SqlLineageEdge[] {
       },
     });
 
-    // Create statement-to-table edges
-    const tables = extractTablesFromStatement(stmt);
+    // Create statement-to-table edges (statement-scoped)
+    const tables = extractTablesFromSql(stmt.sql);
     for (const table of tables) {
       edges.push({
         type: 'ACCESSES',
@@ -77,97 +83,19 @@ export function buildLineageEdges(mapper: MapperInfo): SqlLineageEdge[] {
 }
 
 /**
- * Extract table names from a SQL statement.
- */
-function extractTablesFromStatement(stmt: MapperStatement): string[] {
-  const tables: string[] = [];
-  const sql = stmt.sql;
-
-  // Match FROM table
-  const fromRegex = /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi;
-  const fromMatches = sql.matchAll(fromRegex);
-  for (const match of fromMatches) {
-    const tableName = match[0].replace(/FROM\s+/i, '').split('.')[0];
-    if (tableName && !isSqlKeyword(tableName)) {
-      tables.push(tableName.toLowerCase());
-    }
-  }
-
-  // Match JOIN table
-  const joinRegex = /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi;
-  const joinMatches = sql.matchAll(joinRegex);
-  for (const match of joinMatches) {
-    const tableName = match[0].replace(/JOIN\s+/i, '').split('.')[0];
-    if (tableName && !isSqlKeyword(tableName)) {
-      tables.push(tableName.toLowerCase());
-    }
-  }
-
-  // Match INSERT INTO table
-  const insertRegex = /INSERT\s+INTO\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi;
-  const insertMatches = sql.matchAll(insertRegex);
-  for (const match of insertMatches) {
-    const tableName = match[0].replace(/INSERT\s+INTO\s+/i, '').split('.')[0];
-    if (tableName && !isSqlKeyword(tableName)) {
-      tables.push(tableName.toLowerCase());
-    }
-  }
-
-  // Match UPDATE table
-  const updateRegex = /UPDATE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi;
-  const updateMatches = sql.matchAll(updateRegex);
-  for (const match of updateMatches) {
-    const tableName = match[0].replace(/UPDATE\s+/i, '').split('.')[0];
-    if (tableName && !isSqlKeyword(tableName)) {
-      tables.push(tableName.toLowerCase());
-    }
-  }
-
-  // Match DELETE FROM table
-  const deleteRegex = /DELETE\s+FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi;
-  const deleteMatches = sql.matchAll(deleteRegex);
-  for (const match of deleteMatches) {
-    const tableName = match[0].replace(/DELETE\s+FROM\s+/i, '').split('.')[0];
-    if (tableName && !isSqlKeyword(tableName)) {
-      tables.push(tableName.toLowerCase());
-    }
-  }
-
-  return [...new Set(tables)];
-}
-
-/**
- * Check if a word is a SQL keyword.
- */
-function isSqlKeyword(word: string): boolean {
-  const keywords = [
-    'select', 'from', 'where', 'and', 'or', 'not', 'in', 'like',
-    'between', 'exists', 'null', 'true', 'false', 'case', 'when',
-    'then', 'else', 'end', 'as', 'on', 'left', 'right', 'inner',
-    'outer', 'full', 'cross', 'natural', 'using', 'group', 'order',
-    'having', 'limit', 'offset', 'union', 'except', 'intersect',
-    'distinct', 'all', 'any', 'some', 'count', 'sum', 'avg', 'min',
-    'max', 'values', 'set', 'into', 'default', 'primary', 'key',
-    'foreign', 'references', 'constraint', 'unique', 'index', 'table',
-    'create', 'alter', 'drop', 'truncate', 'insert', 'update', 'delete',
-    'with', 'recursive', 'temporary', 'if', 'dual', 'sysdate', 'current',
-    'timestamp', 'date', 'time', 'year', 'month', 'day', 'hour', 'minute',
-    'second', 'interval', 'cast', 'convert', 'coalesce', 'decode', 'nvl',
-  ];
-  return keywords.includes(word.toLowerCase());
-}
-
-/**
  * Build mapper method bindings for Java-to-SQL linkage.
  */
-export function buildMapperMethodBindings(mapper: MapperInfo): MapperMethodBinding[] {
+export function buildMapperMethodBindings(mapper: MapperDocument): MapperMethodBinding[] {
   const bindings: MapperMethodBinding[] = [];
   const namespace = mapper.namespace;
 
   // Parse namespace to get Java class name
   const javaClass = namespace;
 
-  for (const stmt of mapper.statements) {
+  // Resolve all statements
+  const resolvedStatements = mapper.statements.map((stmt) => resolveStatementSql(stmt, mapper));
+
+  for (const stmt of resolvedStatements) {
     bindings.push({
       namespace,
       methodId: stmt.id,
@@ -242,4 +170,11 @@ export function enrichDbContextWithLineage(
     ...context,
     queries: lineage.statements.map((s) => s.replace('sql:', '')),
   };
+}
+
+/**
+ * Extract tables from a resolved statement (statement-scoped).
+ */
+export function extractTablesFromResolvedStatement(stmt: ResolvedStatement): string[] {
+  return extractTablesFromSql(stmt.sql);
 }

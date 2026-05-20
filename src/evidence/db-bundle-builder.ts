@@ -3,13 +3,16 @@
  *
  * Builds comprehensive evidence bundles for database tables,
  * integrating mapper bindings, SQL statements, and related code.
+ * Uses statement-scoped table extraction (not mapper-level).
  */
 
 import {
-  type MapperInfo,
-  type MapperStatement,
+  type MapperDocument,
+  type ResolvedStatement,
   parseAllMapperFiles,
-  buildTableMapperMap,
+  resolveStatementSql,
+  extractTablesFromSql,
+  findResultMap,
 } from '../mybatis/index.js';
 import {
   buildSqlLineage,
@@ -43,6 +46,8 @@ export interface MapperBinding {
   methodId: string;
   statementType: 'select' | 'insert' | 'update' | 'delete';
   mapperFile: string;
+  resultType?: string;
+  resultMap?: string;
 }
 
 export interface SqlStatementInfo {
@@ -50,6 +55,7 @@ export interface SqlStatementInfo {
   sql: string;
   statementType: string;
   tables: string[];
+  fragmentRefs: string[];
 }
 
 export interface RelatedCodeInfo {
@@ -73,6 +79,7 @@ export interface GapInfo {
 
 /**
  * Build a comprehensive DB table evidence bundle.
+ * Uses statement-scoped table extraction.
  */
 export async function buildDbTableBundle(
   repoPath: string,
@@ -80,7 +87,6 @@ export async function buildDbTableBundle(
 ): Promise<DbTableEvidenceBundle> {
   // Parse all mapper files
   const mappers = await parseAllMapperFiles(repoPath);
-  const tableMap = await buildTableMapperMap(repoPath);
 
   // Build SQL lineage
   const mapperFiles = mappers.map((m) => m.filePath);
@@ -89,37 +95,32 @@ export async function buildDbTableBundle(
   // Get table lineage
   const tableLineage = getTableLineage(tableName, lineage.edges);
 
-  // Get related mappers
-  const relatedMappers = tableMap.get(tableName.toLowerCase()) || [];
+  // Find statements that actually touch this table (statement-scoped)
+  const tableMappers = findTableMappers(mappers, tableName.toLowerCase());
 
-  // Build mapper bindings
+  // Build mapper bindings (statement-scoped)
   const mapperBindings: MapperBinding[] = [];
-  for (const mapper of relatedMappers) {
-    for (const stmt of mapper.statements) {
-      if (mapper.referencedTables.includes(tableName.toLowerCase())) {
-        mapperBindings.push({
-          namespace: mapper.namespace,
-          methodId: stmt.id,
-          statementType: stmt.type as 'select' | 'insert' | 'update' | 'delete',
-          mapperFile: mapper.filePath,
-        });
-      }
-    }
+  for (const { mapper, resolved } of tableMappers) {
+    mapperBindings.push({
+      namespace: mapper.namespace,
+      methodId: resolved.id,
+      statementType: resolved.type as 'select' | 'insert' | 'update' | 'delete',
+      mapperFile: mapper.filePath,
+      resultType: resolved.resultType,
+      resultMap: resolved.resultMap,
+    });
   }
 
-  // Build SQL statements
+  // Build SQL statements (statement-scoped)
   const sqlStatements: SqlStatementInfo[] = [];
-  for (const mapper of relatedMappers) {
-    for (const stmt of mapper.statements) {
-      if (stmt.sql && mapper.referencedTables.includes(tableName.toLowerCase())) {
-        sqlStatements.push({
-          id: `${mapper.namespace}.${stmt.id}`,
-          sql: stmt.sql,
-          statementType: stmt.type,
-          tables: mapper.referencedTables,
-        });
-      }
-    }
+  for (const { mapper, resolved } of tableMappers) {
+    sqlStatements.push({
+      id: `${mapper.namespace}.${resolved.id}`,
+      sql: resolved.sql,
+      statementType: resolved.type,
+      tables: extractTablesFromSql(resolved.sql),
+      fragmentRefs: resolved.fragmentRefs,
+    });
   }
 
   // Build related code (callers)
@@ -135,9 +136,9 @@ export async function buildDbTableBundle(
 
   // Build field candidates (from SQL statements)
   const fieldCandidates: FieldCandidate[] = [];
-  for (const stmt of sqlStatements) {
+  for (const stmtInfo of sqlStatements) {
     // Extract field names from SQL
-    const fields = extractFieldsFromSql(stmt.sql);
+    const fields = extractFieldsFromSql(stmtInfo.sql);
     for (const field of fields) {
       if (!fieldCandidates.find((f) => f.name === field)) {
         fieldCandidates.push({
@@ -173,20 +174,59 @@ export async function buildDbTableBundle(
 }
 
 /**
+ * Find all mapper/statement pairs that touch a specific table.
+ * Statement-scoped: only includes statements that actually reference the table.
+ * Returns resolved statements ready for use.
+ */
+function findTableMappers(
+  mappers: MapperDocument[],
+  tableName: string
+): Array<{ mapper: MapperDocument; resolved: ResolvedStatement }> {
+  const result: Array<{ mapper: MapperDocument; resolved: ResolvedStatement }> = [];
+
+  for (const mapper of mappers) {
+    for (const draft of mapper.statements) {
+      const resolved = resolveStatementSql(draft, mapper);
+      const tables = extractTablesFromSql(resolved.sql);
+
+      // Only include if this specific statement touches the target table
+      if (tables.includes(tableName)) {
+        result.push({ mapper, resolved });
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
  * Extract field names from SQL statement.
  */
 function extractFieldsFromSql(sql: string): string[] {
   const fields: string[] = [];
 
-  // Match SELECT field
-  const selectRegex = /SELECT\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s+/gi;
+  // Match SELECT fields (handle aliases)
+  const selectRegex = /SELECT\s+([\w\.\s,]+)\s+FROM/gi;
   const selectMatches = sql.matchAll(selectRegex);
   for (const match of selectMatches) {
     const fieldList = match[1];
-    const fieldNames = fieldList.split(',').map((f) => f.trim().split('.').pop()!);
-    for (const f of fieldNames) {
-      if (f && !isSqlKeyword(f) && !f.startsWith('?')) {
-        fields.push(f);
+    // Split by comma and extract field names
+    const parts = fieldList.split(',');
+    for (const part of parts) {
+      const trimmed = part.trim();
+      // Handle "field alias" or "table.field" patterns
+      const tokens = trimmed.split(/\s+/);
+      // Take the first token (the actual field)
+      const field = tokens[0].split('.').pop();
+      if (field && !isSqlKeyword(field) && !field.startsWith('?') && field !== '*') {
+        fields.push(field);
+      }
+      // Also capture alias if present
+      if (tokens.length > 1) {
+        const alias = tokens[tokens.length - 1];
+        if (alias && !isSqlKeyword(alias) && !alias.startsWith('?')) {
+          // Alias gives us semantic hint but not DB field
+        }
       }
     }
   }
@@ -214,6 +254,17 @@ function extractFieldsFromSql(sql: string): string[] {
     }
   }
 
+  // Match WHERE fields (field = value)
+  const whereRegex = /WHERE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?\s*=/gi;
+  const whereMatches = sql.matchAll(whereRegex);
+  for (const match of whereMatches) {
+    const fieldPart = match[0].replace(/WHERE\s+/i, '').split('=')[0].trim();
+    const field = fieldPart.split('.').pop();
+    if (field && !isSqlKeyword(field)) {
+      fields.push(field);
+    }
+  }
+
   return [...new Set(fields)];
 }
 
@@ -227,6 +278,8 @@ function isSqlKeyword(word: string): boolean {
     'then', 'else', 'end', 'as', 'on', 'left', 'right', 'inner',
     'distinct', 'all', 'count', 'sum', 'avg', 'min', 'max',
     'values', 'set', 'into', 'default', 'primary', 'key',
+    'order', 'group', 'having', 'limit', 'offset', 'by', 'desc', 'asc',
+    'join', 'outer', 'full', 'cross', 'natural', 'using',
   ];
   return keywords.includes(word.toLowerCase());
 }
@@ -237,17 +290,23 @@ function isSqlKeyword(word: string): boolean {
 export async function buildAllDbTableBundles(repoPath: string): Promise<DbTableEvidenceBundle[]> {
   const bundles: DbTableEvidenceBundle[] = [];
 
-  // Get all tables from mappers
+  // Parse all mappers
   const mappers = await parseAllMapperFiles(repoPath);
-  const allTables: string[] = [];
+
+  // Collect all tables from all statements (statement-scoped)
+  const allTables: Set<string> = new Set();
 
   for (const mapper of mappers) {
-    allTables.push(...mapper.referencedTables);
+    for (const draft of mapper.statements) {
+      const resolved = resolveStatementSql(draft, mapper);
+      const tables = extractTablesFromSql(resolved.sql);
+      for (const table of tables) {
+        allTables.add(table);
+      }
+    }
   }
 
-  const uniqueTables = [...new Set(allTables)];
-
-  for (const table of uniqueTables) {
+  for (const table of allTables) {
     const bundle = await buildDbTableBundle(repoPath, table);
     bundles.push(bundle);
   }

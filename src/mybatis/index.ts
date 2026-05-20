@@ -37,6 +37,7 @@ export {
   findMapperFiles,
   parseAllMapperFiles,
   buildTableMapperMap,
+  extractTablesFromSql,
   type MapperInfo,
   type MapperStatement,
 } from './mapper-parser.js';
@@ -50,3 +51,21 @@ export {
   type SqlLineageEdge,
   type MapperMethodBinding as SqlLineageMapperMethodBinding,
 } from './sql-lineage.js';
+
+// Include resolver
+export {
+  resolveStatementSql,
+  resolveAllStatements,
+  getFragmentById,
+} from './include-resolver.js';
+
+// ResultMap resolver
+export {
+  findResultMap,
+  getResultMapColumns,
+  getResultMapProperties,
+  findPropertyForColumn,
+  findColumnForProperty,
+  getStatementResultMapping,
+  buildResultMapLookup,
+} from './result-map-resolver.js';

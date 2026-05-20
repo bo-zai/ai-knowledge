@@ -112,17 +112,26 @@ export interface DbTableContext {
 
 /**
  * Find mapper.xml files that reference a table.
+ * Uses statement-scoped table extraction.
  */
 export async function findMapperFilesForTable(repoPath: string, tableName: string): Promise<string[]> {
-  // Use MyBatis parser for mapper discovery instead of Cypher regex
-  const { findMapperFiles, parseMapperFile } = await import('../mybatis/index.js');
+  // Use MyBatis parser for mapper discovery with statement-scoped extraction
+  const { findMapperFiles, parseMapperFile, resolveStatementSql, extractTablesFromSql } = await import('../mybatis/index.js');
   const mapperFiles = await findMapperFiles(repoPath);
   const matchingFiles: string[] = [];
 
   for (const mapperFile of mapperFiles) {
-    const info = await parseMapperFile(mapperFile);
-    if (info && info.referencedTables.includes(tableName)) {
-      matchingFiles.push(mapperFile);
+    const mapper = await parseMapperFile(mapperFile);
+    if (mapper) {
+      // Check each statement individually (statement-scoped)
+      for (const stmt of mapper.statements) {
+        const resolved = resolveStatementSql(stmt, mapper);
+        const tables = extractTablesFromSql(resolved.sql);
+        if (tables.includes(tableName.toLowerCase())) {
+          matchingFiles.push(mapperFile);
+          break; // Don't add same file multiple times
+        }
+      }
     }
   }
 
