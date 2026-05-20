@@ -1,3 +1,6 @@
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
 type DbFieldSource = 'comment' | 'inferred';
 type DbSchemaSourceKind = 'ddl' | 'migration' | 'orm' | 'sql' | 'inferred';
 
@@ -15,6 +18,18 @@ interface DbSchemaSource {
   kind: DbSchemaSourceKind;
   file: string;
   priority: number;
+}
+
+export interface DiscoveredTableSchema {
+  tableName: string;
+  schemaName: string;
+  sourceKind: DbSchemaSourceKind;
+  sourceFile: string;
+  fields: DbFieldInput[];
+  primaryKey: string[];
+  indexes: string[];
+  foreignKeys: Array<{ field: string; targetTable: string; targetField: string }>;
+  gaps: Array<{ id: string; kind: string; question: string; reason: string }>;
 }
 
 // Source priority: DDL > migration > ORM > SQL > inferred
@@ -278,4 +293,203 @@ export function buildDbEvidence(input: {
     facts,
     fields: mergeDbFieldSources(input.fields),
   };
+}
+
+export function extractMapperXmlPathsFromQueryOutput(queryOutput: string): string[] {
+  const matches = queryOutput.match(/[A-Za-z]:[\\/][^\r\n]*?Mapper\.xml|[\\/][^\r\n]*?Mapper\.xml/gi) ?? [];
+  return [...new Set(matches.map((match) => match.trim()))];
+}
+
+export async function discoverTablesFromMapperFiles(
+  mapperFilePaths: string[],
+): Promise<DiscoveredTableSchema[]> {
+  const tableMap = new Map<string, DiscoveredTableSchema>();
+
+  for (const mapperFilePath of mapperFilePaths) {
+    const content = await readFile(mapperFilePath, 'utf8');
+    const discoveredTables = extractTablesFromMapperXml(content);
+
+    for (const discoveredTable of discoveredTables) {
+      const existing = tableMap.get(discoveredTable.tableName);
+      if (!existing) {
+        tableMap.set(discoveredTable.tableName, {
+          ...discoveredTable,
+          sourceFile: mapperFilePath,
+        });
+        continue;
+      }
+
+      const mergedFields = mergeDbFieldSources([...existing.fields, ...discoveredTable.fields]);
+      tableMap.set(discoveredTable.tableName, {
+        ...existing,
+        fields: mergedFields,
+        primaryKey: [...new Set([...existing.primaryKey, ...discoveredTable.primaryKey])],
+        foreignKeys: [...existing.foreignKeys, ...discoveredTable.foreignKeys],
+        gaps: [...existing.gaps, ...discoveredTable.gaps],
+      });
+    }
+  }
+
+  return [...tableMap.values()];
+}
+
+export async function findMapperXmlFiles(rootPath: string): Promise<string[]> {
+  const entries = await readdir(rootPath, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = join(rootPath, entry.name);
+
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') {
+        continue;
+      }
+      files.push(...(await findMapperXmlFiles(fullPath)));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.toLowerCase().endsWith('mapper.xml')) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function extractTablesFromMapperXml(content: string): Array<Omit<DiscoveredTableSchema, 'sourceFile'>> {
+  const statements = normalizeMapperSqlBlocks(content);
+  const byTable = new Map<string, Omit<DiscoveredTableSchema, 'sourceFile'>>();
+
+  for (const statement of statements) {
+    const tableNames = extractTableNamesFromStatement(statement);
+    const fieldNames = extractFieldNamesFromStatement(statement);
+
+    for (const tableName of tableNames) {
+      const existing = byTable.get(tableName);
+      const inferredFields = fieldNames.map((fieldName) => ({
+        name: fieldName,
+        type: 'unknown',
+        nullable: true,
+        default: null,
+        description_zh: `${fieldName} 字段`,
+        description_source: 'inferred' as const,
+        constraints: [],
+      }));
+
+      if (!existing) {
+        byTable.set(tableName, {
+          tableName,
+          schemaName: 'public',
+          sourceKind: 'sql',
+          fields: inferredFields,
+          primaryKey: [],
+          indexes: [],
+          foreignKeys: [],
+          gaps: inferredFields.length === 0
+            ? [{
+                id: `G-${tableName}-FIELDS`,
+                kind: 'missing-field-extraction',
+                question: `无法从 mapper.xml 的 SQL 中提取 ${tableName} 的字段`,
+                reason: 'SQL 语句未包含可稳定解析的字段列表',
+              }]
+            : [],
+        });
+        continue;
+      }
+
+      existing.fields = mergeDbFieldSources([...existing.fields, ...inferredFields]);
+    }
+  }
+
+  return [...byTable.values()];
+}
+
+function normalizeMapperSqlBlocks(content: string): string[] {
+  const sqlBlocks = content.match(/<(select|insert|update|delete)\b[\s\S]*?<\/\1>/gi) ?? [];
+  return sqlBlocks.map((block) =>
+    block
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/<!\[CDATA\[|\]\]>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
+}
+
+function extractTableNamesFromStatement(statement: string): string[] {
+  const names = new Set<string>();
+  const patterns = [
+    /\bfrom\s+([a-zA-Z0-9_]+)/gi,
+    /\bjoin\s+([a-zA-Z0-9_]+)/gi,
+    /\binsert\s+into\s+([a-zA-Z0-9_]+)/gi,
+    /\bupdate\s+([a-zA-Z0-9_]+)/gi,
+    /\bdelete\s+from\s+([a-zA-Z0-9_]+)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of statement.matchAll(pattern)) {
+      if (match[1]) {
+        names.add(match[1]);
+      }
+    }
+  }
+
+  return [...names];
+}
+
+function extractFieldNamesFromStatement(statement: string): string[] {
+  const names = new Set<string>();
+
+  const selectMatch = statement.match(/\bselect\s+(.+?)\s+from\b/i);
+  if (selectMatch?.[1]) {
+    for (const token of selectMatch[1].split(',')) {
+      const normalized = normalizeSqlIdentifier(token);
+      if (normalized) {
+        names.add(normalized);
+      }
+    }
+  }
+
+  const insertMatch = statement.match(/\binsert\s+into\s+[a-zA-Z0-9_]+\s*\((.+?)\)\s*values\b/i);
+  if (insertMatch?.[1]) {
+    for (const token of insertMatch[1].split(',')) {
+      const normalized = normalizeSqlIdentifier(token);
+      if (normalized) {
+        names.add(normalized);
+      }
+    }
+  }
+
+  const updateMatch = statement.match(/\bset\s+(.+?)(?:\s+where\b|$)/i);
+  if (updateMatch?.[1]) {
+    for (const assignment of updateMatch[1].split(',')) {
+      const [fieldName] = assignment.split('=');
+      const normalized = normalizeSqlIdentifier(fieldName);
+      if (normalized) {
+        names.add(normalized);
+      }
+    }
+  }
+
+  return [...names];
+}
+
+function normalizeSqlIdentifier(token: string | undefined): string | null {
+  if (!token) {
+    return null;
+  }
+
+  const cleaned = token
+    .trim()
+    .replace(/`/g, '')
+    .replace(/"/g, '')
+    .replace(/\bas\b.*$/i, '')
+    .split('.')
+    .pop()
+    ?.trim();
+
+  if (!cleaned || cleaned === '*' || cleaned.startsWith('#{') || cleaned.startsWith('${')) {
+    return null;
+  }
+
+  return cleaned.replace(/[^a-zA-Z0-9_]/g, '');
 }
