@@ -1,4 +1,5 @@
 import type { SliceEvidenceBundle } from './types.js';
+import { getRepoBasename } from '../shared/path-utils.js';
 
 export function buildRouteEvidence(input: {
   route: string;
@@ -51,7 +52,7 @@ export function buildRouteEvidence(input: {
     symbols: [
       {
         id: `S-${input.route}-handler`,
-        name: input.handler_file.split('/').pop() ?? input.handler_file,
+        name: getRepoBasename(input.handler_file),
         kind: 'function',
         file: input.handler_file,
         role: 'handler',

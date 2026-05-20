@@ -25,6 +25,7 @@ import { buildVerPrompt } from '../generation/object-generators/ver-generator.js
 import { dbObjectSchema } from '../schemas/db.js';
 import { conObjectSchema } from '../schemas/contract.js';
 import { generateObjectId } from '../shared/ids.js';
+import { getRepoBasename } from '../shared/path-utils.js';
 import YAML from 'yaml';
 
 interface GenerateOptions {
@@ -93,7 +94,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // 3. Build evidence
   const repoEvidence = buildRepoEvidenceBundle({
     repoPath,
-    repoName: repoPath.split('/').pop() ?? 'repo',
+    repoName: getRepoBasename(repoPath),
   });
 
   // 4. Generate objects
@@ -125,7 +126,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // 5. Build manifest and catalog
   const generatedAt = new Date().toISOString();
   const manifest = buildManifest({
-    repoId: repoPath.split('/').pop() ?? 'unknown',
+    repoId: getRepoBasename(repoPath),
     repoRoot: repoPath,
     generatedAt,
     gitnexusVersion: '1.0.0',
@@ -223,7 +224,7 @@ async function generateObjectForSlice(
     status: 'fact',
     maturity: 'bootstrap',
     scope: slice.id,
-    repo: repoPath.split('/').pop() ?? 'unknown',
+    repo: getRepoBasename(repoPath),
     slice_ids: [slice.id],
     evidence_primary: [slice.id],
     evidence_secondary: [],
