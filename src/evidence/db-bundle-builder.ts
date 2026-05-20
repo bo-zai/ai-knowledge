@@ -69,6 +69,9 @@ export interface FieldCandidate {
   name: string;
   type?: string;
   source: 'mapper' | 'code' | 'inferred';
+  clauseType?: 'select' | 'insert' | 'update' | 'where' | 'join';
+  sqlAlias?: string;
+  tablePrefix?: string;
 }
 
 export interface GapInfo {
@@ -200,13 +203,21 @@ function findTableMappers(
 }
 
 /**
- * Extract field names from SQL statement.
+ * Extract field names from SQL statement with detailed info.
  */
 function extractFieldsFromSql(sql: string): string[] {
-  const fields: string[] = [];
+  const detailedFields = extractDetailedFieldsFromSql(sql);
+  return detailedFields.map((f) => f.name);
+}
 
-  // Match SELECT fields (handle aliases)
-  const selectRegex = /SELECT\s+([\w\.\s,]+)\s+FROM/gi;
+/**
+ * Extract detailed field info from SQL statement.
+ */
+function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
+  const fields: FieldCandidate[] = [];
+
+  // Match SELECT fields (handle aliases and table.field patterns)
+  const selectRegex = /SELECT\s+([\w\.\s,\(\)]+?)\s+FROM/gi;
   const selectMatches = sql.matchAll(selectRegex);
   for (const match of selectMatches) {
     const fieldList = match[1];
@@ -214,20 +225,50 @@ function extractFieldsFromSql(sql: string): string[] {
     const parts = fieldList.split(',');
     for (const part of parts) {
       const trimmed = part.trim();
-      // Handle "field alias" or "table.field" patterns
+      if (!trimmed || trimmed === '*') continue;
+
+      // Handle "field alias" or "table.field alias" patterns
       const tokens = trimmed.split(/\s+/);
-      // Take the first token (the actual field)
-      const field = tokens[0].split('.').pop();
-      if (field && !isSqlKeyword(field) && !field.startsWith('?') && field !== '*') {
-        fields.push(field);
+      // First token may have table.field format
+      const firstToken = tokens[0];
+
+      // Parse table.field pattern
+      const fieldParts = firstToken.split('.');
+      const tablePrefix = fieldParts.length > 1 ? fieldParts[0] : undefined;
+      const fieldName = fieldParts[fieldParts.length - 1];
+
+      if (fieldName && !isSqlKeyword(fieldName) && !fieldName.startsWith('?') && fieldName !== '*') {
+        // Check if there's an alias (last token different from first)
+        const sqlAlias = tokens.length > 1 && tokens[tokens.length - 1] !== fieldName
+          ? tokens[tokens.length - 1]
+          : undefined;
+
+        fields.push({
+          name: fieldName,
+          source: 'mapper',
+          clauseType: 'select',
+          sqlAlias,
+          tablePrefix,
+        });
       }
-      // Also capture alias if present
-      if (tokens.length > 1) {
-        const alias = tokens[tokens.length - 1];
-        if (alias && !isSqlKeyword(alias) && !alias.startsWith('?')) {
-          // Alias gives us semantic hint but not DB field
-        }
-      }
+    }
+  }
+
+  // Match JOIN ON fields
+  const joinOnRegex = /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\s*=/gi;
+  const joinOnMatches = sql.matchAll(joinOnRegex);
+  for (const match of joinOnMatches) {
+    const fieldPart = match[1];
+    const parts = fieldPart.split('.');
+    const tablePrefix = parts[0];
+    const fieldName = parts[1];
+    if (fieldName && !isSqlKeyword(fieldName)) {
+      fields.push({
+        name: fieldName,
+        source: 'mapper',
+        clauseType: 'join',
+        tablePrefix,
+      });
     }
   }
 
@@ -239,33 +280,61 @@ function extractFieldsFromSql(sql: string): string[] {
     const fieldNames = fieldList.split(',').map((f) => f.trim());
     for (const f of fieldNames) {
       if (f && !isSqlKeyword(f)) {
-        fields.push(f);
+        fields.push({
+          name: f,
+          source: 'mapper',
+          clauseType: 'insert',
+        });
       }
     }
   }
 
   // Match UPDATE fields (SET field = value)
-  const setRegex = /SET\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/gi;
+  const setRegex = /SET\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
   const setMatches = sql.matchAll(setRegex);
   for (const match of setMatches) {
-    const field = match[1];
-    if (field && !isSqlKeyword(field)) {
-      fields.push(field);
+    const fieldPart = match[1];
+    const parts = fieldPart.split('.');
+    const tablePrefix = parts.length > 1 ? parts[0] : undefined;
+    const fieldName = parts[parts.length - 1];
+    if (fieldName && !isSqlKeyword(fieldName)) {
+      fields.push({
+        name: fieldName,
+        source: 'mapper',
+        clauseType: 'update',
+        tablePrefix,
+      });
     }
   }
 
   // Match WHERE fields (field = value)
-  const whereRegex = /WHERE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?\s*=/gi;
+  const whereRegex = /WHERE\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
   const whereMatches = sql.matchAll(whereRegex);
   for (const match of whereMatches) {
-    const fieldPart = match[0].replace(/WHERE\s+/i, '').split('=')[0].trim();
-    const field = fieldPart.split('.').pop();
-    if (field && !isSqlKeyword(field)) {
-      fields.push(field);
+    const fieldPart = match[1];
+    const parts = fieldPart.split('.');
+    const tablePrefix = parts.length > 1 ? parts[0] : undefined;
+    const fieldName = parts[parts.length - 1];
+    if (fieldName && !isSqlKeyword(fieldName)) {
+      fields.push({
+        name: fieldName,
+        source: 'mapper',
+        clauseType: 'where',
+        tablePrefix,
+      });
     }
   }
 
-  return [...new Set(fields)];
+  // Deduplicate by name (keep the one with most info)
+  const uniqueFields = new Map<string, FieldCandidate>();
+  for (const f of fields) {
+    const existing = uniqueFields.get(f.name);
+    if (!existing || (f.sqlAlias && !existing.sqlAlias) || (f.tablePrefix && !existing.tablePrefix)) {
+      uniqueFields.set(f.name, f);
+    }
+  }
+
+  return [...uniqueFields.values()];
 }
 
 /**
