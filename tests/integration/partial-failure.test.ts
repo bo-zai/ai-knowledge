@@ -17,7 +17,7 @@ describe('generate end-to-end', () => {
     await writeFile(join(repo, 'README.md'), '# test repo');
     await createGitRepo(repo);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });
@@ -40,7 +40,7 @@ describe('generate end-to-end', () => {
     await writeFile(join(repo, 'README.md'), '# empty repo');
     await createGitRepo(repo);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });
@@ -60,7 +60,7 @@ describe('generate end-to-end', () => {
     await writeFile(join(repo, 'README.md'), '# coverage test repo');
     await createGitRepo(repo);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });
@@ -78,7 +78,7 @@ describe('generate end-to-end', () => {
     await writeFile(join(repo, 'README.md'), '# stats test repo');
     await createGitRepo(repo);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });

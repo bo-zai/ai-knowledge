@@ -8,7 +8,7 @@ describe('status command', () => {
   it('reports missing package before generation', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-'));
     await writeFile(join(repo, 'README.md'), '# test repo');
-    const result = await execa('node', ['dist/cli/index.cjs', 'status', '--repo', repo]);
+    const result = await execa('node', ['dist/cli/index.js', 'status', '--repo', repo]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('bootstrap-knowledge');
     expect(result.stdout).toContain('missing');
@@ -66,7 +66,7 @@ is_partial: false
 is_empty: false
 `);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'status', '--repo', repo]);
+    const result = await execa('node', ['dist/cli/index.js', 'status', '--repo', repo]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('bootstrap-knowledge: present');
     expect(result.stdout).toContain('Manifest');
@@ -114,7 +114,7 @@ warnings: []
 is_partial: true
 `);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'status', '--repo', repo]);
+    const result = await execa('node', ['dist/cli/index.js', 'status', '--repo', repo]);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('STATUS: partial');
     expect(result.stdout).toContain('Failures: 1');

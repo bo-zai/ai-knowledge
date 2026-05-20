@@ -37,7 +37,7 @@ app.get('/api/products', (req, res) => res.json([]));
     await execa('git', ['add', '.'], { cwd: repo });
     await execa('git', ['commit', '-m', 'initial'], { cwd: repo });
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 60000,
     });
@@ -71,7 +71,7 @@ app.get('/api/products', (req, res) => res.json([]));
     await execa('git', ['add', '.'], { cwd: repo });
     await execa('git', ['commit', '-m', 'initial'], { cwd: repo });
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });
@@ -92,7 +92,7 @@ app.get('/api/products', (req, res) => res.json([]));
     await writeFile(join(repo, 'README.md'), '# metadata test');
     await createGitRepo(repo);
 
-    const result = await execa('node', ['dist/cli/index.cjs', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
+    const result = await execa('node', ['dist/cli/index.js', 'generate', '--repo', repo, '--model', 'test-model', '--base-url', 'http://localhost:11434/v1', '--api-key-env', 'TEST_API_KEY'], {
       env: { TEST_API_KEY: 'test-key' },
       timeout: 30000,
     });
