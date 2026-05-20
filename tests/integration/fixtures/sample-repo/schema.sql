@@ -1,0 +1,13 @@
+CREATE TABLE users (
+  id BIGINT PRIMARY KEY COMMENT '主键',
+  name VARCHAR(100) COMMENT '用户名',
+  email VARCHAR(255) COMMENT '邮箱地址',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE orders (
+  id BIGINT PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id),
+  total DECIMAL(10, 2),
+  status VARCHAR(20)
+);
