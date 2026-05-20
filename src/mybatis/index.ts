@@ -75,3 +75,8 @@ export {
   resolveEntityEvidence,
   buildFieldEvidenceLookup,
 } from './java-entity-evidence.js';
+
+// Caller evidence
+export {
+  resolveCallerEvidence,
+} from './caller-evidence.js';

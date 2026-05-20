@@ -10,11 +10,13 @@ import {
   type MapperDocument,
   type ResolvedStatement,
   type EntityEvidence,
+  type CallerEvidence,
   parseAllMapperFiles,
   resolveStatementSql,
   extractTablesFromSql,
   findResultMap,
   resolveEntityEvidence,
+  resolveCallerEvidence,
 } from '../mybatis/index.js';
 import {
   buildSqlLineage,
@@ -36,6 +38,7 @@ export interface DbTableEvidenceBundle {
   relatedCode: RelatedCodeInfo[];
   fieldCandidates: FieldCandidate[];
   entityEvidence: EntityEvidence[];
+  callerEvidence: CallerEvidence[];
   gaps: GapInfo[];
   provenance: {
     source: string;
@@ -201,6 +204,20 @@ export async function buildDbTableBundle(
     }
   }
 
+  // Collect caller evidence from Service classes
+  const callerEvidence: CallerEvidence[] = [];
+  for (const { mapper, resolved } of tableMappers) {
+    const callers = await resolveCallerEvidence({
+      repoPath,
+      namespace: mapper.namespace,
+      methodId: resolved.id,
+    });
+    for (const caller of callers) {
+      caller.sourceStatementId = resolved.id;
+      callerEvidence.push(caller);
+    }
+  }
+
   // Identify gaps
   const gaps: GapInfo[] = [];
   if (mapperBindings.length === 0) {
@@ -217,6 +234,7 @@ export async function buildDbTableBundle(
     relatedCode,
     fieldCandidates,
     entityEvidence,
+    callerEvidence,
     gaps,
     provenance: {
       source: 'embedded-gitnexus',
@@ -457,6 +475,7 @@ export function mergeDbTableBundles(bundles: DbTableEvidenceBundle[]): DbTableEv
       relatedCode: tableBundles.flatMap((b) => b.relatedCode),
       fieldCandidates: tableBundles.flatMap((b) => b.fieldCandidates),
       entityEvidence: tableBundles.flatMap((b) => b.entityEvidence),
+      callerEvidence: tableBundles.flatMap((b) => b.callerEvidence),
       gaps: tableBundles.flatMap((b) => b.gaps),
       provenance: tableBundles[0].provenance,
     });
