@@ -9,10 +9,12 @@
 import {
   type MapperDocument,
   type ResolvedStatement,
+  type EntityEvidence,
   parseAllMapperFiles,
   resolveStatementSql,
   extractTablesFromSql,
   findResultMap,
+  resolveEntityEvidence,
 } from '../mybatis/index.js';
 import {
   buildSqlLineage,
@@ -33,6 +35,7 @@ export interface DbTableEvidenceBundle {
   sqlStatements: SqlStatementInfo[];
   relatedCode: RelatedCodeInfo[];
   fieldCandidates: FieldCandidate[];
+  entityEvidence: EntityEvidence[];
   gaps: GapInfo[];
   provenance: {
     source: string;
@@ -68,10 +71,12 @@ export interface RelatedCodeInfo {
 export interface FieldCandidate {
   name: string;
   type?: string;
-  source: 'mapper' | 'code' | 'inferred';
+  source: 'mapper' | 'code' | 'entity' | 'inferred';
   clauseType?: 'select' | 'insert' | 'update' | 'where' | 'join';
   sqlAlias?: string;
   tablePrefix?: string;
+  mappedJavaProperty?: string;
+  javaFieldComment?: string;
 }
 
 export interface GapInfo {
@@ -87,6 +92,7 @@ export interface GapInfo {
 export async function buildDbTableBundle(
   repoPath: string,
   tableName: string,
+  coreRepoPath?: string,
 ): Promise<DbTableEvidenceBundle> {
   // Parse all mapper files
   const mappers = await parseAllMapperFiles(repoPath);
@@ -137,16 +143,59 @@ export async function buildDbTableBundle(
     });
   }
 
-  // Build field candidates (from SQL statements)
+  // Collect entity evidence from resultType/resultMap
+  const entityEvidence: EntityEvidence[] = [];
+  for (const { mapper, resolved } of tableMappers) {
+    if (resolved.resultType || resolved.resultMap) {
+      const resultMapDef = resolved.resultMap ? findResultMap(mapper, resolved.resultMap) : null;
+      const evidence = await resolveEntityEvidence({
+        repoPath,
+        coreRepoPath,
+        resultType: resolved.resultType,
+        resultMap: resultMapDef,
+      });
+
+      if (evidence) {
+        evidence.sourceStatementId = resolved.id;
+        entityEvidence.push(evidence);
+      }
+    }
+  }
+
+  // Build field candidates (from SQL statements and entity evidence)
   const fieldCandidates: FieldCandidate[] = [];
+
+  // First, extract from SQL
   for (const stmtInfo of sqlStatements) {
-    // Extract field names from SQL
-    const fields = extractFieldsFromSql(stmtInfo.sql);
-    for (const field of fields) {
-      if (!fieldCandidates.find((f) => f.name === field)) {
+    const detailedFields = extractDetailedFieldsFromSql(stmtInfo.sql);
+    for (const field of detailedFields) {
+      const existing = fieldCandidates.find((f) => f.name === field.name);
+      if (!existing) {
+        fieldCandidates.push(field);
+      } else {
+        // Merge additional info
+        if (field.sqlAlias && !existing.sqlAlias) existing.sqlAlias = field.sqlAlias;
+        if (field.tablePrefix && !existing.tablePrefix) existing.tablePrefix = field.tablePrefix;
+        if (field.clauseType && !existing.clauseType) existing.clauseType = field.clauseType;
+      }
+    }
+  }
+
+  // Then, merge entity evidence into field candidates
+  for (const entity of entityEvidence) {
+    for (const entityField of entity.fields) {
+      const existing = fieldCandidates.find((f) => f.name === entityField.mappedColumn || f.sqlAlias === entityField.javaProperty);
+      if (existing) {
+        // Add Java property mapping
+        existing.mappedJavaProperty = entityField.javaProperty;
+        existing.javaFieldComment = entityField.javaFieldComment;
+      } else if (entityField.mappedColumn) {
+        // Add field from entity mapping that wasn't in SQL
         fieldCandidates.push({
-          name: field,
-          source: 'mapper',
+          name: entityField.mappedColumn,
+          source: 'entity',
+          mappedJavaProperty: entityField.javaProperty,
+          javaFieldComment: entityField.javaFieldComment,
         });
       }
     }
@@ -167,6 +216,7 @@ export async function buildDbTableBundle(
     sqlStatements,
     relatedCode,
     fieldCandidates,
+    entityEvidence,
     gaps,
     provenance: {
       source: 'embedded-gitnexus',
@@ -406,6 +456,7 @@ export function mergeDbTableBundles(bundles: DbTableEvidenceBundle[]): DbTableEv
       sqlStatements: tableBundles.flatMap((b) => b.sqlStatements),
       relatedCode: tableBundles.flatMap((b) => b.relatedCode),
       fieldCandidates: tableBundles.flatMap((b) => b.fieldCandidates),
+      entityEvidence: tableBundles.flatMap((b) => b.entityEvidence),
       gaps: tableBundles.flatMap((b) => b.gaps),
       provenance: tableBundles[0].provenance,
     });

@@ -69,3 +69,9 @@ export {
   getStatementResultMapping,
   buildResultMapLookup,
 } from './result-map-resolver.js';
+
+// Java entity evidence
+export {
+  resolveEntityEvidence,
+  buildFieldEvidenceLookup,
+} from './java-entity-evidence.js';
