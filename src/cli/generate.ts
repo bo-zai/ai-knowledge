@@ -31,6 +31,12 @@ import { buildOwnPrompt } from '../generation/object-generators/own-generator.js
 import { buildVerPrompt } from '../generation/object-generators/ver-generator.js';
 import { dbObjectSchema } from '../schemas/db.js';
 import { conObjectSchema } from '../schemas/contract.js';
+import { termObjectSchema } from '../schemas/term.js';
+import { flowObjectSchema } from '../schemas/flow.js';
+import { modObjectSchema } from '../schemas/mod.js';
+import { openObjectSchema } from '../schemas/open.js';
+import { ownObjectSchema } from '../schemas/own.js';
+import { verObjectSchema } from '../schemas/ver.js';
 import { generateObjectId } from '../shared/ids.js';
 import { getRepoBasename } from '../shared/path-utils.js';
 import YAML from 'yaml';
@@ -411,10 +417,25 @@ function validateObject(draft: unknown, objectType: string): unknown | null {
         return dbObjectSchema.parse(draft);
       case 'CON':
         return conObjectSchema.parse(draft);
+      case 'TERM':
+        return termObjectSchema.parse(draft);
+      case 'FLOW':
+        return flowObjectSchema.parse(draft);
+      case 'MOD':
+        return modObjectSchema.parse(draft);
+      case 'OPEN':
+        return openObjectSchema.parse(draft);
+      case 'OWN':
+        return ownObjectSchema.parse(draft);
+      case 'VER':
+        return verObjectSchema.parse(draft);
       default:
-        return draft; // 其他类型暂不做严格验证
+        logger.warn(`Unknown object type for validation: ${objectType}`);
+        return null;
     }
-  } catch {
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.warn(`Schema validation failed for type ${objectType}: ${errorMsg}`);
     return null;
   }
 }
