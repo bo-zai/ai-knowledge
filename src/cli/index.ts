@@ -1,7 +1,4 @@
 import { Command } from 'commander';
-import { runGenerate } from './generate.js';
-import { runStatus } from './status.js';
-import { runClean } from './clean.js';
 
 const program = new Command();
 
@@ -21,6 +18,7 @@ program
   .option('--force-analyze', 'Force GitNexus re-analysis')
   .option('--verbose', 'Enable verbose logging')
   .action(async (options) => {
+    const { runGenerate } = await import('./generate.js');
     await runGenerate(options);
   });
 
@@ -29,6 +27,7 @@ program
   .description('Show package status')
   .requiredOption('--repo <path>', 'Target repository path')
   .action(async (options) => {
+    const { runStatus } = await import('./status.js');
     await runStatus(options.repo);
   });
 
@@ -37,6 +36,7 @@ program
   .description('Remove bootstrap knowledge package')
   .requiredOption('--repo <path>', 'Target repository path')
   .action(async (options) => {
+    const { runClean } = await import('./clean.js');
     await runClean(options.repo);
   });
 
