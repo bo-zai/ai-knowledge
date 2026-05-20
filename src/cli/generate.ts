@@ -91,7 +91,10 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   logger.info(`Discovered ${slicePlan.total_count} slices`);
 
   // 3. Build evidence
-  const repoEvidence = buildRepoEvidenceBundle(repoPath, 'repo');
+  const repoEvidence = buildRepoEvidenceBundle({
+    repoPath,
+    repoName: repoPath.split('/').pop() ?? 'repo',
+  });
 
   // 4. Generate objects
   const client = createOpenAiClient(modelConfig);
