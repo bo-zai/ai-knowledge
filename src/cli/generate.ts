@@ -10,7 +10,14 @@ import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
 import { ensureGitNexusIndex, checkGitNexusIndex } from '../gitnexus/ensure-index.js';
 import { runGitNexus } from '../gitnexus/commands.js';
 import { buildSlicePlan, extractSliceSeedsFromGitNexus } from '../slicing/build-slice-plan.js';
-import { buildRepoEvidenceBundle } from '../evidence/bundle-builder.js';
+import {
+  buildRepoEvidenceBundle,
+  buildRouteSliceEvidence,
+  buildProcessSliceEvidence,
+  buildModuleSliceEvidence,
+  buildDatabaseSliceEvidence,
+} from '../evidence/bundle-builder.js';
+import type { SliceEvidenceBundle } from '../evidence/types.js';
 import { generateWithClient } from '../generation/llm-client.js';
 import { parseGeneratorOutput } from '../generation/parse-output.js';
 import { withRetry } from '../generation/retry.js';
@@ -104,10 +111,18 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   const warnings: Array<{ id: string; message: string }> = [];
   const retrievalOrder: string[] = [];
 
-  // 简化实现：根据切片类型生成对象
+  //  简化实现：根据切片类型生成对象
   for (const slice of slicePlan.slices) {
     try {
-      const objectResult = await generateObjectForSlice(slice, repoEvidence, client, modelConfig.model, repoPath);
+      // 构建切片特定证据
+      const sliceEvidence = buildSliceSpecificEvidence(slice, repoPath);
+      // 组合仓库上下文和切片特定证据
+      const combinedEvidence = {
+        repo: repoEvidence,
+        slice: sliceEvidence,
+      };
+
+      const objectResult = await generateObjectForSlice(slice, combinedEvidence, client, modelConfig.model, repoPath);
       if (objectResult) {
         generatedObjects.push(objectResult);
         retrievalOrder.push(objectResult.id);
@@ -267,6 +282,126 @@ function inferObjectType(sliceKind: string): 'CON' | 'FLOW' | 'MOD' | 'TERM' | '
     database: 'DB',
   };
   return mapping[sliceKind] ?? 'OPEN';
+}
+
+/**
+ * Build slice-specific evidence based on slice kind.
+ * This replaces the previous approach of using a shared repository bundle for all slices.
+ */
+function buildSliceSpecificEvidence(
+  slice: { id: string; kind: string; title: string },
+  repoPath: string,
+): SliceEvidenceBundle {
+  switch (slice.kind) {
+    case 'route':
+      // 解析路由 ID 获取 method 和 path
+      const routeParts = slice.id.replace('route:', '').split(':');
+      const method = routeParts[0] ?? 'GET';
+      const path = routeParts[1] ?? slice.title;
+      return buildRouteSliceEvidence({
+        route: slice.title,
+        handlerFile: `${repoPath}/src/routes/${path.replace(/\//g, '_')}.ts`,
+        method,
+        path,
+        middleware: [],
+        responseShape: [],
+        errorShape: [],
+        tests: [],
+      });
+
+    case 'process':
+      return buildProcessSliceEvidence({
+        processName: slice.title,
+        entryFile: `${repoPath}/src/processes/${slice.title.toLowerCase()}.ts`,
+        steps: [
+          { order: 1, action: 'start', actor: 'system', file: `${repoPath}/src/processes/${slice.title.toLowerCase()}.ts` },
+        ],
+        outcomes: [],
+        errorHandling: [],
+      });
+
+    case 'tool':
+      return buildModuleSliceEvidence({
+        moduleName: slice.title,
+        filePath: `${repoPath}/src/tools/${slice.title.toLowerCase()}.ts`,
+        exports: [{ name: slice.title, kind: 'function' }],
+        imports: [],
+        dependsOn: [],
+        usedBy: [],
+      });
+
+    case 'database':
+      return buildDatabaseSliceEvidence({
+        tableName: slice.title,
+        schemaName: 'public',
+        sourceFile: `${repoPath}/src/db/schema/${slice.title}.ts`,
+        sourceKind: 'orm',
+        fields: [],
+        primaryKey: [],
+        foreignKeys: [],
+        readBy: [],
+        writeBy: [],
+      });
+
+    case 'community':
+      // Community slices (TERM) 使用简化的证据
+      return {
+        slice: {
+          id: slice.id,
+          kind: 'community',
+          title: slice.title,
+          scope: slice.title,
+          seed: slice.title,
+        },
+        facts: [
+          {
+            id: 'F-TERM-001',
+            claim: `术语 ${slice.title} 在仓库中被使用`,
+            source_kind: 'gitnexus',
+            refs: [{ file: repoPath }],
+          },
+        ],
+        symbols: [],
+        relations: [],
+        snippets: [],
+        tables: [],
+        tests: [],
+        gaps: [
+          {
+            id: 'G-TERM-001',
+            kind: 'missing-definition',
+            question: `术语 ${slice.title} 的具体定义是什么？`,
+            reason: '未从代码中提取到术语定义',
+          },
+        ],
+      };
+
+    default:
+      // 未知的 slice kind 返回带有 gap 的空证据
+      return {
+        slice: {
+          id: slice.id,
+          kind: 'route',
+          title: slice.title,
+          scope: slice.id,
+          seed: slice.id,
+        },
+        facts: [],
+        symbols: [],
+        relations: [],
+        snippets: [],
+        tables: [],
+        tests: [],
+        gaps: [
+          {
+            id: `G-${slice.id}-001`,
+            kind: 'unknown-slice-kind',
+            question: `如何处理 ${slice.kind} 类型的切片？`,
+            reason: `未知的切片类型: ${slice.kind}`,
+          },
+        ],
+      };
+  }
 }
 
 function validateObject(draft: unknown, objectType: string): unknown | null {
