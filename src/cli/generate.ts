@@ -1,7 +1,12 @@
 import type OpenAI from 'openai';
 import { logger, setLogLevel } from '../shared/logger.js';
 import { getEnvVar } from '../config/env.js';
-import { resolveModelConfig, createOpenAiClient } from '../config/model-config.js';
+import {
+  resolveModelConfig,
+  createOpenAiClient,
+  loadDefaultLlmConfigFile,
+  loadLlmConfigFile,
+} from '../config/model-config.js';
 import { buildManifest } from '../packaging/build-manifest.js';
 import { buildCatalog } from '../packaging/build-catalog.js';
 import { writePackage } from '../packaging/write-package.js';
@@ -19,6 +24,10 @@ import {
   buildDatabaseSliceEvidence,
 } from '../evidence/bundle-builder.js';
 import type { SliceEvidenceBundle } from '../evidence/types.js';
+import {
+  buildAllDbTableBundles,
+  type DbTableEvidenceBundle,
+} from '../evidence/db-bundle-builder.js';
 import { generateWithClient } from '../generation/llm-client.js';
 import { parseGeneratorOutput } from '../generation/parse-output.js';
 import { withRetry } from '../generation/retry.js';
@@ -45,9 +54,10 @@ import YAML from 'yaml';
 interface GenerateOptions {
   repo: string;
   slice?: string;
-  model: string;
-  baseUrl: string;
-  apiKeyEnv: string;
+  llmConfig?: string;
+  model?: string;
+  baseUrl?: string;
+  apiKeyEnv?: string;
   forceAnalyze?: boolean;
   verbose?: boolean;
 }
@@ -74,13 +84,21 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   const repoPath = options.repo;
   const bootstrapDir = DEFAULT_BOOTSTRAP_DIR;
-  const apiKey = getEnvVar(options.apiKeyEnv);
+  const fileConfig = options.llmConfig
+    ? await loadLlmConfigFile(options.llmConfig)
+    : await loadDefaultLlmConfigFile();
 
-  const modelConfig = resolveModelConfig({
+  const resolvedConfig = resolveModelConfig({
     baseUrl: options.baseUrl,
-    apiKey,
+    apiKeyEnv: options.apiKeyEnv,
     model: options.model,
+    fileConfig,
   });
+  const apiKey = resolvedConfig.apiKey || getEnvVar(resolvedConfig.apiKeyEnv);
+  const modelConfig = {
+    ...resolvedConfig,
+    apiKey,
+  };
 
   logger.info(`Generating bootstrap-knowledge for ${repoPath}`);
 
@@ -98,9 +116,33 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     await execGitNexus(['analyze', repoPath], repoPath);
   }
 
-  // 2. Discover slices
-  const gitnexusResult = await execGitNexus(['list', repoPath], repoPath);
-  const sliceSeeds = extractSliceSeedsFromGitNexus(gitnexusResult.stdout);
+  // 2. Discover database-first slices from real MyBatis evidence.
+  const dbBundles = await buildAllDbTableBundles(repoPath);
+  const dbBundleMap = new Map(dbBundles.map((bundle) => [bundle.table.toLowerCase(), bundle]));
+
+  let sliceSeeds = {
+    routes: [] as string[],
+    processes: [] as string[],
+    tools: [] as string[],
+    communities: [] as string[],
+    tables: dbBundles.map((bundle) => bundle.table),
+  };
+
+  // Keep backward-compatible route/process discovery as best effort only.
+  try {
+    const gitnexusResult = await execGitNexus(['list', repoPath], repoPath);
+    const discovered = extractSliceSeedsFromGitNexus(gitnexusResult.stdout);
+    sliceSeeds = {
+      routes: discovered.routes,
+      processes: discovered.processes,
+      tools: discovered.tools,
+      communities: discovered.communities,
+      tables: [...new Set([...sliceSeeds.tables, ...discovered.tables])],
+    };
+  } catch (error) {
+    logger.warn(`Slice discovery via list command failed, continuing with DB slices only: ${String(error)}`);
+  }
+
   const slicePlan = buildSlicePlan(sliceSeeds);
 
   logger.info(`Discovered ${slicePlan.total_count} slices`);
@@ -122,11 +164,12 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   for (const slice of slicePlan.slices) {
     try {
       // 构建切片特定证据
-      const sliceEvidence = buildSliceSpecificEvidence(slice, repoPath);
+      const sliceEvidence = buildSliceSpecificEvidence(slice, repoPath, dbBundleMap);
       // 组合仓库上下文和切片特定证据
       const combinedEvidence = {
         repo: repoEvidence,
         slice: sliceEvidence,
+        db_bundle: slice.kind === 'database' ? dbBundleMap.get(slice.title.toLowerCase()) ?? null : null,
       };
 
       const objectResult = await generateObjectForSlice(slice, combinedEvidence, client, modelConfig.model, repoPath);
@@ -270,12 +313,16 @@ async function generateObjectForSlice(
 }
 
 function getPromptBuilderForSliceKind(kind: string): ((input: unknown) => { system: string; user: string }) | null {
+  // Special handling for database - it expects structured input
+  if (kind === 'database') {
+    return (input: unknown) => buildDbPrompt(input as Parameters<typeof buildDbPrompt>[0]);
+  }
+
   const builders: Record<string, (input: unknown) => { system: string; user: string }> = {
     route: buildConPrompt,
     process: buildFlowPrompt,
     tool: buildModPrompt,
     community: buildTermPrompt,
-    database: buildDbPrompt,
   };
   return builders[kind] ?? null;
 }
@@ -298,6 +345,7 @@ function inferObjectType(sliceKind: string): 'CON' | 'FLOW' | 'MOD' | 'TERM' | '
 function buildSliceSpecificEvidence(
   slice: { id: string; kind: string; title: string },
   repoPath: string,
+  dbBundleMap: Map<string, DbTableEvidenceBundle>,
 ): SliceEvidenceBundle {
   switch (slice.kind) {
     case 'route':
@@ -338,6 +386,40 @@ function buildSliceSpecificEvidence(
       });
 
     case 'database':
+      const dbBundle = dbBundleMap.get(slice.title.toLowerCase());
+      if (dbBundle) {
+        return buildDatabaseSliceEvidence({
+          tableName: dbBundle.table,
+          schemaName: 'public',
+          sourceFile: dbBundle.mapperBindings[0]?.mapperFile ?? repoPath,
+          sourceKind: 'sql',
+          fields:
+            dbBundle.fieldCandidates.length > 0
+              ? dbBundle.fieldCandidates.map((field) => ({
+                  name: field.name,
+                  type: field.type ?? 'unknown',
+                  description: field.name,
+                  source: field.source === 'inferred' ? 'inferred' : 'comment',
+                }))
+              : [
+                  {
+                    name: 'id',
+                    type: 'unknown',
+                    description: 'id',
+                    source: 'inferred',
+                  },
+                ],
+          primaryKey: [],
+          foreignKeys: [],
+          readBy: dbBundle.mapperBindings
+            .filter((binding) => binding.statementType === 'select')
+            .map((binding) => `${binding.namespace}.${binding.methodId}`),
+          writeBy: dbBundle.mapperBindings
+            .filter((binding) => binding.statementType !== 'select')
+            .map((binding) => `${binding.namespace}.${binding.methodId}`),
+        });
+      }
+
       return buildDatabaseSliceEvidence({
         tableName: slice.title,
         schemaName: 'public',

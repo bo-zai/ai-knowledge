@@ -16,7 +16,7 @@ export const dbObjectSchema = commonObjectSchema.extend({
   table_name: z.string().min(1),
   table_name_zh: z.string().min(1),
   schema_name: z.string().min(1),
-  source_kind: z.enum(['ddl', 'migration', 'orm', 'inferred']),
+  source_kind: z.enum(['ddl', 'migration', 'orm', 'mapper', 'inferred']),
   primary_key: z.array(z.string()),
   indexes: z.array(z.string()),
   foreign_keys: z.array(z.string()),
