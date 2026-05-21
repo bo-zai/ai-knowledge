@@ -70,7 +70,55 @@ function resolveSqlParts(
     }
   }
 
-  return resolvedParts.join(' ').replace(/\s+/g, ' ').trim();
+  // Join parts and normalize SQL with proper keyword boundaries
+  const rawSql = resolvedParts.join(' ');
+  return normalizeSql(rawSql);
+}
+
+/**
+ * Normalize SQL string to ensure proper keyword and token boundaries.
+ */
+function normalizeSql(sql: string): string {
+  // First, compress multiple whitespaces to single space
+  let normalized = sql.replace(/\s+/g, ' ').trim();
+
+  // Fix obvious keyword boundary issues where keywords are glued together
+  // These are the most common patterns from include expansion
+  const keywordGluePatterns: Array<{ pattern: RegExp; replacement: string }> = [
+    // SELECT glued to next word
+    { pattern: /SELECTFROM/gi, replacement: 'SELECT FROM' },
+    { pattern: /SELECTJOIN/gi, replacement: 'SELECT ' },
+    // FROM glued to next word
+    { pattern: /FROMJOIN/gi, replacement: 'FROM JOIN' },
+    { pattern: /FROMLEFT/gi, replacement: 'FROM LEFT' },
+    { pattern: /FROMRIGHT/gi, replacement: 'FROM RIGHT' },
+    { pattern: /FROMINNER/gi, replacement: 'FROM INNER' },
+    // JOIN glued to ON
+    { pattern: /JOINON/gi, replacement: 'JOIN ON' },
+    // WHERE glued to condition keyword
+    { pattern: /WHEREAND/gi, replacement: 'WHERE AND' },
+    { pattern: /WHEREOR\b/gi, replacement: 'WHERE OR' }, // \b to not break 'order'
+    // AND/OR glued together
+    { pattern: /ANDOR\b/gi, replacement: 'AND OR' },
+    { pattern: /ORAND\b/gi, replacement: 'OR AND' },
+    // ORDER BY glued
+    { pattern: /ORDERBY/gi, replacement: 'ORDER BY' },
+    { pattern: /GROUPBY/gi, replacement: 'GROUP BY' },
+    // INSERT INTO glued
+    { pattern: /INSERTINTO/gi, replacement: 'INSERT INTO' },
+  ];
+
+  for (const { pattern, replacement } of keywordGluePatterns) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+
+  // Fix comma boundaries: ensure space after comma
+  normalized = normalized.replace(/,([a-zA-Z_])/g, ', $1');
+
+  // Final cleanup
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
 }
 
 /**
