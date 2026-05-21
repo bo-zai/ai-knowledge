@@ -8,5 +8,16 @@ export default defineConfig({
   clean: true,
   dts: false,
   splitting: false,
-  external: ['openai', 'yaml', 'execa', 'zod', 'commander'],
+  external: [
+    'openai',
+    'yaml',
+    'execa',
+    'zod',
+    'commander',
+    /^tree-sitter/,
+    'node-gyp-build',
+    'ladybugdb',
+    'better-sqlite3',
+    'leiden',
+  ],
 });

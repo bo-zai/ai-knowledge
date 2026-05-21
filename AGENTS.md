@@ -6,7 +6,7 @@
 
 核心原则：
 
-- `GitNexus` 负责提供结构化代码图谱和执行流证据
+- 项目内嵌的解析与索引引擎负责提供结构化代码图谱和执行流证据
 - 程序负责控制输入输出结构、schema 校验和落盘
 - `LLM` 只负责生成知识内容，不负责决定结构
 
@@ -18,9 +18,12 @@
 src/
 ├── cli/            命令行入口与子命令注册
 ├── config/         配置与环境变量解析
+├── engine/         内嵌解析、索引、查询底座
+├── query/          查询与上下文扩展
+├── mybatis/        MyBatis 解析与 SQL / 表证据提取
+├── knowledge/      知识生成主流程协调
 ├── shared/         通用工具与错误类型
 ├── schemas/        运行时 schema 定义
-├── gitnexus/       GitNexus 交互适配层
 ├── slicing/        切片发现与计划构建
 ├── evidence/       证据提取与归一化
 ├── generation/     LLM 调用与对象生成
@@ -33,8 +36,9 @@ src/
 
 - 不要在 `cli/` 写业务逻辑
 - 不要让 `generation/` 直接操作文件系统
-- 不要绕过 `gitnexus/` 适配层直接调用 GitNexus
+- 不要绕过 `query/`、`engine/`、`mybatis/` 直接在上层拼底层索引或 SQL 解析逻辑
 - 所有外部边界数据必须先做 schema 校验
+- 不要使用 `git worktree` 形式开发代码，统一直接在当前工作区修改
 
 ### 命名
 
