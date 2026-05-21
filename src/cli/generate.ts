@@ -17,6 +17,7 @@ import { writeDebugLogs, type SliceDebugTrace } from '../packaging/write-debug-l
 import { renderObjectMarkdown, renderConMarkdown } from '../packaging/render-object.js';
 import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
 import { ensureIndex, hasIndex, discoverSlices, type DiscoveryResult } from '../query/index-service.js';
+import { prepareKnowledgeGeneration, type AnalysisState } from '../query/prepare-generation.js';
 import { buildSlicePlan, extractSliceSeedsFromDiscoveryOutput } from '../slicing/build-slice-plan.js';
 import {
   buildRepoEvidenceBundle,
@@ -119,13 +120,13 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   logger.info(`Generating bootstrap-knowledge for ${repoPath}`);
 
-  // 1. Ensure index (only if needed for route/process discovery)
-  // For database-only slices, we can skip the embedded engine entirely
-  const isDatabaseOnly = sliceFilter?.kind === 'database' && sliceFilter.target.length > 0;
-
-  if (!mockMode && !isDatabaseOnly) {
-    await ensureIndex(repoPath, { force: options.forceAnalyze });
-  }
+  // 1. Preflight: ensure analysis is ready
+  const preflightResult = await prepareKnowledgeGeneration({
+    repoPath,
+    forceAnalyze: options.forceAnalyze,
+    mockMode,
+  });
+  const analysisState = preflightResult.analysisState;
 
   // 2. Discover database-first slices from real MyBatis evidence.
   const companionCoreRepoPath = await resolveCompanionCoreRepoPath(repoPath);
