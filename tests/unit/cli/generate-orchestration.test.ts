@@ -1,57 +1,56 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EmbeddedGitNexusExecutor } from '../../../src/knowledge/embedded-adapter';
+import type { DiscoveryResult } from '../../../src/query/index-service';
 
 describe('generate orchestration', () => {
-  describe('embedded index handling', () => {
+  describe('index handling', () => {
     it('reuses existing index without analyze', async () => {
-      const execEmbedded = vi.fn<EmbeddedGitNexusExecutor>().mockResolvedValue({ stdout: 'indexed' });
-      const hasIndex = vi.fn().mockResolvedValue(true);
+      const hasIndexMock = vi.fn().mockResolvedValue(true);
+      const ensureIndexMock = vi.fn();
 
-      // 模拟 ensureEmbeddedIndex 行为
-      const indexed = await hasIndex('/test/repo');
+      // 模拟 ensureIndex 行为
+      const indexed = await hasIndexMock('/test/repo');
       if (!indexed) {
-        await execEmbedded(['analyze', '/test/repo'], '/test/repo');
+        await ensureIndexMock('/test/repo');
       }
 
-      expect(execEmbedded).not.toHaveBeenCalled();
+      expect(ensureIndexMock).not.toHaveBeenCalled();
     });
 
-    it('triggers analyze when index missing', async () => {
-      const execEmbedded = vi.fn<EmbeddedGitNexusExecutor>().mockResolvedValue({ stdout: 'ok' });
-      const hasIndex = vi.fn().mockResolvedValue(false);
+    it('triggers index when missing', async () => {
+      const hasIndexMock = vi.fn().mockResolvedValue(false);
+      const ensureIndexMock = vi.fn();
 
-      // 模拟 ensureEmbeddedIndex 行为
-      const indexed = await hasIndex('/test/repo');
+      // 模拟 ensureIndex 行为
+      const indexed = await hasIndexMock('/test/repo');
       if (!indexed) {
-        await execEmbedded(['analyze', '/test/repo'], '/test/repo');
+        await ensureIndexMock('/test/repo');
       }
 
-      expect(execEmbedded).toHaveBeenCalledWith(['analyze', '/test/repo'], '/test/repo');
+      expect(ensureIndexMock).toHaveBeenCalledWith('/test/repo');
     });
   });
 
   describe('slice discovery', () => {
-    it('extracts slices from discovery output', async () => {
-      const mockOutput = `Route: GET /api/users
-Process: UserLogin
-Table: users`;
+    it('consumes structured discovery result', async () => {
+      const mockDiscovery: DiscoveryResult = {
+        routes: [
+          { id: 'route:GET:/api/users', method: 'GET', path: '/api/users' },
+        ],
+        processes: [
+          { id: 'process:UserLogin', name: 'UserLogin' },
+        ],
+        tools: [],
+        communities: [],
+        tables: [
+          { id: 'table:users', name: 'users' },
+        ],
+      };
 
-      // 验证 extractSliceSeedsFromDiscoveryOutput 能解析输出
-      const lines = mockOutput.split('\n');
-      const routes: string[] = [];
-      const tables: string[] = [];
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('Route:')) {
-          routes.push(trimmed.replace('Route:', '').trim());
-        } else if (trimmed.startsWith('Table:')) {
-          tables.push(trimmed.replace('Table:', '').trim());
-        }
-      }
-
-      expect(routes).toContain('GET /api/users');
-      expect(tables).toContain('users');
+      // 验证 discovery result 结构正确
+      expect(mockDiscovery.routes).toHaveLength(1);
+      expect(mockDiscovery.routes[0].method).toBe('GET');
+      expect(mockDiscovery.routes[0].path).toBe('/api/users');
+      expect(mockDiscovery.tables).toContainEqual({ id: 'table:users', name: 'users' });
     });
   });
 

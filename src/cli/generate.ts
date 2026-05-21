@@ -14,7 +14,7 @@ import { writeReports, type GenerationReport } from '../packaging/write-reports.
 import { writeDebugLogs, type SliceDebugTrace } from '../packaging/write-debug-logs.js';
 import { renderObjectMarkdown, renderConMarkdown } from '../packaging/render-object.js';
 import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
-import { createEmbeddedGitNexusExecutor, ensureEmbeddedIndex, checkEmbeddedIndex } from '../knowledge/embedded-adapter.js';
+import { ensureIndex, hasIndex, discoverSlices, type DiscoveryResult } from '../query/index-service.js';
 import { buildSlicePlan, extractSliceSeedsFromDiscoveryOutput } from '../slicing/build-slice-plan.js';
 import {
   buildRepoEvidenceBundle,
@@ -109,18 +109,12 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   logger.info(`Generating bootstrap-knowledge for ${repoPath}`);
 
-  // 1. Ensure embedded index (only if needed for route/process discovery)
+  // 1. Ensure index (only if needed for route/process discovery)
   // For database-only slices, we can skip the embedded engine entirely
   const isDatabaseOnly = sliceFilter?.kind === 'database' && sliceFilter.target.length > 0;
-  const execEmbedded = createEmbeddedGitNexusExecutor();
-  const hasIndex = async (path: string) => checkEmbeddedIndex(path);
 
   if (!mockMode && !isDatabaseOnly) {
-    if (!options.forceAnalyze) {
-      await ensureEmbeddedIndex(repoPath);
-    } else {
-      await execEmbedded(['analyze', repoPath], repoPath);
-    }
+    await ensureIndex(repoPath, { force: options.forceAnalyze });
   }
 
   // 2. Discover database-first slices from real MyBatis evidence.
@@ -138,17 +132,16 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // Keep backward-compatible route/process discovery as best effort only.
   if (!mockMode && shouldQueryAdditionalSlices(sliceFilter)) {
     try {
-      const discoveryResult = await execEmbedded(['list', repoPath], repoPath);
-      const discovered = extractSliceSeedsFromDiscoveryOutput(discoveryResult.stdout);
+      const discovered = await discoverSlices(repoPath);
       sliceSeeds = {
-        routes: discovered.routes,
-        processes: discovered.processes,
-        tools: discovered.tools,
-        communities: discovered.communities,
-        tables: [...new Set([...sliceSeeds.tables, ...discovered.tables])],
+        routes: discovered.routes.map(r => `${r.method} ${r.path}`),
+        processes: discovered.processes.map(p => p.name),
+        tools: discovered.tools.map(t => t.name),
+        communities: discovered.communities.map(c => c.name),
+        tables: [...new Set([...sliceSeeds.tables, ...discovered.tables.map(t => t.name)])],
       };
     } catch (error) {
-      logger.warn(`Slice discovery via list command failed, continuing with DB slices only: ${String(error)}`);
+      logger.warn(`Slice discovery failed, continuing with DB slices only: ${String(error)}`);
     }
   }
 
