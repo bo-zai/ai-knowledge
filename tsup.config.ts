@@ -1,4 +1,19 @@
 import { defineConfig } from 'tsup';
+import fs from 'fs';
+import path from 'path';
+
+// Copy vendor/leiden to dist after build
+const copyVendor = () => {
+  const srcDir = path.resolve('vendor/leiden');
+  const destDir = path.resolve('dist/vendor/leiden');
+  if (fs.existsSync(srcDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const file of fs.readdirSync(srcDir)) {
+      fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
+    }
+    console.log('Copied vendor/leiden to dist');
+  }
+};
 
 export default defineConfig({
   entry: {
@@ -12,6 +27,7 @@ export default defineConfig({
   dts: false,
   splitting: false,
   banner: { js: '#!/usr/bin/env node --no-deprecation' },
+  onSuccess: copyVendor,
   external: [
     'openai',
     'yaml',

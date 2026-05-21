@@ -17,13 +17,17 @@ import type { AbstractGraph, Attributes } from 'graphology-types';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import fs from 'fs';
 import type { NodeLabel } from '../shared';
 import { KnowledgeGraph } from '../graph/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// Navigate to package root (works from both src/ and dist/)
-const leidenPath = resolve(__dirname, '..', '..', '..', 'vendor', 'leiden', 'index.cjs');
+// Navigate to vendor directory - works from both src/ (3 levels up) and dist/cli/ (2 levels up)
+const leidenPathFromSrc = resolve(__dirname, '..', '..', '..', 'vendor', 'leiden', 'index.cjs');
+const leidenPathFromDist = resolve(__dirname, '..', 'vendor', 'leiden', 'index.cjs');
+// Try both paths to handle different build outputs
+const leidenPath = fs.existsSync(leidenPathFromDist) ? leidenPathFromDist : leidenPathFromSrc;
 /** Graphology Graph instance type (AbstractGraph from graphology-types avoids CJS/ESM interop namespace issue) */
 type GraphInstance = AbstractGraph<Attributes, Attributes, Attributes>;
 
