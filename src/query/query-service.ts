@@ -64,7 +64,7 @@ export async function buildDbEvidenceBundle(repoPath: string, tableName: string)
       })),
     },
     provenance: {
-      source: 'embedded-gitnexus',
+      source: 'embedded-analysis',
       repoPath,
       generatedAt: new Date().toISOString(),
     },

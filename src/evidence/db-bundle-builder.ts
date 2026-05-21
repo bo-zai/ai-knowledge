@@ -298,7 +298,7 @@ export async function buildDbTableBundle(
     callerEvidence,
     gaps,
     provenance: {
-      source: 'embedded-gitnexus',
+      source: 'embedded-analysis',
       repoPath,
       generatedAt: new Date().toISOString(),
     },

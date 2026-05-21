@@ -30,7 +30,7 @@ export async function runStatus(repoPath: string): Promise<void> {
     console.log(`Knowledge Pack Type: ${manifest.knowledge_pack_type}`);
     console.log(`Repo ID: ${manifest.repo_id}`);
     console.log(`Generated At: ${manifest.generated_at}`);
-    console.log(`Analysis Version: ${manifest.gitnexus_version}`);
+    console.log(`Analysis Version: ${manifest.analysis_version}`);
     console.log(`Object Types: ${(manifest.object_types as string[])?.join(', ') ?? 'unknown'}`);
 
     // 解析 catalog

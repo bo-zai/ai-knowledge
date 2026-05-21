@@ -228,7 +228,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     repoId: getRepoBasename(repoPath),
     repoRoot: repoPath,
     generatedAt,
-    gitnexusVersion: '1.0.0',
+    analysisVersion: '1.0.0',
   });
 
   const catalog = buildCatalog({

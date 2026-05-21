@@ -2,7 +2,7 @@ export function buildManifest(input: {
   repoId: string;
   repoRoot: string;
   generatedAt: string;
-  gitnexusVersion: string;
+  analysisVersion: string;
 }) {
   return {
     schema_version: 1,
@@ -10,7 +10,7 @@ export function buildManifest(input: {
     repo_id: input.repoId,
     repo_root: input.repoRoot,
     generated_at: input.generatedAt,
-    gitnexus_version: input.gitnexusVersion,
+    analysis_version: input.analysisVersion,
     object_types: ['TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB'],
   };
 }
