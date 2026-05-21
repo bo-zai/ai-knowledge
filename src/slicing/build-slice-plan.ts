@@ -1,6 +1,18 @@
 import type { SlicePlan, SliceSeed } from './types.js';
 import { discoverSlices, countByKind } from './discover-slices.js';
-import type { NormalizedSliceDiscovery } from '../gitnexus/adapter.js';
+
+/**
+ * Normalized slice discovery output structure.
+ * Used by embedded runtime discovery functions.
+ */
+export interface NormalizedSliceDiscovery {
+  routes: Array<{ id: string; method: string; path: string }>;
+  processes: Array<{ id: string; name: string }>;
+  tools: Array<{ id: string; name: string }>;
+  communities: Array<{ id: string; name: string }>;
+  tables: Array<{ id: string; name: string }>;
+  gaps?: Array<{ kind: 'route' | 'process' | 'tool' | 'community' | 'table'; reason: string; raw_line?: string }>;
+}
 
 export function buildSlicePlan(input: {
   routes: string[];
@@ -19,8 +31,8 @@ export function buildSlicePlan(input: {
 }
 
 /**
- * Build slice plan from normalized GitNexus discovery data.
- * This is the preferred entry point when using the adapter.
+ * Build slice plan from normalized discovery output.
+ * This is the preferred entry point when using embedded runtime.
  */
 export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery): SlicePlan {
   const slices: SliceSeed[] = [];
@@ -80,16 +92,18 @@ export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery
   };
 }
 
-// 从 GitNexus 查询结果提取切片种子（保留向后兼容，但标记为 deprecated）
-/** @deprecated Use buildSlicePlanFromNormalized with adapter output instead */
-export function extractSliceSeedsFromGitNexus(gitnexusOutput: string): {
+/**
+ * Extract slice seeds from discovery output.
+ * Parses text-based discovery output format.
+ */
+export function extractSliceSeedsFromDiscoveryOutput(discoveryOutput: string): {
   routes: string[];
   processes: string[];
   tools: string[];
   communities: string[];
   tables: string[];
 } {
-  const lines = gitnexusOutput.split('\n');
+  const lines = discoveryOutput.split('\n');
   const routes: string[] = [];
   const processes: string[] = [];
   const tools: string[] = [];

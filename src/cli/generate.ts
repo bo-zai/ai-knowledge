@@ -15,7 +15,7 @@ import { writeDebugLogs, type SliceDebugTrace } from '../packaging/write-debug-l
 import { renderObjectMarkdown, renderConMarkdown } from '../packaging/render-object.js';
 import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
 import { createEmbeddedGitNexusExecutor, ensureEmbeddedIndex, checkEmbeddedIndex } from '../knowledge/embedded-adapter.js';
-import { buildSlicePlan, extractSliceSeedsFromGitNexus } from '../slicing/build-slice-plan.js';
+import { buildSlicePlan, extractSliceSeedsFromDiscoveryOutput } from '../slicing/build-slice-plan.js';
 import {
   buildRepoEvidenceBundle,
   buildRouteSliceEvidence,
@@ -139,7 +139,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   if (!mockMode && shouldQueryAdditionalSlices(sliceFilter)) {
     try {
       const discoveryResult = await execEmbedded(['list', repoPath], repoPath);
-      const discovered = extractSliceSeedsFromGitNexus(discoveryResult.stdout);
+      const discovered = extractSliceSeedsFromDiscoveryOutput(discoveryResult.stdout);
       sliceSeeds = {
         routes: discovered.routes,
         processes: discovered.processes,
