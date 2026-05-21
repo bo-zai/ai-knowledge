@@ -1,4 +1,4 @@
-import { ensureDir, writeText } from '../shared/fs.js';
+import { ensureDir, removeDir, writeText } from '../shared/fs.js';
 import YAML from 'yaml';
 
 export async function writePackage(input: {
@@ -9,6 +9,14 @@ export async function writePackage(input: {
   objects: Array<{ id: string; type: string; content: string }>;
 }): Promise<void> {
   const basePath = `${input.repoPath}/${input.bootstrapDir}`;
+
+  // 全量重建，避免旧对象残留污染当前结果
+  try {
+    await removeDir(basePath);
+  } catch {
+    // Windows 上真实仓库目录可能被索引器或编辑器短暂占用。
+    // 这里退化为原地覆盖，保证本次生成不会因为目录锁直接失败。
+  }
 
   // 创建目录结构
   await ensureDir(basePath);

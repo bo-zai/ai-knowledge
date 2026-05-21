@@ -26,8 +26,10 @@ describe('schemas', () => {
         primary_key: ['id'],
         indexes: [],
         foreign_keys: [],
-        read_by: [],
-        write_by: [],
+        read_by_direct: [],
+        read_by_joined: [],
+        write_by_direct: [],
+        write_by_joined: [],
         fields: [{ name: 'id', type: 'bigint', nullable: false, default: null, description_zh: '主键', constraints: [] }],
       };
       expect(() => dbObjectSchema.parse(bad)).toThrow();
@@ -55,8 +57,10 @@ describe('schemas', () => {
         primary_key: ['id'],
         indexes: [],
         foreign_keys: [],
-        read_by: [],
-        write_by: [],
+        read_by_direct: [],
+        read_by_joined: [],
+        write_by_direct: [],
+        write_by_joined: [],
         fields: [{ name: 'id', type: 'bigint', nullable: false, default: null, description_zh: '主键', description_source: 'comment', constraints: [] }],
       };
       const result = dbObjectSchema.parse(good);

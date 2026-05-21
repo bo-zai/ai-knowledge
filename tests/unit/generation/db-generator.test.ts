@@ -34,6 +34,8 @@ describe('buildDbPrompt', () => {
         table: 'users',
         mapperBindings: [],
         sqlStatements: [],
+        directStatements: [],
+        joinedStatements: [],
         relatedCode: [],
         fieldCandidates: [{ name: 'id', source: 'mapper' }],
         entityEvidence: [],

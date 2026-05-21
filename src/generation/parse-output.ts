@@ -76,28 +76,35 @@ function validateOutput(parsed: unknown): GeneratorOutput {
   }
 
   const obj = parsed as Record<string, unknown>;
+  let objects: unknown[] | undefined;
+  let warnings: unknown[] | undefined;
 
   // 确保有 objects 数组
   if (!Array.isArray(obj.objects)) {
     // 尝试兼容：如果输出直接是对象，将其包装成数组
     if (obj.object && typeof obj.object === 'object') {
-      obj.objects = [obj.object] as unknown[];
+      objects = [obj.object];
     } else if (obj.id && obj.type) {
       // 单个对象输出
-      obj.objects = [obj] as unknown[];
+      const { objects: _objects, warnings: _warnings, ...singleObject } = obj;
+      objects = [singleObject];
     } else {
       throw new AppError('Generator output must have an objects array', 'INVALID_GENERATOR_OUTPUT');
     }
+  } else {
+    objects = obj.objects as unknown[];
   }
 
   // 确保有 warnings 数组
   if (!Array.isArray(obj.warnings)) {
-    obj.warnings = [] as unknown[];
+    warnings = [];
+  } else {
+    warnings = obj.warnings as unknown[];
   }
 
   return {
-    objects: obj.objects as unknown[],
-    warnings: obj.warnings as unknown[],
+    objects,
+    warnings,
   };
 }
 

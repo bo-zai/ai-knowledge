@@ -12,9 +12,10 @@ program
   .description('Generate bootstrap knowledge package')
   .requiredOption('--repo <path>', 'Target repository path')
   .option('--slice <value>', 'Generate only specific slice')
-  .option('--model <name>', 'LLM model name', 'gpt-4o')
-  .option('--base-url <url>', 'LLM API base URL', 'https://api.openai.com/v1')
-  .option('--api-key-env <name>', 'Environment variable for API key', 'OPENAI_API_KEY')
+  .option('--llm-config <path>', 'Path to JSON LLM config file')
+  .option('--model <name>', 'LLM model name')
+  .option('--base-url <url>', 'LLM API base URL')
+  .option('--api-key-env <name>', 'Environment variable for API key')
   .option('--force-analyze', 'Force GitNexus re-analysis')
   .option('--verbose', 'Enable verbose logging')
   .action(async (options) => {

@@ -21,7 +21,25 @@ CRITICAL RULES:
 - Use SQL aliases and Java property mappings to infer field meaning
 - Caller evidence provides business context - use it for table-level description
 - Never include fields from unrelated tables
-- Statement-scoped: only fields from SQL that actually touches this table`;
+- Statement-scoped: only fields from SQL that actually touches this table
+
+FIELD SELECTION RULES:
+- Strong clause types (select, insert, update) CAN enter main fields list
+- Weak clause types (where, join, order_by) SHOULD NOT enter main fields list unless also has entity mapping evidence (mappedJavaProperty or javaType)
+- If field only appears in order_by/where/join and no entity mapping, skip it from main fields
+
+FIELD TYPE RULES (CRITICAL):
+- When javaType exists in fieldCandidate, you MUST use it exactly as provided
+- DO NOT infer Long/Integer/String/BigDecimal when javaType is available
+- When no javaType, use "unknown" instead of guessing
+- DO NOT add type_suffix like "_id" -> "Long" guesses
+
+CONSTRAINT RULES (CRITICAL):
+- When no DDL/migration evidence exists, primary_key MUST be empty array []
+- When no DDL/migration evidence exists, constraints MUST be empty array []
+- DO NOT infer primary_key from field name patterns like "id"
+- DO NOT write nullable: false as fact without schema evidence
+- Use gaps for suspected but unconfirmed constraints`;
 
   // Use db_bundle if available (new evidence pipeline)
   const evidence = input.db_bundle ? buildEvidenceFromBundle(input.db_bundle) : input.evidence;
@@ -37,22 +55,32 @@ CRITICAL RULES:
         table_name_zh: 'string (Chinese, use caller evidence for context)',
         schema_name: 'string',
         source_kind: 'mapper | inferred (use "mapper" for MyBatis-derived)',
-        primary_key: 'array of field names',
+        primary_key: 'array of field names (MUST be empty [] when no DDL evidence)',
         indexes: 'array',
         foreign_keys: 'array',
-        read_by: 'array of mapper method IDs from evidence',
-        write_by: 'array of mapper method IDs from evidence',
+        read_by_direct: 'array of direct-access mapper method IDs from evidence',
+        read_by_joined: 'array of joined-access mapper method IDs from evidence',
+        write_by_direct: 'array of direct-access write mapper method IDs',
+        write_by_joined: 'array of joined-access write mapper method IDs (usually empty)',
+        callers: [
+          {
+            caller_class: 'string (Service/Manager class from evidence)',
+            caller_method: 'string (method that invokes the mapper)',
+            business_context: 'string (Chinese - from nearby comments or hints)',
+          },
+        ],
         fields: [
           {
             name: 'string (DB field name from SQL)',
-            type: 'string (inferred from Java type if available)',
-            nullable: 'boolean',
+            type: 'string (use javaType from evidence; "unknown" if missing; DO NOT guess)',
+            nullable: 'boolean (use true or null if no schema evidence)',
             default: 'string | null',
             description_zh: 'string (REQUIRED - from Java field comment if available)',
             description_source: 'comment | inferred (REQUIRED)',
-            constraints: 'array',
+            constraints: 'array (MUST be empty [] when no DDL evidence)',
           },
         ],
+        gaps: 'array of suspected but unconfirmed info (use for suspected primary_key, etc)',
       },
     },
     null,
@@ -74,6 +102,7 @@ function buildEvidenceFromBundle(bundle: DbTableEvidenceBundle): Record<string, 
         statementType: b.statementType,
         resultType: b.resultType,
         resultMap: b.resultMap,
+        accessType: b.accessType,
       })),
       sqlStatements: bundle.sqlStatements.map((s: SqlStatementInfo) => ({
         id: s.id,
@@ -81,6 +110,19 @@ function buildEvidenceFromBundle(bundle: DbTableEvidenceBundle): Record<string, 
         statementType: s.statementType,
         tables: s.tables,
         fragmentRefs: s.fragmentRefs,
+        accessType: s.accessType,
+      })),
+      directStatements: bundle.directStatements.map((s: SqlStatementInfo) => ({
+        id: s.id,
+        sql: s.sql,
+        statementType: s.statementType,
+        tables: s.tables,
+      })),
+      joinedStatements: bundle.joinedStatements.map((s: SqlStatementInfo) => ({
+        id: s.id,
+        sql: s.sql,
+        statementType: s.statementType,
+        tables: s.tables,
       })),
       fieldCandidates: bundle.fieldCandidates.map((f: FieldCandidate) => ({
         dbField: f.name,
@@ -88,7 +130,10 @@ function buildEvidenceFromBundle(bundle: DbTableEvidenceBundle): Record<string, 
         clauseType: f.clauseType,
         mappedJavaProperty: f.mappedJavaProperty,
         javaFieldComment: f.javaFieldComment,
+        javaType: f.javaType,
+        typeSource: f.typeSource,
         source: f.source,
+        sourceStatementId: f.sourceStatementId,
       })),
       entityEvidence: bundle.entityEvidence.map((e: EntityEvidence) => ({
         javaType: e.javaType,

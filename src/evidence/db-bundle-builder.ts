@@ -35,6 +35,8 @@ export interface DbTableEvidenceBundle {
   table: string;
   mapperBindings: MapperBinding[];
   sqlStatements: SqlStatementInfo[];
+  directStatements: SqlStatementInfo[];
+  joinedStatements: SqlStatementInfo[];
   relatedCode: RelatedCodeInfo[];
   fieldCandidates: FieldCandidate[];
   entityEvidence: EntityEvidence[];
@@ -54,6 +56,7 @@ export interface MapperBinding {
   mapperFile: string;
   resultType?: string;
   resultMap?: string;
+  accessType: 'direct' | 'joined';
 }
 
 export interface SqlStatementInfo {
@@ -62,6 +65,7 @@ export interface SqlStatementInfo {
   statementType: string;
   tables: string[];
   fragmentRefs: string[];
+  accessType: 'direct' | 'joined';
 }
 
 export interface RelatedCodeInfo {
@@ -114,9 +118,9 @@ export async function buildDbTableBundle(
   // Find statements that actually touch this table (statement-scoped)
   const tableMappers = findTableMappers(mappers, tableName.toLowerCase());
 
-  // Build mapper bindings (statement-scoped)
+  // Build mapper bindings (statement-scoped, with access type)
   const mapperBindings: MapperBinding[] = [];
-  for (const { mapper, resolved } of tableMappers) {
+  for (const { mapper, resolved, accessType } of tableMappers) {
     mapperBindings.push({
       namespace: mapper.namespace,
       methodId: resolved.id,
@@ -124,19 +128,29 @@ export async function buildDbTableBundle(
       mapperFile: mapper.filePath,
       resultType: resolved.resultType,
       resultMap: resolved.resultMap,
+      accessType,
     });
   }
 
-  // Build SQL statements (statement-scoped)
+  // Build SQL statements (statement-scoped, with access type)
   const sqlStatements: SqlStatementInfo[] = [];
-  for (const { mapper, resolved } of tableMappers) {
-    sqlStatements.push({
+  const directStatements: SqlStatementInfo[] = [];
+  const joinedStatements: SqlStatementInfo[] = [];
+  for (const { mapper, resolved, accessType } of tableMappers) {
+    const stmtInfo: SqlStatementInfo = {
       id: `${mapper.namespace}.${resolved.id}`,
       sql: resolved.sql,
       statementType: resolved.type,
       tables: extractTablesFromSql(resolved.sql),
       fragmentRefs: resolved.fragmentRefs,
-    });
+      accessType,
+    };
+    sqlStatements.push(stmtInfo);
+    if (accessType === 'direct') {
+      directStatements.push(stmtInfo);
+    } else {
+      joinedStatements.push(stmtInfo);
+    }
   }
 
   // Build related code (callers)
@@ -276,6 +290,8 @@ export async function buildDbTableBundle(
     table: tableName,
     mapperBindings,
     sqlStatements,
+    directStatements,
+    joinedStatements,
     relatedCode,
     fieldCandidates,
     entityEvidence,
@@ -292,13 +308,13 @@ export async function buildDbTableBundle(
 /**
  * Find all mapper/statement pairs that touch a specific table.
  * Statement-scoped: only includes statements that actually reference the table.
- * Returns resolved statements ready for use.
+ * Returns resolved statements with access type classification.
  */
 function findTableMappers(
   mappers: MapperDocument[],
   tableName: string
-): Array<{ mapper: MapperDocument; resolved: ResolvedStatement }> {
-  const result: Array<{ mapper: MapperDocument; resolved: ResolvedStatement }> = [];
+): Array<{ mapper: MapperDocument; resolved: ResolvedStatement; accessType: 'direct' | 'joined' }> {
+  const result: Array<{ mapper: MapperDocument; resolved: ResolvedStatement; accessType: 'direct' | 'joined' }> = [];
 
   for (const mapper of mappers) {
     for (const draft of mapper.statements) {
@@ -307,12 +323,59 @@ function findTableMappers(
 
       // Only include if this specific statement touches the target table
       if (tables.includes(tableName)) {
-        result.push({ mapper, resolved });
+        const accessType = classifyTableAccessType(resolved.sql, tableName, resolved.type);
+        result.push({ mapper, resolved, accessType });
       }
     }
   }
 
   return result;
+}
+
+/**
+ * Classify whether a table is accessed directly or via join.
+ * - Direct: table appears in FROM clause (main target)
+ * - Joined: table only appears in JOIN clause (joined for reference)
+ * - INSERT/UPDATE/DELETE are always direct
+ */
+function classifyTableAccessType(
+  sql: string,
+  tableName: string,
+  statementType: string
+): 'direct' | 'joined' {
+  // INSERT/UPDATE/DELETE are always direct
+  if (statementType === 'insert' || statementType === 'update' || statementType === 'delete') {
+    return 'direct';
+  }
+
+  // For SELECT, check FROM clause vs JOIN clause
+  const lowerSql = sql.toLowerCase();
+  const lowerTable = tableName.toLowerCase();
+
+  // Check if table appears in FROM clause
+  const fromRegex = /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?(?:\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?)*/gi;
+  const fromMatch = lowerSql.match(fromRegex);
+
+  if (fromMatch) {
+    // Check if target table is in FROM clause (before any JOIN)
+    const fromClause = fromMatch[0];
+    const beforeJoin = fromClause.split(/\s+(?:left|right|inner|outer|cross|natural)?\s*join/i)[0];
+    if (beforeJoin.includes(lowerTable)) {
+      return 'direct';
+    }
+  }
+
+  // Check if table appears in JOIN clause
+  const joinRegex = /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?\s+ON/gi;
+  const joinMatches = lowerSql.matchAll(joinRegex);
+  for (const match of joinMatches) {
+    if (match[0].toLowerCase().includes(lowerTable)) {
+      return 'joined';
+    }
+  }
+
+  // Default to direct if table appears somewhere but classification unclear
+  return 'direct';
 }
 
 /**
@@ -551,6 +614,8 @@ export function mergeDbTableBundles(bundles: DbTableEvidenceBundle[]): DbTableEv
       table,
       mapperBindings: tableBundles.flatMap((b) => b.mapperBindings),
       sqlStatements: tableBundles.flatMap((b) => b.sqlStatements),
+      directStatements: tableBundles.flatMap((b) => b.directStatements),
+      joinedStatements: tableBundles.flatMap((b) => b.joinedStatements),
       relatedCode: tableBundles.flatMap((b) => b.relatedCode),
       fieldCandidates: tableBundles.flatMap((b) => b.fieldCandidates),
       entityEvidence: tableBundles.flatMap((b) => b.entityEvidence),
