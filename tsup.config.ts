@@ -1,7 +1,10 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: { 'cli/index': 'src/cli/index.ts' },
+  entry: {
+    'cli/index': 'src/cli/index.ts',
+    'workers/parse-worker': 'src/engine/ingestion/workers/parse-worker.ts',
+  },
   format: ['esm'],
   target: 'node20',
   sourcemap: true,
