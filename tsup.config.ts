@@ -2,16 +2,30 @@ import { defineConfig } from 'tsup';
 import fs from 'fs';
 import path from 'path';
 
-// Copy vendor/leiden to dist after build
-const copyVendor = () => {
-  const srcDir = path.resolve('vendor/leiden');
-  const destDir = path.resolve('dist/vendor/leiden');
-  if (fs.existsSync(srcDir)) {
-    fs.mkdirSync(destDir, { recursive: true });
-    for (const file of fs.readdirSync(srcDir)) {
-      fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
+// Copy vendor/leiden and scripts to dist after build
+const copyAssets = () => {
+  // Copy vendor/leiden
+  const vendorSrc = path.resolve('vendor/leiden');
+  const vendorDest = path.resolve('dist/vendor/leiden');
+  if (fs.existsSync(vendorSrc)) {
+    fs.mkdirSync(vendorDest, { recursive: true });
+    for (const file of fs.readdirSync(vendorSrc)) {
+      fs.copyFileSync(path.join(vendorSrc, file), path.join(vendorDest, file));
     }
     console.log('Copied vendor/leiden to dist');
+  }
+
+  // Copy scripts
+  const scriptsSrc = path.resolve('scripts');
+  const scriptsDest = path.resolve('dist/scripts');
+  if (fs.existsSync(scriptsSrc)) {
+    fs.mkdirSync(scriptsDest, { recursive: true });
+    for (const file of fs.readdirSync(scriptsSrc)) {
+      if (file.endsWith('.mjs') || file.endsWith('.cjs')) {
+        fs.copyFileSync(path.join(scriptsSrc, file), path.join(scriptsDest, file));
+      }
+    }
+    console.log('Copied scripts to dist');
   }
 };
 
@@ -27,7 +41,7 @@ export default defineConfig({
   dts: false,
   splitting: false,
   banner: { js: '#!/usr/bin/env node --no-deprecation' },
-  onSuccess: copyVendor,
+  onSuccess: copyAssets,
   external: [
     'openai',
     'yaml',

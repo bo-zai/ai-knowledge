@@ -1,6 +1,16 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'node:url';
+import fs from 'fs';
+import { dirname, resolve } from 'node:path';
 import { LBUG_MAX_DB_SIZE } from './lbug-config.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Resolve script path - works from both src/ (3 levels up) and dist/cli/ (2 levels up)
+const scriptPathFromSrc = resolve(__dirname, '..', '..', '..', 'scripts', 'install-duckdb-extension.mjs');
+const scriptPathFromDist = resolve(__dirname, '..', 'scripts', 'install-duckdb-extension.mjs');
+const scriptPath = fs.existsSync(scriptPathFromDist) ? scriptPathFromDist : scriptPathFromSrc;
 
 const DEFAULT_EXTENSION_INSTALL_TIMEOUT_MS = 15_000;
 const EXTENSION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -65,8 +75,7 @@ export const getExtensionInstallChildProcessArgs = (
   extensionName: string,
   maxDbSize: number = LBUG_MAX_DB_SIZE,
 ): string[] => {
-  const childScript = new URL('../../../scripts/install-duckdb-extension.mjs', import.meta.url);
-  return [fileURLToPath(childScript), extensionName, String(maxDbSize)];
+  return [scriptPath, extensionName, String(maxDbSize)];
 };
 
 /**
