@@ -1,7 +1,7 @@
 /**
  * Query Services
  *
- * Provides high-level query operations for the embedded GitNexus runtime.
+ * Provides high-level query operations for the embedded analysis runtime.
  */
 
 export {
