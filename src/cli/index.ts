@@ -5,7 +5,8 @@ const program = new Command();
 program
   .name('rkg')
   .description('Generate bootstrap-knowledge packages from embedded analysis + LLM')
-  .version('0.1.0');
+  .version('0.1.0', '-v, --version', 'output the version number')
+  .helpOption('-h, --help', 'display help for command');
 
 program
   .command('generate [path]')
