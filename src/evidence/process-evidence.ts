@@ -18,7 +18,7 @@ export function buildProcessEvidence(input: {
       {
         id: 'F-001',
         claim: `Process ${input.processName} starts at ${input.entryFile}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.entryFile }],
       },
     ],

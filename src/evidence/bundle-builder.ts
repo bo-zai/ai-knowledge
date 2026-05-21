@@ -31,7 +31,7 @@ export function buildRepoEvidenceBundle(input: {
     facts.push({
       id: 'F-REPO-003',
       claim: `入口文件: ${input.entryPoints.join(', ')}`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: input.entryPoints.map((f) => ({ file: f })),
     });
   }
@@ -69,7 +69,7 @@ export function buildRouteSliceEvidence(input: {
     {
       id: 'F-ROUTE-001',
       claim: `路由 ${input.method} ${input.path} 由 ${input.handlerFile} 处理`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: [{ file: input.handlerFile }],
     },
   ];
@@ -78,7 +78,7 @@ export function buildRouteSliceEvidence(input: {
     facts.push({
       id: 'F-ROUTE-002',
       claim: `中间件链: ${input.middleware.join(' -> ')}`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: [{ file: input.handlerFile }],
     });
   }
@@ -132,7 +132,7 @@ export function buildProcessSliceEvidence(input: {
     {
       id: 'F-PROCESS-001',
       claim: `进程 ${input.processName} 从 ${input.entryFile} 开始`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: [{ file: input.entryFile }],
     },
   ];
@@ -207,13 +207,13 @@ export function buildModuleSliceEvidence(input: {
     {
       id: 'F-MOD-001',
       claim: `模块 ${input.moduleName} 定义在 ${input.filePath}`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: [{ file: input.filePath }],
     },
     {
       id: 'F-MOD-002',
       claim: `导出: ${input.exports.map((e) => e.name).join(', ')}`,
-      source_kind: 'gitnexus',
+      source_kind: 'analysis-runtime',
       refs: [{ file: input.filePath }],
     },
   ];

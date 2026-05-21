@@ -18,7 +18,7 @@ export function buildOwnEvidence(input: {
       {
         id: 'F-001',
         claim: `${input.componentName} is owned by ${input.ownerName} (${input.ownerType})`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.componentName }],
       },
     ],

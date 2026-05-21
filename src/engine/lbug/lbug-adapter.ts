@@ -187,8 +187,8 @@ const DB_LOCK_RETRY_DELAY_MS = 500;
 
 /**
  * Return true when the error message indicates that another process holds
- * an exclusive lock on the LadybugDB file (e.g. `gitnexus analyze` or
- * `gitnexus serve` running at the same time).
+ * an exclusive lock on the LadybugDB file (e.g. `knowledge analyze` or
+ * MCP server running at the same time).
  */
 export const isDbBusyError = (err: unknown): boolean => {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
@@ -205,7 +205,7 @@ export const isDbBusyError = (err: unknown): boolean => {
  * a read-only LadybugDB connection. The MCP query pool opens DBs read-only,
  * so any path that calls a `CREATE_*` procedure there will surface this
  * (e.g. defensive `ensureFTSIndex` calls). Owners of the writable analyze
- * path should ignore this error — index creation is owned by `gitnexus
+ * path should ignore this error — index creation is owned by `knowledge
  * analyze` and either already happened or will happen on the next run.
  */
 export const isReadOnlyDbError = (err: unknown): boolean => {
@@ -239,7 +239,7 @@ export const initLbug = async (dbPath: string) => {
  * While the callback runs, no other request can switch the active DB.
  *
  * Automatically retries up to DB_LOCK_RETRY_ATTEMPTS times when the
- * database is busy (e.g. `gitnexus analyze` holds the write lock).
+ * database is busy (e.g. `knowledge analyze` holds the write lock).
  * Each retry waits DB_LOCK_RETRY_DELAY_MS * attempt milliseconds.
  */
 export const withLbugDb = async <T>(dbPath: string, operation: () => Promise<T>): Promise<T> => {
@@ -1311,7 +1311,7 @@ export const createFTSIndex = async (
  * pool adapter), `CREATE_FTS_INDEX` will fail with "Cannot execute write
  * operations in a read-only database". Treat that as a no-op and cache
  * the key so callers don't loop on a path that can never succeed here —
- * the index is owned by `gitnexus analyze` (writable) and either already
+ * the index is owned by `knowledge analyze` (writable) and either already
  * exists or will be created on the next analyze.
  */
 export const ensureFTSIndex = async (

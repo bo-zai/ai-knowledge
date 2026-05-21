@@ -70,7 +70,7 @@ export interface OrchestrationDeps {
   repoPath: string;
   bootstrapDir: string;
   modelConfig: { baseUrl: string; apiKey: string; model: string };
-  gitnexus: {
+  runtime: {
     ensureIndex: (repoPath: string) => Promise<void>;
     query: (command: string) => Promise<string>;
   };
@@ -606,7 +606,7 @@ function buildSliceSpecificEvidence(
           {
             id: 'F-TERM-001',
             claim: `术语 ${slice.title} 在仓库中被使用`,
-            source_kind: 'gitnexus',
+            source_kind: 'analysis-runtime',
             refs: [{ file: repoPath }],
           },
         ],

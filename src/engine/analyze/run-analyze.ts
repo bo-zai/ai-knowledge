@@ -27,7 +27,7 @@ import {
   getStoragePaths,
   saveMeta,
   loadMeta,
-  ensureGitNexusIgnored,
+  ensureKnowledgeIgnored,
   registerRepo,
   cleanupOldKuzuFiles,
 } from '../storage/repo-manager.js';
@@ -40,7 +40,6 @@ import {
 } from '../storage/git.js';
 import type { CachedEmbedding } from '../embeddings/types.js';
 import { EMBEDDING_TABLE_NAME, STALE_HASH_SENTINEL } from '../lbug/schema.js';
-import { generateAIContextFiles } from '../cli/ai-context.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -77,10 +76,6 @@ export interface AnalyzeOptions {
    */
   dropEmbeddings?: boolean;
   skipGit?: boolean;
-  /** Skip AGENTS.md and CLAUDE.md gitnexus block updates. */
-  skipAgentsMd?: boolean;
-  /** Omit volatile symbol/relationship counts from AGENTS.md and CLAUDE.md. */
-  noStats?: boolean;
   /**
    * User-provided alias for the registry `name` (#829). When set,
    * forwarded to `registerRepo` so the indexed repo is stored under
@@ -145,11 +140,11 @@ export const PHASE_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the full GitNexus analysis pipeline.
+ * Run the full analysis pipeline.
  *
  * This is the shared core extracted from the CLI `analyze` command. It
  * handles: pipeline execution, LadybugDB loading, FTS indexing, embedding
- * generation, metadata persistence, and AI context file generation.
+ * generation, metadata persistence, and registry registration.
  *
  * The function communicates progress and log messages exclusively through
  * the {@link AnalyzeCallbacks} interface — it never writes to stdout/stderr
@@ -180,7 +175,7 @@ export async function runFullAnalysis(
   if (existingMeta && !options.force && existingMeta.lastCommit === currentCommit) {
     // Non-git folders have currentCommit = '' — always rebuild since we can't detect changes
     if (currentCommit !== '') {
-      await ensureGitNexusIgnored(repoPath);
+      await ensureKnowledgeIgnored(repoPath);
       return {
         // `resolveRepoIdentityRoot` collapses worktree roots to the
         // canonical repo basename (#1259) but leaves arbitrary subdirs
@@ -487,39 +482,8 @@ export async function runFullAnalysis(
       allowDuplicateName: options.allowDuplicateName,
     });
 
-    // Keep generated .gitnexus contents ignored without editing the user's root .gitignore.
-    await ensureGitNexusIgnored(repoPath);
-
-    // ── Generate AI context files (best-effort) ───────────────────────
-    let aggregatedClusterCount = 0;
-    if (pipelineResult.communityResult?.communities) {
-      const groups = new Map<string, number>();
-      for (const c of pipelineResult.communityResult.communities) {
-        const label = c.heuristicLabel || c.label || 'Unknown';
-        groups.set(label, (groups.get(label) || 0) + c.symbolCount);
-      }
-      aggregatedClusterCount = Array.from(groups.values()).filter((count) => count >= 5).length;
-    }
-
-    try {
-      await generateAIContextFiles(
-        repoPath,
-        storagePath,
-        projectName,
-        {
-          files: pipelineResult.totalFileCount,
-          nodes: stats.nodes,
-          edges: stats.edges,
-          communities: pipelineResult.communityResult?.stats.totalCommunities,
-          clusters: aggregatedClusterCount,
-          processes: pipelineResult.processResult?.stats.totalProcesses,
-        },
-        undefined,
-        { skipAgentsMd: options.skipAgentsMd, noStats: options.noStats },
-      );
-    } catch {
-      // Best-effort — don't fail the entire analysis for context file issues
-    }
+    // Keep generated .knowledge contents ignored without editing the user's root .gitignore.
+    await ensureKnowledgeIgnored(repoPath);
 
     // ── Close LadybugDB ──────────────────────────────────────────────
     await closeLbug();

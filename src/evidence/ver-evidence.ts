@@ -18,7 +18,7 @@ export function buildVerEvidence(input: {
       {
         id: 'F-001',
         claim: `${input.componentName} version is ${input.version}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.componentName }],
       },
     ],

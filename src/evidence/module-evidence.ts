@@ -18,7 +18,7 @@ export function buildModuleEvidence(input: {
       {
         id: 'F-001',
         claim: `Module ${input.moduleName} is defined in ${input.filePath}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.filePath }],
       },
     ],

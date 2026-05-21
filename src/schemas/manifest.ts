@@ -6,7 +6,7 @@ export const manifestSchema = z.object({
   repo_id: z.string().min(1),
   repo_root: z.string().min(1),
   generated_at: z.string().min(1),
-  gitnexus_version: z.string().min(1),
+  analysis_version: z.string().min(1),
   object_types: z.array(z.enum(['TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB'])),
 });
 

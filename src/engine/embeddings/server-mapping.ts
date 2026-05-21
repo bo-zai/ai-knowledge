@@ -1,7 +1,7 @@
 /**
  * Server Mapping Configuration
  *
- * Reads ~/.gitnexus/server-mapping.json to map repo names to service names.
+ * Reads ~/.knowledge/server-mapping.json to map repo names to service names.
  * Used in embedding text to enrich metadata with microservice context.
  */
 
@@ -9,7 +9,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 
-const MAPPING_FILE = path.join(os.homedir(), '.gitnexus', 'server-mapping.json');
+const MAPPING_FILE = path.join(os.homedir(), '.knowledge', 'server-mapping.json');
 
 let cachedMapping: Record<string, string> | null = null;
 

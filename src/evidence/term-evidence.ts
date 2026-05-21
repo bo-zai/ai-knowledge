@@ -17,7 +17,7 @@ export function buildTermEvidence(input: {
       {
         id: 'F-001',
         claim: `Term ${input.term} means: ${input.definition}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [],
       },
     ],

@@ -3,9 +3,13 @@
  *
  * Provides index management and discovery operations for the embedded runtime.
  * This is the typed boundary for CLI generation and query operations.
+ *
+ * IMPORTANT: This module lazy-loads the full analysis runtime to avoid
+ * pulling in community detection dependencies (Leiden) at startup for
+ * database-only generation paths.
  */
 
-import { runFullAnalysis, type AnalyzeResult } from '../engine/analyze/run-analyze.js';
+import type { AnalyzeResult } from '../engine/analyze/run-analyze.js';
 import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
 import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
 
@@ -34,15 +38,16 @@ export async function ensureIndex(repoPath: string, options?: { force?: boolean 
 
 /**
  * Run embedded analysis.
+ * Lazy-loads the full analysis runtime to avoid startup dependency on Leiden.
  */
 export async function runAnalysis(repoPath: string, options?: { force?: boolean }): Promise<AnalyzeResult> {
+  // Lazy-load full analysis to avoid pulling in Leiden at module load time
+  const { runFullAnalysis } = await import('../engine/analyze/run-analyze.js');
   return runFullAnalysis(
     repoPath,
     {
       force: options?.force ?? false,
       embeddings: false,
-      skipAgentsMd: true,
-      noStats: true,
     },
     {
       onProgress: (phase, percent, message) => {

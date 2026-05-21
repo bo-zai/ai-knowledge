@@ -273,7 +273,7 @@ const IGNORED_FILES = new Set([
 // The hardcoded DEFAULT_IGNORE_LIST is the "safety net" default: directories
 // that are almost never source code (node_modules, .git, dist, __tests__,
 // etc.). Users who legitimately need to index one of these can negate the
-// hardcoded rule via a `!pattern` line in `.gitnexusignore` (#771) — same
+// hardcoded rule via a `!pattern` line in `.knowledge-ignore` (#771) — same
 // semantics as `.gitignore` negation. That override is applied in
 // `createIgnoreFilter` below; `shouldIgnorePath` itself stays a pure
 // hardcoded-list check so its callers (wiki generator, tests) get
@@ -338,11 +338,11 @@ export const isHardcodedIgnoredDirectory = (name: string): boolean => {
 };
 
 /**
- * Load .gitignore and .gitnexusignore rules from the repo root.
+ * Load .gitignore and .knowledge-ignore rules from the repo root.
  * Returns an `ignore` instance with all patterns, or null if no files found.
  */
 export interface IgnoreOptions {
-  /** Skip .gitignore parsing, only read .gitnexusignore. Defaults to GITNEXUS_NO_GITIGNORE env var. */
+  /** Skip .gitignore parsing, only read .knowledge-ignore. Defaults to KNOWLEDGE_NO_GITIGNORE env var. */
   noGitignore?: boolean;
 }
 
@@ -354,8 +354,8 @@ export const loadIgnoreRules = async (
   let hasRules = false;
 
   // Allow users to bypass .gitignore parsing (e.g. when .gitignore accidentally excludes source files)
-  const skipGitignore = options?.noGitignore ?? !!process.env.GITNEXUS_NO_GITIGNORE;
-  const filenames = skipGitignore ? ['.gitnexusignore'] : ['.gitignore', '.gitnexusignore'];
+  const skipGitignore = options?.noGitignore ?? !!process.env.KNOWLEDGE_NO_GITIGNORE;
+  const filenames = skipGitignore ? ['.knowledge-ignore'] : ['.gitignore', '.knowledge-ignore'];
 
   for (const filename of filenames) {
     try {
@@ -374,14 +374,14 @@ export const loadIgnoreRules = async (
 };
 
 /**
- * Walk ancestor segments of `rel` and check whether `.gitnexusignore`
- * (or `.gitignore`) contains an explicit `!pattern` negation that
- * applies. Returns true as soon as any segment — or the path itself —
- * is matched by a negation rule.
+ * Walk ancestor segments of `rel` and check whether `.knowledge-ignore`
+// (or `.gitignore`) contains an explicit `!pattern` negation that
+// applies. Returns true as soon as any segment — or the path itself —
+// is matched by a negation rule.
  *
  * Why this exists (#771): the hardcoded DEFAULT_IGNORE_LIST would
  * otherwise block indexing of directories like `__tests__/` even when
- * the user has an explicit `!__tests__/` line in `.gitnexusignore`.
+ * the user has an explicit `!__tests__/` line in `.knowledge-ignore`.
  * Mirroring `.gitignore` negation semantics: a user's explicit
  * unignore of a parent directory implicitly unignores everything
  * underneath, so we walk the ancestor chain rather than only testing
@@ -411,13 +411,13 @@ const hasExplicitUnignore = (ig: Ignore, rel: string): boolean => {
 
 /**
  * Create a glob-compatible ignore filter combining:
- * - .gitignore / .gitnexusignore patterns (via `ignore` package)
+ * - .gitignore / .knowledge-ignore patterns (via `ignore` package)
  * - Hardcoded DEFAULT_IGNORE_LIST, IGNORED_EXTENSIONS, IGNORED_FILES
  *
  * Returns an IgnoreLike object for glob's `ignore` option,
  * enabling directory-level pruning during traversal.
  *
- * Precedence (#771): user's `.gitnexusignore` negation patterns take
+ * Precedence (#771): user's `.knowledge-ignore` negation patterns take
  * priority over the hardcoded list, matching `.gitignore` semantics.
  * An explicit `!pattern` rule unignores descendants even when they
  * would otherwise be blocked by DEFAULT_IGNORE_LIST — UNLESS a more
@@ -435,7 +435,7 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // which is what the `ignore` package expects. No explicit normalization needed.
       const rel = p.relative();
       if (!rel) return false;
-      // User's .gitnexusignore negation takes precedence over hardcoded
+      // User's .knowledge-ignore negation takes precedence over hardcoded
       // rules (#771). If any ancestor or the path itself was explicitly
       // unignored AND no more-specific rule re-ignores this exact path,
       // allow it through. The `!ig.ignores(rel)` guard matches
@@ -443,7 +443,7 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // by `__tests__/generated/` negates the parent but still blocks
       // the re-ignored child.
       if (ig && hasExplicitUnignore(ig, rel) && !ig.ignores(rel)) return false;
-      // Check .gitignore / .gitnexusignore patterns
+      // Check .gitignore / .knowledge-ignore patterns
       if (ig && ig.ignores(rel)) return true;
       // Fall back to hardcoded rules
       return shouldIgnorePath(rel);
@@ -454,7 +454,7 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // list check below is defense-in-depth — do not remove `dot: false`
       // assuming this covers it.
       const rel = p.relative();
-      // User's .gitnexusignore negation takes precedence (#771) — if the
+      // User's .knowledge-ignore negation takes precedence (#771) — if the
       // user explicitly unignored this directory or any ancestor via a
       // !pattern rule, allow descent even if the directory name is in
       // DEFAULT_IGNORE_LIST. The `!ig.ignores(rel + '/')` guard keeps
@@ -463,7 +463,7 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       if (ig && rel && hasExplicitUnignore(ig, rel) && !ig.ignores(rel + '/')) return false;
       // Hardcoded list: block descent into well-known noise directories.
       if (DEFAULT_IGNORE_LIST.has(p.name)) return true;
-      // Check against .gitignore / .gitnexusignore patterns.
+      // Check against .gitignore / .knowledge-ignore patterns.
       // Since childrenIgnored is only called for directories, always test with
       // a trailing slash. This ensures directory-only negation patterns (e.g.
       // `!iOS/`) are applied correctly — without the slash, `ig.ignores('iOS')`

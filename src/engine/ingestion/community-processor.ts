@@ -6,11 +6,12 @@
  *
  * Communities represent groups of code that work together frequently,
  * helping agents navigate the codebase by functional area rather than file structure.
+ *
+ * IMPORTANT: Leiden is lazy-loaded only when community detection actually runs.
+ * This prevents startup failure when the vendor file is missing for database-only
+ * generation paths that don't need community detection.
  */
 
-// NOTE: The Leiden algorithm source is vendored from graphology's repo
-// (src/communities-leiden) because it was never published to npm.
-// We use createRequire to load the CommonJS vendored files in ESM context.
 import Graph from 'graphology';
 import type { AbstractGraph, Attributes } from 'graphology-types';
 import { createRequire } from 'node:module';
@@ -23,11 +24,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // Navigate to package root (works from both src/ and dist/)
 const leidenPath = resolve(__dirname, '..', '..', '..', 'vendor', 'leiden', 'index.cjs');
-const _require = createRequire(import.meta.url);
 /** Graphology Graph instance type (AbstractGraph from graphology-types avoids CJS/ESM interop namespace issue) */
 type GraphInstance = AbstractGraph<Attributes, Attributes, Attributes>;
-
-const leiden: LeidenModule = _require(leidenPath);
 
 /** Vendored Leiden algorithm module shape */
 interface LeidenModule {
@@ -40,6 +38,16 @@ interface LeidenDetailedResult {
   count: number;
   modularity: number;
 }
+
+// Lazy-loaded Leiden module - only loaded when processCommunities runs
+let _leiden: LeidenModule | null = null;
+const getLeiden = (): LeidenModule => {
+  if (!_leiden) {
+    const _require = createRequire(import.meta.url);
+    _leiden = _require(leidenPath);
+  }
+  return _leiden!;
+};
 
 // ============================================================================
 // TYPES
@@ -145,9 +153,10 @@ export const processCommunities = async (
   const LEIDEN_TIMEOUT_MS = 60_000;
   let details: LeidenDetailedResult;
   try {
-    details = await Promise.race([
-      Promise.resolve(
-        leiden.detailed(graph, {
+    const leiden = getLeiden();
+      details = await Promise.race([
+        Promise.resolve(
+          leiden.detailed(graph, {
           resolution: isLarge ? 2.0 : 1.0,
           maxIterations: isLarge ? 3 : 0,
         }),

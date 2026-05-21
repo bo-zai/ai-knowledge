@@ -23,19 +23,19 @@ export function buildRouteEvidence(input: {
       {
         id: 'F-001',
         claim: `路由 ${input.route} 由 ${input.handler_file} 处理`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.handler_file }],
       },
       {
         id: 'F-002',
         claim: `响应字段: ${input.response_keys.join(', ')}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.handler_file }],
       },
       {
         id: 'F-003',
         claim: `错误字段: ${input.error_keys.join(', ')}`,
-        source_kind: 'gitnexus',
+        source_kind: 'analysis-runtime',
         refs: [{ file: input.handler_file }],
       },
       ...(input.middleware.length > 0
@@ -43,7 +43,7 @@ export function buildRouteEvidence(input: {
             {
               id: 'F-004',
               claim: `中间件: ${input.middleware.join(' -> ')}`,
-              source_kind: 'gitnexus',
+              source_kind: 'analysis-runtime',
               refs: [{ file: input.handler_file }],
             },
           ]

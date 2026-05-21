@@ -24,12 +24,6 @@ import {
   type SqlLineageEdge,
   type MapperMethodBinding,
 } from '../mybatis/sql-lineage.js';
-import {
-  findDbTables,
-  getDbTableContext,
-  type DbTableNode,
-  type DbTableContext,
-} from '../query/index-service.js';
 
 export interface DbTableEvidenceBundle {
   table: string;

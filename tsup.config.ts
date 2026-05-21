@@ -16,8 +16,11 @@ export default defineConfig({
     'commander',
     /^tree-sitter/,
     'node-gyp-build',
+    '@ladybugdb/core',
+    '@ladybugdb/core-win32-x64',
     'ladybugdb',
     'better-sqlite3',
     'leiden',
+    /vendor\/leiden/,
   ],
 });
