@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 
 import { appendText, ensureDir } from '../shared/fs.js';
+import type { LlmGenerationResult } from '../generation/llm-client.js';
 
 export interface SliceDebugTrace {
   sliceId: string;
@@ -20,6 +21,7 @@ export interface SliceDebugTrace {
     rawText?: string;
     parsedOutput?: unknown;
     warnings?: unknown[];
+    llm?: LlmGenerationResult;
   };
   validation?: {
     passed: boolean;

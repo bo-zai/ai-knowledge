@@ -1,4 +1,6 @@
 import type OpenAI from 'openai';
+import fs from 'fs/promises';
+import path from 'path';
 import { logger, setLogLevel } from '../shared/logger.js';
 import { getEnvVar } from '../config/env.js';
 import {
@@ -29,7 +31,7 @@ import {
   buildAllDbTableBundles,
   type DbTableEvidenceBundle,
 } from '../evidence/db-bundle-builder.js';
-import { generateWithClient } from '../generation/llm-client.js';
+import { generateWithClient, type LlmGenerationResult } from '../generation/llm-client.js';
 import type { GeneratorOutput } from '../generation/parse-output.js';
 import { parseGeneratorOutput } from '../generation/parse-output.js';
 import { withRetry } from '../generation/retry.js';
@@ -118,7 +120,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   }
 
   // 2. Discover database-first slices from real MyBatis evidence.
-  const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter);
+  const companionCoreRepoPath = await resolveCompanionCoreRepoPath(repoPath);
+  const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter, companionCoreRepoPath);
   const dbBundleMap = new Map(dbBundles.map((bundle) => [bundle.table.toLowerCase(), bundle]));
 
   let sliceSeeds = {
@@ -193,6 +196,16 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       if (generation.objectResult) {
         generatedObjects.push(generation.objectResult);
         retrievalOrder.push(generation.objectResult.id);
+      } else if (generation.trace.status === 'validation_failed' || generation.trace.status === 'error') {
+        const failedObjectType = inferObjectType(slice.kind);
+        failures.push({
+          id: generateObjectId(failedObjectType, slice.id),
+          type: failedObjectType,
+          error:
+            generation.trace.validation?.error ??
+            generation.trace.error ??
+            'Object generation failed',
+        });
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -327,6 +340,7 @@ async function generateObjectForSlice(
   const startedAt = new Date();
   let rawText: string | undefined;
   let parsedOutput: GeneratorOutput | undefined;
+  let llmResult: LlmGenerationResult | undefined;
 
   const output = isMockModel(model)
     ? buildMockGeneratorOutput(slice, evidence, objectType)
@@ -335,7 +349,8 @@ async function generateObjectForSlice(
           if (!client) {
             throw new Error('OpenAI client is not available');
           }
-          rawText = await generateWithClient(client, model, system, user);
+          llmResult = await generateWithClient(client, model, system, user);
+          rawText = llmResult.text;
           parsedOutput = parseGeneratorOutput(rawText);
           return parsedOutput;
         },
@@ -368,6 +383,7 @@ async function generateObjectForSlice(
           rawText,
           parsedOutput,
           warnings: output.warnings,
+          llm: llmResult,
         },
       },
     };
@@ -391,8 +407,11 @@ async function generateObjectForSlice(
     generated_by: 'repo-knowledge-generator',
     generated_at: generatedAt,
   };
+  const normalizedDraft = normalizeDraftForType(draft, objectType);
+  const evidenceBundle = getDbBundleFromEvidence(evidence);
+  const enrichedDraft = enrichDraftWithEvidence(normalizedDraft, objectType, evidenceBundle);
   const candidateObject = {
-    ...(typeof draft === 'object' && draft !== null ? draft : {}),
+    ...(typeof enrichedDraft === 'object' && enrichedDraft !== null ? enrichedDraft : {}),
     ...frontmatter,
     id: objectId,
     type: objectType,
@@ -423,6 +442,7 @@ async function generateObjectForSlice(
           rawText,
           parsedOutput,
           warnings: output.warnings,
+          llm: llmResult,
         },
         validation: {
           passed: false,
@@ -464,6 +484,7 @@ async function generateObjectForSlice(
         rawText,
         parsedOutput,
         warnings: output.warnings,
+        llm: llmResult,
       },
       validation: {
         passed: true,
@@ -683,6 +704,407 @@ function validateObject(draft: unknown, objectType: string): unknown | null {
   }
 }
 
+function normalizeDraftForType(draft: unknown, objectType: string): unknown {
+  if (objectType !== 'DB' || typeof draft !== 'object' || draft === null || Array.isArray(draft)) {
+    return draft;
+  }
+
+  const record = draft as Record<string, unknown>;
+
+  return {
+    ...record,
+    source_kind: normalizeDbSourceKind(record.source_kind),
+    fields: normalizeDbFields(record.fields),
+    gaps: normalizeDbGaps(record.gaps),
+    callers: normalizeDbCallers(record.callers),
+    primary_key: normalizeStringArray(record.primary_key),
+    indexes: normalizeStringArray(record.indexes),
+    foreign_keys: normalizeStringArray(record.foreign_keys),
+    read_by_direct: normalizeStringArray(record.read_by_direct),
+    read_by_joined: normalizeStringArray(record.read_by_joined),
+    write_by_direct: normalizeStringArray(record.write_by_direct),
+    write_by_joined: normalizeStringArray(record.write_by_joined),
+  };
+}
+
+function getDbBundleFromEvidence(evidence: unknown): DbTableEvidenceBundle | null {
+  if (typeof evidence !== 'object' || evidence === null || Array.isArray(evidence)) {
+    return null;
+  }
+
+  const record = evidence as Record<string, unknown>;
+  const dbBundle = record.db_bundle;
+  if (typeof dbBundle !== 'object' || dbBundle === null || Array.isArray(dbBundle)) {
+    return null;
+  }
+
+  return dbBundle as DbTableEvidenceBundle;
+}
+
+function enrichDraftWithEvidence(
+  draft: unknown,
+  objectType: string,
+  dbBundle: DbTableEvidenceBundle | null,
+): unknown {
+  if (objectType !== 'DB' || typeof draft !== 'object' || draft === null || Array.isArray(draft) || !dbBundle) {
+    return draft;
+  }
+
+  const record = draft as Record<string, unknown>;
+  const fields = Array.isArray(record.fields) ? record.fields : [];
+  const callers = Array.isArray(record.callers) ? record.callers : [];
+
+  return {
+    ...record,
+    read_by_direct: dbBundle.directStatements
+      .filter((statement) => statement.statementType === 'select')
+      .map((statement) => statement.id),
+    read_by_joined: dbBundle.joinedStatements
+      .filter((statement) => statement.statementType === 'select')
+      .map((statement) => statement.id),
+    write_by_direct: dbBundle.directStatements
+      .filter((statement) => statement.statementType !== 'select')
+      .map((statement) => statement.id),
+    write_by_joined: dbBundle.joinedStatements
+      .filter((statement) => statement.statementType !== 'select')
+      .map((statement) => statement.id),
+    fields: fields.map((field) => enrichDbField(field, dbBundle)),
+    callers: callers.map((caller) => enrichDbCaller(caller, dbBundle)).filter(Boolean),
+  };
+}
+
+function enrichDbField(field: unknown, dbBundle: DbTableEvidenceBundle): unknown {
+  if (typeof field !== 'object' || field === null || Array.isArray(field)) {
+    return field;
+  }
+
+  const record = field as Record<string, unknown>;
+  const fieldName = typeof record.name === 'string' ? record.name.trim() : '';
+  if (fieldName.length === 0) {
+    return field;
+  }
+
+  const entityField = findPreferredEntityFieldEvidence(dbBundle, fieldName);
+  const candidate = findPreferredFieldCandidate(dbBundle, fieldName);
+  const javaType = entityField?.javaFieldType?.trim() || candidate?.javaType?.trim();
+  const javaComment = entityField?.javaFieldComment?.trim() || candidate?.javaFieldComment?.trim();
+
+  return {
+    ...record,
+    ...(javaType ? { type: javaType } : {}),
+    ...(javaComment
+      ? {
+          description_zh: javaComment,
+          description_source: 'comment',
+        }
+      : {}),
+  };
+}
+
+function findPreferredFieldCandidate(
+  dbBundle: DbTableEvidenceBundle,
+  fieldName: string,
+): DbTableEvidenceBundle['fieldCandidates'][number] | undefined {
+  const directStatementIds = new Set(dbBundle.directStatements.map((statement) => statement.id.split('.').pop() ?? statement.id));
+
+  return (
+    dbBundle.fieldCandidates.find(
+      (candidate) =>
+        candidate.name === fieldName &&
+        candidate.sourceStatementId != null &&
+        directStatementIds.has(candidate.sourceStatementId),
+    ) ?? dbBundle.fieldCandidates.find((candidate) => candidate.name === fieldName)
+  );
+}
+
+function findPreferredEntityFieldEvidence(
+  dbBundle: DbTableEvidenceBundle,
+  fieldName: string,
+): { javaFieldType?: string; javaFieldComment?: string } | undefined {
+  const directStatementIds = new Set(dbBundle.directStatements.map((statement) => statement.id.split('.').pop() ?? statement.id));
+  const directEntities = dbBundle.entityEvidence.filter((entity) => directStatementIds.has(entity.sourceStatementId));
+  const primaryEntityType = selectPrimaryEntityType(directEntities);
+  const targetFieldNames = new Set(dbBundle.fieldCandidates.map((candidate) => candidate.name));
+  const preferredDirectEntities = primaryEntityType
+    ? directEntities.filter((entity) => entity.javaType === primaryEntityType)
+    : directEntities;
+  const entityField =
+    findEntityFieldInEvidence(preferredDirectEntities, fieldName, targetFieldNames) ??
+    findEntityFieldInEvidence(directEntities, fieldName, targetFieldNames) ??
+    findEntityFieldInEvidence(dbBundle.entityEvidence, fieldName, targetFieldNames);
+
+  if (!entityField) {
+    return undefined;
+  }
+
+  return {
+    javaFieldType: entityField.javaFieldType,
+    javaFieldComment: entityField.javaFieldComment,
+  };
+}
+
+function findEntityFieldInEvidence(
+  entities: DbTableEvidenceBundle['entityEvidence'],
+  fieldName: string,
+  targetFieldNames: Set<string>,
+): DbTableEvidenceBundle['entityEvidence'][number]['fields'][number] | undefined {
+  for (const entity of sortEntitiesBySpecificity(entities, targetFieldNames)) {
+    const matchedField = entity.fields.find(
+      (field) =>
+        field.mappedColumn === fieldName ||
+        toSnakeCase(field.javaProperty) === fieldName,
+    );
+    if (matchedField) {
+      return matchedField;
+    }
+  }
+
+  return undefined;
+}
+
+function sortEntitiesBySpecificity(
+  entities: DbTableEvidenceBundle['entityEvidence'],
+  targetFieldNames: Set<string>,
+): DbTableEvidenceBundle['entityEvidence'] {
+  const scores = new Map<string, number>();
+
+  for (const entity of entities) {
+    const score = entity.fields.reduce((count, field) => {
+      const mappedColumn = field.mappedColumn ?? toSnakeCase(field.javaProperty);
+      return count + (targetFieldNames.has(mappedColumn) ? 1 : 0);
+    }, 0);
+    scores.set(entity.sourceStatementId, score);
+  }
+
+  return [...entities].sort((left, right) => {
+    const scoreDiff = (scores.get(right.sourceStatementId) ?? 0) - (scores.get(left.sourceStatementId) ?? 0);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+
+    return left.sourceStatementId.localeCompare(right.sourceStatementId);
+  });
+}
+
+function selectPrimaryEntityType(
+  entities: DbTableEvidenceBundle['entityEvidence'],
+): string | undefined {
+  if (entities.length === 0) {
+    return undefined;
+  }
+
+  const counts = new Map<string, number>();
+  for (const entity of entities) {
+    counts.set(entity.javaType, (counts.get(entity.javaType) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => {
+      const countDiff = right[1] - left[1];
+      if (countDiff !== 0) {
+        return countDiff;
+      }
+      return left[0].localeCompare(right[0]);
+    })[0]?.[0];
+}
+
+function enrichDbCaller(caller: unknown, dbBundle: DbTableEvidenceBundle): Record<string, unknown> | null {
+  if (typeof caller !== 'object' || caller === null || Array.isArray(caller)) {
+    return null;
+  }
+
+  const record = caller as Record<string, unknown>;
+  const callerClass = typeof record.caller_class === 'string' ? record.caller_class.trim() : '';
+  const callerMethod = typeof record.caller_method === 'string' ? record.caller_method.trim() : '';
+
+  const matchedCaller =
+    dbBundle.callerEvidence.find((item) => item.callerClass === callerClass && item.callerMethod.trim().length > 0) ??
+    dbBundle.callerEvidence.find((item) => item.callerClass === callerClass);
+
+  const businessContext = typeof record.business_context === 'string' && record.business_context.trim().length > 0
+    ? record.business_context.trim()
+    : matchedCaller?.nearbyComments.find((comment) => comment.trim().length > 0) ??
+      matchedCaller?.businessHints.find((hint) => hint.trim().length > 0);
+
+  return {
+    ...record,
+    caller_class: callerClass.length > 0 ? callerClass : matchedCaller?.callerClass ?? 'unknown',
+    caller_method: callerMethod.length > 0 ? callerMethod : matchedCaller?.callerMethod ?? '',
+    ...(businessContext ? { business_context: businessContext } : {}),
+  };
+}
+
+function normalizeDbSourceKind(value: unknown): string {
+  if (typeof value !== 'string') {
+    return 'inferred';
+  }
+
+  if (value === 'sql') {
+    return 'mapper';
+  }
+
+  return value;
+}
+
+function normalizeDbFields(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((field): field is Record<string, unknown> => typeof field === 'object' && field !== null && !Array.isArray(field))
+    .map((field) => ({
+      ...field,
+      nullable: normalizeNullable(field.nullable),
+      default: normalizeNullableDefault(field.default),
+      description_source: field.description_source === 'comment' ? 'comment' : 'inferred',
+      constraints: normalizeStringArray(field.constraints),
+    }));
+}
+
+function normalizeDbGaps(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((gap): gap is Record<string, unknown> => typeof gap === 'object' && gap !== null && !Array.isArray(gap))
+    .map((gap) => {
+      const description = normalizeGapDescription(gap.description ?? gap.detail);
+      const fieldName = typeof gap.field_name === 'string' && gap.field_name.trim().length > 0
+        ? gap.field_name.trim()
+        : typeof gap.fieldName === 'string' && gap.fieldName.trim().length > 0
+          ? gap.fieldName.trim()
+          : undefined;
+      const evidence = typeof gap.evidence === 'string'
+        ? gap.evidence.trim()
+        : gap.evidence != null
+          ? JSON.stringify(gap.evidence)
+          : undefined;
+
+      return {
+        type: normalizeGapType(gap.type ?? gap.kind),
+        description,
+        ...(fieldName ? { field_name: fieldName } : {}),
+        ...(evidence ? { evidence } : {}),
+      };
+    })
+    .filter((gap) => gap.description.length > 0);
+}
+
+function normalizeDbCallers(value: unknown): Array<Record<string, string>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((caller): caller is Record<string, unknown> => typeof caller === 'object' && caller !== null && !Array.isArray(caller))
+    .map((caller) => {
+      const callerClass = typeof caller.caller_class === 'string'
+        ? caller.caller_class.trim()
+        : typeof caller.callerClass === 'string'
+          ? caller.callerClass.trim()
+          : '';
+      const callerMethod = typeof caller.caller_method === 'string'
+        ? caller.caller_method.trim()
+        : typeof caller.callerMethod === 'string'
+          ? caller.callerMethod.trim()
+          : '';
+      const businessContext = typeof caller.business_context === 'string'
+        ? caller.business_context.trim()
+        : typeof caller.businessContext === 'string'
+          ? caller.businessContext.trim()
+          : '';
+
+      return {
+        caller_class: callerClass,
+        caller_method: callerMethod,
+        ...(businessContext ? { business_context: businessContext } : {}),
+      };
+    })
+    .filter((caller) => caller.caller_class.length > 0 || caller.caller_method.length > 0)
+    .map((caller) => ({
+      caller_class: caller.caller_class.length > 0 ? caller.caller_class : 'unknown',
+      caller_method: caller.caller_method,
+      ...(caller.business_context ? { business_context: caller.business_context } : {}),
+    }));
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeNullable(value: unknown): boolean | null {
+  if (typeof value === 'boolean' || value === null) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function normalizeNullableDefault(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return String(value);
+}
+
+function normalizeGapType(value: unknown):
+  | 'suspected_primary_key'
+  | 'suspected_not_null'
+  | 'suspected_unique'
+  | 'suspected_foreign_key'
+  | 'missing_mapper'
+  | 'unmapped_field'
+  | 'ambiguous_binding' {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  switch (normalized) {
+    case 'suspected_primary_key':
+    case 'suspected_not_null':
+    case 'suspected_unique':
+    case 'suspected_foreign_key':
+    case 'missing_mapper':
+    case 'unmapped_field':
+    case 'ambiguous_binding':
+      return normalized;
+    default:
+      return 'ambiguous_binding';
+  }
+}
+
+function normalizeGapDescription(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toLowerCase();
+}
+
 function getObjectPath(type: string, id: string): string {
   const typeDirs: Record<string, string> = {
     TERM: 'terms',
@@ -737,11 +1159,30 @@ function shouldQueryAdditionalSlices(filter: SliceFilter | null): boolean {
   return !filter || filter.kind !== 'database';
 }
 
-async function buildDbBundlesForGeneration(repoPath: string, filter: SliceFilter | null): Promise<DbTableEvidenceBundle[]> {
+async function buildDbBundlesForGeneration(
+  repoPath: string,
+  filter: SliceFilter | null,
+  coreRepoPath?: string,
+): Promise<DbTableEvidenceBundle[]> {
   if (filter?.kind === 'database' && filter.target.length > 0) {
-    return [await buildDbTableBundle(repoPath, filter.target)];
+    return [await buildDbTableBundle(repoPath, filter.target, coreRepoPath)];
   }
-  return buildAllDbTableBundles(repoPath);
+  return buildAllDbTableBundles(repoPath, coreRepoPath);
+}
+
+async function resolveCompanionCoreRepoPath(repoPath: string): Promise<string | undefined> {
+  const repoName = path.basename(repoPath);
+  if (!repoName.startsWith('music-education-') || repoName === 'music-education-core') {
+    return undefined;
+  }
+
+  const siblingCorePath = path.join(path.dirname(repoPath), 'music-education-core');
+  try {
+    const stat = await fs.stat(siblingCorePath);
+    return stat.isDirectory() ? siblingCorePath : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function applySliceFilter(slices: SliceSeed[], filter: SliceFilter | null): SliceSeed[] {
