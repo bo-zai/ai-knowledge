@@ -8,7 +8,7 @@ export default defineConfig({
   clean: true,
   dts: false,
   splitting: false,
-  banner: { js: '#!/usr/bin/env node' },
+  banner: { js: '#!/usr/bin/env node --no-deprecation' },
   external: [
     'openai',
     'yaml',
