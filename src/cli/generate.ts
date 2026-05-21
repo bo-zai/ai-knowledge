@@ -11,10 +11,10 @@ import { buildManifest } from '../packaging/build-manifest.js';
 import { buildCatalog } from '../packaging/build-catalog.js';
 import { writePackage } from '../packaging/write-package.js';
 import { writeReports, type GenerationReport } from '../packaging/write-reports.js';
+import { writeDebugLogs, type SliceDebugTrace } from '../packaging/write-debug-logs.js';
 import { renderObjectMarkdown, renderConMarkdown } from '../packaging/render-object.js';
 import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
-import { ensureGitNexusIndex, checkGitNexusIndex } from '../gitnexus/ensure-index.js';
-import { runGitNexus } from '../gitnexus/commands.js';
+import { createEmbeddedGitNexusExecutor, ensureEmbeddedIndex, checkEmbeddedIndex } from '../knowledge/embedded-adapter.js';
 import { buildSlicePlan, extractSliceSeedsFromGitNexus } from '../slicing/build-slice-plan.js';
 import {
   buildRepoEvidenceBundle,
@@ -25,10 +25,12 @@ import {
 } from '../evidence/bundle-builder.js';
 import type { SliceEvidenceBundle } from '../evidence/types.js';
 import {
+  buildDbTableBundle,
   buildAllDbTableBundles,
   type DbTableEvidenceBundle,
 } from '../evidence/db-bundle-builder.js';
 import { generateWithClient } from '../generation/llm-client.js';
+import type { GeneratorOutput } from '../generation/parse-output.js';
 import { parseGeneratorOutput } from '../generation/parse-output.js';
 import { withRetry } from '../generation/retry.js';
 import { buildDbPrompt } from '../generation/object-generators/db-generator.js';
@@ -48,8 +50,9 @@ import { openObjectSchema } from '../schemas/open.js';
 import { ownObjectSchema } from '../schemas/own.js';
 import { verObjectSchema } from '../schemas/ver.js';
 import { generateObjectId } from '../shared/ids.js';
-import { getRepoBasename } from '../shared/path-utils.js';
+import { getRepoBasename, getRepoId } from '../shared/path-utils.js';
 import YAML from 'yaml';
+import type { SliceKind, SliceSeed } from '../slicing/types.js';
 
 interface GenerateOptions {
   repo: string;
@@ -99,25 +102,29 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     ...resolvedConfig,
     apiKey,
   };
+  const mockMode = isMockModel(modelConfig.model);
+  const sliceFilter = parseSliceFilter(options.slice);
+  const repoId = getRepoId(repoPath);
+  const runId = buildRunId();
 
   logger.info(`Generating bootstrap-knowledge for ${repoPath}`);
 
-  // 1. Ensure GitNexus index
-  const execGitNexus = runGitNexus;
-  const hasIndex = async (path: string) => checkGitNexusIndex(path, execGitNexus);
+  // 1. Ensure embedded index (only if needed for route/process discovery)
+  // For database-only slices, we can skip the embedded engine entirely
+  const isDatabaseOnly = sliceFilter?.kind === 'database' && sliceFilter.target.length > 0;
+  const execEmbedded = createEmbeddedGitNexusExecutor();
+  const hasIndex = async (path: string) => checkEmbeddedIndex(path);
 
-  if (!options.forceAnalyze) {
-    await ensureGitNexusIndex({
-      repoPath,
-      execGitNexus,
-      hasIndex,
-    });
-  } else {
-    await execGitNexus(['analyze', repoPath], repoPath);
+  if (!mockMode && !isDatabaseOnly) {
+    if (!options.forceAnalyze) {
+      await ensureEmbeddedIndex(repoPath);
+    } else {
+      await execEmbedded(['analyze', repoPath], repoPath);
+    }
   }
 
   // 2. Discover database-first slices from real MyBatis evidence.
-  const dbBundles = await buildAllDbTableBundles(repoPath);
+  const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter);
   const dbBundleMap = new Map(dbBundles.map((bundle) => [bundle.table.toLowerCase(), bundle]));
 
   let sliceSeeds = {
@@ -129,21 +136,30 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   };
 
   // Keep backward-compatible route/process discovery as best effort only.
-  try {
-    const gitnexusResult = await execGitNexus(['list', repoPath], repoPath);
-    const discovered = extractSliceSeedsFromGitNexus(gitnexusResult.stdout);
-    sliceSeeds = {
-      routes: discovered.routes,
-      processes: discovered.processes,
-      tools: discovered.tools,
-      communities: discovered.communities,
-      tables: [...new Set([...sliceSeeds.tables, ...discovered.tables])],
-    };
-  } catch (error) {
-    logger.warn(`Slice discovery via list command failed, continuing with DB slices only: ${String(error)}`);
+  if (!mockMode && shouldQueryAdditionalSlices(sliceFilter)) {
+    try {
+      const discoveryResult = await execEmbedded(['list', repoPath], repoPath);
+      const discovered = extractSliceSeedsFromGitNexus(discoveryResult.stdout);
+      sliceSeeds = {
+        routes: discovered.routes,
+        processes: discovered.processes,
+        tools: discovered.tools,
+        communities: discovered.communities,
+        tables: [...new Set([...sliceSeeds.tables, ...discovered.tables])],
+      };
+    } catch (error) {
+      logger.warn(`Slice discovery via list command failed, continuing with DB slices only: ${String(error)}`);
+    }
   }
 
-  const slicePlan = buildSlicePlan(sliceSeeds);
+  const discoveredPlan = buildSlicePlan(sliceSeeds);
+  const filteredSlices = applySliceFilter(discoveredPlan.slices, sliceFilter);
+  const slicePlan = {
+    ...discoveredPlan,
+    slices: filteredSlices,
+    total_count: filteredSlices.length,
+    by_kind: countSlicesByKind(filteredSlices),
+  };
 
   logger.info(`Discovered ${slicePlan.total_count} slices`);
 
@@ -154,11 +170,12 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
 
   // 4. Generate objects
-  const client = await createOpenAiClient(modelConfig);
+  const client = mockMode ? null : await createOpenAiClient(modelConfig);
   const generatedObjects: Array<{ id: string; type: string; content: string; frontmatter: Record<string, unknown> }> = [];
   const failures: Array<{ id: string; type: string; error: string }> = [];
   const warnings: Array<{ id: string; message: string }> = [];
   const retrievalOrder: string[] = [];
+  const debugTraces: SliceDebugTrace[] = [];
 
   //  简化实现：根据切片类型生成对象
   for (const slice of slicePlan.slices) {
@@ -172,16 +189,40 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         db_bundle: slice.kind === 'database' ? dbBundleMap.get(slice.title.toLowerCase()) ?? null : null,
       };
 
-      const objectResult = await generateObjectForSlice(slice, combinedEvidence, client, modelConfig.model, repoPath);
-      if (objectResult) {
-        generatedObjects.push(objectResult);
-        retrievalOrder.push(objectResult.id);
+      const generation = await generateObjectForSlice(
+        slice,
+        combinedEvidence,
+        client,
+        modelConfig.model,
+        repoPath,
+      );
+      debugTraces.push(generation.trace);
+      if (generation.objectResult) {
+        generatedObjects.push(generation.objectResult);
+        retrievalOrder.push(generation.objectResult.id);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       failures.push({
         id: generateObjectId('OPEN', slice.id),
         type: 'OPEN',
+        error: errorMsg,
+      });
+      debugTraces.push({
+        sliceId: slice.id,
+        sliceKind: slice.kind,
+        sliceTitle: slice.title,
+        objectType: inferObjectType(slice.kind),
+        mode: isMockModel(modelConfig.model) ? 'mock' : 'llm',
+        status: 'error',
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        durationMs: 0,
+        request: {
+          systemPrompt: '',
+          userPrompt: '',
+        },
+        response: {},
         error: errorMsg,
       });
       logger.warn(`Failed to generate object for slice ${slice.id}: ${errorMsg}`);
@@ -203,7 +244,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       id: obj.id,
       type: obj.type,
       path: getObjectPath(obj.type, obj.id),
-      slice_ids: [obj.id],
+      slice_ids: Array.isArray(obj.frontmatter.slice_ids) ? (obj.frontmatter.slice_ids as string[]) : [],
     })),
   });
 
@@ -235,6 +276,14 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     report,
   });
 
+  await writeDebugLogs({
+    repoId,
+    repoPath,
+    runId,
+    model: modelConfig.model,
+    traces: debugTraces,
+  });
+
   logger.info(`Bootstrap-knowledge generated at ${repoPath}/${bootstrapDir}`);
   logger.info(`Objects: ${generatedObjects.length} succeeded, ${failures.length} failed`);
 }
@@ -242,15 +291,38 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 async function generateObjectForSlice(
   slice: { id: string; kind: string; title: string },
   evidence: unknown,
-  client: OpenAI,
+  client: OpenAI | null,
   model: string,
   repoPath: string,
-): Promise<{ id: string; type: string; content: string; frontmatter: Record<string, unknown> } | null> {
+): Promise<{
+  objectResult: { id: string; type: string; content: string; frontmatter: Record<string, unknown> } | null;
+  trace: SliceDebugTrace;
+}> {
   // 根据切片类型选择 generator
   const promptBuilder = getPromptBuilderForSliceKind(slice.kind);
   if (!promptBuilder) {
     logger.warn(`No generator for slice kind ${slice.kind}`);
-    return null;
+    const now = new Date().toISOString();
+    return {
+      objectResult: null,
+      trace: {
+        sliceId: slice.id,
+        sliceKind: slice.kind,
+        sliceTitle: slice.title,
+        objectType: 'OPEN',
+        mode: isMockModel(model) ? 'mock' : 'llm',
+        status: 'error',
+        startedAt: now,
+        finishedAt: now,
+        durationMs: 0,
+        request: {
+          systemPrompt: '',
+          userPrompt: '',
+        },
+        response: {},
+        error: `No generator for slice kind ${slice.kind}`,
+      },
+    };
   }
 
   const { system, user } = promptBuilder({
@@ -258,29 +330,58 @@ async function generateObjectForSlice(
     evidence,
     repoPath,
   });
+  const objectType = inferObjectType(slice.kind);
+  const startedAt = new Date();
+  let rawText: string | undefined;
+  let parsedOutput: GeneratorOutput | undefined;
 
-  const output = await withRetry(
-    async () => {
-      const raw = await generateWithClient(client, model, system, user);
-      return parseGeneratorOutput(raw);
-    },
-    { maxRetries: 3, delayMs: 1000 },
-  );
+  const output = isMockModel(model)
+    ? buildMockGeneratorOutput(slice, evidence, objectType)
+    : await withRetry(
+        async () => {
+          if (!client) {
+            throw new Error('OpenAI client is not available');
+          }
+          rawText = await generateWithClient(client, model, system, user);
+          parsedOutput = parseGeneratorOutput(rawText);
+          return parsedOutput;
+        },
+        { maxRetries: 3, delayMs: 1000 },
+      );
+  if (isMockModel(model)) {
+    parsedOutput = output;
+    rawText = JSON.stringify(output);
+  }
+  const finishedAtForOutput = new Date();
 
   if (output.objects.length === 0) {
-    return null;
+    return {
+      objectResult: null,
+      trace: {
+        sliceId: slice.id,
+        sliceKind: slice.kind,
+        sliceTitle: slice.title,
+        objectType,
+        mode: isMockModel(model) ? 'mock' : 'llm',
+        status: 'empty',
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAtForOutput.toISOString(),
+        durationMs: finishedAtForOutput.getTime() - startedAt.getTime(),
+        request: {
+          systemPrompt: system,
+          userPrompt: user,
+        },
+        response: {
+          rawText,
+          parsedOutput,
+          warnings: output.warnings,
+        },
+      },
+    };
   }
 
   const draft = output.objects[0];
-  const objectType = inferObjectType(slice.kind);
-
-  // 验证 schema
-  const validated = validateObject(draft, objectType);
-  if (!validated) {
-    logger.warn(`Invalid object for slice ${slice.id}`);
-    return null;
-  }
-
+  const generatedAt = new Date().toISOString();
   const objectId = generateObjectId(objectType, slice.id);
   const frontmatter = {
     id: objectId,
@@ -295,8 +396,48 @@ async function generateObjectForSlice(
     evidence_secondary: [],
     stale_if: [],
     generated_by: 'repo-knowledge-generator',
-    generated_at: new Date().toISOString(),
+    generated_at: generatedAt,
   };
+  const candidateObject = {
+    ...(typeof draft === 'object' && draft !== null ? draft : {}),
+    ...frontmatter,
+    id: objectId,
+    type: objectType,
+  };
+
+  // 验证 schema
+  const validated = validateObject(candidateObject, objectType);
+  if (!validated) {
+    logger.warn(`Invalid object for slice ${slice.id}`);
+    const finishedAt = new Date();
+    return {
+      objectResult: null,
+      trace: {
+        sliceId: slice.id,
+        sliceKind: slice.kind,
+        sliceTitle: slice.title,
+        objectType,
+        mode: isMockModel(model) ? 'mock' : 'llm',
+        status: 'validation_failed',
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+        request: {
+          systemPrompt: system,
+          userPrompt: user,
+        },
+        response: {
+          rawText,
+          parsedOutput,
+          warnings: output.warnings,
+        },
+        validation: {
+          passed: false,
+          error: 'Schema validation failed',
+        },
+      },
+    };
+  }
 
   // 渲染 markdown
   let content: string;
@@ -305,11 +446,37 @@ async function generateObjectForSlice(
   } else {
     content = renderObjectMarkdown({
       frontmatter,
-      body: YAML.stringify(draft),
+      body: YAML.stringify(stripCommonFields(validated as Record<string, unknown>)),
     });
   }
 
-  return { id: objectId, type: objectType, content, frontmatter };
+  const finishedAt = new Date();
+  return {
+    objectResult: { id: objectId, type: objectType, content, frontmatter },
+    trace: {
+      sliceId: slice.id,
+      sliceKind: slice.kind,
+      sliceTitle: slice.title,
+      objectType,
+      mode: isMockModel(model) ? 'mock' : 'llm',
+      status: 'success',
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+      request: {
+        systemPrompt: system,
+        userPrompt: user,
+      },
+      response: {
+        rawText,
+        parsedOutput,
+        warnings: output.warnings,
+      },
+      validation: {
+        passed: true,
+      },
+    },
+  };
 }
 
 function getPromptBuilderForSliceKind(kind: string): ((input: unknown) => { system: string; user: string }) | null {
@@ -392,7 +559,7 @@ function buildSliceSpecificEvidence(
           tableName: dbBundle.table,
           schemaName: 'public',
           sourceFile: dbBundle.mapperBindings[0]?.mapperFile ?? repoPath,
-          sourceKind: 'sql',
+          sourceKind: 'orm',
           fields:
             dbBundle.fieldCandidates.length > 0
               ? dbBundle.fieldCandidates.map((field) => ({
@@ -535,4 +702,296 @@ function getObjectPath(type: string, id: string): string {
     DB: 'db',
   };
   return `objects/${typeDirs[type] ?? 'unknown'}/${id}.md`;
+}
+
+function isMockModel(model: string): boolean {
+  return model.startsWith('test-');
+}
+
+interface SliceFilter {
+  kind?: SliceKind;
+  raw: string;
+  target: string;
+}
+
+function parseSliceFilter(value?: string): SliceFilter | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  const [prefix, rest] = normalized.split(':', 2);
+  const knownKinds: SliceKind[] = ['route', 'process', 'tool', 'community', 'database'];
+  if (knownKinds.includes(prefix as SliceKind) && rest) {
+    return {
+      kind: prefix as SliceKind,
+      raw: normalized,
+      target: rest.trim().toLowerCase(),
+    };
+  }
+
+  return {
+    raw: normalized,
+    target: normalized.toLowerCase(),
+  };
+}
+
+function shouldQueryAdditionalSlices(filter: SliceFilter | null): boolean {
+  return !filter || filter.kind !== 'database';
+}
+
+async function buildDbBundlesForGeneration(repoPath: string, filter: SliceFilter | null): Promise<DbTableEvidenceBundle[]> {
+  if (filter?.kind === 'database' && filter.target.length > 0) {
+    return [await buildDbTableBundle(repoPath, filter.target)];
+  }
+  return buildAllDbTableBundles(repoPath);
+}
+
+function applySliceFilter(slices: SliceSeed[], filter: SliceFilter | null): SliceSeed[] {
+  if (!filter) {
+    return slices;
+  }
+
+  return slices.filter((slice) => {
+    if (filter.kind && slice.kind !== filter.kind) {
+      return false;
+    }
+
+    const idValue = slice.id.toLowerCase();
+    const titleValue = slice.title.toLowerCase();
+    const sourceValue = slice.source?.toLowerCase();
+
+    if (filter.kind) {
+      return titleValue === filter.target || sourceValue === filter.target || idValue === filter.raw.toLowerCase();
+    }
+
+    return idValue === filter.target || titleValue === filter.target || sourceValue === filter.target;
+  });
+}
+
+function countSlicesByKind(slices: SliceSeed[]): Record<SliceKind, number> {
+  return slices.reduce<Record<SliceKind, number>>(
+    (counts, slice) => {
+      counts[slice.kind] += 1;
+      return counts;
+    },
+    { route: 0, process: 0, tool: 0, community: 0, database: 0 },
+  );
+}
+
+function stripCommonFields(object: Record<string, unknown>): Record<string, unknown> {
+  const {
+    id: _id,
+    type: _type,
+    title: _title,
+    status: _status,
+    maturity: _maturity,
+    scope: _scope,
+    repo: _repo,
+    slice_ids: _sliceIds,
+    evidence_primary: _evidencePrimary,
+    evidence_secondary: _evidenceSecondary,
+    stale_if: _staleIf,
+    generated_by: _generatedBy,
+    generated_at: _generatedAt,
+    ...rest
+  } = object;
+  return rest;
+}
+
+function buildMockGeneratorOutput(
+  slice: { id: string; kind: string; title: string },
+  evidence: unknown,
+  objectType: 'CON' | 'FLOW' | 'MOD' | 'TERM' | 'DB' | 'OWN' | 'VER' | 'OPEN',
+): GeneratorOutput {
+  const payload = (evidence ?? {}) as {
+    slice?: SliceEvidenceBundle;
+    db_bundle?: DbTableEvidenceBundle | null;
+  };
+
+  const baseWarnings = [{ message: 'mock-model-output' }];
+
+  switch (objectType) {
+    case 'DB': {
+      const dbBundle = payload.db_bundle;
+      const fields =
+        dbBundle && dbBundle.fieldCandidates.length > 0
+          ? dbBundle.fieldCandidates.map((field) => ({
+              name: field.name,
+              type: field.type ?? 'unknown',
+              nullable: true,
+              default: null,
+              description_zh: field.javaFieldComment || field.mappedJavaProperty || field.name,
+              description_source: field.javaFieldComment ? 'comment' : 'inferred',
+              constraints: [],
+            }))
+          : [
+              {
+                name: 'id',
+                type: 'unknown',
+                nullable: true,
+                default: null,
+                description_zh: '主键',
+                description_source: 'inferred',
+                constraints: [],
+              },
+            ];
+
+      return {
+        objects: [
+          {
+            table_name: dbBundle?.table ?? slice.title,
+            table_name_zh: `${dbBundle?.table ?? slice.title}表`,
+            schema_name: 'public',
+            source_kind: 'mapper',
+            primary_key: [],
+            indexes: [],
+            foreign_keys: [],
+            read_by_direct:
+              dbBundle?.directStatements
+                .filter((s) => s.statementType === 'select')
+                .map((s) => s.id) ?? [],
+            read_by_joined:
+              dbBundle?.joinedStatements
+                .filter((s) => s.statementType === 'select')
+                .map((s) => s.id) ?? [],
+            write_by_direct:
+              dbBundle?.directStatements
+                .filter((s) => s.statementType !== 'select')
+                .map((s) => s.id) ?? [],
+            write_by_joined:
+              dbBundle?.joinedStatements
+                .filter((s) => s.statementType !== 'select')
+                .map((s) => s.id) ?? [],
+            fields,
+            gaps: [],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    }
+    case 'CON':
+      return {
+        objects: [
+          {
+            interface_kind: 'route',
+            interface_name: slice.title,
+            interface_name_zh: `${slice.title}接口`,
+            producer: slice.title,
+            producer_zh: '路由处理器',
+            consumers: [],
+            input_shape: [],
+            input_description_zh: '当前未提取到输入字段',
+            output_shape: [],
+            output_description_zh: '当前未提取到输出字段',
+            middleware: [],
+            related_routes: [slice.title],
+            related_tools: [],
+            entry_file: payload.slice?.facts[0]?.refs[0]?.file ?? slice.title,
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'FLOW':
+      return {
+        objects: [
+          {
+            flow_name: slice.title,
+            flow_name_zh: `${slice.title}流程`,
+            trigger: slice.id,
+            trigger_zh: '触发该流程的入口',
+            steps: [
+              {
+                order: 1,
+                action: 'start',
+                action_zh: '开始处理',
+                actor: 'system',
+                inputs: [],
+                outputs: [],
+              },
+            ],
+            outcomes: [],
+            error_handling: [],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'MOD':
+      return {
+        objects: [
+          {
+            module_name: slice.title,
+            module_name_zh: `${slice.title}模块`,
+            responsibility_zh: '承载当前切片相关逻辑',
+            module_kind: 'utility',
+            exports: [],
+            imports: [],
+            depends_on: [],
+            used_by: [],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'TERM':
+      return {
+        objects: [
+          {
+            term: slice.title,
+            term_zh: slice.title,
+            definition_zh: `术语 ${slice.title} 在当前仓库中被使用`,
+            aliases: [],
+            related_terms: [],
+            used_in: [slice.id],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'OPEN':
+      return {
+        objects: [
+          {
+            question: `${slice.title} 仍有待确认信息`,
+            question_zh: `${slice.title} 仍有待确认信息`,
+            context_zh: 'mock 模式下未连接真实模型，保留开放问题',
+            impact: 'medium',
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'OWN':
+      return {
+        objects: [
+          {
+            owner_type: 'shared',
+            owner_name: slice.title,
+            owner_name_zh: slice.title,
+            responsibility_zh: '当前切片的默认责任边界',
+            scope_items: [slice.id],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+    case 'VER':
+      return {
+        objects: [
+          {
+            version_name: slice.title,
+            version_name_zh: slice.title,
+            version_value: 'bootstrap',
+            version_kind: 'tool',
+            changelog_zh: 'mock 模式下生成的占位版本信息',
+            breaking_changes: [],
+          },
+        ],
+        warnings: baseWarnings,
+      };
+  }
+}
+
+function buildRunId(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-');
 }

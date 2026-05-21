@@ -1,42 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GitNexusExecutor } from '../../../src/gitnexus/types';
+import type { EmbeddedGitNexusExecutor } from '../../../src/knowledge/embedded-adapter';
 
 describe('generate orchestration', () => {
-  describe('GitNexus index handling', () => {
+  describe('embedded index handling', () => {
     it('reuses existing index without analyze', async () => {
-      const execGitNexus = vi.fn<GitNexusExecutor>().mockResolvedValue({ stdout: 'indexed' });
+      const execEmbedded = vi.fn<EmbeddedGitNexusExecutor>().mockResolvedValue({ stdout: 'indexed' });
       const hasIndex = vi.fn().mockResolvedValue(true);
 
-      // 模拟 ensureGitNexusIndex 行为
+      // 模拟 ensureEmbeddedIndex 行为
       const indexed = await hasIndex('/test/repo');
       if (!indexed) {
-        await execGitNexus(['analyze', '/test/repo'], '/test/repo');
+        await execEmbedded(['analyze', '/test/repo'], '/test/repo');
       }
 
-      expect(execGitNexus).not.toHaveBeenCalled();
+      expect(execEmbedded).not.toHaveBeenCalled();
     });
 
     it('triggers analyze when index missing', async () => {
-      const execGitNexus = vi.fn<GitNexusExecutor>().mockResolvedValue({ stdout: 'ok' });
+      const execEmbedded = vi.fn<EmbeddedGitNexusExecutor>().mockResolvedValue({ stdout: 'ok' });
       const hasIndex = vi.fn().mockResolvedValue(false);
 
-      // 模拟 ensureGitNexusIndex 行为
+      // 模拟 ensureEmbeddedIndex 行为
       const indexed = await hasIndex('/test/repo');
       if (!indexed) {
-        await execGitNexus(['analyze', '/test/repo'], '/test/repo');
+        await execEmbedded(['analyze', '/test/repo'], '/test/repo');
       }
 
-      expect(execGitNexus).toHaveBeenCalledWith(['analyze', '/test/repo'], '/test/repo');
+      expect(execEmbedded).toHaveBeenCalledWith(['analyze', '/test/repo'], '/test/repo');
     });
   });
 
   describe('slice discovery', () => {
-    it('extracts slices from GitNexus output', async () => {
+    it('extracts slices from discovery output', async () => {
       const mockOutput = `Route: GET /api/users
 Process: UserLogin
 Table: users`;
 
-      // 验证 extractSliceSeedsFromGitNexus 能解析输出
+      // 验证 extractSliceSeedsFromDiscoveryOutput 能解析输出
       const lines = mockOutput.split('\n');
       const routes: string[] = [];
       const tables: string[] = [];
