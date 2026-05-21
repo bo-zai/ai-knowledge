@@ -1,8 +1,20 @@
 import { fileExists, readText } from '../shared/fs.js';
 import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
+import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
 import YAML from 'yaml';
 
-export async function runStatus(repoPath: string): Promise<void> {
+interface StatusOptions {
+  repo?: string;
+  path?: string;
+}
+
+export async function runStatus(options: StatusOptions): Promise<void> {
+  // Resolve target repo path
+  const resolved = resolveTargetRepo({
+    repoOption: options.repo,
+    positionalPath: options.path,
+  });
+  const repoPath = resolved.repoPath;
   const bootstrapDir = DEFAULT_BOOTSTRAP_DIR;
   const manifestPath = `${repoPath}/${bootstrapDir}/manifest.yaml`;
   const catalogPath = `${repoPath}/${bootstrapDir}/catalog.yaml`;
@@ -13,7 +25,7 @@ export async function runStatus(repoPath: string): Promise<void> {
   if (!exists) {
     console.log(`bootstrap-knowledge: missing`);
     console.log(`Path: ${repoPath}/${bootstrapDir}`);
-    console.log(`To generate, run: repo-knowledge-generator generate --repo ${repoPath}`);
+    console.log(`To generate, run: repo-knowledge-generator generate ${repoPath}`);
     return;
   }
 

@@ -52,12 +52,14 @@ import { openObjectSchema } from '../schemas/open.js';
 import { ownObjectSchema } from '../schemas/own.js';
 import { verObjectSchema } from '../schemas/ver.js';
 import { generateObjectId } from '../shared/ids.js';
+import { resolveTargetRepo, type ResolveRepoResult } from '../shared/resolve-target-repo.js';
 import { getRepoBasename, getRepoId } from '../shared/path-utils.js';
 import YAML from 'yaml';
 import type { SliceKind, SliceSeed } from '../slicing/types.js';
 
 interface GenerateOptions {
-  repo: string;
+  repo?: string;
+  path?: string;
   slice?: string;
   llmConfig?: string;
   model?: string;
@@ -87,7 +89,13 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     setLogLevel('debug');
   }
 
-  const repoPath = options.repo;
+  // Resolve target repo path
+  const resolved = resolveTargetRepo({
+    repoOption: options.repo,
+    positionalPath: options.path,
+  });
+  const repoPath = resolved.repoPath;
+  logger.debug(`Resolved repo path from ${resolved.source}: ${repoPath}`);
   const bootstrapDir = DEFAULT_BOOTSTRAP_DIR;
   const fileConfig = options.llmConfig
     ? await loadLlmConfigFile(options.llmConfig)

@@ -8,9 +8,9 @@ program
   .version('0.1.0');
 
 program
-  .command('generate')
-  .description('Generate bootstrap knowledge package')
-  .requiredOption('--repo <path>', 'Target repository path')
+  .command('generate [path]')
+  .description('Generate bootstrap knowledge package. If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
   .option('--slice <value>', 'Generate only specific slice')
   .option('--llm-config <path>', 'Path to JSON LLM config file')
   .option('--model <name>', 'LLM model name')
@@ -18,27 +18,27 @@ program
   .option('--api-key-env <name>', 'Environment variable for API key')
   .option('--force-analyze', 'Force embedded analysis re-run')
   .option('--verbose', 'Enable verbose logging')
-  .action(async (options) => {
+  .action(async (path, options) => {
     const { runGenerate } = await import('./generate.js');
-    await runGenerate(options);
+    await runGenerate({ ...options, path });
   });
 
 program
-  .command('status')
-  .description('Show package status')
-  .requiredOption('--repo <path>', 'Target repository path')
-  .action(async (options) => {
+  .command('status [path]')
+  .description('Show package status. If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
+  .action(async (path, options) => {
     const { runStatus } = await import('./status.js');
-    await runStatus(options.repo);
+    await runStatus({ ...options, path });
   });
 
 program
-  .command('clean')
-  .description('Remove bootstrap knowledge package')
-  .requiredOption('--repo <path>', 'Target repository path')
-  .action(async (options) => {
+  .command('clean [path]')
+  .description('Remove bootstrap knowledge package. If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
+  .action(async (path, options) => {
     const { runClean } = await import('./clean.js');
-    await runClean(options.repo);
+    await runClean({ ...options, path });
   });
 
 program.parse();
