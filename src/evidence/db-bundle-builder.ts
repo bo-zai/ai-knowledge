@@ -75,11 +75,15 @@ export interface FieldCandidate {
   name: string;
   type?: string;
   source: 'mapper' | 'code' | 'entity' | 'inferred';
-  clauseType?: 'select' | 'insert' | 'update' | 'where' | 'join';
+  clauseType?: 'select' | 'insert' | 'update' | 'where' | 'join' | 'order_by';
   sqlAlias?: string;
   tablePrefix?: string;
   mappedJavaProperty?: string;
   javaFieldComment?: string;
+  javaType?: string;
+  typeSource?: 'resultMap' | 'resultType' | 'insertParam' | 'updateParam' | 'sqlInferred';
+  sourceStatementId?: string;
+  sourceMapper?: string;
 }
 
 export interface GapInfo {
@@ -168,18 +172,43 @@ export async function buildDbTableBundle(
   // Build field candidates (from SQL statements and entity evidence)
   const fieldCandidates: FieldCandidate[] = [];
 
+  // Define strong clause types (should be in main field list)
+  const strongClauseTypes = ['select', 'insert', 'update'];
+
   // First, extract from SQL
   for (const stmtInfo of sqlStatements) {
-    const detailedFields = extractDetailedFieldsFromSql(stmtInfo.sql);
+    // Parse statement ID to get mapper namespace
+    const statementId = stmtInfo.id.split('.').pop() || stmtInfo.id;
+    const mapperNamespace = stmtInfo.id.split('.').slice(0, -1).join('.') || '';
+
+    const detailedFields = extractDetailedFieldsFromSql(
+      stmtInfo.sql,
+      statementId,
+      mapperNamespace
+    );
     for (const field of detailedFields) {
       const existing = fieldCandidates.find((f) => f.name === field.name);
       if (!existing) {
         fieldCandidates.push(field);
       } else {
-        // Merge additional info
+        // Merge additional info, but prefer strong clause types
         if (field.sqlAlias && !existing.sqlAlias) existing.sqlAlias = field.sqlAlias;
         if (field.tablePrefix && !existing.tablePrefix) existing.tablePrefix = field.tablePrefix;
-        if (field.clauseType && !existing.clauseType) existing.clauseType = field.clauseType;
+        // Only upgrade clause type if new one is stronger
+        if (field.clauseType && strongClauseTypes.includes(field.clauseType)) {
+          if (!existing.clauseType || !strongClauseTypes.includes(existing.clauseType)) {
+            existing.clauseType = field.clauseType;
+            existing.sourceStatementId = field.sourceStatementId;
+            existing.sourceMapper = field.sourceMapper;
+          }
+        }
+        // Keep source info from first encounter
+        if (!existing.sourceStatementId && field.sourceStatementId) {
+          existing.sourceStatementId = field.sourceStatementId;
+        }
+        if (!existing.sourceMapper && field.sourceMapper) {
+          existing.sourceMapper = field.sourceMapper;
+        }
       }
     }
   }
@@ -187,11 +216,24 @@ export async function buildDbTableBundle(
   // Then, merge entity evidence into field candidates
   for (const entity of entityEvidence) {
     for (const entityField of entity.fields) {
-      const existing = fieldCandidates.find((f) => f.name === entityField.mappedColumn || f.sqlAlias === entityField.javaProperty);
+      const existing = fieldCandidates.find(
+        (f) => f.name === entityField.mappedColumn || f.sqlAlias === entityField.javaProperty
+      );
       if (existing) {
         // Add Java property mapping
         existing.mappedJavaProperty = entityField.javaProperty;
         existing.javaFieldComment = entityField.javaFieldComment;
+        // Add Java type if available
+        if (entityField.javaFieldType) {
+          existing.javaType = entityField.javaFieldType;
+          existing.typeSource = entity.sourceStatementId.includes('select')
+            ? 'resultMap'
+            : entity.sourceStatementId.includes('insert')
+            ? 'insertParam'
+            : entity.sourceStatementId.includes('update')
+            ? 'updateParam'
+            : 'resultType';
+        }
       } else if (entityField.mappedColumn) {
         // Add field from entity mapping that wasn't in SQL
         fieldCandidates.push({
@@ -199,6 +241,9 @@ export async function buildDbTableBundle(
           source: 'entity',
           mappedJavaProperty: entityField.javaProperty,
           javaFieldComment: entityField.javaFieldComment,
+          javaType: entityField.javaFieldType,
+          typeSource: 'resultMap',
+          sourceStatementId: entity.sourceStatementId,
         });
       }
     }
@@ -281,7 +326,11 @@ function extractFieldsFromSql(sql: string): string[] {
 /**
  * Extract detailed field info from SQL statement.
  */
-function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
+function extractDetailedFieldsFromSql(
+  sql: string,
+  statementId?: string,
+  mapperNamespace?: string
+): FieldCandidate[] {
   const fields: FieldCandidate[] = [];
 
   // Match SELECT fields (handle aliases and table.field patterns)
@@ -317,6 +366,8 @@ function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
           clauseType: 'select',
           sqlAlias,
           tablePrefix,
+          sourceStatementId: statementId,
+          sourceMapper: mapperNamespace,
         });
       }
     }
@@ -336,6 +387,8 @@ function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
         source: 'mapper',
         clauseType: 'join',
         tablePrefix,
+        sourceStatementId: statementId,
+        sourceMapper: mapperNamespace,
       });
     }
   }
@@ -352,6 +405,8 @@ function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
           name: f,
           source: 'mapper',
           clauseType: 'insert',
+          sourceStatementId: statementId,
+          sourceMapper: mapperNamespace,
         });
       }
     }
@@ -371,6 +426,8 @@ function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
         source: 'mapper',
         clauseType: 'update',
         tablePrefix,
+        sourceStatementId: statementId,
+        sourceMapper: mapperNamespace,
       });
     }
   }
@@ -389,6 +446,28 @@ function extractDetailedFieldsFromSql(sql: string): FieldCandidate[] {
         source: 'mapper',
         clauseType: 'where',
         tablePrefix,
+        sourceStatementId: statementId,
+        sourceMapper: mapperNamespace,
+      });
+    }
+  }
+
+  // Match ORDER BY fields
+  const orderByRegex = /ORDER\s+BY\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi;
+  const orderByMatches = sql.matchAll(orderByRegex);
+  for (const match of orderByMatches) {
+    const fieldPart = match[1];
+    const parts = fieldPart.split('.');
+    const tablePrefix = parts.length > 1 ? parts[0] : undefined;
+    const fieldName = parts[parts.length - 1];
+    if (fieldName && !isSqlKeyword(fieldName) && fieldName !== 'desc' && fieldName !== 'asc') {
+      fields.push({
+        name: fieldName,
+        source: 'mapper',
+        clauseType: 'order_by',
+        tablePrefix,
+        sourceStatementId: statementId,
+        sourceMapper: mapperNamespace,
       });
     }
   }
