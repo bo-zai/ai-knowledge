@@ -4,7 +4,7 @@ const program = new Command();
 
 program
   .name('repo-knowledge-generator')
-  .description('Generate bootstrap-knowledge packages from GitNexus + LLM')
+  .description('Generate bootstrap-knowledge packages from embedded analysis + LLM')
   .version('0.1.0');
 
 program
@@ -16,7 +16,7 @@ program
   .option('--model <name>', 'LLM model name')
   .option('--base-url <url>', 'LLM API base URL')
   .option('--api-key-env <name>', 'Environment variable for API key')
-  .option('--force-analyze', 'Force GitNexus re-analysis')
+  .option('--force-analyze', 'Force embedded analysis re-run')
   .option('--verbose', 'Enable verbose logging')
   .action(async (options) => {
     const { runGenerate } = await import('./generate.js');
