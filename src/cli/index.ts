@@ -3,7 +3,7 @@ import { Command } from 'commander';
 const program = new Command();
 
 program
-  .name('repo-knowledge-generator')
+  .name('rkg')
   .description('Generate bootstrap-knowledge packages from embedded analysis + LLM')
   .version('0.1.0');
 

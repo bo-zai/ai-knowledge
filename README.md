@@ -1,4 +1,4 @@
-# Repo Knowledge Generator
+# RKG (Repo Knowledge Generator)
 
 一个独立的 TypeScript/Node.js CLI 工具，用于从嵌入式分析引擎和 OpenAI-compatible LLM 生成 `bootstrap-knowledge/` 知识包。
 
@@ -7,6 +7,7 @@
 ```bash
 npm install
 npm run build
+npm link  # 全局安装 rkg 命令
 ```
 
 ## 使用
@@ -14,14 +15,18 @@ npm run build
 ```bash
 # 先配置 llm.config.json，或设置 OPENAI_API_KEY 环境变量
 
-# 生成 bootstrap knowledge package
-repo-knowledge-generator generate --repo <path>
+# 在项目目录中直接运行（使用 cwd git root）
+rkg generate
 
-# 查看状态
-repo-knowledge-generator status --repo <path>
+# 或指定路径
+rkg generate <path>
+rkg status <path>
+rkg clean <path>
 
-# 清理
-repo-knowledge-generator clean --repo <path>
+# 或使用 --repo 显式指定
+rkg generate --repo <path>
+rkg status --repo <path>
+rkg clean --repo <path>
 ```
 
 ## 开发
@@ -66,6 +71,6 @@ $env:OPENAI_API_KEY="your-key"
 也可以用命令行覆盖文件配置：
 
 ```bash
-repo-knowledge-generator generate --repo <path> --llm-config ./llm.config.json
-repo-knowledge-generator generate --repo <path> --model gpt-4o --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
+rkg generate --llm-config ./llm.config.json
+rkg generate --model gpt-4o --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
 ```

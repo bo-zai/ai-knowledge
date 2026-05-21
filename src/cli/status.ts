@@ -25,7 +25,7 @@ export async function runStatus(options: StatusOptions): Promise<void> {
   if (!exists) {
     console.log(`bootstrap-knowledge: missing`);
     console.log(`Path: ${repoPath}/${bootstrapDir}`);
-    console.log(`To generate, run: repo-knowledge-generator generate ${repoPath}`);
+    console.log(`To generate, run: rkg generate ${repoPath}`);
     return;
   }
 
