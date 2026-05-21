@@ -4,7 +4,7 @@ import { commonObjectSchema } from './common.js';
 export const dbFieldSchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1),
-  nullable: z.boolean(),
+  nullable: z.boolean().nullable(),
   default: z.string().nullable(),
   description_zh: z.string().min(1),
   description_source: z.enum(['comment', 'inferred']),
@@ -20,7 +20,7 @@ export const gapInfoSchema = z.object({
 
 export const dbCallerSchema = z.object({
   caller_class: z.string().min(1),
-  caller_method: z.string().min(1),
+  caller_method: z.string(),
   business_context: z.string().optional(),
 });
 

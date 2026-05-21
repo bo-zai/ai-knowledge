@@ -22,6 +22,7 @@ CRITICAL RULES:
 - Caller evidence provides business context - use it for table-level description
 - Never include fields from unrelated tables
 - Statement-scoped: only fields from SQL that actually touches this table
+- If caller_method is unknown, you may return an empty string instead of inventing one
 
 FIELD SELECTION RULES:
 - Strong clause types (select, insert, update) CAN enter main fields list
@@ -65,7 +66,7 @@ CONSTRAINT RULES (CRITICAL):
         callers: [
           {
             caller_class: 'string (Service/Manager class from evidence)',
-            caller_method: 'string (method that invokes the mapper)',
+            caller_method: 'string (method that invokes the mapper, use empty string if unknown)',
             business_context: 'string (Chinese - from nearby comments or hints)',
           },
         ],
@@ -73,14 +74,21 @@ CONSTRAINT RULES (CRITICAL):
           {
             name: 'string (DB field name from SQL)',
             type: 'string (use javaType from evidence; "unknown" if missing; DO NOT guess)',
-            nullable: 'boolean (use true or null if no schema evidence)',
+            nullable: 'boolean | null (use null if no schema evidence)',
             default: 'string | null',
             description_zh: 'string (REQUIRED - from Java field comment if available)',
             description_source: 'comment | inferred (REQUIRED)',
             constraints: 'array (MUST be empty [] when no DDL evidence)',
           },
         ],
-        gaps: 'array of suspected but unconfirmed info (use for suspected primary_key, etc)',
+        gaps: [
+          {
+            type: 'suspected_primary_key | suspected_not_null | suspected_unique | suspected_foreign_key | missing_mapper | unmapped_field | ambiguous_binding',
+            description: 'string (Chinese)',
+            field_name: 'string (optional)',
+            evidence: 'string (optional)',
+          },
+        ],
       },
     },
     null,

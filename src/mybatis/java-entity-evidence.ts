@@ -118,7 +118,7 @@ async function parseJavaEntityFile(
       javaFieldName: field.name,
       javaFieldType: field.type,
       javaFieldComment: field.comment,
-      mappedColumn: mapping?.column,
+      mappedColumn: mapping?.column ?? toSnakeCase(field.name),
     };
   });
 
@@ -129,6 +129,13 @@ async function parseJavaEntityFile(
     classComment,
     fields,
   };
+}
+
+function toSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toLowerCase();
 }
 
 /**
@@ -164,36 +171,164 @@ function extractJavaFields(content: string): Array<{
 }> {
   const fields: Array<{ name: string; type: string; comment?: string }> = [];
 
-  // Match field declarations with preceding comment
-  // Pattern: [comment] private Type fieldName;
-  const fieldRegex = /(\/\*\*[\s\S]*?\*\/\s*)?(?:private|protected|public)\s+([\w<>[\],\s]+)\s+(\w+)\s*[;=]/g;
+  const classBody = findPrimaryTypeBody(content);
+  if (!classBody) {
+    return fields;
+  }
 
-  let match;
-  while ((match = fieldRegex.exec(content)) !== null) {
-    const commentRaw = match[1];
-    const typeRaw = match[2].trim();
-    const name = match[3];
+  const lines = classBody.split(/\r?\n/);
+  const fieldRegex =
+    /^(?:private|protected|public)\s+(?:(?:static|final|transient|volatile)\s+)*([\w.$<>\[\],?]+)\s+(\w+)\s*(?:=[^;]*)?;$/;
 
-    // Skip static fields
-    if (content.slice(match.index).includes('static')) continue;
+  let depth = 1;
+  let inJavadoc = false;
+  const commentLines: string[] = [];
 
-    // Parse comment
-    let comment: string | undefined;
-    if (commentRaw) {
-      comment = commentRaw
-        .replace(/\/\*\*/, '')
-        .replace(/\*\//, '')
-        .replace(/^\s*\*\s*/gm, '')
-        .trim();
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
     }
 
-    // Simplify type (remove generics for now)
-    const type = typeRaw.replace(/[<>,\s]+/g, ' ').trim();
+    if (inJavadoc) {
+      const cleaned = cleanJavadocLine(line);
+      if (cleaned) {
+        commentLines.push(cleaned);
+      }
 
-    fields.push({ name, type, comment });
+      if (line.includes('*/')) {
+        inJavadoc = false;
+      }
+      continue;
+    }
+
+    if (depth === 1 && line.startsWith('/**')) {
+      inJavadoc = true;
+      const cleaned = cleanJavadocLine(line);
+      if (cleaned) {
+        commentLines.push(cleaned);
+      }
+      if (line.includes('*/')) {
+        inJavadoc = false;
+      }
+      continue;
+    }
+
+    if (depth !== 1) {
+      depth += countStructuralBraces(line);
+      continue;
+    }
+
+    if (line.startsWith('@')) {
+      continue;
+    }
+
+    const normalizedLine = stripInlineComment(line);
+    if (
+      normalizedLine.includes('(') ||
+      /\b(class|interface|enum|record)\b/.test(normalizedLine)
+    ) {
+      depth += countStructuralBraces(normalizedLine);
+      commentLines.length = 0;
+      continue;
+    }
+
+    const match = normalizedLine.match(fieldRegex);
+    if (match && !/\bstatic\b/.test(normalizedLine)) {
+      fields.push({
+        name: match[2],
+        type: match[1].trim(),
+        comment: commentLines.length > 0 ? commentLines.join('\n') : undefined,
+      });
+      commentLines.length = 0;
+      continue;
+    }
+
+    if (normalizedLine.endsWith(';')) {
+      commentLines.length = 0;
+    }
+
+    depth += countStructuralBraces(normalizedLine);
   }
 
   return fields;
+}
+
+function findPrimaryTypeBody(content: string): string | null {
+  const typeMatch = /\b(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|record)\s+\w+[^{]*\{/m.exec(content);
+  if (!typeMatch) {
+    return null;
+  }
+
+  const bodyStart = (typeMatch.index ?? 0) + typeMatch[0].length;
+  let depth = 1;
+
+  for (let index = bodyStart; index < content.length; index += 1) {
+    const char = content[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return content.slice(bodyStart, index);
+      }
+    }
+  }
+
+  return null;
+}
+
+function cleanJavadocLine(line: string): string {
+  return line
+    .replace('/**', '')
+    .replace('*/', '')
+    .replace(/^\s*\*\s?/, '')
+    .trim();
+}
+
+function stripInlineComment(line: string): string {
+  return line.replace(/\/\/.*$/, '').trim();
+}
+
+function countStructuralBraces(line: string): number {
+  let balance = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaped = false;
+
+  for (const char of line) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (!inDoubleQuote && char === '\'') {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+
+    if (!inSingleQuote && char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      continue;
+    }
+
+    if (char === '{') {
+      balance += 1;
+    } else if (char === '}') {
+      balance -= 1;
+    }
+  }
+
+  return balance;
 }
 
 /**

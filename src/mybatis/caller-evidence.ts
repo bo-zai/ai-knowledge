@@ -171,23 +171,34 @@ function extractCallerEvidence(
  */
 function findCallingMethod(content: string, mapperClass: string, methodId: string): string | null {
   const mapperVar = toCamelCase(mapperClass);
-  const callPattern = `${mapperVar}.${methodId}`;
+  const callPatterns = [
+    `${mapperVar}.${methodId}(`,
+    `${mapperVar}.${methodId} (`,
+    `.${methodId}(`,
+  ];
 
-  // Find the method containing this call
-  // Match public/private method declarations
-  const methodRegex = /(?:public|private|protected)\s+\w+\s+(\w+)\s*\([^)]*\)\s*\{([^}]*?)\}/g;
-
-  let match;
-  while ((match = methodRegex.exec(content)) !== null) {
-    const methodName = match[1];
-    const methodBody = match[2];
-
-    if (methodBody.includes(callPattern) || methodBody.includes(`.${methodId}`)) {
-      return methodName;
+  let callIndex = -1;
+  for (const pattern of callPatterns) {
+    callIndex = content.indexOf(pattern);
+    if (callIndex !== -1) {
+      break;
     }
   }
 
-  return null;
+  if (callIndex === -1) {
+    return null;
+  }
+
+  const beforeCall = content.slice(0, callIndex);
+  const methodRegex = /(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:synchronized\s+)?(?:<[^>]+>\s*)?[\w<>\[\], ?]+\s+(\w+)\s*\([^)]*\)\s*\{/g;
+
+  let lastMethodName: string | null = null;
+  let match: RegExpExecArray | null;
+  while ((match = methodRegex.exec(beforeCall)) !== null) {
+    lastMethodName = match[1];
+  }
+
+  return lastMethodName;
 }
 
 /**

@@ -184,15 +184,19 @@ export async function buildDbTableBundle(
   const strongClauseTypes = ['select', 'insert', 'update'];
 
   // First, extract from SQL
-  for (const stmtInfo of sqlStatements) {
+  for (const stmtInfo of directStatements) {
     // Parse statement ID to get mapper namespace
     const statementId = stmtInfo.id.split('.').pop() || stmtInfo.id;
     const mapperNamespace = stmtInfo.id.split('.').slice(0, -1).join('.') || '';
 
-    const detailedFields = extractDetailedFieldsFromSql(
-      stmtInfo.sql,
-      statementId,
-      mapperNamespace
+    const detailedFields = filterFieldsForTargetTable(
+      extractDetailedFieldsFromSql(
+        stmtInfo.sql,
+        statementId,
+        mapperNamespace
+      ),
+      stmtInfo,
+      tableName,
     );
     for (const field of detailedFields) {
       const existing = fieldCandidates.find((f) => f.name === field.name);
@@ -222,17 +226,32 @@ export async function buildDbTableBundle(
   }
 
   // Then, merge entity evidence into field candidates
+  const directStatementIds = new Set(directStatements.map((statement) => statement.id.split('.').pop() ?? statement.id));
+  const directEntities = entityEvidence.filter((entity) => directStatementIds.has(entity.sourceStatementId));
+  const primaryEntityType = selectPrimaryEntityType(directEntities);
+  const targetFieldNames = new Set(fieldCandidates.map((candidate) => candidate.name));
+  const entityOverlapScores = new Map(
+    entityEvidence.map((entity) => [
+      entity.sourceStatementId,
+      entity.fields.reduce((count, field) => {
+        const mappedColumn = field.mappedColumn ?? toSnakeCase(field.javaProperty);
+        return count + (targetFieldNames.has(mappedColumn) ? 1 : 0);
+      }, 0),
+    ]),
+  );
+
   for (const entity of entityEvidence) {
+    const isPrimaryEntity = !primaryEntityType || entity.javaType === primaryEntityType;
     for (const entityField of entity.fields) {
-      const existing = fieldCandidates.find(
-        (f) => f.name === entityField.mappedColumn || f.sqlAlias === entityField.javaProperty
-      );
+      const existing = fieldCandidates.find((f) => matchesEntityField(f, entityField));
       if (existing) {
-        // Add Java property mapping
-        existing.mappedJavaProperty = entityField.javaProperty;
-        existing.javaFieldComment = entityField.javaFieldComment;
+        if (isPrimaryEntity) {
+          existing.mappedJavaProperty = entityField.javaProperty;
+          existing.javaFieldComment = entityField.javaFieldComment;
+        }
+
         // Add Java type if available
-        if (entityField.javaFieldType) {
+        if (isPrimaryEntity && entityField.javaFieldType) {
           existing.javaType = entityField.javaFieldType;
           existing.typeSource = entity.sourceStatementId.includes('select')
             ? 'resultMap'
@@ -242,10 +261,21 @@ export async function buildDbTableBundle(
             ? 'updateParam'
             : 'resultType';
         }
-      } else if (entityField.mappedColumn) {
+      } else if (entityField.mappedColumn || entityField.javaProperty) {
+        const isDirectEntity = directStatementIds.has(entity.sourceStatementId);
+        const overlapScore = entityOverlapScores.get(entity.sourceStatementId) ?? 0;
+        if (!isDirectEntity || overlapScore < 2) {
+          continue;
+        }
+
+        if (primaryEntityType && entity.javaType !== primaryEntityType) {
+          continue;
+        }
+
         // Add field from entity mapping that wasn't in SQL
+        const inferredColumn = entityField.mappedColumn ?? toSnakeCase(entityField.javaProperty);
         fieldCandidates.push({
-          name: entityField.mappedColumn,
+          name: inferredColumn,
           source: 'entity',
           mappedJavaProperty: entityField.javaProperty,
           javaFieldComment: entityField.javaFieldComment,
@@ -326,6 +356,26 @@ function findTableMappers(
   return result;
 }
 
+function selectPrimaryEntityType(entities: EntityEvidence[]): string | undefined {
+  if (entities.length === 0) {
+    return undefined;
+  }
+
+  const counts = new Map<string, number>();
+  for (const entity of entities) {
+    counts.set(entity.javaType, (counts.get(entity.javaType) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => {
+      const countDiff = right[1] - left[1];
+      if (countDiff !== 0) {
+        return countDiff;
+      }
+      return left[0].localeCompare(right[0]);
+    })[0]?.[0];
+}
+
 /**
  * Classify whether a table is accessed directly or via join.
  * - Direct: table appears in FROM clause (main target)
@@ -370,6 +420,63 @@ function classifyTableAccessType(
 
   // Default to direct if table appears somewhere but classification unclear
   return 'direct';
+}
+
+function filterFieldsForTargetTable(
+  fields: FieldCandidate[],
+  statement: SqlStatementInfo,
+  targetTable: string,
+): FieldCandidate[] {
+  const lowerTargetTable = targetTable.toLowerCase();
+  const targetAliases = extractTargetAliases(statement.sql, lowerTargetTable);
+
+  return fields.filter((field) => {
+    if (!isColumnLikeName(field.name)) {
+      return false;
+    }
+
+    if (statement.statementType !== 'select') {
+      return true;
+    }
+
+    if (field.tablePrefix) {
+      return targetAliases.has(field.tablePrefix.toLowerCase());
+    }
+
+    if (statement.tables.length === 1) {
+      return true;
+    }
+
+    // Multi-table SELECT with unqualified columns is ambiguous.
+    // Prefer adding such columns back via stronger entity evidence.
+    return false;
+  });
+}
+
+function extractTargetAliases(sql: string, targetTable: string): Set<string> {
+  const aliases = new Set<string>([targetTable]);
+  const tablePattern = new RegExp(
+    `\\b(?:FROM|JOIN)\\s+${escapeRegExp(targetTable)}\\b(?:\\s+(?:AS\\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?`,
+    'gi',
+  );
+
+  let match: RegExpExecArray | null;
+  while ((match = tablePattern.exec(sql)) !== null) {
+    const alias = match[1]?.trim();
+    if (alias && !isSqlKeyword(alias)) {
+      aliases.add(alias.toLowerCase());
+    }
+  }
+
+  return aliases;
+}
+
+function isColumnLikeName(value: string): boolean {
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -557,10 +664,39 @@ function isSqlKeyword(word: string): boolean {
   return keywords.includes(word.toLowerCase());
 }
 
+function matchesEntityField(
+  field: FieldCandidate,
+  entityField: EntityEvidence['fields'][number],
+): boolean {
+  if (entityField.mappedColumn && field.name === entityField.mappedColumn) {
+    return true;
+  }
+
+  if (field.sqlAlias && field.sqlAlias === entityField.javaProperty) {
+    return true;
+  }
+
+  if (field.mappedJavaProperty && field.mappedJavaProperty === entityField.javaProperty) {
+    return true;
+  }
+
+  return field.name === toSnakeCase(entityField.javaProperty);
+}
+
+function toSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/-/g, '_')
+    .toLowerCase();
+}
+
 /**
  * Build all DB table bundles for a repository.
  */
-export async function buildAllDbTableBundles(repoPath: string): Promise<DbTableEvidenceBundle[]> {
+export async function buildAllDbTableBundles(
+  repoPath: string,
+  coreRepoPath?: string,
+): Promise<DbTableEvidenceBundle[]> {
   const bundles: DbTableEvidenceBundle[] = [];
 
   // Parse all mappers
@@ -580,7 +716,7 @@ export async function buildAllDbTableBundles(repoPath: string): Promise<DbTableE
   }
 
   for (const table of allTables) {
-    const bundle = await buildDbTableBundle(repoPath, table);
+    const bundle = await buildDbTableBundle(repoPath, table, coreRepoPath);
     bundles.push(bundle);
   }
 
