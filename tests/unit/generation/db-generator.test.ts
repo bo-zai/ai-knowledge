@@ -46,4 +46,43 @@ describe('buildDbPrompt', () => {
     });
     expect(result.user).toContain('db_bundle');
   });
+
+  it('requires field descriptions to use business context for ambiguous abbreviations', () => {
+    const result = buildDbPrompt({ slice: { id: 'database:users', kind: 'database', title: 'users' } });
+    expect(result.system).toContain('field-level disambiguation');
+    expect(result.system).toContain('ambiguous abbreviations');
+    expect(result.system).toContain('callerEvidence');
+  });
+
+  it('includes caller code evidence in user prompt when db_bundle is provided', () => {
+    const result = buildDbPrompt({
+      slice: { id: 'database:users', kind: 'database', title: 'users' },
+      db_bundle: {
+        table: 'users',
+        mapperBindings: [],
+        sqlStatements: [],
+        directStatements: [],
+        joinedStatements: [],
+        relatedCode: [],
+        fieldCandidates: [{ name: 'diff_level', source: 'mapper' }],
+        entityEvidence: [],
+        callerEvidence: [
+          {
+            sourceStatementId: 'selectById',
+            callerClass: 'QuestionService',
+            callerMethod: 'buildQuestionCard',
+            callerFile: '/repo/QuestionService.java',
+            callSiteSnippet: 'card.setDifficulty(questionMapper.selectById(id));',
+            nearbyComments: ['根据题目难度构建卡片'],
+            businessHints: ['题目难度'],
+          },
+        ],
+        gaps: [],
+        provenance: { source: 'test', repoPath: '/test', generatedAt: '2026-05-20' },
+      },
+    });
+    expect(result.user).toContain('callerFile');
+    expect(result.user).toContain('callSiteSnippet');
+    expect(result.user).toContain('题目难度');
+  });
 });

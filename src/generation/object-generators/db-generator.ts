@@ -19,7 +19,10 @@ CRITICAL RULES:
 - Prefer "comment" when Java entity field comments exist in evidence
 - Use "inferred" when no source comment exists but field name is clear
 - Use SQL aliases and Java property mappings to infer field meaning
-- Caller evidence provides business context - use it for table-level description
+- Caller evidence provides business context - use it for table-level description and field-level disambiguation
+- For field-level disambiguation, prioritize javaFieldComment, mappedJavaProperty, sqlAlias, entity class comments, callerEvidence.nearbyComments, callerEvidence.businessHints, and callerEvidence.callSiteSnippet
+- For ambiguous abbreviations or polysemous tokens such as diff, lvl, biz, type, status, flag, code, kind, level, use business context first and do not default to generic dictionary translation
+- If ambiguous abbreviations cannot be resolved from evidence, use conservative domain wording instead of inventing a precise meaning
 - Never include fields from unrelated tables
 - Statement-scoped: only fields from SQL that actually touches this table
 - If caller_method is unknown, you may return an empty string instead of inventing one
@@ -156,6 +159,8 @@ function buildEvidenceFromBundle(bundle: DbTableEvidenceBundle): Record<string, 
       callerEvidence: bundle.callerEvidence.map((c: CallerEvidence) => ({
         callerClass: c.callerClass,
         callerMethod: c.callerMethod,
+        callerFile: c.callerFile,
+        callSiteSnippet: c.callSiteSnippet,
         nearbyComments: c.nearbyComments,
         businessHints: c.businessHints,
       })),

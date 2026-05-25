@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Copy vendor/leiden and scripts to dist after build
-const copyAssets = () => {
+const copyAssets = async (): Promise<void> => {
   // Copy vendor/leiden
   const vendorSrc = path.resolve('vendor/leiden');
   const vendorDest = path.resolve('dist/vendor/leiden');

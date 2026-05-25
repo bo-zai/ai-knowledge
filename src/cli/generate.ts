@@ -130,7 +130,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   // 2. Discover database-first slices from real MyBatis evidence.
   const companionCoreRepoPath = await resolveCompanionCoreRepoPath(repoPath);
+  logger.info('Building DB evidence bundles...');
   const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter, companionCoreRepoPath);
+  logger.info(`Built ${dbBundles.length} DB evidence bundles`);
   const dbBundleMap = new Map(dbBundles.map((bundle) => [bundle.table.toLowerCase(), bundle]));
 
   let sliceSeeds = {
@@ -144,6 +146,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // Keep backward-compatible route/process discovery as best effort only.
   if (!mockMode && shouldQueryAdditionalSlices(sliceFilter)) {
     try {
+      logger.info('Running additional slice discovery...');
       const discovered = await discoverSlices(repoPath);
       sliceSeeds = {
         routes: discovered.routes.map(r => `${r.method} ${r.path}`),
@@ -152,6 +155,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         communities: discovered.communities.map(c => c.name),
         tables: [...new Set([...sliceSeeds.tables, ...discovered.tables.map(t => t.name)])],
       };
+      logger.info(
+        `Additional slice discovery completed: routes=${discovered.routes.length}, processes=${discovered.processes.length}, tools=${discovered.tools.length}, communities=${discovered.communities.length}, tables=${discovered.tables.length}`,
+      );
     } catch (error) {
       logger.warn(`Slice discovery failed, continuing with DB slices only: ${String(error)}`);
     }
@@ -167,12 +173,20 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   };
 
   logger.info(`Discovered ${slicePlan.total_count} slices`);
+  logger.info(
+    `Slice distribution: route=${slicePlan.by_kind.route}, process=${slicePlan.by_kind.process}, tool=${slicePlan.by_kind.tool}, community=${slicePlan.by_kind.community}, database=${slicePlan.by_kind.database}`,
+  );
+  if (slicePlan.total_count === 0) {
+    logger.warn('No slices matched the current filters');
+  }
 
   // 3. Build evidence
+  logger.info('Building repository evidence bundle');
   const repoEvidence = buildRepoEvidenceBundle({
     repoPath,
     repoName: getRepoBasename(repoPath),
   });
+  logger.info('Repository evidence bundle ready');
 
   // 4. Generate objects
   const client = mockMode ? null : await createOpenAiClient(modelConfig);
@@ -181,10 +195,13 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   const warnings: Array<{ id: string; message: string }> = [];
   const retrievalOrder: string[] = [];
   const debugTraces: SliceDebugTrace[] = [];
+  logger.info(`Starting object generation for ${slicePlan.slices.length} slices`);
 
   //  简化实现：根据切片类型生成对象
-  for (const slice of slicePlan.slices) {
+  for (const [index, slice] of slicePlan.slices.entries()) {
+    const sliceProgress = formatSliceProgress(index, slicePlan.slices.length, slice);
     try {
+      logger.info(`Building evidence for ${sliceProgress}`);
       // 构建切片特定证据
       const sliceEvidence = buildSliceSpecificEvidence(slice, repoPath, dbBundleMap);
       // 组合仓库上下文和切片特定证据
@@ -194,6 +211,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         db_bundle: slice.kind === 'database' ? dbBundleMap.get(slice.title.toLowerCase()) ?? null : null,
       };
 
+      logger.info(`Generating ${sliceProgress}`);
       const generation = await generateObjectForSlice(
         slice,
         combinedEvidence,
@@ -216,6 +234,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
             'Object generation failed',
         });
       }
+      logger.info(
+        `Finished ${sliceProgress} with status ${generation.trace.status} in ${generation.trace.durationMs}ms`,
+      );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       failures.push({
@@ -240,11 +261,12 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         response: {},
         error: errorMsg,
       });
-      logger.warn(`Failed to generate object for slice ${slice.id}: ${errorMsg}`);
+      logger.warn(`Failed ${sliceProgress}: ${errorMsg}`);
     }
   }
 
   // 5. Build manifest and catalog
+  logger.info('Building manifest and catalog');
   const generatedAt = new Date().toISOString();
   const manifest = buildManifest({
     repoId: getRepoBasename(repoPath),
@@ -264,6 +286,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
 
   // 6. Write package
+  logger.info('Writing bootstrap-knowledge package');
   await writePackage({
     repoPath,
     bootstrapDir,
@@ -277,6 +300,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
 
   // 7. Write reports
+  logger.info('Writing generation reports');
   const report: GenerationReport = {
     totalObjects: slicePlan.slices.length,
     succeeded: generatedObjects.length,
@@ -291,6 +315,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     report,
   });
 
+  logger.info('Writing debug traces');
   await writeDebugLogs({
     repoId,
     repoPath,
@@ -1437,4 +1462,12 @@ function buildMockGeneratorOutput(
 
 function buildRunId(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function formatSliceProgress(
+  index: number,
+  total: number,
+  slice: { kind: string; title: string },
+): string {
+  return `slice ${index + 1}/${total} [${slice.kind}] ${slice.title}`;
 }

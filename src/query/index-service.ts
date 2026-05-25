@@ -12,6 +12,7 @@
 import type { AnalyzeResult } from '../engine/analyze/run-analyze.js';
 import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
 import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
+import { logger } from '../shared/logger.js';
 
 /**
  * Check if repo has an index.
@@ -77,6 +78,7 @@ export interface DiscoveryResult {
  */
 export async function discoverSlices(repoPath: string): Promise<DiscoveryResult> {
   const { lbugPath } = getStoragePaths(repoPath);
+  logger.info(`Opening analysis index for slice discovery: ${lbugPath}`);
   await initLbug(lbugPath);
 
   try {
@@ -89,6 +91,7 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
 
     // For now, query known patterns for routes/processes/tools
     // Route pattern: functions/methods matching route handler signatures
+    logger.info('Running route slice discovery query');
     const routeCypher = `
       MATCH (n:Function) WHERE n.name =~ '(?i).*(route|handler|controller).*'
       RETURN n.name as name, n.filePath as filePath
@@ -106,8 +109,10 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         });
       }
     }
+    logger.info(`Route slice discovery returned ${routes.length} slices`);
 
     // Process pattern: functions with specific naming
+    logger.info('Running process slice discovery query');
     const processCypher = `
       MATCH (n:Function) WHERE n.name =~ '(?i).*(process|workflow|flow).*'
       RETURN n.name as name, n.filePath as filePath
@@ -120,8 +125,10 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         name,
       });
     }
+    logger.info(`Process slice discovery returned ${processes.length} slices`);
 
     // Tool pattern: utility classes/functions
+    logger.info('Running tool slice discovery query');
     const toolCypher = `
       MATCH (n:Class) WHERE n.name =~ '(?i).*(tool|util|helper|service).*'
       RETURN n.name as name, n.filePath as filePath
@@ -134,8 +141,10 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         name,
       });
     }
+    logger.info(`Tool slice discovery returned ${tools.length} slices`);
 
     // Community pattern: modules/packages
+    logger.info('Running community slice discovery query');
     const communityCypher = `
       MATCH (n:Community) RETURN n.name as name, n.members as members
     `;
@@ -147,8 +156,10 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         name,
       });
     }
+    logger.info(`Community slice discovery returned ${communities.length} slices`);
 
     // Table pattern: database-related classes
+    logger.info('Running table slice discovery query');
     const tableCypher = `
       MATCH (n:Class) WHERE n.name =~ '(?i).*(table|entity|dao|mapper).*'
       RETURN n.name as name
@@ -161,9 +172,11 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         name: name.toLowerCase(),
       });
     }
+    logger.info(`Table slice discovery returned ${tables.length} slices`);
 
     return { routes, processes, tools, communities, tables };
   } finally {
+    logger.info('Closing analysis index for slice discovery');
     await closeLbug();
   }
 }
