@@ -28,3 +28,9 @@ export {
   createLocalReadTools,
   type LocalReadToolHandlers,
 } from './local-read-tools.js';
+
+export {
+  parseKnowledgeReadAgentOutput,
+  routeAfterBudgetCheck,
+  runKnowledgeReadRuntime,
+} from './graph-runtime.js';
