@@ -22,3 +22,9 @@ export {
 export type { BudgetState } from './context-budget.js';
 
 export { createTraceCollector, type TraceCollector } from './trace.js';
+
+export {
+  createLocalReadToolHandlers,
+  createLocalReadTools,
+  type LocalReadToolHandlers,
+} from './local-read-tools.js';
