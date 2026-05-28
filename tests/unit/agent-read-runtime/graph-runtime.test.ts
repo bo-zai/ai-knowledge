@@ -4,6 +4,7 @@ import {
   routeAfterBudgetCheck,
   buildForcedInsufficientOutput,
   validateFinalOutput,
+  routeAfterValidation,
 } from '../../../src/agent-read-runtime/graph-runtime.js';
 
 describe('graph runtime output parsing', () => {
@@ -105,5 +106,35 @@ describe('output validation', () => {
 
     expect(result.parsedOutput).toBeUndefined();
     expect(result.validationError).toContain('Agent output is not valid JSON');
+  });
+});
+
+describe('validation routing', () => {
+  it('routes validated output to end', () => {
+    expect(routeAfterValidation({
+      parsedOutput: {
+        answer: 'ok',
+        evidence_refs: [],
+        insufficient_evidence: false,
+      },
+      validationError: undefined,
+      repairAttempts: 0,
+    })).toBe('__end__');
+  });
+
+  it('routes first validation failure to repair', () => {
+    expect(routeAfterValidation({
+      parsedOutput: undefined,
+      validationError: 'bad json',
+      repairAttempts: 0,
+    })).toBe('repair_output');
+  });
+
+  it('routes second validation failure to failed', () => {
+    expect(routeAfterValidation({
+      parsedOutput: undefined,
+      validationError: 'bad json',
+      repairAttempts: 1,
+    })).toBe('failed');
   });
 });

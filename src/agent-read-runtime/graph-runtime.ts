@@ -56,6 +56,20 @@ export function routeAfterBudgetCheck(state: { budgetExceeded: boolean; finalTex
   return 'model_decide';
 }
 
+export function routeAfterValidation(state: {
+  parsedOutput?: KnowledgeReadAgentOutput;
+  validationError?: string;
+  repairAttempts: number;
+}): typeof END | 'repair_output' | 'failed' {
+  if (state.parsedOutput) {
+    return END;
+  }
+  if (state.validationError && state.repairAttempts < 1) {
+    return 'repair_output';
+  }
+  return 'failed';
+}
+
 export function buildForcedInsufficientOutput(): string {
   return JSON.stringify({
     answer: 'Evidence budget was exhausted before enough evidence could be confirmed.',
@@ -109,6 +123,20 @@ export function parseKnowledgeReadAgentOutput(text: string): Omit<KnowledgeReadR
     })),
     insufficientEvidence: output.insufficient_evidence,
   };
+}
+
+function buildRepairPrompt(finalText: string | undefined, validationError: string | undefined): string {
+  return [
+    'Repair the previous output so it is valid JSON for this schema:',
+    '{"answer":"string","evidence_refs":[{"file":"string","start_line":1,"end_line":1,"note":"string"}],"insufficient_evidence":false}',
+    '',
+    `Validation error: ${validationError ?? 'unknown'}`,
+    '',
+    'Previous output:',
+    finalText ?? '',
+    '',
+    'Return only JSON.',
+  ].join('\n');
 }
 
 function messageContentToText(content: unknown): string {
@@ -199,6 +227,19 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
       finalText: buildForcedInsufficientOutput(),
     }))
     .addNode('output_validate', async (state) => validateFinalOutput(state))
+    .addNode('repair_output', async (state) => {
+      const response = await model.invoke([
+        new HumanMessage(buildRepairPrompt(state.finalText, state.validationError)),
+      ]);
+      return {
+        finalText: messageContentToText(response.content),
+        validationError: undefined,
+        repairAttempts: state.repairAttempts + 1,
+      };
+    })
+    .addNode('failed', async (state) => {
+      throw new Error(state.validationError ?? 'Knowledge read output validation failed');
+    })
     .addEdge(START, 'model_decide')
     .addConditionalEdges('model_decide', (state) => {
       const last = state.messages[state.messages.length - 1];
@@ -217,7 +258,13 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
       output_validate: 'output_validate',
     })
     .addEdge('force_insufficient_output', 'output_validate')
-    .addEdge('output_validate', END)
+    .addConditionalEdges('output_validate', routeAfterValidation, {
+      [END]: END,
+      repair_output: 'repair_output',
+      failed: 'failed',
+    })
+    .addEdge('repair_output', 'output_validate')
+    .addEdge('failed', END)
     .compile();
 
   const response = await withRetry(

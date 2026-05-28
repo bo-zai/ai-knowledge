@@ -35,4 +35,5 @@ export {
   runKnowledgeReadRuntime,
   buildForcedInsufficientOutput,
   validateFinalOutput,
+  routeAfterValidation,
 } from './graph-runtime.js';
