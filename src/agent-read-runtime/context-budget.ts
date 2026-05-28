@@ -6,6 +6,7 @@ export const DEFAULT_KNOWLEDGE_READ_LIMITS: KnowledgeReadLimits = {
   maxTotalToolResultChars: 40_000,
   maxFileWindowLines: 240,
   searchResultLimit: 30,
+  maxSearchFileBytes: 512_000,
 };
 
 export interface BudgetState {

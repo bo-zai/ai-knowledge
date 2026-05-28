@@ -13,6 +13,7 @@ export interface KnowledgeReadLimits {
   maxTotalToolResultChars: number;
   maxFileWindowLines: number;
   searchResultLimit: number;
+  maxSearchFileBytes: number;
 }
 
 export interface KnowledgeReadRuntimeInput {

@@ -70,4 +70,8 @@ describe('context budget', () => {
     expect(third.allowed).toBe(false);
     expect(third.message).toContain('tool call budget exceeded');
   });
+
+  it('defines a max search file size limit', () => {
+    expect(DEFAULT_KNOWLEDGE_READ_LIMITS.maxSearchFileBytes).toBe(512_000);
+  });
 });
