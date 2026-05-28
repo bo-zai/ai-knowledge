@@ -7,6 +7,7 @@ import { createLocalReadTools } from './local-read-tools.js';
 import { createTraceCollector } from './trace.js';
 import {
   KnowledgeReadAgentOutputSchema,
+  type KnowledgeReadAgentOutput,
   type KnowledgeReadResult,
   type KnowledgeReadRuntimeInput,
 } from './types.js';
@@ -27,6 +28,14 @@ const GraphStateAnnotation = Annotation.Root({
     reducer: (_, right) => right,
     default: () => undefined,
   }),
+  parsedOutput: Annotation<KnowledgeReadAgentOutput | undefined>({
+    reducer: (_, right) => right,
+    default: () => undefined,
+  }),
+  validationError: Annotation<string | undefined>({
+    reducer: (_, right) => right,
+    default: () => undefined,
+  }),
   budgetExceeded: Annotation<boolean>({
     reducer: (_, right) => right,
     default: () => false,
@@ -37,11 +46,48 @@ const GraphStateAnnotation = Annotation.Root({
   }),
 });
 
-export function routeAfterBudgetCheck(state: { budgetExceeded: boolean; finalText?: string }): 'model_decide' | 'output_validate' {
-  if (state.finalText || state.budgetExceeded) {
+export function routeAfterBudgetCheck(state: { budgetExceeded: boolean; finalText?: string }): 'model_decide' | 'force_insufficient_output' | 'output_validate' {
+  if (state.finalText) {
     return 'output_validate';
   }
+  if (state.budgetExceeded) {
+    return 'force_insufficient_output';
+  }
   return 'model_decide';
+}
+
+export function buildForcedInsufficientOutput(): string {
+  return JSON.stringify({
+    answer: 'Evidence budget was exhausted before enough evidence could be confirmed.',
+    evidence_refs: [],
+    insufficient_evidence: true,
+  });
+}
+
+export function validateFinalOutput(state: { finalText?: string; repairAttempts: number }): {
+  parsedOutput?: KnowledgeReadAgentOutput;
+  validationError?: string;
+} {
+  try {
+    const parsed = parseKnowledgeReadAgentOutput(state.finalText ?? '');
+    return {
+      parsedOutput: {
+        answer: parsed.answer,
+        evidence_refs: parsed.evidenceRefs.map((ref) => ({
+          file: ref.file,
+          start_line: ref.startLine,
+          end_line: ref.endLine,
+          note: ref.note,
+        })),
+        insufficient_evidence: parsed.insufficientEvidence,
+      },
+      validationError: undefined,
+    };
+  } catch (error) {
+    return {
+      validationError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function parseKnowledgeReadAgentOutput(text: string): Omit<KnowledgeReadResult, 'toolCallsUsed' | 'trace'> {
@@ -149,7 +195,10 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
       };
     })
     .addNode('budget_check', async (state) => state)
-    .addNode('output_validate', async (state) => state)
+    .addNode('force_insufficient_output', async () => ({
+      finalText: buildForcedInsufficientOutput(),
+    }))
+    .addNode('output_validate', async (state) => validateFinalOutput(state))
     .addEdge(START, 'model_decide')
     .addConditionalEdges('model_decide', (state) => {
       const last = state.messages[state.messages.length - 1];
@@ -164,8 +213,10 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     .addEdge('tool_execute', 'budget_check')
     .addConditionalEdges('budget_check', routeAfterBudgetCheck, {
       model_decide: 'model_decide',
+      force_insufficient_output: 'force_insufficient_output',
       output_validate: 'output_validate',
     })
+    .addEdge('force_insufficient_output', 'output_validate')
     .addEdge('output_validate', END)
     .compile();
 
@@ -178,9 +229,20 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     { maxRetries: 3, delayMs: 1000 },
   );
 
-  const lastMessage = response.messages[response.messages.length - 1];
-  const finalText = response.finalText ?? messageContentToText(lastMessage?.content);
-  const parsed = parseKnowledgeReadAgentOutput(finalText);
+  if (!response.parsedOutput) {
+    throw new Error(response.validationError ?? 'Knowledge read output validation failed');
+  }
+
+  const parsed = {
+    answer: response.parsedOutput.answer,
+    evidenceRefs: response.parsedOutput.evidence_refs.map((ref) => ({
+      file: ref.file,
+      startLine: ref.start_line,
+      endLine: ref.end_line,
+      note: ref.note,
+    })),
+    insufficientEvidence: response.parsedOutput.insufficient_evidence,
+  };
   const finalizedTrace = trace.finalize();
 
   return {

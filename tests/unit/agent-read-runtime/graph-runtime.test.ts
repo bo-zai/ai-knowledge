@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseKnowledgeReadAgentOutput, routeAfterBudgetCheck } from '../../../src/agent-read-runtime/graph-runtime.js';
+import {
+  parseKnowledgeReadAgentOutput,
+  routeAfterBudgetCheck,
+  buildForcedInsufficientOutput,
+  validateFinalOutput,
+} from '../../../src/agent-read-runtime/graph-runtime.js';
 
 describe('graph runtime output parsing', () => {
   it('parses valid JSON output', () => {
@@ -28,14 +33,16 @@ describe('graph runtime output parsing', () => {
   it('rejects invalid schema', () => {
     expect(() => parseKnowledgeReadAgentOutput(JSON.stringify({ foo: 'bar' }))).toThrow();
   });
+});
 
-  it('routes to output validation after budget is exhausted', () => {
+describe('budget check routing', () => {
+  it('routes to force insufficient output when budget is exhausted and no final text', () => {
     const next = routeAfterBudgetCheck({
       budgetExceeded: true,
       finalText: undefined,
     });
 
-    expect(next).toBe('output_validate');
+    expect(next).toBe('force_insufficient_output');
   });
 
   it('routes to model decide when budget remains', () => {
@@ -54,5 +61,49 @@ describe('graph runtime output parsing', () => {
     });
 
     expect(next).toBe('output_validate');
+  });
+
+  it('routes to output validate when budget exhausted but final text exists', () => {
+    const next = routeAfterBudgetCheck({
+      budgetExceeded: true,
+      finalText: 'some text',
+    });
+
+    expect(next).toBe('output_validate');
+  });
+});
+
+describe('forced insufficient output', () => {
+  it('builds valid insufficient evidence output', () => {
+    const parsed = parseKnowledgeReadAgentOutput(buildForcedInsufficientOutput());
+
+    expect(parsed.insufficientEvidence).toBe(true);
+    expect(parsed.evidenceRefs).toEqual([]);
+  });
+});
+
+describe('output validation', () => {
+  it('validates final output into parsed output', () => {
+    const result = validateFinalOutput({
+      finalText: JSON.stringify({
+        answer: 'ok',
+        evidence_refs: [],
+        insufficient_evidence: false,
+      }),
+      repairAttempts: 0,
+    });
+
+    expect(result.parsedOutput?.answer).toBe('ok');
+    expect(result.validationError).toBeUndefined();
+  });
+
+  it('captures validation error for invalid final output', () => {
+    const result = validateFinalOutput({
+      finalText: 'plain text',
+      repairAttempts: 0,
+    });
+
+    expect(result.parsedOutput).toBeUndefined();
+    expect(result.validationError).toContain('Agent output is not valid JSON');
   });
 });

@@ -33,4 +33,6 @@ export {
   parseKnowledgeReadAgentOutput,
   routeAfterBudgetCheck,
   runKnowledgeReadRuntime,
+  buildForcedInsufficientOutput,
+  validateFinalOutput,
 } from './graph-runtime.js';
