@@ -249,4 +249,26 @@ describe('graph-level integration', () => {
     expect(result.answer).toBe('repaired');
     expect(result.insufficientEvidence).toBe(true);
   });
+
+  it('does not retry the whole graph after repair validation fails', async () => {
+    let calls = 0;
+    const badModel = {
+      async invoke() {
+        calls += 1;
+        return new AIMessage('still not json');
+      },
+    };
+
+    await expect(runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Return invalid output',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+    }, {
+      model: badModel as never,
+    })).rejects.toThrow('Agent output is not valid JSON');
+
+    expect(calls).toBe(2);
+  });
 });

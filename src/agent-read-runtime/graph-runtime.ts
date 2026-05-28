@@ -1,7 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { withRetry } from '../generation/retry.js';
 import { createBudgetState, resolveKnowledgeReadLimits } from './context-budget.js';
 import { createLocalReadTools } from './local-read-tools.js';
 import { createTraceCollector } from './trace.js';
@@ -18,6 +17,15 @@ Do not request whole-repository reads.
 Do not invent facts.
 If evidence is insufficient, set insufficient_evidence to true.
 Return only JSON with keys: answer, evidence_refs, insufficient_evidence.`;
+
+export class KnowledgeReadValidationError extends Error {
+  readonly retryable = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'KnowledgeReadValidationError';
+  }
+}
 
 const GraphStateAnnotation = Annotation.Root({
   messages: Annotation<Array<HumanMessage | AIMessage | ToolMessage>>({
@@ -139,6 +147,26 @@ function buildRepairPrompt(finalText: string | undefined, validationError: strin
   ].join('\n');
 }
 
+async function invokeGraphWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof KnowledgeReadValidationError) {
+        throw error;
+      }
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 function messageContentToText(content: unknown): string {
   if (typeof content === 'string') {
     return content;
@@ -250,7 +278,9 @@ export async function runKnowledgeReadRuntime(
       };
     })
     .addNode('failed', async (state) => {
-      throw new Error(state.validationError ?? 'Knowledge read output validation failed');
+      throw new KnowledgeReadValidationError(
+        state.validationError ?? 'Knowledge read output validation failed',
+      );
     })
     .addEdge(START, 'model_decide')
     .addConditionalEdges('model_decide', (state) => {
@@ -279,14 +309,11 @@ export async function runKnowledgeReadRuntime(
     .addEdge('failed', END)
     .compile();
 
-  const response = await withRetry(
-    () => graph.invoke({
-      messages: [new HumanMessage(userPrompt)],
-      budgetExceeded: false,
-      repairAttempts: 0,
-    }),
-    { maxRetries: 3, delayMs: 1000 },
-  );
+  const response = await invokeGraphWithRetry(() => graph.invoke({
+    messages: [new HumanMessage(userPrompt)],
+    budgetExceeded: false,
+    repairAttempts: 0,
+  }));
 
   if (!response.parsedOutput) {
     throw new Error(response.validationError ?? 'Knowledge read output validation failed');
