@@ -20,3 +20,5 @@ export {
 } from './context-budget.js';
 
 export type { BudgetState } from './context-budget.js';
+
+export { createTraceCollector, type TraceCollector } from './trace.js';
