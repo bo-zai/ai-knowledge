@@ -1,6 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
-import { END, START, StateGraph } from '@langchain/langgraph';
+import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import { withRetry } from '../generation/retry.js';
 import { createBudgetState, resolveKnowledgeReadLimits } from './context-budget.js';
 import { createLocalReadTools } from './local-read-tools.js';
@@ -18,14 +18,26 @@ Do not invent facts.
 If evidence is insufficient, set insufficient_evidence to true.
 Return only JSON with keys: answer, evidence_refs, insufficient_evidence.`;
 
-interface GraphRuntimeState {
-  messages: Array<HumanMessage | AIMessage | ToolMessage>;
-  finalText?: string;
-  budgetExceeded: boolean;
-  repairAttempts: number;
-}
+const GraphStateAnnotation = Annotation.Root({
+  messages: Annotation<Array<HumanMessage | AIMessage | ToolMessage>>({
+    reducer: (left, right) => [...left, ...right],
+    default: () => [],
+  }),
+  finalText: Annotation<string | undefined>({
+    reducer: (_, right) => right,
+    default: () => undefined,
+  }),
+  budgetExceeded: Annotation<boolean>({
+    reducer: (_, right) => right,
+    default: () => false,
+  }),
+  repairAttempts: Annotation<number>({
+    reducer: (_, right) => right,
+    default: () => 0,
+  }),
+});
 
-export function routeAfterBudgetCheck(state: Pick<GraphRuntimeState, 'budgetExceeded' | 'finalText'>): 'model_decide' | 'output_validate' {
+export function routeAfterBudgetCheck(state: { budgetExceeded: boolean; finalText?: string }): 'model_decide' | 'output_validate' {
   if (state.finalText || state.budgetExceeded) {
     return 'output_validate';
   }
@@ -80,7 +92,8 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     budget,
     trace,
   });
-  const toolMap = new Map(tools.map((item) => [item.name, item]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toolMap = new Map<string, any>(tools.map((item) => [item.name, item]));
 
   const model = new ChatOpenAI({
     model: input.model,
@@ -97,26 +110,7 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     `Instruction:\n${input.instruction}`,
   ].filter(Boolean).join('\n\n');
 
-  const graph = new StateGraph<GraphRuntimeState>({
-    channels: {
-      messages: {
-        value: (left, right) => [...left, ...right],
-        default: () => [],
-      },
-      finalText: {
-        value: (_left, right) => right,
-        default: () => undefined,
-      },
-      budgetExceeded: {
-        value: (_left, right) => right,
-        default: () => false,
-      },
-      repairAttempts: {
-        value: (_left, right) => right,
-        default: () => 0,
-      },
-    },
-  })
+  const graph = new StateGraph(GraphStateAnnotation)
     .addNode('model_decide', async (state) => {
       const response = await model.invoke(state.messages);
       const toolCalls = response.tool_calls ?? [];
@@ -136,9 +130,13 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
       const toolMessages: ToolMessage[] = [];
       for (const call of last.tool_calls ?? []) {
         const selected = toolMap.get(call.name);
-        const content = selected
-          ? String(await selected.invoke(call.args ?? {}))
-          : `unknown tool: ${call.name}`;
+        let content: string;
+        if (selected) {
+          const result = await selected.invoke(call.args ?? {});
+          content = String(result);
+        } else {
+          content = `unknown tool: ${call.name}`;
+        }
         toolMessages.push(new ToolMessage({
           content,
           tool_call_id: call.id ?? call.name,
@@ -179,7 +177,9 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     }),
     { maxRetries: 3, delayMs: 1000 },
   );
-  const finalText = response.finalText ?? messageContentToText(response.messages[response.messages.length - 1]?.content);
+
+  const lastMessage = response.messages[response.messages.length - 1];
+  const finalText = response.finalText ?? messageContentToText(lastMessage?.content);
   const parsed = parseKnowledgeReadAgentOutput(finalText);
   const finalizedTrace = trace.finalize();
 
