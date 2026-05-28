@@ -271,4 +271,59 @@ describe('graph-level integration', () => {
 
     expect(calls).toBe(2);
   });
+
+  it('counts and traces unknown tool calls', async () => {
+    const result = await runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Call an unknown tool first',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+    }, {
+      model: createFakeModel([
+        new AIMessage({
+          content: '',
+          tool_calls: [{
+            id: 'call-unknown',
+            name: 'read_everything',
+            args: {},
+          }],
+        }),
+        new AIMessage(JSON.stringify({
+          answer: 'unknown tool was rejected',
+          evidence_refs: [],
+          insufficient_evidence: true,
+        })),
+      ]) as never,
+    });
+
+    expect(result.toolCallsUsed).toBe(1);
+    expect(result.trace.toolCalls[0]?.toolName).toBe('read_everything');
+    expect(result.trace.toolCalls[0]?.error).toBe('unknown tool');
+  });
+
+  it('forces insufficient evidence after repeated unknown tools exhaust budget', async () => {
+    const result = await runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Keep calling unknown tools',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+      limits: { maxToolCalls: 1 },
+    }, {
+      model: createFakeModel([
+        new AIMessage({
+          content: '',
+          tool_calls: [{
+            id: 'call-unknown',
+            name: 'read_everything',
+            args: {},
+          }],
+        }),
+      ]) as never,
+    });
+
+    expect(result.insufficientEvidence).toBe(true);
+    expect(result.toolCallsUsed).toBe(1);
+  });
 });

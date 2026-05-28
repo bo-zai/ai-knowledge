@@ -1,7 +1,11 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
-import { createBudgetState, resolveKnowledgeReadLimits } from './context-budget.js';
+import {
+  createBudgetState,
+  recordToolCall,
+  resolveKnowledgeReadLimits,
+} from './context-budget.js';
 import { createLocalReadTools } from './local-read-tools.js';
 import { createTraceCollector } from './trace.js';
 import {
@@ -206,6 +210,29 @@ export async function runKnowledgeReadRuntime(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolMap = new Map<string, any>(tools.map((item) => [item.name, item]));
 
+  const recordUnknownToolCall = (toolName: string, args: Record<string, unknown>): string => {
+    const started = new Date();
+    const callBudget = recordToolCall(budget);
+    const content = callBudget.allowed
+      ? `unknown tool: ${toolName}`
+      : callBudget.message ?? 'tool call budget exceeded';
+    const finished = new Date();
+
+    trace.recordToolCall({
+      toolName,
+      args,
+      startedAt: started.toISOString(),
+      finishedAt: finished.toISOString(),
+      durationMs: finished.getTime() - started.getTime(),
+      returnedChars: content.length,
+      acceptedBudgetChars: 0,
+      truncated: false,
+      error: 'unknown tool',
+    });
+
+    return content;
+  };
+
   const defaultModel = new ChatOpenAI({
     model: input.model,
     apiKey: input.apiKey,
@@ -249,7 +276,7 @@ export async function runKnowledgeReadRuntime(
           const result = await selected.invoke(call.args ?? {});
           content = String(result);
         } else {
-          content = `unknown tool: ${call.name}`;
+          content = recordUnknownToolCall(call.name, call.args ?? {});
         }
         toolMessages.push(new ToolMessage({
           content,
