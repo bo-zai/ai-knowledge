@@ -10,6 +10,8 @@ import {
   NegativeEvidenceSchema,
   OpenQuestionSeedSchema,
 } from '../../../src/evidence/evidence-bundle-schema.js';
+import { buildEvidenceBundle } from '../../../src/evidence/capability-evidence-builder.js';
+import type { CapabilityCandidate } from '../../../src/slicing/capability-candidate-schema.js';
 
 describe('EvidenceEntryPointSchema', () => {
   it('accepts valid entry point', () => {
@@ -232,5 +234,181 @@ describe('EvidenceBundleSchema', () => {
         openQuestions: [],
       }),
     ).toThrow();
+  });
+});
+
+describe('buildEvidenceBundle', () => {
+  it('copies candidate name candidates and related terms', () => {
+    const candidate: CapabilityCandidate = {
+      candidateId: 'CAND-DB-KNOWLEDGE',
+      nameCandidates: ['DB knowledge generation'],
+      confidence: 0.78,
+      confidenceBreakdown: {
+        entrySignal: 0.75,
+        behaviorSignal: 0.85,
+        dataSignal: 0.9,
+        testSignal: 0.65,
+        docSignal: 0.4,
+        graphCohesion: 0.75,
+      },
+      primaryEntryPoints: [],
+      behaviorAnchors: [],
+      dataAnchors: [],
+      testAnchors: [],
+      docAnchors: [],
+      moduleClusters: [],
+      relatedTerms: ['db object', 'description source'],
+      risks: ['no_external_boundary_found'],
+      missingSignals: ['No explicit external DB ownership contract found'],
+    };
+
+    const bundle = buildEvidenceBundle(candidate, 'test-repo');
+
+    expect(bundle.capabilityHints.nameCandidates).toContain('DB knowledge generation');
+    expect(bundle.capabilityHints.relatedTerms).toContain('db object');
+    expect(bundle.capabilityHints.relatedTerms).toContain('description source');
+  });
+
+  it('limits behavior slices to 12', () => {
+    const candidate: CapabilityCandidate = {
+      candidateId: 'CAND-TEST',
+      nameCandidates: ['Test capability'],
+      confidence: 0.6,
+      confidenceBreakdown: {
+        entrySignal: 0.5,
+        behaviorSignal: 0.5,
+        dataSignal: 0.5,
+        testSignal: 0.5,
+        docSignal: 0.5,
+        graphCohesion: 0.5,
+      },
+      primaryEntryPoints: [],
+      behaviorAnchors: Array.from({ length: 20 }, (_, i) => ({
+        location: `src/test-${i}.ts`,
+        verb: 'test',
+        object: 'data',
+      })),
+      dataAnchors: [],
+      testAnchors: [],
+      docAnchors: [],
+      moduleClusters: [],
+      relatedTerms: [],
+      risks: [],
+      missingSignals: [],
+    };
+
+    const bundle = buildEvidenceBundle(candidate, 'test-repo');
+
+    expect(bundle.behaviorSlices.length).toBeLessThanOrEqual(12);
+  });
+
+  it('creates no_external_boundary_found negative evidence when no API/event signal', () => {
+    const candidate: CapabilityCandidate = {
+      candidateId: 'CAND-NO-EXTERNAL',
+      nameCandidates: ['Internal capability'],
+      confidence: 0.6,
+      confidenceBreakdown: {
+        entrySignal: 0.5,
+        behaviorSignal: 0.5,
+        dataSignal: 0.5,
+        testSignal: 0.5,
+        docSignal: 0.5,
+        graphCohesion: 0.5,
+      },
+      primaryEntryPoints: [],
+      behaviorAnchors: [],
+      dataAnchors: [],
+      testAnchors: [],
+      docAnchors: [],
+      moduleClusters: [],
+      relatedTerms: [],
+      risks: ['no_external_boundary_found'],
+      missingSignals: [],
+    };
+
+    const bundle = buildEvidenceBundle(candidate, 'test-repo');
+
+    expect(bundle.negativeEvidence.some(n => n.kind === 'missing_boundary')).toBe(true);
+  });
+
+  it('creates OPEN seed from missing signals', () => {
+    const candidate: CapabilityCandidate = {
+      candidateId: 'CAND-MISSING',
+      nameCandidates: ['Missing signals capability'],
+      confidence: 0.6,
+      confidenceBreakdown: {
+        entrySignal: 0.5,
+        behaviorSignal: 0.5,
+        dataSignal: 0.5,
+        testSignal: 0.5,
+        docSignal: 0.5,
+        graphCohesion: 0.5,
+      },
+      primaryEntryPoints: [],
+      behaviorAnchors: [],
+      dataAnchors: [],
+      testAnchors: [],
+      docAnchors: [],
+      moduleClusters: [],
+      relatedTerms: [],
+      risks: [],
+      missingSignals: ['Cannot determine field description source'],
+    };
+
+    const bundle = buildEvidenceBundle(candidate, 'test-repo');
+
+    expect(bundle.openQuestions.length).toBeGreaterThan(0);
+    expect(bundle.openQuestions[0]?.question).toContain('field description');
+  });
+
+  it('produces valid EvidenceBundle', () => {
+    const candidate: CapabilityCandidate = {
+      candidateId: 'CAND-VALID',
+      nameCandidates: ['Valid capability'],
+      confidence: 0.7,
+      confidenceBreakdown: {
+        entrySignal: 0.6,
+        behaviorSignal: 0.7,
+        dataSignal: 0.8,
+        testSignal: 0.6,
+        docSignal: 0.5,
+        graphCohesion: 0.6,
+      },
+      primaryEntryPoints: [{
+        kind: 'cli',
+        location: 'src/cli/generate.ts',
+        name: 'generate',
+      }],
+      behaviorAnchors: [{
+        location: 'src/gen.ts',
+        verb: 'generate',
+        object: 'object',
+      }],
+      dataAnchors: [{
+        kind: 'schema',
+        location: 'src/schema.ts',
+        name: 'Schema',
+      }],
+      testAnchors: [{
+        location: 'tests/test.ts',
+        testName: 'test',
+      }],
+      docAnchors: [],
+      moduleClusters: [{
+        rootPath: 'src',
+        moduleNames: ['module'],
+        cohesionScore: 0.7,
+      }],
+      relatedTerms: ['term'],
+      risks: [],
+      missingSignals: [],
+    };
+
+    const bundle = buildEvidenceBundle(candidate, 'test-repo');
+
+    // 验证生成的 bundle 符合 schema
+    const parsed = EvidenceBundleSchema.parse(bundle);
+    expect(parsed.bundleId).toBeDefined();
+    expect(parsed.candidateId).toBe('CAND-VALID');
   });
 });
