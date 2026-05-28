@@ -21,7 +21,7 @@ export function createTraceCollector(now: () => Date = () => new Date()): TraceC
         finishedAt: finished.toISOString(),
         durationMs: finished.getTime() - started.getTime(),
         toolCalls: [...toolCalls],
-        totalToolResultChars: toolCalls.reduce((sum, event) => sum + event.returnedChars, 0),
+        totalToolResultChars: toolCalls.reduce((sum, event) => sum + event.acceptedBudgetChars, 0),
       };
     },
   };

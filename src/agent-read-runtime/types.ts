@@ -33,6 +33,7 @@ export interface ToolTraceEvent {
   finishedAt: string;
   durationMs: number;
   returnedChars: number;
+  acceptedBudgetChars: number;
   truncated: boolean;
   error?: string;
 }

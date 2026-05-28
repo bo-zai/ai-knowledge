@@ -33,12 +33,18 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
     }
 
     let output = '';
+    let acceptedBudgetChars = 0;
     let error: string | undefined;
     try {
       const raw = await handler();
       const truncated = truncateToolResult(raw, input.budget.limits.maxToolResultChars);
       const totalBudget = recordToolResult(input.budget, truncated.text);
-      output = totalBudget.allowed ? truncated.text : totalBudget.message ?? 'total tool result budget exceeded';
+      if (totalBudget.allowed) {
+        acceptedBudgetChars = truncated.text.length;
+        output = truncated.text;
+      } else {
+        output = totalBudget.message ?? 'total tool result budget exceeded';
+      }
       return output;
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -53,6 +59,7 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
         finishedAt: finished.toISOString(),
         durationMs: finished.getTime() - started.getTime(),
         returnedChars: output.length,
+        acceptedBudgetChars,
         truncated: output.endsWith('[truncated]'),
         ...(error ? { error } : {}),
       });
