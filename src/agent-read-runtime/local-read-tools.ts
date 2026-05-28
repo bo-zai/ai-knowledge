@@ -6,6 +6,31 @@ import type { BudgetState } from './context-budget.js';
 import { recordToolCall, recordToolResult, truncateToolResult } from './context-budget.js';
 import type { TraceCollector } from './trace.js';
 
+const SKIPPED_SEARCH_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  '.knowledge',
+  'bootstrap-knowledge',
+]);
+
+const SKIPPED_BINARY_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.ico',
+  '.pdf',
+  '.zip',
+  '.gz',
+  '.exe',
+  '.dll',
+  '.wasm',
+]);
+
 interface LocalReadToolInput {
   repoPath: string;
   budget: BudgetState;
@@ -101,17 +126,28 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const files: string[] = [];
     for (const entry of entries) {
-      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') {
-        continue;
-      }
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        if (SKIPPED_SEARCH_DIRS.has(entry.name)) {
+          continue;
+        }
         files.push(...await walkFiles(fullPath));
       } else if (entry.isFile()) {
         files.push(fullPath);
       }
     }
     return files;
+  };
+
+  const isSearchableTextFile = async (file: string): Promise<boolean> => {
+    if (SKIPPED_BINARY_EXTENSIONS.has(path.extname(file).toLowerCase())) {
+      return false;
+    }
+    const stat = await fs.stat(file);
+    if (stat.size > input.budget.limits.maxSearchFileBytes) {
+      return false;
+    }
+    return true;
   };
 
   const searchRaw = async (query: string, limit?: number, onlyTests = false): Promise<string> => {
@@ -128,10 +164,17 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
       if (onlyTests && !relative.includes('test') && !relative.includes('spec')) {
         continue;
       }
+      if (!(await isSearchableTextFile(file))) {
+        continue;
+      }
       let text = '';
       try {
         text = await fs.readFile(file, 'utf8');
       } catch {
+        continue;
+      }
+      // 检查是否包含空字符（二进制文件标志）
+      if (text.includes('\0')) {
         continue;
       }
       const lines = text.split(/\r?\n/);

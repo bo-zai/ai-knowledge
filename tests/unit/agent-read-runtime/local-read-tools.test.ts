@@ -154,4 +154,35 @@ describe('local read tool handlers', () => {
     expect(result).toContain('tool error');
     expect(result).toContain('exceeds limit');
   });
+
+  it('skips files larger than the search file byte limit', async () => {
+    await fs.writeFile(path.join(repoPath, 'src', 'large.ts'), 'needle'.repeat(100));
+
+    const handlers = createLocalReadToolHandlers({
+      repoPath,
+      budget: createBudgetState({
+        ...DEFAULT_KNOWLEDGE_READ_LIMITS,
+        maxSearchFileBytes: 10,
+      }),
+      trace: createTraceCollector(),
+    });
+
+    const result = await handlers.searchRepoText({ query: 'needle', limit: 10 });
+
+    expect(result).toContain('no matches');
+  });
+
+  it('skips obvious binary files during search', async () => {
+    await fs.writeFile(path.join(repoPath, 'src', 'image.png'), Buffer.from([0, 1, 2, 3]));
+
+    const handlers = createLocalReadToolHandlers({
+      repoPath,
+      budget: createBudgetState(DEFAULT_KNOWLEDGE_READ_LIMITS),
+      trace: createTraceCollector(),
+    });
+
+    const result = await handlers.searchRepoText({ query: '', limit: 10 });
+
+    expect(result).toContain('no matches');
+  });
 });
