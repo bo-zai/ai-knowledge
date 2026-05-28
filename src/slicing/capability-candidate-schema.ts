@@ -47,6 +47,7 @@ export const CandidateRiskSchema = z.string();
 export const CapabilityCandidateSchema = z.object({
   candidateId: z.string().min(1),
   nameCandidates: z.array(z.string().min(1)).min(1),
+  summaryHint: z.string().optional(),
   confidence: z.number().min(0).max(1),
   confidenceBreakdown: z.object({
     entrySignal: z.number().min(0).max(1),

@@ -5,6 +5,7 @@ import {
   buildCapabilityClaimPrompt,
 } from '../../../src/generation/capability-claim-generator.js';
 import type { EvidenceBundle } from '../../../src/evidence/evidence-bundle-schema.js';
+import type { CandidateClaim } from '../../../src/generation/capability-claim-generator.js';
 
 describe('CandidateClaimSchema', () => {
   it('accepts valid CAP claim', () => {
@@ -61,7 +62,7 @@ describe('filterCandidateClaims', () => {
   };
 
   it('rejects non-OPEN claim without evidence refs', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'CAP',
       claimText: 'Some capability',
       confidence: 'high',
@@ -77,7 +78,7 @@ describe('filterCandidateClaims', () => {
   });
 
   it('rejects low-confidence non-OPEN claim', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'CAP',
       claimText: 'Low confidence claim',
       confidence: 'low',
@@ -93,7 +94,7 @@ describe('filterCandidateClaims', () => {
   });
 
   it('accepts high-confidence CAP claim with valid evidence refs', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'CAP',
       claimText: 'DB knowledge generation',
       confidence: 'high',
@@ -109,7 +110,7 @@ describe('filterCandidateClaims', () => {
   });
 
   it('rejects OPEN claim without blocked decisions', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'OPEN',
       claimText: 'Unknown question',
       confidence: 'low',
@@ -125,7 +126,7 @@ describe('filterCandidateClaims', () => {
   });
 
   it('accepts OPEN claim with blocked decisions', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'OPEN',
       claimText: 'Cannot determine field description source',
       confidence: 'low',
@@ -141,7 +142,7 @@ describe('filterCandidateClaims', () => {
   });
 
   it('rejects claim with evidence ref not in bundle', () => {
-    const claims = [{
+    const claims: CandidateClaim[] = [{
       suggestedType: 'CAP',
       claimText: 'Invalid evidence ref',
       confidence: 'high',
