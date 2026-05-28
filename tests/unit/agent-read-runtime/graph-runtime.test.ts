@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { AIMessage } from '@langchain/core/messages';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   parseKnowledgeReadAgentOutput,
   routeAfterBudgetCheck,
   buildForcedInsufficientOutput,
   validateFinalOutput,
   routeAfterValidation,
+  runKnowledgeReadRuntime,
 } from '../../../src/agent-read-runtime/graph-runtime.js';
 
 describe('graph runtime output parsing', () => {
@@ -136,5 +141,112 @@ describe('validation routing', () => {
       validationError: 'bad json',
       repairAttempts: 1,
     })).toBe('failed');
+  });
+});
+
+describe('graph-level integration', () => {
+  let repoPath: string;
+
+  beforeEach(async () => {
+    repoPath = await fs.mkdtemp(path.join(os.tmpdir(), 'knowledge-read-graph-'));
+    await fs.mkdir(path.join(repoPath, 'src'), { recursive: true });
+    await fs.writeFile(path.join(repoPath, 'src', 'sample.ts'), 'export function saveOrder() { return "ok"; }\n');
+  });
+
+  afterEach(async () => {
+    await fs.rm(repoPath, { recursive: true, force: true });
+  });
+
+  function createFakeModel(responses: AIMessage[]) {
+    let index = 0;
+    return {
+      async invoke() {
+        const response = responses[index];
+        index += 1;
+        if (!response) {
+          throw new Error('fake model exhausted');
+        }
+        return response;
+      },
+    };
+  }
+
+  it('runs graph from model tool call to valid final output', async () => {
+    const result = await runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Inspect saveOrder',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+    }, {
+      model: createFakeModel([
+        new AIMessage({
+          content: '',
+          tool_calls: [{
+            id: 'call-1',
+            name: 'read_file_window',
+            args: { path: 'src/sample.ts', startLine: 1, endLine: 1 },
+          }],
+        }),
+        new AIMessage({
+          content: JSON.stringify({
+            answer: 'saveOrder returns ok.',
+            evidence_refs: [{ file: 'src/sample.ts', start_line: 1, end_line: 1, note: 'Function definition' }],
+            insufficient_evidence: false,
+          }),
+        }),
+      ]) as never,
+    });
+
+    expect(result.insufficientEvidence).toBe(false);
+    expect(result.evidenceRefs[0]?.file).toBe('src/sample.ts');
+    expect(result.toolCallsUsed).toBe(1);
+  });
+
+  it('returns insufficient evidence when tool budget is exhausted', async () => {
+    const result = await runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Keep reading',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+      limits: { maxToolCalls: 1 },
+    }, {
+      model: createFakeModel([
+        new AIMessage({
+          content: '',
+          tool_calls: [{
+            id: 'call-1',
+            name: 'read_file_window',
+            args: { path: 'src/sample.ts', startLine: 1, endLine: 1 },
+          }],
+        }),
+      ]) as never,
+    });
+
+    expect(result.insufficientEvidence).toBe(true);
+    expect(result.evidenceRefs).toEqual([]);
+  });
+
+  it('repairs invalid final JSON once', async () => {
+    const result = await runKnowledgeReadRuntime({
+      repoPath,
+      instruction: 'Return final output',
+      model: 'unused',
+      baseUrl: 'http://unused',
+      apiKey: 'unused',
+    }, {
+      model: createFakeModel([
+        new AIMessage('not json'),
+        new AIMessage(JSON.stringify({
+          answer: 'repaired',
+          evidence_refs: [],
+          insufficient_evidence: true,
+        })),
+      ]) as never,
+    });
+
+    expect(result.answer).toBe('repaired');
+    expect(result.insufficientEvidence).toBe(true);
   });
 });

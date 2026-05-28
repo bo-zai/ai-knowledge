@@ -157,7 +157,16 @@ function messageContentToText(content: unknown): string {
   return '';
 }
 
-export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput): Promise<KnowledgeReadResult> {
+interface KnowledgeReadRuntimeDeps {
+  model?: {
+    invoke(messages: unknown): Promise<AIMessage>;
+  };
+}
+
+export async function runKnowledgeReadRuntime(
+  input: KnowledgeReadRuntimeInput,
+  deps: KnowledgeReadRuntimeDeps = {},
+): Promise<KnowledgeReadResult> {
   const limits = resolveKnowledgeReadLimits(input.limits);
   const budget = createBudgetState(limits);
   const trace = createTraceCollector();
@@ -169,7 +178,7 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolMap = new Map<string, any>(tools.map((item) => [item.name, item]));
 
-  const model = new ChatOpenAI({
+  const defaultModel = new ChatOpenAI({
     model: input.model,
     apiKey: input.apiKey,
     configuration: {
@@ -177,6 +186,9 @@ export async function runKnowledgeReadRuntime(input: KnowledgeReadRuntimeInput):
     },
     temperature: 0,
   }).bindTools(tools);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const model: any = deps.model ?? defaultModel;
 
   const userPrompt = [
     SYSTEM_PROMPT,
