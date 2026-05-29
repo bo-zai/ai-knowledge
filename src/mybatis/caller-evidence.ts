@@ -29,6 +29,53 @@ export async function resolveCallerEvidence(args: {
 }
 
 /**
+ * Collect all possible mapper receiver names from Java content.
+ */
+function collectMapperReceivers(content: string, mapperClass: string): string[] {
+  const receivers = new Set<string>([toCamelCase(mapperClass), mapperClass]);
+  const escapedMapperClass = escapeRegExp(mapperClass);
+
+  // 字段声明: private QuestionMapper mapper; 或 private QuestionMapper questionMapper;
+  const fieldRegex = new RegExp(`\\b${escapedMapperClass}\\s+(\\w+)\\b`, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = fieldRegex.exec(content)) !== null) {
+    if (match[1]) {
+      receivers.add(match[1]);
+    }
+  }
+
+  // 构造器/方法参数: public void run(QuestionMapper mapper) 或 public Service(QuestionMapper questionMapper)
+  const paramRegex = new RegExp(`\\(${escapedMapperClass}\\s+(\\w+)\\b`, 'g');
+  while ((match = paramRegex.exec(content)) !== null) {
+    if (match[1]) {
+      receivers.add(match[1]);
+    }
+  }
+
+  return [...receivers];
+}
+
+/**
+ * Build a precise call matcher that only matches known receivers.
+ */
+function buildPreciseCallMatcher(receivers: string[], methodId: string): RegExp | null {
+  if (receivers.length === 0) {
+    return null;
+  }
+
+  const receiverPattern = receivers
+    .map(escapeRegExp)
+    .sort((left, right) => right.length - left.length)
+    .join('|');
+  const escapedMethodId = escapeRegExp(methodId);
+
+  return new RegExp(
+    `(^|[^\\w])(?:${receiverPattern})\\s*\\.\\s*${escapedMethodId}\\s*\\(`,
+    'm',
+  );
+}
+
+/**
  * Find Java files that call a specific mapper method.
  */
 async function findMapperCallers(
@@ -95,35 +142,20 @@ async function findJavaFilesImportingMapper(repoPath: string, mapperClass: strin
  * Check if content calls a specific mapper method.
  */
 function callsMapperMethod(content: string, mapperClass: string, methodId: string): boolean {
-  // Common patterns:
-  // - mapperClass.methodId(...)
-  // - mapperVariable.methodId(...)
-  // where mapperVariable is typically the mapper class name in camelCase
+  // 收集可能的 mapper receiver 名称
+  const receivers = collectMapperReceivers(content, mapperClass);
 
-  const mapperVar = toCamelCase(mapperClass);
-
-  // Match patterns like: mapper.methodId or authMapper.getMenuAuthList
-  // Also match just .methodId() for more lenient matching
-  const patterns = [
-    `${mapperClass}.${methodId}`,
-    `${mapperVar}.${methodId}`,
-    `.${methodId}\\s*\\(`,
-  ];
-
-  for (const pattern of patterns) {
-    try {
-      const regex = new RegExp(pattern.replace(/\./g, '\\.'), 'g');
-      if (regex.test(content)) {
-        return true;
-      }
-    } catch {
-      // Invalid regex pattern, skip
-      continue;
-    }
+  // 构建精确匹配器
+  const preciseMatcher = buildPreciseCallMatcher(receivers, methodId);
+  if (preciseMatcher && preciseMatcher.test(content)) {
+    return true;
   }
 
-  // Fallback: simple string search for methodId
-  if (content.includes(`.${methodId}(`)) {
+  // Fallback: 检查是否存在 mapper 类名静态调用
+  const escapedMapperClass = escapeRegExp(mapperClass);
+  const escapedMethodId = escapeRegExp(methodId);
+  const staticCallRegex = new RegExp(`\\b${escapedMapperClass}\\s*\\.\\s*${escapedMethodId}\\s*\\(`);
+  if (staticCallRegex.test(content)) {
     return true;
   }
 
@@ -147,8 +179,10 @@ function extractCallerEvidence(
   const packageMatch = content.match(/package\s+([\w.]+)/);
   const packageName = packageMatch ? packageMatch[1] : '';
 
+  const callSite = findCallSite(content, mapperClass, methodId);
+
   // Find method that contains the call
-  const callerMethod = findCallingMethod(content, mapperClass, methodId);
+  const callerMethod = findCallingMethod(content, callSite?.index ?? -1);
 
   // Extract nearby comments (method comments)
   const nearbyComments = extractNearbyComments(content, callerMethod);
@@ -161,6 +195,7 @@ function extractCallerEvidence(
     callerMethod: callerMethod || '',
     callerClass: packageName ? `${packageName}.${callerClass}` : callerClass,
     callerFile: filePath,
+    callSiteSnippet: callSite?.snippet,
     nearbyComments,
     businessHints,
   };
@@ -169,22 +204,7 @@ function extractCallerEvidence(
 /**
  * Find the method that calls the mapper method.
  */
-function findCallingMethod(content: string, mapperClass: string, methodId: string): string | null {
-  const mapperVar = toCamelCase(mapperClass);
-  const callPatterns = [
-    `${mapperVar}.${methodId}(`,
-    `${mapperVar}.${methodId} (`,
-    `.${methodId}(`,
-  ];
-
-  let callIndex = -1;
-  for (const pattern of callPatterns) {
-    callIndex = content.indexOf(pattern);
-    if (callIndex !== -1) {
-      break;
-    }
-  }
-
+function findCallingMethod(content: string, callIndex: number): string | null {
   if (callIndex === -1) {
     return null;
   }
@@ -199,6 +219,83 @@ function findCallingMethod(content: string, mapperClass: string, methodId: strin
   }
 
   return lastMethodName;
+}
+
+function findCallSite(
+  content: string,
+  mapperClass: string,
+  methodId: string,
+): { index: number; snippet: string } | null {
+  const receivers = collectMapperReceivers(content, mapperClass);
+  const matcher = buildPreciseCallMatcher(receivers, methodId);
+
+  // 先尝试精确匹配
+  if (matcher) {
+    const match = matcher.exec(content);
+    if (match && typeof match.index === 'number') {
+      const callIndex = match.index + (match[1]?.length ?? 0);
+      return {
+        index: callIndex,
+        snippet: extractStatementSnippet(content, callIndex),
+      };
+    }
+  }
+
+  // Fallback: 尝试静态调用 mapperClass.methodId(...)
+  const escapedMapperClass = escapeRegExp(mapperClass);
+  const escapedMethodId = escapeRegExp(methodId);
+  const staticCallRegex = new RegExp(
+    `(^|[^\\w])${escapedMapperClass}\\s*\\.\\s*${escapedMethodId}\\s*\\(`,
+    'm',
+  );
+  const staticMatch = staticCallRegex.exec(content);
+  if (staticMatch && typeof staticMatch.index === 'number') {
+    const callIndex = staticMatch.index + (staticMatch[1]?.length ?? 0);
+    return {
+      index: callIndex,
+      snippet: extractStatementSnippet(content, callIndex),
+    };
+  }
+
+  // 如果找不到精确匹配，返回 null 而不是使用宽泛匹配
+  // 这符合设计要求：缺失证据比错误证据更安全
+  return null;
+}
+
+function extractStatementSnippet(content: string, callIndex: number): string {
+  const statementStart = findStatementStart(content, callIndex);
+  const statementEnd = findStatementEnd(content, callIndex);
+  return content
+    .slice(statementStart, statementEnd)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findStatementStart(content: string, callIndex: number): number {
+  let cursor = callIndex;
+  while (cursor > 0) {
+    const previousChar = content[cursor - 1];
+    if (previousChar === ';' || previousChar === '{' || previousChar === '}') {
+      break;
+    }
+    cursor -= 1;
+  }
+  return cursor;
+}
+
+function findStatementEnd(content: string, callIndex: number): number {
+  let cursor = callIndex;
+  while (cursor < content.length) {
+    const currentChar = content[cursor];
+    cursor += 1;
+    if (currentChar === ';') {
+      break;
+    }
+    if (currentChar === '\n' && content.slice(callIndex, cursor).includes(';')) {
+      break;
+    }
+  }
+  return cursor;
 }
 
 /**
@@ -266,4 +363,8 @@ function extractBusinessHints(callerClass: string, callerMethod: string | null):
 function toCamelCase(className: string): string {
   // AuthMapper -> authMapper
   return className.charAt(0).toLowerCase() + className.slice(1);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
