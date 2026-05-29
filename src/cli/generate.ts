@@ -70,6 +70,12 @@ interface GenerateOptions {
   verbose?: boolean;
 }
 
+interface GenerationErrorMeta {
+  message: string;
+  finishedAt: string;
+  durationMs: number;
+}
+
 // Orchestration dependencies - 用于测试时注入 fake
 export interface OrchestrationDeps {
   repoPath: string;
@@ -239,16 +245,17 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      const failedObjectType = inferObjectType(slice.kind);
       failures.push({
-        id: generateObjectId('OPEN', slice.id),
-        type: 'OPEN',
+        id: generateObjectId(failedObjectType, slice.id),
+        type: failedObjectType,
         error: errorMsg,
       });
       debugTraces.push({
         sliceId: slice.id,
         sliceKind: slice.kind,
         sliceTitle: slice.title,
-        objectType: inferObjectType(slice.kind),
+        objectType: failedObjectType,
         mode: isMockModel(modelConfig.model) ? 'mock' : 'llm',
         status: 'error',
         startedAt: new Date().toISOString(),
@@ -389,10 +396,52 @@ async function generateObjectForSlice(
           return parsedOutput;
         },
         { maxRetries: 3, delayMs: 1000 },
-      );
+      ).catch((error: unknown) => {
+        const finishedAt = new Date();
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          objects: [],
+          warnings: [],
+          __generationError: {
+            message: errorMessage,
+            finishedAt: finishedAt.toISOString(),
+            durationMs: finishedAt.getTime() - startedAt.getTime(),
+          },
+        } as GeneratorOutput & {
+          __generationError: GenerationErrorMeta;
+        };
+      });
   if (isMockModel(model)) {
     parsedOutput = output;
     rawText = JSON.stringify(output);
+  }
+  if ('__generationError' in output) {
+    const generationError = output.__generationError as GenerationErrorMeta;
+    return {
+      objectResult: null,
+      trace: {
+        sliceId: slice.id,
+        sliceKind: slice.kind,
+        sliceTitle: slice.title,
+        objectType,
+        mode: isMockModel(model) ? 'mock' : 'llm',
+        status: 'error',
+        startedAt: startedAt.toISOString(),
+        finishedAt: generationError.finishedAt,
+        durationMs: generationError.durationMs,
+        request: {
+          systemPrompt: system,
+          userPrompt: user,
+        },
+        response: {
+          rawText,
+          parsedOutput,
+          warnings: [],
+          llm: llmResult,
+        },
+        error: generationError.message,
+      },
+    };
   }
   const finishedAtForOutput = new Date();
 

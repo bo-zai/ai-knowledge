@@ -1,0 +1,169 @@
+version: 1
+
+retrieval_order:
+  - TERM
+  - OWN
+  - CON
+  - MOD
+  - VER
+  - OPEN
+
+capabilities:
+  CAP-GOODS-SEARCH-HISTORY:
+    page: final-knowledge/music-education-app-goods-search-history/pages/CAP-GOODS-SEARCH-HISTORY.md
+    seed_objects:
+      - TERM-GOODS-SEARCH-KEYWORD
+      - OWN-GOODS-SEARCH-HISTORY-WRITE
+      - CON-GOODS-LIST
+      - MOD-GOODS-CONTROLLER-LIST
+      - MOD-GOODS-SERVICE-QUERY-PAGE
+      - MOD-SEARCH-HISTORY-SERVICE-SAVE
+      - VER-GOODS-SEARCH-HISTORY
+      - OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE
+
+objects:
+  TERM-GOODS-SEARCH-KEYWORD:
+    path: final-knowledge/music-education-app-goods-search-history/objects/terms/TERM-GOODS-SEARCH-KEYWORD.md
+    triggers_any:
+      - 商品搜索
+      - 关键字搜索
+      - keyword
+      - 搜索历史
+    decision_points:
+      - term_grounding
+      - contract_mapping
+    related:
+      - CON-GOODS-LIST
+      - OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/entity/page/CommonPage.java
+      - music-education-app/src/main/resources/mappers/GoodsMapper.xml
+      - music-education-core/src/main/java/com/education/music/core/DO/mall/GoodsDO.java
+    target_metrics:
+      - term_grounding_accuracy
+
+  OWN-GOODS-SEARCH-HISTORY-WRITE:
+    path: final-knowledge/music-education-app-goods-search-history/objects/ownership/OWN-GOODS-SEARCH-HISTORY-WRITE.md
+    triggers_any:
+      - 搜索历史
+      - 搜索词写入
+      - 历史记录落库
+    decision_points:
+      - source_of_truth
+      - write_boundary
+    related:
+      - MOD-GOODS-SERVICE-QUERY-PAGE
+      - MOD-SEARCH-HISTORY-SERVICE-SAVE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/service/mall/GoodsService.java
+      - music-education-app/src/main/java/com/education/music/app/service/mall/SearchHistoryService.java
+      - music-education-app/src/main/java/com/education/music/app/interceptor/LoginInterceptor.java
+    target_metrics:
+      - boundary_accuracy
+
+  CON-GOODS-LIST:
+    path: final-knowledge/music-education-app-goods-search-history/objects/contracts/CON-GOODS-LIST.md
+    triggers_any:
+      - /goods/list
+      - 商品列表接口
+      - 关键字筛选
+    decision_points:
+      - boundary_decision
+      - contract_mapping
+    related:
+      - TERM-GOODS-SEARCH-KEYWORD
+      - OWN-GOODS-SEARCH-HISTORY-WRITE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/controller/GoodsController.java
+      - music-education-app/src/main/resources/mappers/GoodsMapper.xml
+      - music-education-app/src/main/java/com/education/music/app/config/WebConfig.java
+      - music-education-app/src/main/java/com/education/music/app/interceptor/LoginInterceptor.java
+    target_metrics:
+      - boundary_accuracy
+      - unsupported_assumption_rate
+
+  MOD-GOODS-CONTROLLER-LIST:
+    path: final-knowledge/music-education-app-goods-search-history/objects/modules/MOD-GOODS-CONTROLLER-LIST.md
+    triggers_any:
+      - controller 改动
+      - /goods/list 入参
+    decision_points:
+      - change_surface
+    related:
+      - CON-GOODS-LIST
+      - MOD-GOODS-SERVICE-QUERY-PAGE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/controller/GoodsController.java
+    target_metrics:
+      - change_surface_precision
+
+  MOD-GOODS-SERVICE-QUERY-PAGE:
+    path: final-knowledge/music-education-app-goods-search-history/objects/modules/MOD-GOODS-SERVICE-QUERY-PAGE.md
+    triggers_any:
+      - 搜索逻辑修改
+      - 排序修改
+      - 搜索历史触发条件
+    decision_points:
+      - change_surface
+      - implementation_plan
+    related:
+      - OWN-GOODS-SEARCH-HISTORY-WRITE
+      - OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/service/mall/GoodsService.java
+      - music-education-app/src/main/resources/mappers/GoodsMapper.xml
+    target_metrics:
+      - change_surface_precision
+
+  MOD-SEARCH-HISTORY-SERVICE-SAVE:
+    path: final-knowledge/music-education-app-goods-search-history/objects/modules/MOD-SEARCH-HISTORY-SERVICE-SAVE.md
+    triggers_any:
+      - 搜索历史落库
+      - 时间戳处理
+    decision_points:
+      - change_surface
+    related:
+      - OWN-GOODS-SEARCH-HISTORY-WRITE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/service/mall/SearchHistoryService.java
+      - music-education-app/src/main/resources/mappers/SearchHistoryMapper.xml
+    target_metrics:
+      - change_surface_precision
+
+  VER-GOODS-SEARCH-HISTORY:
+    path: final-knowledge/music-education-app-goods-search-history/objects/validation/VER-GOODS-SEARCH-HISTORY.md
+    triggers_any:
+      - 验证计划
+      - 回归测试
+      - 搜索历史改动
+    decision_points:
+      - validation_plan
+    related:
+      - CON-GOODS-LIST
+      - MOD-GOODS-SERVICE-QUERY-PAGE
+    evidence_watch:
+      - music-education-app/src/test/java/com/education/music/app/controller/GoodsControllerTest.java
+    target_metrics:
+      - verification_completeness
+
+  OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE:
+    path: final-knowledge/music-education-app-goods-search-history/objects/open/OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE.md
+    triggers_any:
+      - 搜索历史不一致
+      - keyType 需求
+      - 新搜索模式
+    decision_points:
+      - escalation
+    related:
+      - TERM-GOODS-SEARCH-KEYWORD
+      - OWN-GOODS-SEARCH-HISTORY-WRITE
+    evidence_watch:
+      - music-education-app/src/main/java/com/education/music/app/service/mall/GoodsService.java
+      - music-education-app/src/main/resources/mappers/GoodsMapper.xml
+    target_metrics:
+      - unsupported_assumption_rate
+
+unknown_escalation_rules:
+  - if_requirement_mentions_keyword_without_keytype: true
+  - if_requirement_mentions_search_history_display_without_read_path: true
+  - if_search_history_intent_conflicts_with_sql_filtering: true

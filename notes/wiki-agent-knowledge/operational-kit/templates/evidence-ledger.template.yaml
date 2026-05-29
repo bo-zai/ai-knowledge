@@ -1,0 +1,15 @@
+evidence_ledger:
+  - evidence_id: EVD-001
+    claim_candidate: ""
+    tier: tier1 | tier2 | tier3
+    source_kind: code | test | schema | contract | config | iac | adr | pr | review | incident | log | trace | metric | chat
+    source_ref: ""
+    supports:
+      - ""
+    conflicts_with:
+      - ""
+    freshness_signal:
+      - ""
+    confidence: low | medium | high
+    notes: ""
+

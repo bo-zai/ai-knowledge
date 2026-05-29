@@ -1,0 +1,133 @@
+claim_candidates:
+  - claim_id: CLM-REQ001-001
+    proposed_object_type: OWN
+    claim_text: mall-app-web 当前商品列表搜索主链路的后端实现落在 mall-portal 的 /product/search，而不是 mall-search 的 /esProduct/search。
+    scope: 前台商品列表搜索主链路
+    need_refs:
+      - NEED-REQ001-BOUNDARY
+    evidence_refs:
+      - PmsPortalProductController.search
+      - PmsPortalProductServiceImpl.search
+      - mall-app-web product.ts
+    task_triggers:
+      - 商品搜索增强
+      - 搜索结果页改造
+    decision_points:
+      - boundary_decision
+      - change_surface
+    expected_failure_if_missing: Agent 会把改动错误地路由到 mall-search，忽略当前实际商品列表链路。
+    expected_failure_if_stale: Agent 会错误评估改动面和回归范围。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - boundary_accuracy
+      - change_surface_precision
+
+  - claim_id: CLM-REQ001-002
+    proposed_object_type: CON
+    claim_text: mall-portal 的 /product/search 已支持 keyword、brandId、productCategoryId、sort 参数，且 brandId 已在服务层生效。
+    scope: mall-portal 商品搜索接口
+    need_refs:
+      - NEED-REQ001-BRAND-FILTER
+    evidence_refs:
+      - PmsPortalProductController.search
+      - PmsPortalProductServiceImpl.search
+    task_triggers:
+      - 品牌筛选
+      - 搜索结果页筛选增强
+    decision_points:
+      - contract_mapping
+      - boundary_decision
+    expected_failure_if_missing: Agent 会误以为后端缺少品牌筛选能力，从而做不必要后端改造。
+    expected_failure_if_stale: Agent 会错误判断接口兼容性。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - boundary_accuracy
+      - unsupported_assumption_rate
+
+  - claim_id: CLM-REQ001-003
+    proposed_object_type: CON
+    claim_text: mall-search 的 /esProduct/search/relate 返回品牌、分类和属性聚合信息，但其语义不等同于搜索框联想词。
+    scope: mall-search related info 聚合接口
+    need_refs:
+      - NEED-REQ001-SUGGESTION
+    evidence_refs:
+      - EsProductController.searchRelatedInfo
+      - EsProductServiceImpl.searchRelatedInfo
+    task_triggers:
+      - 联想词需求
+      - 搜索辅助信息需求
+    decision_points:
+      - term_grounding
+      - boundary_decision
+    expected_failure_if_missing: Agent 会直接把 relatedInfo 当成联想词能力，导致需求语义误解。
+    expected_failure_if_stale: Agent 会在错误接口上堆功能。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - term_grounding_accuracy
+      - unsupported_assumption_rate
+
+  - claim_id: CLM-REQ001-004
+    proposed_object_type: MOD
+    claim_text: mall-app-web 的商品列表页当前只接入关键字、分类和排序，没有品牌筛选 UI 与 brandId 请求参数接入。
+    scope: mall-app-web 商品列表页
+    need_refs:
+      - NEED-REQ001-FRONT-GAP
+    evidence_refs:
+      - pages/product/list.vue
+    task_triggers:
+      - 前台商品列表筛选增强
+    decision_points:
+      - change_surface
+    expected_failure_if_missing: Agent 无法准确定位前端真实缺口，可能重复改后端。
+    expected_failure_if_stale: Agent 会误判前端是否已具备接入能力。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - change_surface_precision
+
+  - claim_id: CLM-REQ001-005
+    proposed_object_type: MOD
+    claim_text: mall-app-web 的搜索输入页当前只有历史记录和跳转逻辑，没有联想词接口调用和展示。
+    scope: mall-app-web 搜索输入页
+    need_refs:
+      - NEED-REQ001-SUGGESTION
+    evidence_refs:
+      - pages/product/search.vue
+    task_triggers:
+      - 搜索框联想词
+      - 搜索输入增强
+    decision_points:
+      - change_surface
+      - verification_plan
+    expected_failure_if_missing: Agent 会无法区分“搜索历史”与“联想词”缺口。
+    expected_failure_if_stale: Agent 会误判前端交互现状。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - change_surface_precision
+
+  - claim_id: CLM-REQ001-006
+    proposed_object_type: OPEN
+    claim_text: 需求中的“联想词”是否等同于 autocomplete/suggest 仍未知，当前代码只能证明存在 history 和 relatedInfo，两者均不足以自动得出最终语义。
+    scope: 搜索输入增强语义
+    need_refs:
+      - NEED-REQ001-SUGGESTION
+    evidence_refs:
+      - pages/product/search.vue
+      - EsProductController.searchRelatedInfo
+      - EsProductServiceImpl.searchRelatedInfo
+    task_triggers:
+      - 联想词需求
+    decision_points:
+      - unknowns
+      - escalation
+    expected_failure_if_missing: Agent 会用幻觉补全“联想词”的实现语义。
+    expected_failure_if_stale: Agent 会在错误能力上持续演化。
+    target_tasks:
+      - CASE-MALL-REQ001
+    target_metrics:
+      - unsupported_assumption_rate
+

@@ -1,0 +1,33 @@
+case_id: CASE-MUSIC-APP-GOODS-SEARCH-HISTORY-001
+capability: CAP-GOODS-SEARCH-HISTORY
+risk_level: medium
+
+gold:
+  canonical_terms:
+    - TERM-GOODS-SEARCH-KEYWORD
+  capability_summary:
+    - "POST /goods/list returns goods list and may write search history"
+  systems_involved:
+    - "music-education-app"
+    - "music-education-core"
+    - "mall_search_history table"
+  source_of_truth:
+    - OWN-GOODS-SEARCH-HISTORY-WRITE
+  affected_contracts:
+    - CON-GOODS-LIST
+  candidate_modules:
+    - MOD-GOODS-CONTROLLER-LIST
+    - MOD-GOODS-SERVICE-QUERY-PAGE
+    - MOD-SEARCH-HISTORY-SERVICE-SAVE
+  required_validations:
+    - VER-GOODS-SEARCH-HISTORY
+  must_ask_questions:
+    - OPEN-GOODS-SEARCH-WRITE-READ-DIVERGENCE
+  forbidden_assumptions:
+    - "Assume keyword always filters results"
+    - "Assume goods.keywords field is used by runtime search"
+    - "Assume /goods/list is anonymous"
+  veto_conditions:
+    - "Misses the login boundary of /goods/list"
+    - "Treats keyword filtering and history writing as the same condition"
+    - "Localizes the change only to controller when query semantics change"

@@ -85,4 +85,57 @@ describe('buildDbPrompt', () => {
     expect(result.user).toContain('callSiteSnippet');
     expect(result.user).toContain('题目难度');
   });
+
+  it('uses compact db evidence instead of duplicated sql bundles', () => {
+    const result = buildDbPrompt({
+      slice: { id: 'database:users', kind: 'database', title: 'users' },
+      db_bundle: {
+        table: 'users',
+        mapperBindings: [
+          {
+            namespace: 'com.demo.UserMapper',
+            methodId: 'selectById',
+            statementType: 'select',
+            mapperFile: '/repo/UserMapper.xml',
+            accessType: 'direct',
+          },
+        ],
+        sqlStatements: [
+          {
+            id: 'com.demo.UserMapper.selectById',
+            sql: 'select id, diff_level from users where id = ?',
+            statementType: 'select',
+            tables: ['users'],
+            fragmentRefs: [],
+            accessType: 'direct',
+          },
+        ],
+        directStatements: [
+          {
+            id: 'com.demo.UserMapper.selectById',
+            sql: 'select id, diff_level from users where id = ?',
+            statementType: 'select',
+            tables: ['users'],
+            fragmentRefs: [],
+            accessType: 'direct',
+          },
+        ],
+        joinedStatements: [],
+        relatedCode: [],
+        fieldCandidates: [{ name: 'diff_level', source: 'mapper', sourceStatementId: 'selectById' }],
+        entityEvidence: [],
+        callerEvidence: [],
+        gaps: [],
+        provenance: { source: 'test', repoPath: '/test', generatedAt: '2026-05-20' },
+      },
+    });
+
+    const payload = JSON.parse(result.user) as { evidence: { db_bundle: Record<string, unknown> } };
+    expect(payload.evidence.db_bundle).not.toHaveProperty('mapperBindings');
+    expect(payload.evidence.db_bundle).not.toHaveProperty('sqlStatements');
+    expect(payload.evidence.db_bundle).not.toHaveProperty('directStatements');
+    expect(payload.evidence.db_bundle).not.toHaveProperty('joinedStatements');
+    expect(payload.evidence.db_bundle).toHaveProperty('accessPaths');
+    expect(payload.evidence.db_bundle).toHaveProperty('statementSamples');
+  });
 });

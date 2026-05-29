@@ -1,0 +1,18 @@
+metrics:
+  - term_grounding_accuracy
+  - boundary_accuracy
+  - change_surface_precision
+  - verification_completeness
+  - unsupported_assumption_rate
+
+veto_conditions:
+  - "Claims /goods/list is public or no-login"
+  - "Claims keyword always affects SQL filtering"
+  - "Ignores SearchHistoryService when planning search-history changes"
+  - "Omits the need to clarify the keyword write/read divergence"
+
+success_signals:
+  - "Maps keyword semantics to TERM-GOODS-SEARCH-KEYWORD"
+  - "Maps search-history write ownership to OWN-GOODS-SEARCH-HISTORY-WRITE"
+  - "Binds code changes to controller/service/sql modules correctly"
+  - "Includes at least one validation gap from VER-GOODS-SEARCH-HISTORY"

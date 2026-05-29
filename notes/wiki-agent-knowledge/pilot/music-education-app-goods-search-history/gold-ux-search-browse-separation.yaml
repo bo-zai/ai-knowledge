@@ -1,0 +1,42 @@
+case_id: CASE-MUSIC-APP-UX-SEARCH-BROWSE-SEPARATION
+requirement_file: request-ux-search-browse-separation.md
+risk_level: medium
+
+gold:
+  business_intent:
+    - "让用户明确区分主动搜索和普通浏览"
+    - "避免上一次搜索残留条件继续影响分类浏览或清空后的浏览"
+  must_recognize:
+    - "这不是单纯的搜索排序问题，而是搜索状态与浏览状态的边界问题"
+    - "当前能力主要在后端商品列表查询流程，但用户感知问题可能部分依赖前端请求行为"
+    - "清空搜索、切换分类、继续浏览是否带 keyword，需要作为关键未知项确认"
+    - "本次不能波及商品详情、推荐商品、短信验证码和兑换流程"
+  boundary_expectations:
+    in_scope_backend:
+      - "goods list contract"
+      - "goods query filtering semantics"
+      - "search history side effects if they follow search state"
+    possible_external_dependency:
+      - "页面在什么时机发送空关键词、分类切换请求或浏览请求"
+  likely_change_surface:
+    - CON-GOODS-LIST
+    - MOD-GOODS-SERVICE-QUERY-PAGE
+  optional_change_surface:
+    - MOD-SEARCH-HISTORY-SERVICE-SAVE
+  should_not_focus_on:
+    - "搜索联想"
+    - "搜索历史入口页面"
+    - "商品排序策略"
+  must_ask:
+    - "前端当前如何表示‘清空搜索后浏览’"
+    - "分类切换时是否仍会带上之前的 keyword 或 keyType"
+    - "这次需求只改后端仓库，还是需要配合前端行为一起改"
+  validation_expectations:
+    - "主动搜索时结果与搜索意图一致"
+    - "切换分类后结果不再受上一轮搜索残留条件影响"
+    - "清空搜索后恢复正常浏览结果"
+    - "用户不会在普通浏览时得到来源不明的搜索过滤结果"
+  veto_conditions:
+    - "把问题误解成 UI 文案问题"
+    - "忽略前端/调用方在搜索与浏览切换中的作用"
+    - "声称只改推荐或详情逻辑即可解决"

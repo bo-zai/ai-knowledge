@@ -1,0 +1,26 @@
+claim_candidates:
+  - claim_id: CLM-001
+    proposed_object_type: TERM | SYS | OWN | CON | MOD | VER | FLOW | STATE | INV | DEC | OPEN | ACTOR | CAP
+    claim_text: ""
+    scope: ""
+    need_refs:
+      - NEED-001
+    evidence_refs:
+      - EVD-001
+    task_triggers:
+      - ""
+    decision_points:
+      - term_grounding
+      - source_of_truth
+    expected_failure_if_missing: ""
+    expected_failure_if_stale: ""
+    target_tasks:
+      - CASE-001
+    target_metrics:
+      - boundary_accuracy
+    keep_if:
+      - improves one core metric
+    drop_if:
+      - does not change any decision
+    notes: ""
+

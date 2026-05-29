@@ -1,0 +1,35 @@
+case_id: CASE-000
+title: ""
+risk_level: low | medium | high | critical
+source_ref: ""
+business_domain: ""
+task_type: feature | bugfix | refactor | integration | migration
+
+gold:
+  canonical_terms: []
+  actors: []
+  capability: []
+  systems_involved: []
+  source_of_truth: []
+  affected_flows: []
+  affected_states: []
+  affected_contracts: []
+  invariants: []
+  candidate_modules: []
+  required_validations: []
+  must_ask_questions: []
+  forbidden_assumptions: []
+  veto_conditions: []
+
+evidence:
+  code_refs: []
+  test_refs: []
+  schema_refs: []
+  contract_refs: []
+  adr_refs: []
+  incident_refs: []
+
+scoring:
+  primary_metrics: []
+  secondary_metrics: []
+
