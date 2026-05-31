@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { CapabilityCandidate, EntrySignal, BehaviorSignal, DataSignal, TestSignal, DocSignal, ModuleCluster } from './capability-candidate-schema.js';
+import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
+import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 const DOMAIN_PHRASES = [
   'db object',
@@ -740,4 +742,237 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
   }
 
   return candidates;
+}
+
+// ============================================================================
+// Graph-DB-based capability discovery (replaces file-system scanning)
+// ============================================================================
+
+function escapeCypherString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+}
+
+function buildPathFilterCypher(varName: string, targetPaths: string[]): string {
+  if (targetPaths.length === 0) return 'true';
+  const clauses = targetPaths.map(p => {
+    const normalized = escapeCypherString(p.replace(/\\/g, '/'));
+    return `STARTS WITH(${varName}.filePath, '${normalized}')`;
+  });
+  return `(${clauses.join(' OR ')})`;
+}
+
+async function queryGraphEntrySignals(
+  pathFilter: string,
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<EntrySignal[]> {
+  const cypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Controller|Service|Component|Handler)$' RETURN c.name as name, c.filePath as filePath`;
+  const rows = await executeQuery(cypher);
+  return rows.map((row: Record<string, unknown>) => {
+    const name = String(row.name ?? '');
+    const filePath = String(row.filePath ?? '');
+    const relevance = computeTargetRelevance([filePath, name], targetTerms);
+    const lower = name.toLowerCase();
+    let kind: EntrySignal['kind'] = 'handler';
+    let role: string | undefined;
+    if (lower.includes('controller')) { kind = 'http'; role = 'controller'; }
+    else if (lower.includes('service')) { kind = 'service'; role = 'service'; }
+    else if (lower.includes('controller')) { kind = 'http'; role = 'controller'; }
+    return {
+      kind,
+      location: filePath,
+      name,
+      description: `Graph-discovered ${kind} entry`,
+      targetRelevance: relevance.score,
+      matchedTerms: relevance.matchedTerms,
+      role,
+    };
+  }).sort(byRelevanceDesc);
+}
+
+async function queryGraphBehaviorSignals(
+  pathFilter: string,
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<BehaviorSignal[]> {
+  const cypher = `MATCH (m:Method) WHERE ${pathFilter} RETURN m.name as name, m.filePath as filePath LIMIT 500`;
+  const rows = await executeQuery(cypher);
+  return rows.map((row: Record<string, unknown>) => {
+    const name = String(row.name ?? '');
+    const filePath = String(row.filePath ?? '');
+    const relevance = computeTargetRelevance([filePath, name], targetTerms);
+    const terms = normalizeCapabilityTerms(name);
+    // Determine role from file path
+    const normalizedPath = normalizePathForMatch(filePath);
+    const role = normalizedPath.includes('/controller/') ? 'controller' :
+                 normalizedPath.includes('/service/') ? 'service' :
+                 normalizedPath.includes('/mapper/') ? 'mapper' : undefined;
+    return {
+      location: filePath,
+      verb: terms[0] || name,
+      object: terms.slice(1).join(' ') || name,
+      targetRelevance: relevance.score,
+      matchedTerms: relevance.matchedTerms,
+      role,
+    };
+  }).sort(byRelevanceDesc);
+}
+
+async function queryGraphDataSignals(
+  pathFilter: string,
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<DataSignal[]> {
+  const classCypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN c.name as name, c.filePath as filePath`;
+  const interfaceCypher = `MATCH (i:Interface) WHERE ${pathFilter} AND i.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN i.name as name, i.filePath as filePath`;
+  const [classRows, interfaceRows] = await Promise.all([
+    executeQuery(classCypher),
+    executeQuery(interfaceCypher),
+  ]);
+  const allRows = [
+    ...classRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
+    ...interfaceRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
+  ];
+  return allRows.map(row => {
+    const relevance = computeTargetRelevance([row.filePath, row.name], targetTerms);
+    const normalizedPath = normalizePathForMatch(row.filePath);
+    const role = normalizedPath.includes('/controller/') ? 'controller' :
+                 normalizedPath.includes('/service/') ? 'service' :
+                 normalizedPath.includes('/mapper/') ? 'mapper' :
+                 normalizedPath.includes('/entity/') ? 'entity' :
+                 normalizedPath.includes('/dto/') || normalizedPath.includes('/vo/') ||
+                 normalizedPath.includes('/request/') || normalizedPath.includes('/response/') ? 'dto' : undefined;
+    return { kind: row.kind, location: row.filePath, name: row.name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role };
+  }).sort(byRelevanceDesc);
+}
+
+async function queryGraphTestSignals(
+  pathFilter: string,
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<TestSignal[]> {
+  const cypher = `MATCH (m:Method) WHERE ${pathFilter} AND m.filePath =~ '.*(test|spec).*' RETURN m.name as name, m.filePath as filePath LIMIT 300`;
+  const rows = await executeQuery(cypher);
+  const seen = new Set<string>();
+  const signals: TestSignal[] = [];
+  for (const row of rows) {
+    const name = String((row as Record<string, unknown>).name ?? '');
+    const filePath = String((row as Record<string, unknown>).filePath ?? '');
+    const key = `${filePath}:${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const relevance = computeTargetRelevance([filePath, name], targetTerms);
+    signals.push({ location: filePath, testName: name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role: 'test' });
+  }
+  signals.sort(byRelevanceDesc);
+  return signals;
+}
+
+async function queryGraphModuleClusters(targetTerms: string[]): Promise<ModuleCluster[]> {
+  const cypher = `MATCH (c:Community) RETURN c.heuristicLabel as label, c.symbolCount as symbolCount, c.cohesion as cohesion LIMIT 8`;
+  const rows = await executeQuery(cypher);
+  return rows.map((row: Record<string, unknown>) => {
+    const label = String(row.label ?? '');
+    const cohesion = Number(row.cohesion ?? row.symbolCount ?? 0);
+    const relevance = computeTargetRelevance([label], targetTerms);
+    return {
+      rootPath: label,
+      moduleNames: [label],
+      cohesionScore: Math.min(1, Math.max(0.5, cohesion / 100)),
+      targetRelevance: relevance.score,
+      matchedTerms: relevance.matchedTerms,
+    };
+  }).sort(byRelevanceDesc);
+}
+
+export async function discoverCapabilitiesFromGraph(
+  input: DiscoverCapabilitiesInput,
+): Promise<CapabilityCandidate[]> {
+  const { repoRoot, targetTerms = [], targetPaths = [] } = input;
+
+  if (targetTerms.length === 0 && targetPaths.length === 0) {
+    return [];
+  }
+
+  const { lbugPath } = getStoragePaths(repoRoot);
+  await initLbug(lbugPath);
+  try {
+    const pathFilter = buildPathFilterCypher('c', targetPaths);
+    const methodPathFilter = buildPathFilterCypher('m', targetPaths);
+    const interfacePathFilter = buildPathFilterCypher('i', targetPaths);
+
+    const candidates: CapabilityCandidate[] = [];
+
+    const primaryEntryPoints = await queryGraphEntrySignals(pathFilter, repoRoot, targetTerms);
+    const behaviorAnchors = await queryGraphBehaviorSignals(methodPathFilter, repoRoot, targetTerms);
+    const dataAnchors = await queryGraphDataSignals(pathFilter, repoRoot, targetTerms);
+    const testAnchors = await queryGraphTestSignals(methodPathFilter, repoRoot, targetTerms);
+    const moduleClusters = await queryGraphModuleClusters(targetTerms);
+
+    // Compute confidence (reuse existing logic)
+    const entrySignal = primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
+    const behaviorSignal = behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
+    const dataSignal = dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
+    const testSignal = testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
+    const docSignal = 0.4;
+    const graphCohesion = moduleClusters.length > 1 ? 0.75 : 0.5;
+
+    const confidence = computeConfidence(entrySignal, behaviorSignal, dataSignal, testSignal, docSignal, graphCohesion);
+
+    const { businessTerms, technicalTerms } = classifyTargetTerms(targetTerms);
+    const relatedTerms: string[] = [...targetTerms];
+    for (const term of targetTerms) {
+      relatedTerms.push(...normalizeCapabilityTerms(term));
+    }
+
+    const businessCapabilityName = deriveBusinessCapabilityName({
+      businessTerms,
+      entrySignals: primaryEntryPoints,
+      behaviorSignals: behaviorAnchors,
+      dataSignals: dataAnchors,
+      moduleSignals: moduleClusters.map(cluster => ({
+        targetRelevance: cluster.targetRelevance,
+        matchedTerms: cluster.matchedTerms,
+        name: cluster.rootPath,
+        location: cluster.rootPath,
+      })),
+    });
+
+    const nameCandidates = [businessCapabilityName];
+
+    if (technicalTerms.includes('mybatis') && !relatedTerms.includes('mybatis mapper')) {
+      relatedTerms.push('mybatis mapper');
+    }
+
+    const candidate: CapabilityCandidate = {
+      candidateId: `CAND-${targetTerms.map(t => t.toUpperCase()).join('-')}`,
+      nameCandidates,
+      confidence,
+      confidenceBreakdown: {
+        entrySignal,
+        behaviorSignal,
+        dataSignal,
+        testSignal,
+        docSignal,
+        graphCohesion,
+      },
+      primaryEntryPoints,
+      behaviorAnchors,
+      dataAnchors,
+      testAnchors,
+      docAnchors: [],
+      moduleClusters,
+      relatedTerms: [...new Set(relatedTerms)],
+      risks: ['no_external_boundary_found'],
+      missingSignals: ['No explicit external DB ownership contract found'],
+    };
+
+    if (candidate.confidence >= 0.55) {
+      candidates.push(candidate);
+    }
+
+    return candidates;
+  } finally {
+    await closeLbug();
+  }
 }

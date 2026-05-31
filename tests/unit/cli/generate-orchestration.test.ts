@@ -110,6 +110,7 @@ describe('generate orchestration', () => {
       try {
         await runGenerate({
           repo,
+          knowledge: 'db',
           model: 'test-model',
           baseUrl: 'http://localhost:11434/v1',
           apiKeyEnv: 'TEST_API_KEY',
@@ -129,7 +130,7 @@ describe('generate orchestration', () => {
         }
       }
 
-      expect(loggedText).toContain('Building repository evidence bundle');
+      expect(loggedText).toContain('Building DB evidence bundles');
       expect(loggedText).toContain('Generating slice 1/1 [database] users');
     });
   });

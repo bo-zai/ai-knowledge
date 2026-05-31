@@ -12,6 +12,9 @@ export interface EvidenceIndexItem {
 
 export interface CapabilityGenerationReport {
   mode: 'skeleton' | 'llm';
+  capabilityGenerationMode?: 'single';
+  selectedCandidateId?: string;
+  candidateCount?: number;
   llmRequested: boolean;
   llmRequired: boolean;
   llmCalled: boolean;
@@ -38,8 +41,13 @@ export interface CapabilityGenerationReport {
     capFromLlm: boolean;
     flowOrConFromLlm: boolean;
     modPresent: boolean;
+    modHasTouchGuidance: boolean;
     verOrValidationOpenPresent: boolean;
+    verHasOracle: boolean;
+    openHasMinimalNextEvidence: boolean;
+    noTechnicalTermLeakage: boolean;
   };
+  technicalTermLeakage?: string[];
   qualityWarnings?: string[];
   warnings: string[];
 }

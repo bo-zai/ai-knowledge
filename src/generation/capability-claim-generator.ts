@@ -110,6 +110,16 @@ function collectTermEvidence(bundle: EvidenceBundle): TermEvidence[] {
     .slice(0, 8);
 }
 
+const FieldSemanticSchema = z.union([
+  z.string(),
+  z.object({
+    meaning: z.string().optional(),
+    validation: z.array(z.string()).optional(),
+    evidenceRef: z.string().optional(),
+    notes: z.array(z.string()).optional(),
+  }).strict(),
+]);
+
 const ObjectHintSchema = z.object({
   canonicalTerm: z.string().optional(),
   subject: z.string().optional(),
@@ -133,7 +143,7 @@ const ObjectHintSchema = z.object({
   testAnchors: z.array(z.string()).optional(),
   contractSubject: z.string().optional(),
   contractKind: z.enum(['schema', 'sql', 'api', 'event', 'output']).optional(),
-  fieldSemantics: z.record(z.string(), z.string()).optional(),
+  fieldSemantics: z.record(z.string(), FieldSemanticSchema).optional(),
   validationRules: z.array(z.string()).optional(),
   schemaRef: z.string().optional(),
   verificationGoal: z.string().optional(),
@@ -184,11 +194,11 @@ export function filterCandidateClaims(claims: CandidateClaim[], bundle: Evidence
   const validRefs = collectBundleRefs(bundle);
 
   return claims.filter(claim => {
-    // OPEN claim 必须有 blockedDecisions
+    // OPEN claim 必须有 blockedDecisions 和 minimalNextEvidence
     if (claim.suggestedType === 'OPEN') {
-      if (claim.blockedDecisions.length === 0) {
-        return false;
-      }
+      if (claim.blockedDecisions.length === 0) return false;
+      const minimalNextEvidence = claim.objectHints?.minimalNextEvidence;
+      if (!minimalNextEvidence || minimalNextEvidence.length === 0) return false;
       return true;
     }
 
@@ -443,6 +453,7 @@ export function buildSkeletonClaims(bundle: EvidenceBundle): CandidateClaim[] {
       sddStageUses: ['requirement_clarification'],
       unsupportedParts: [],
       blockedDecisions: question.blockedDecisions,
+      objectHints: { minimalNextEvidence: [question.minimalNextEvidence] },
       source: 'skeleton',
     });
   }
@@ -457,6 +468,7 @@ export function buildSkeletonClaims(bundle: EvidenceBundle): CandidateClaim[] {
       sddStageUses: ['design_planning'],
       unsupportedParts: [],
       blockedDecisions: [negative.impact],
+      objectHints: { minimalNextEvidence: [negative.location ?? negative.description] },
       source: 'skeleton',
     });
   }

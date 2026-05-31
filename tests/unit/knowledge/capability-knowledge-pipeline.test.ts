@@ -28,6 +28,40 @@ const validFlowClaim: CandidateClaim = {
   source: 'llm',
 };
 
+const validModClaim: CandidateClaim = {
+  suggestedType: 'MOD',
+  claimText: 'MyBatis evidence module is the change surface for DB knowledge generation',
+  confidence: 'high',
+  evidenceRefs: ['evidence://module/MOD-001'],
+  decisionPoints: ['change_surface'],
+  sddStageUses: ['implementation_planning', 'coding'],
+  unsupportedParts: [],
+  blockedDecisions: [],
+  source: 'llm',
+  objectHints: {
+    modulePath: 'src/mybatis',
+    ownedResponsibility: 'MyBatis evidence extraction',
+    touchWhen: ['Changing evidence collection logic', 'Changing mapper parsing'],
+    doNotTouchWhen: ['Changing unrelated schema definitions'],
+  },
+};
+
+const validVerClaim: CandidateClaim = {
+  suggestedType: 'VER',
+  claimText: 'DB object generation passes DBObjectSchema validation',
+  confidence: 'high',
+  evidenceRefs: ['evidence://validation/VAL-001'],
+  decisionPoints: ['validation_plan'],
+  sddStageUses: ['validation'],
+  unsupportedParts: [],
+  blockedDecisions: [],
+  source: 'llm',
+  objectHints: {
+    verificationGoal: 'Generated DB object matches schema contract',
+    acceptanceOracle: ['DBObjectSchema validation passes', 'All required fields present'],
+  },
+};
+
 const validOpenClaim: CandidateClaim = {
   suggestedType: 'OPEN',
   claimText: 'Open question from provider',
@@ -37,7 +71,12 @@ const validOpenClaim: CandidateClaim = {
   sddStageUses: [],
   unsupportedParts: [],
   blockedDecisions: ['custom-blocked'],
+  objectHints: { minimalNextEvidence: ['Review validation tests'] },
 };
+
+function makeBusinessQualityClaims(): CandidateClaim[] {
+  return [validCapClaim, validFlowClaim, validModClaim, validVerClaim];
+}
 
 describe('runCapabilityKnowledgePipeline', () => {
   it('generates files for targeted DB knowledge capability', async () => {
@@ -45,7 +84,7 @@ describe('runCapabilityKnowledgePipeline', () => {
       repoRoot: '.',
       targetTerms: ['db', 'mybatis', 'knowledge'],
       targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
-      claimsProvider: async () => ({ claims: [validCapClaim, validFlowClaim, validOpenClaim] }),
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
     });
 
     expect(result.files.length).toBeGreaterThan(0);
@@ -72,9 +111,9 @@ describe('runCapabilityKnowledgePipeline', () => {
   it('includes pipeline metadata', async () => {
     const result = await runCapabilityKnowledgePipeline({
       repoRoot: '.',
-      targetTerms: ['test'],
-      targetPaths: ['src/test'],
-      claimsProvider: async () => ({ claims: [validCapClaim, validFlowClaim] }),
+      targetTerms: ['db', 'mybatis', 'knowledge'],
+      targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
     });
 
     expect(result.metadata.capabilityId).toBeDefined();
@@ -127,7 +166,7 @@ describe('runCapabilityKnowledgePipeline', () => {
       repoRoot: '.',
       targetTerms: ['db', 'mybatis', 'knowledge'],
       targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
-      claimsProvider: async () => ({ claims: [validCapClaim, validFlowClaim, validOpenClaim] }),
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
     });
 
     expect(result.objects.some(o => o.type === 'CAP')).toBe(true);
@@ -140,7 +179,7 @@ describe('runCapabilityKnowledgePipeline', () => {
       repoRoot: '.',
       targetTerms: ['db', 'mybatis', 'knowledge'],
       targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
-      claimsProvider: async () => ({ claims: [validCapClaim, validFlowClaim] }),
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
       llmMode: { requested: true, required: true, model: 'test-model' },
     });
 
@@ -200,5 +239,41 @@ describe('runCapabilityKnowledgePipeline', () => {
         }],
       }),
     })).rejects.toThrow(/LLM FLOW or CON claim is required/);
+  });
+
+  it('throws when MOD exists only from skeleton without touch guidance', async () => {
+    await expect(runCapabilityKnowledgePipeline({
+      repoRoot: '.',
+      targetTerms: ['db', 'mybatis', 'knowledge'],
+      targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
+      claimsProvider: async () => ({ claims: [validCapClaim, validFlowClaim, validVerClaim] }),
+    })).rejects.toThrow(/MOD touch guidance/);
+  });
+
+  it('reports single capability generation mode and selected candidate', async () => {
+    const result = await runCapabilityKnowledgePipeline({
+      repoRoot: '.',
+      targetTerms: ['db', 'mybatis', 'knowledge'],
+      targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
+    });
+
+    expect(result.report.capabilityGenerationMode).toBe('single');
+    expect(result.report.selectedCandidateId).toBeTruthy();
+    expect(result.report.candidateCount).toBeGreaterThan(0);
+  });
+
+  it('reports stronger business quality gates', async () => {
+    const result = await runCapabilityKnowledgePipeline({
+      repoRoot: '.',
+      targetTerms: ['db', 'mybatis', 'knowledge'],
+      targetPaths: ['src/mybatis', 'src/evidence', 'src/knowledge', 'src/schemas'],
+      claimsProvider: async () => ({ claims: makeBusinessQualityClaims() }),
+    });
+
+    expect(result.report.requiredBusinessObjects).toBeDefined();
+    expect(result.report.requiredBusinessObjects!.modHasTouchGuidance).toBe(true);
+    expect(result.report.requiredBusinessObjects!.verHasOracle).toBe(true);
+    expect(result.report.requiredBusinessObjects!.noTechnicalTermLeakage).toBe(true);
   });
 });

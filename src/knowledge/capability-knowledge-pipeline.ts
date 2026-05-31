@@ -5,6 +5,8 @@ import { filterCandidateClaims, buildSkeletonClaims, type CandidateClaim } from 
 import { assembleCapabilityKnowledgeObjects, type KnowledgeObject } from './capability-object-assembler.js';
 import { buildCapabilityKnowledgeFiles, type EvidenceIndexItem, type CapabilityGenerationReport, type CapabilityLlmDebug } from '../packaging/capability-knowledge-writer.js';
 import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
+import { isTechnicalTerm } from '../generation/capability-claim-generator.js';
+import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
 
 const BAD_DEFAULT_PHRASES = [
   'is a discovered business capability supported by repository evidence',
@@ -175,6 +177,18 @@ function buildEvidenceIndexFromBundle(bundle: EvidenceBundle): EvidenceIndexItem
   return items;
 }
 
+function hasNonEmptyArrayMetadata(object: KnowledgeObject, key: string): boolean {
+  const value = object.metadata[key];
+  return Array.isArray(value) && value.length > 0;
+}
+
+function collectTechnicalTermLeakage(objects: KnowledgeObject[]): string[] {
+  return objects
+    .filter(object => object.type === 'TERM')
+    .map(object => String(object.metadata.canonicalTerm ?? object.id.replace(/^TERM-/, '')))
+    .filter(term => isTechnicalTerm(term));
+}
+
 export async function runCapabilityKnowledgePipeline(
   input: RunCapabilityKnowledgePipelineInput,
 ): Promise<RunCapabilityKnowledgePipelineResult> {
@@ -334,16 +348,33 @@ export async function runCapabilityKnowledgePipeline(
     (o.type === 'FLOW' || o.type === 'CON') && o.metadata.source === 'llm',
   );
   const modPresent = objects.some(o => o.type === 'MOD');
-  const verOrValidationOpenPresent = objects.some(o => o.type === 'VER') ||
-    objects.some(o =>
-      o.type === 'OPEN' &&
-      Array.isArray(o.metadata.minimalNextEvidence) &&
-      (o.metadata.minimalNextEvidence as unknown[]).length > 0,
-    );
+  const modHasTouchGuidance = objects.some(o =>
+    o.type === 'MOD' &&
+    o.metadata.source === 'llm' &&
+    hasNonEmptyArrayMetadata(o, 'touchWhen') &&
+    hasNonEmptyArrayMetadata(o, 'doNotTouchWhen'),
+  );
+  const verHasOracle = objects.some(o =>
+    o.type === 'VER' &&
+    hasNonEmptyArrayMetadata(o, 'acceptanceOracle') &&
+    typeof o.metadata.verificationGoal === 'string' &&
+    o.metadata.verificationGoal.length > 0,
+  );
+  const openHasMinimalNextEvidence = objects.some(o =>
+    o.type === 'OPEN' &&
+    o.blockedDecisions.length > 0 &&
+    hasNonEmptyArrayMetadata(o, 'minimalNextEvidence'),
+  );
+  const verOrValidationOpenPresent = verHasOracle || openHasMinimalNextEvidence;
+  const technicalTermLeakage = collectTechnicalTermLeakage(objects);
+  const noTechnicalTermLeakage = technicalTermLeakage.length === 0;
 
-  if (!capFromLlm || !flowOrConFromLlm || !modPresent || !verOrValidationOpenPresent) {
-    throw new Error('LLM generation failed: generated capability package is missing required business knowledge objects');
-  }
+  if (!capFromLlm) throw new Error('LLM generation failed: LLM CAP object is required');
+  if (!flowOrConFromLlm) throw new Error('LLM generation failed: LLM FLOW or CON object is required');
+  if (!modPresent) throw new Error('LLM generation failed: MOD object is required');
+  if (!modHasTouchGuidance) throw new Error('LLM generation failed: LLM MOD touch guidance is required for business capability knowledge');
+  if (!verOrValidationOpenPresent) throw new Error('LLM generation failed: validation oracle or validation OPEN is required');
+  if (!noTechnicalTermLeakage) throw new Error(`LLM generation failed: technical TERM leakage: ${technicalTermLeakage.join(', ')}`);
 
   // Step 7: 找到 CAP 对象的 ID 作为 capabilityId
   const capObject = objects.find(o => o.type === 'CAP');
@@ -370,6 +401,9 @@ export async function runCapabilityKnowledgePipeline(
   // 构建 report
   const report: CapabilityGenerationReport = {
     mode: 'llm',
+    capabilityGenerationMode: 'single',
+    selectedCandidateId: topCandidate.candidateId,
+    candidateCount: candidates.length,
     llmRequested: true,
     llmRequired: true,
     llmCalled,
@@ -388,8 +422,13 @@ export async function runCapabilityKnowledgePipeline(
       capFromLlm,
       flowOrConFromLlm,
       modPresent,
+      modHasTouchGuidance,
       verOrValidationOpenPresent,
+      verHasOracle,
+      openHasMinimalNextEvidence,
+      noTechnicalTermLeakage,
     },
+    technicalTermLeakage,
     warnings,
   };
 
@@ -457,4 +496,45 @@ function mergeClaimsByTypeAndText(
   }
 
   return result;
+}
+
+const TYPE_TO_DIR: Record<string, string> = {
+  CAP: 'capabilities',
+  TERM: 'terms',
+  FLOW: 'flows',
+  MOD: 'modules',
+  CON: 'contracts',
+  VER: 'validation',
+  OPEN: 'open',
+};
+
+export function capabilityResultToContribution(
+  result: RunCapabilityKnowledgePipelineResult,
+): KnowledgePackageContribution {
+  return {
+    stage: 'capability',
+    files: result.files.filter(f => f.path !== 'catalog.yaml'),
+    objects: result.objects.map(obj => ({
+      id: obj.id,
+      type: obj.type,
+      path: `objects/${TYPE_TO_DIR[obj.type] || 'unknown'}/${obj.id}.yaml`,
+    })),
+    report: {
+      stage: 'capability',
+      ran: true,
+      succeeded: result.objects.length,
+      failed: 0,
+      details: {
+        capabilityGenerationMode: 'single',
+        selectedCandidateId: result.report.selectedCandidateId,
+        candidateCount: result.report.candidateCount,
+        llmRuntime: 'langgraph',
+        llmCalled: result.metadata.llm.called,
+        llmSucceeded: result.metadata.llm.succeeded,
+        objectSourceCounts: result.report.objectSourceCounts,
+        requiredBusinessObjects: result.report.requiredBusinessObjects,
+      },
+    },
+    warnings: result.metadata.warnings,
+  };
 }

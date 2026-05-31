@@ -420,8 +420,13 @@ describe('report with LangGraph metadata', () => {
           capFromLlm: true,
           flowOrConFromLlm: true,
           modPresent: true,
+          modHasTouchGuidance: true,
           verOrValidationOpenPresent: true,
+          verHasOracle: true,
+          openHasMinimalNextEvidence: true,
+          noTechnicalTermLeakage: true,
         },
+        technicalTermLeakage: [],
         warnings: [],
       },
     });
@@ -431,12 +436,9 @@ describe('report with LangGraph metadata', () => {
 
     const report = JSON.parse(reportFile!.content);
     expect(report.objectSourceCounts).toEqual({ llm: 3, skeleton: 2, evidence_seed: 1 });
-    expect(report.requiredBusinessObjects).toEqual({
-      capFromLlm: true,
-      flowOrConFromLlm: true,
-      modPresent: true,
-      verOrValidationOpenPresent: true,
-    });
+    expect(report.requiredBusinessObjects!.capFromLlm).toBe(true);
+    expect(report.requiredBusinessObjects!.modHasTouchGuidance).toBe(true);
+    expect(report.requiredBusinessObjects!.noTechnicalTermLeakage).toBe(true);
   });
 
   it('includes graphTrace in debug JSON', () => {

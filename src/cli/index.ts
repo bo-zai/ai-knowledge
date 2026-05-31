@@ -12,7 +12,12 @@ program
   .command('generate [path]')
   .description('Generate bootstrap knowledge package. If no path specified, uses current directory.')
   .option('--repo <path>', 'Target repository path (overrides positional argument)')
-  .option('--slice <value>', 'Generate only specific slice')
+  .option('--knowledge <db|capability|all>', 'Knowledge type to generate: db, capability, or all. Defaults to all.')
+  .option('--target <selector>', 'Generate one target, for example db:users or capability:order')
+  .option('--slice <value>', '[deprecated] Generate only specific slice')
+  .option('--terms <terms>', '[deprecated] Comma-separated target terms for capability discovery')
+  .option('--paths <paths>', '[deprecated] Comma-separated target paths for capability discovery')
+  .option('--out <path>', 'Output directory (defaults to target repo root)')
   .option('--llm-config <path>', 'Path to JSON LLM config file')
   .option('--model <name>', 'LLM model name')
   .option('--base-url <url>', 'LLM API base URL')
@@ -40,23 +45,6 @@ program
   .action(async (path, options) => {
     const { runClean } = await import('./clean.js');
     await runClean({ ...options, path });
-  });
-
-program
-  .command('generate-capability [path]')
-  .description('Generate capability-oriented knowledge package from target repository')
-  .option('--repo <path>', 'Target repository path (overrides positional argument)')
-  .option('--terms <terms>', 'Comma-separated target terms (e.g., db,mybatis,knowledge)')
-  .option('--paths <paths>', 'Comma-separated target paths (e.g., src/main,src/test)')
-  .option('--out <path>', 'Output directory (defaults to target repo root)')
-  .option('--llm-config <path>', 'Path to JSON LLM config file')
-  .option('--model <name>', 'LLM model name')
-  .option('--base-url <url>', 'LLM API base URL')
-  .option('--api-key-env <name>', 'Environment variable for API key')
-  .option('--verbose', 'Enable verbose logging')
-  .action(async (path, options) => {
-    const { runGenerateCapability } = await import('./generate-capability.js');
-    await runGenerateCapability({ ...options, path });
   });
 
 program.parse();

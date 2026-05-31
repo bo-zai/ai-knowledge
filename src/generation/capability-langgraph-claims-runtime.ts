@@ -3,7 +3,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
 import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
 import { buildCapabilityClaimPrompt, filterCandidateClaims, type CandidateClaim } from './capability-claim-generator.js';
-import { parseCapabilityClaimJson } from './capability-llm-claims-provider.js';
+import { parseCapabilityClaimJsonWithMetadata } from './capability-llm-claims-provider.js';
 
 type ModelLike = {
   invoke(messages: unknown): Promise<AIMessage>;
@@ -28,6 +28,7 @@ export interface CapabilityClaimsLangGraphResult {
     attempts: number;
     repaired: boolean;
     validationErrors: string[];
+    normalizationNotes: string[];
   };
 }
 
@@ -37,6 +38,7 @@ const State = Annotation.Root({
   claims: Annotation<CandidateClaim[] | undefined>({ reducer: (_, value) => value, default: () => undefined }),
   validationError: Annotation<string | undefined>({ reducer: (_, value) => value, default: () => undefined }),
   validationErrors: Annotation<string[]>({ reducer: (left, right) => [...left, ...right], default: () => [] }),
+  normalizationNotes: Annotation<string[]>({ reducer: (left, right) => [...left, ...right], default: () => [] }),
   attempts: Annotation<number>({ reducer: (_, value) => value, default: () => 0 }),
   repaired: Annotation<boolean>({ reducer: (_, value) => value, default: () => false }),
 });
@@ -53,13 +55,13 @@ function messageToText(message: AIMessage): string {
   return '';
 }
 
-function validateAcceptedClaims(text: string, bundle: EvidenceBundle): CandidateClaim[] {
-  const parsed = parseCapabilityClaimJson(text);
-  const filtered = filterCandidateClaims(parsed, bundle);
+function validateAcceptedClaims(text: string, bundle: EvidenceBundle): { claims: CandidateClaim[]; normalizationNotes: string[] } {
+  const parsed = parseCapabilityClaimJsonWithMetadata(text);
+  const filtered = filterCandidateClaims(parsed.claims, bundle);
   if (!filtered.some((claim) => claim.suggestedType !== 'OPEN')) {
     throw new Error('LangGraph LLM output has no accepted non-OPEN claim after evidence filtering');
   }
-  return filtered;
+  return { claims: filtered, normalizationNotes: parsed.normalizationNotes };
 }
 
 function buildSystemPrompt(): string {
@@ -111,8 +113,10 @@ export async function runCapabilityClaimsLangGraph(input: RunCapabilityClaimsLan
     .addNode('parse_validate', async (state) => {
       const text = state.repairedText ?? state.rawText ?? '';
       try {
+        const validation = validateAcceptedClaims(text, input.bundle);
         return {
-          claims: validateAcceptedClaims(text, input.bundle),
+          claims: validation.claims,
+          normalizationNotes: validation.normalizationNotes,
           validationError: undefined,
         };
       } catch (error) {
@@ -168,6 +172,7 @@ export async function runCapabilityClaimsLangGraph(input: RunCapabilityClaimsLan
       attempts: result.attempts,
       repaired: result.repaired,
       validationErrors: result.validationErrors,
+      normalizationNotes: result.normalizationNotes,
     },
   };
 }

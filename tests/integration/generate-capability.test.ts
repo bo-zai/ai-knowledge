@@ -94,7 +94,7 @@ export async function validateOrder(order: Order): Promise<boolean> {
   return repo;
 }
 
-describe('generate-capability command', () => {
+describe('generate --terms (capability mode)', () => {
   it('fails when no API key is configured', async () => {
     const repo = await createSimpleRepo();
 
@@ -102,7 +102,7 @@ describe('generate-capability command', () => {
       'node',
       [
         'dist/cli/index.js',
-        'generate-capability',
+        'generate',
         repo,
         '--terms', 'order',
         '--paths', 'src',
@@ -116,52 +116,6 @@ describe('generate-capability command', () => {
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr + result.stdout).toContain('LLM API key is missing');
-  });
-
-  it('fails when --llm flag is used (removed)', async () => {
-    const repo = await createSimpleRepo();
-
-    const result = await execa(
-      'node',
-      [
-        'dist/cli/index.js',
-        'generate-capability',
-        repo,
-        '--terms', 'order',
-        '--paths', 'src',
-        '--llm',
-      ],
-      {
-        reject: false,
-        timeout: 30000,
-      }
-    );
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr + result.stdout).toContain('unknown option');
-  });
-
-  it('fails when --require-llm flag is used (removed)', async () => {
-    const repo = await createSimpleRepo();
-
-    const result = await execa(
-      'node',
-      [
-        'dist/cli/index.js',
-        'generate-capability',
-        repo,
-        '--terms', 'order',
-        '--paths', 'src',
-        '--require-llm',
-      ],
-      {
-        reject: false,
-        timeout: 30000,
-      }
-    );
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr + result.stdout).toContain('unknown option');
   });
 
   it('accepts --llm-config option and fails when endpoint is unreachable', async () => {
@@ -179,7 +133,7 @@ describe('generate-capability command', () => {
       'node',
       [
         'dist/cli/index.js',
-        'generate-capability',
+        'generate',
         repo,
         '--terms', 'order',
         '--paths', 'src',
@@ -254,6 +208,41 @@ describe('generate-capability command', () => {
         },
       },
       {
+        suggestedType: 'CON',
+        claimText: 'Order output exposes order identity, amount, and status used by order management.',
+        confidence: 'high',
+        evidenceRefs: ['evidence://behavior/BEH-001'],
+        decisionPoints: ['affected_contracts'],
+        sddStageUses: ['requirement_specification'],
+        unsupportedParts: [],
+        blockedDecisions: [],
+        objectHints: {
+          contractSubject: 'Order output contract',
+          contractKind: 'schema',
+          fieldSemantics: {
+            status: {
+              meaning: 'Current lifecycle state of the order',
+              validation: ['pending after creation'],
+              evidenceRef: 'evidence://behavior/BEH-001',
+            },
+          },
+        },
+      },
+      {
+        suggestedType: 'VER',
+        claimText: 'Order creation returns pending status test covers core capability path.',
+        confidence: 'high',
+        evidenceRefs: ['evidence://behavior/BEH-001'],
+        decisionPoints: ['validation_plan'],
+        sddStageUses: ['validation'],
+        unsupportedParts: [],
+        blockedDecisions: [],
+        objectHints: {
+          verificationGoal: 'Order creation returns pending status',
+          acceptanceOracle: ['createOrder returns an order with pending status'],
+        },
+      },
+      {
         suggestedType: 'OPEN',
         claimText: 'Cannot determine external payment service contract for order settlement.',
         confidence: 'low',
@@ -285,7 +274,7 @@ describe('generate-capability command', () => {
         'node',
         [
           'dist/cli/index.js',
-          'generate-capability',
+          'generate',
           repo,
           '--terms', 'order',
           '--paths', 'src',
@@ -306,10 +295,15 @@ describe('generate-capability command', () => {
 
       expect(report.llmRuntime).toBe('langgraph');
       expect(report.llmSucceeded).toBe(true);
+      expect(report.capabilityGenerationMode).toBe('single');
+      expect(report.selectedCandidateId).toBeTruthy();
+      expect(report.candidateCount).toBeGreaterThan(0);
       expect(report.requiredBusinessObjects.capFromLlm).toBe(true);
       expect(report.requiredBusinessObjects.flowOrConFromLlm).toBe(true);
       expect(report.requiredBusinessObjects.modPresent).toBe(true);
-      expect(report.requiredBusinessObjects.verOrValidationOpenPresent).toBe(true);
+      expect(report.requiredBusinessObjects.modHasTouchGuidance).toBe(true);
+      expect(report.requiredBusinessObjects.verHasOracle).toBe(true);
+      expect(report.requiredBusinessObjects.noTechnicalTermLeakage).toBe(true);
       expect(report.objectSourceCounts.llm).toBeGreaterThan(0);
 
       // 验证 CAP 对象

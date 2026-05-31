@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
-import { copyFile, mkdir } from 'node:fs/promises';
 
 async function createGitRepo(repo: string): Promise<void> {
   await execa('git', ['init'], { cwd: repo });
@@ -24,15 +23,18 @@ describe('generate end-to-end', () => {
 
     expect(result.exitCode).toBe(0);
 
-    // 检查 manifest.yaml 存在
-    const manifest = await readFile(join(repo, 'bootstrap-knowledge', 'manifest.yaml'), 'utf8');
-    expect(manifest).toContain('schema_version');
-    expect(manifest).toContain('knowledge_pack_type: bootstrap');
-
     // 检查 catalog.yaml 存在且包含统计信息
     const catalog = await readFile(join(repo, 'bootstrap-knowledge', 'catalog.yaml'), 'utf8');
+    expect(catalog).toContain('version');
     expect(catalog).toContain('retrieval_order');
-    expect(catalog).toContain('total_object_count');
+    expect(catalog).toContain('objects');
+
+    // 检查 generation.json 存在且包含 stage 报告
+    const reportRaw = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf8');
+    const report = JSON.parse(reportRaw);
+    expect(report).toHaveProperty('knowledge');
+    expect(report).toHaveProperty('stages');
+    expect(report).toHaveProperty('warnings');
   });
 
   it('keeps package generation alive when no objects are generated', async () => {
@@ -47,15 +49,23 @@ describe('generate end-to-end', () => {
 
     expect(result.exitCode).toBe(0);
 
-    const summary = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation-summary.md'), 'utf8');
-    expect(summary).toContain('Generation Summary');
-    expect(summary).toContain('**Total Objects:** 0');
+    // 读取 generation.json 报告
+    const reportRaw = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf8');
+    const report = JSON.parse(reportRaw);
 
-    // 检查 STATUS 标记
-    expect(summary).toContain('STATUS');
+    // 验证报告结构完整
+    expect(report).toHaveProperty('knowledge');
+    expect(report).toHaveProperty('stages');
+
+    // 空仓库应该产生 0 个对象
+    const stages = report.stages as Record<string, { ran: boolean; succeeded: number; failed: number }>;
+    const totalSucceeded = Object.values(stages)
+      .filter((s) => s.ran)
+      .reduce((sum, s) => sum + s.succeeded, 0);
+    expect(totalSucceeded).toBe(0);
   });
 
-  it('writes coverage-report.yaml with partial failure details', async () => {
+  it('writes generation.json with stage details', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-coverage-'));
     await writeFile(join(repo, 'README.md'), '# coverage test repo');
     await createGitRepo(repo);
@@ -67,13 +77,23 @@ describe('generate end-to-end', () => {
 
     expect(result.exitCode).toBe(0);
 
-    const coverage = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'coverage-report.yaml'), 'utf8');
-    expect(coverage).toContain('success_rate');
-    expect(coverage).toContain('is_partial');
-    expect(coverage).toContain('is_empty');
+    // generation.json 包含每个 stage 的 ran/succeeded/failed 信息
+    const reportRaw = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf8');
+    const report = JSON.parse(reportRaw);
+
+    expect(report).toHaveProperty('stages');
+    const stages = report.stages as Record<string, { ran: boolean; succeeded: number; failed: number }>;
+    for (const [stageName, stage] of Object.entries(stages)) {
+      expect(stage).toHaveProperty('ran');
+      expect(stage).toHaveProperty('succeeded');
+      expect(stage).toHaveProperty('failed');
+      expect(typeof stage.ran).toBe('boolean');
+      expect(typeof stage.succeeded).toBe('number');
+      expect(typeof stage.failed).toBe('number');
+    }
   });
 
-  it('writes object-stats.yaml with detailed statistics', async () => {
+  it('writes catalog.yaml with object type grouping', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-stats-'));
     await writeFile(join(repo, 'README.md'), '# stats test repo');
     await createGitRepo(repo);
@@ -85,9 +105,12 @@ describe('generate end-to-end', () => {
 
     expect(result.exitCode).toBe(0);
 
-    const stats = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'object-stats.yaml'), 'utf8');
-    expect(stats).toContain('generated_at');
-    expect(stats).toContain('summary');
-    expect(stats).toContain('by_type');
+    // catalog.yaml 包含对象信息和检索顺序
+    const catalog = await readFile(join(repo, 'bootstrap-knowledge', 'catalog.yaml'), 'utf8');
+    expect(catalog).toContain('objects:');
+    expect(catalog).toContain('retrieval_order:');
+    expect(catalog).toContain('unknown_escalation_rules:');
+    expect(catalog).toContain('db_context:');
+    expect(catalog).toContain('capability_context:');
   });
 });

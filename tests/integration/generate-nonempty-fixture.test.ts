@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -44,26 +44,28 @@ app.get('/api/products', (req, res) => res.json([]));
 
     expect(result.exitCode).toBe(0);
 
-    // Read the generation summary
-    const summary = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation-summary.md'), 'utf8');
+    // Read the unified generation report
+    const reportRaw = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf8');
+    const report = JSON.parse(reportRaw);
 
-    // Verify STATUS marker exists (COMPLETE, PARTIAL, or EMPTY)
-    expect(summary).toContain('STATUS');
+    // Verify stages exist and report structure is correct
+    expect(report).toHaveProperty('stages');
+    expect(report).toHaveProperty('knowledge');
+    expect(report).toHaveProperty('warnings');
 
-    // Read coverage report
-    const coverage = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'coverage-report.yaml'), 'utf8');
+    // Read catalog to verify it has objects section
+    const catalog = await readFile(join(repo, 'bootstrap-knowledge', 'catalog.yaml'), 'utf8');
+    expect(catalog).toContain('version:');
+    expect(catalog).toContain('objects:');
+    expect(catalog).toContain('retrieval_order:');
 
-    // Verify is_empty flag is explicit
-    expect(coverage).toContain('is_empty');
-
-    // If GitNexus discovered slices but generation failed, should be partial not empty
-    // If GitNexus discovered nothing, should be empty
-    // Either case is acceptable, but must be explicit
-    const isEmptyMatch = coverage.match(/is_empty: (true|false)/);
-    expect(isEmptyMatch).not.toBeNull();
+    // At least one stage should have run
+    const stages = report.stages as Record<string, { ran: boolean; succeeded: number; failed: number }>;
+    const anyRan = Object.values(stages).some((s) => s.ran);
+    expect(anyRan).toBe(true);
   });
 
-  it('explicitly marks sparse fixture as EMPTY', async () => {
+  it('explicitly marks sparse fixture as empty', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-sparse-'));
     await writeFile(join(repo, 'README.md'), '# sparse repo - no code');
     await createGitRepo(repo);
@@ -78,16 +80,23 @@ app.get('/api/products', (req, res) => res.json([]));
 
     expect(result.exitCode).toBe(0);
 
-    const summary = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation-summary.md'), 'utf8');
+    // Read catalog: sparse fixture should have minimal objects
+    const catalog = await readFile(join(repo, 'bootstrap-knowledge', 'catalog.yaml'), 'utf8');
+    expect(catalog).toContain('objects:');
 
-    // Sparse fixture MUST contain STATUS: EMPTY explicitly
-    expect(summary).toContain('STATUS: EMPTY');
+    // Read generation report
+    const reportRaw = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf8');
+    const report = JSON.parse(reportRaw);
 
-    const coverage = await readFile(join(repo, 'bootstrap-knowledge', 'reports', 'coverage-report.yaml'), 'utf8');
-    expect(coverage).toContain('is_empty: true');
+    // Sparse fixture: DB stage should have 0 succeeded (no mapper files, no slices)
+    const dbStage = report.stages?.db as { ran: boolean; succeeded: number; failed: number } | undefined;
+    // Either DB didn't run, or it ran with 0 succeeded
+    if (dbStage?.ran) {
+      expect(dbStage.succeeded).toBe(0);
+    }
   });
 
-  it('validates repo metadata correctness in manifest', async () => {
+  it('validates catalog metadata correctness', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-meta-'));
     await writeFile(join(repo, 'README.md'), '# metadata test');
     await createGitRepo(repo);
@@ -99,20 +108,21 @@ app.get('/api/products', (req, res) => res.json([]));
 
     expect(result.exitCode).toBe(0);
 
-    const manifest = await readFile(join(repo, 'bootstrap-knowledge', 'manifest.yaml'), 'utf8');
+    const catalog = await readFile(join(repo, 'bootstrap-knowledge', 'catalog.yaml'), 'utf8');
 
-    // Verify repo_root is the actual path (Windows or POSIX)
-    expect(manifest).toContain('repo_root:');
+    // Verify catalog has expected top-level keys
+    expect(catalog).toContain('version:');
+    expect(catalog).toContain('generation:');
+    expect(catalog).toContain('retrieval_order:');
+    expect(catalog).toContain('objects:');
+    expect(catalog).toContain('unknown_escalation_rules:');
 
-    // Verify repo_id is derived correctly (basename, sanitized)
-    expect(manifest).toContain('repo_id:');
+    // Verify retrieval_order has db_context and capability_context
+    expect(catalog).toContain('db_context:');
+    expect(catalog).toContain('capability_context:');
 
-    // repo_id should NOT contain path separators or special characters
-    const repoIdMatch = manifest.match(/repo_id: ([a-z0-9-]+)/);
-    expect(repoIdMatch).not.toBeNull();
-
-    // Should not contain slashes or backslashes
-    expect(repoIdMatch?.[1]).not.toContain('/');
-    expect(repoIdMatch?.[1]).not.toContain('\\');
+    // Verify generation section has knowledge field
+    const knowledgeMatch = catalog.match(/knowledge:\s*(\w+)/);
+    expect(knowledgeMatch).not.toBeNull();
   });
 });

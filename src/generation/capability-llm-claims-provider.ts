@@ -188,55 +188,127 @@ function extractValidClaimObjects(text: string): unknown[] {
   return claims;
 }
 
-function repairArrayFields(obj: unknown): unknown {
-  if (!obj || typeof obj !== 'object') return obj;
-
-  if (Array.isArray(obj)) {
-    return obj.map(repairArrayFields);
-  }
-
-  const record = obj as Record<string, unknown>;
-  const arrayFields = [
-    'notEqualTo', 'aliases', 'successCriteria', 'nonGoals',
-    'failureBranches', 'compensation', 'touchWhen', 'doNotTouchWhen',
-    'testAnchors', 'validationRules', 'acceptanceOracle', 'minimalNextEvidence',
-  ];
-
-  for (const key of Object.keys(record)) {
-    if (key === 'objectHints' && record[key] && typeof record[key] === 'object' && !Array.isArray(record[key])) {
-      const hints = record[key] as Record<string, unknown>;
-      for (const arrayField of arrayFields) {
-        if (typeof hints[arrayField] === 'string') {
-          hints[arrayField] = [hints[arrayField]];
-        }
-      }
-    }
-    // Recurse into nested objects/arrays
-    if (record[key] && typeof record[key] === 'object') {
-      record[key] = repairArrayFields(record[key]);
-    }
-  }
-
-  return record;
+interface NormalizeResult {
+  value: unknown;
+  notes: string[];
 }
 
-export function parseCapabilityClaimJson(text: string): CandidateClaim[] {
+const ROOT_ARRAY_FIELDS = new Set([
+  'evidenceRefs',
+  'decisionPoints',
+  'sddStageUses',
+  'unsupportedParts',
+  'blockedDecisions',
+]);
+
+const HINT_ARRAY_FIELDS = new Set([
+  'notEqualTo',
+  'aliases',
+  'successCriteria',
+  'nonGoals',
+  'failureBranches',
+  'compensation',
+  'touchWhen',
+  'doNotTouchWhen',
+  'testAnchors',
+  'validationRules',
+  'acceptanceOracle',
+  'minimalNextEvidence',
+]);
+
+function toArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null) return [];
+  return [value];
+}
+
+const VALID_SDD_STAGES = new Set([
+  'requirement_clarification',
+  'requirement_specification',
+  'design_planning',
+  'implementation_planning',
+  'coding',
+  'review',
+  'validation',
+]);
+
+function normalizeClaimShape(item: unknown, index: number): NormalizeResult {
+  const notes: string[] = [];
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return { value: item, notes };
+  }
+
+  const record = { ...(item as Record<string, unknown>) };
+
+  for (const field of ROOT_ARRAY_FIELDS) {
+    if (typeof record[field] === 'string') {
+      record[field] = toArray(record[field]);
+      notes.push(`claim[${index}].${field}: string normalized to array`);
+    }
+  }
+
+  // Filter invalid sddStageUses values
+  if (Array.isArray(record.sddStageUses)) {
+    const original = record.sddStageUses as unknown[];
+    const filtered = original.filter(v => typeof v === 'string' && VALID_SDD_STAGES.has(v));
+    if (filtered.length < original.length) {
+      notes.push(`claim[${index}].sddStageUses: ${original.length - filtered.length} invalid values removed`);
+      record.sddStageUses = filtered;
+    }
+  }
+
+  if (record.objectHints && typeof record.objectHints === 'object' && !Array.isArray(record.objectHints)) {
+    const hints = { ...(record.objectHints as Record<string, unknown>) };
+
+    // Remove root-level fields mistakenly placed in objectHints
+    const rootFieldNames = new Set([
+      'suggestedType', 'claimText', 'confidence', 'evidenceRefs',
+      'decisionPoints', 'sddStageUses', 'unsupportedParts', 'blockedDecisions', 'source',
+    ]);
+    for (const field of rootFieldNames) {
+      if (field in hints) {
+        delete hints[field];
+        notes.push(`claim[${index}].objectHints.${field}: removed (root-level field misplaced in objectHints)`);
+      }
+    }
+
+    for (const field of HINT_ARRAY_FIELDS) {
+      if (typeof hints[field] === 'string') {
+        hints[field] = toArray(hints[field]);
+        notes.push(`claim[${index}].objectHints.${field}: string normalized to array`);
+      }
+    }
+
+    if (Array.isArray(hints.orderedSteps) && hints.orderedSteps.every(step => typeof step === 'string')) {
+      hints.orderedSteps = hints.orderedSteps.map(action => ({ action }));
+      notes.push(`claim[${index}].objectHints.orderedSteps: string[] normalized to step objects`);
+    }
+
+    record.objectHints = hints;
+  }
+
+  return { value: record, notes };
+}
+
+export interface CapabilityClaimParseResult {
+  claims: CandidateClaim[];
+  normalizationNotes: string[];
+}
+
+export function parseCapabilityClaimJsonWithMetadata(text: string): CapabilityClaimParseResult {
   const jsonText = stripJsonFences(text);
   const sanitized = sanitizeJsonControlChars(jsonText);
   const repaired = repairCommonJsonIssues(sanitized);
 
   let parsed: unknown;
 
-  // Try parsing as-is first
   try {
     parsed = JSON.parse(repaired);
   } catch {
-    // Try repairing truncated JSON
     try {
       const truncatedRepaired = repairTruncatedJson(repaired);
       parsed = JSON.parse(truncatedRepaired);
     } catch {
-      // Last resort: try to extract valid claim objects from corrupted JSON
       const extracted = extractValidClaimObjects(repaired);
       if (extracted.length > 0) {
         parsed = extracted;
@@ -250,14 +322,22 @@ export function parseCapabilityClaimJson(text: string): CandidateClaim[] {
     throw new Error('Invalid capability claim JSON: expected array');
   }
 
-  return (parsed as unknown[]).map((item, index) => {
-    const repairedItem = repairArrayFields(item);
-    const result = CandidateClaimSchema.safeParse(repairedItem);
+  const allNotes: string[] = [];
+  const claims = (parsed as unknown[]).map((item, index) => {
+    const normalized = normalizeClaimShape(item, index);
+    allNotes.push(...normalized.notes);
+    const result = CandidateClaimSchema.safeParse(normalized.value);
     if (!result.success) {
       throw new Error(`Invalid capability claim at index ${index}: ${result.error.message}`);
     }
     return result.data;
   });
+
+  return { claims, normalizationNotes: allNotes };
+}
+
+export function parseCapabilityClaimJson(text: string): CandidateClaim[] {
+  return parseCapabilityClaimJsonWithMetadata(text).claims;
 }
 
 export function createCapabilityLlmClaimsProvider(input: CreateCapabilityLlmClaimsProviderInput) {

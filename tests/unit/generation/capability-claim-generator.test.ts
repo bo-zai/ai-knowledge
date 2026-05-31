@@ -28,6 +28,37 @@ describe('CandidateClaimSchema', () => {
     expect(claim.suggestedType).toBe('CAP');
   });
 
+  it('accepts structured fieldSemantics values from real LLM output', () => {
+    const result = CandidateClaimSchema.safeParse({
+      suggestedType: 'CON',
+      claimText: 'Order detail contract exposes goods line items and goods price semantics.',
+      confidence: 'high',
+      evidenceRefs: ['evidence://contract/CON-EVID-001'],
+      decisionPoints: ['affected_contracts'],
+      sddStageUses: ['requirement_specification'],
+      unsupportedParts: [],
+      blockedDecisions: [],
+      source: 'llm',
+      objectHints: {
+        contractSubject: 'Order detail goods contract',
+        contractKind: 'schema',
+        fieldSemantics: {
+          goodsList: {
+            meaning: 'Ordered goods line items returned with the order detail',
+            validation: ['Must match submitted goods'],
+            evidenceRef: 'evidence://contract/CON-EVID-001',
+          },
+          goodsPrice: {
+            meaning: 'Price used for the ordered goods line',
+            notes: ['Currency source is not proven by current evidence'],
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('accepts valid OPEN claim without evidence refs', () => {
     const claim = CandidateClaimSchema.parse({
       suggestedType: 'OPEN',
@@ -165,7 +196,27 @@ describe('filterCandidateClaims', () => {
     expect(filtered.length).toBe(0);
   });
 
-  it('accepts OPEN claim with blocked decisions', () => {
+  it('rejects OPEN claim without minimalNextEvidence', () => {
+    const bundle: EvidenceBundle = {
+      ...validBundle,
+    };
+    const claims: CandidateClaim[] = [{
+      suggestedType: 'OPEN',
+      claimText: 'Ownership boundary is unknown.',
+      confidence: 'low',
+      evidenceRefs: [],
+      decisionPoints: [],
+      sddStageUses: ['requirement_clarification'],
+      unsupportedParts: [],
+      blockedDecisions: ['Cannot decide source of truth'],
+      source: 'llm',
+    }];
+
+    const filtered = filterCandidateClaims(claims, bundle);
+    expect(filtered).toEqual([]);
+  });
+
+  it('accepts OPEN claim with blocked decisions and minimalNextEvidence', () => {
     const claims: CandidateClaim[] = [{
       suggestedType: 'OPEN',
       claimText: 'Cannot determine field description source',
@@ -175,6 +226,7 @@ describe('filterCandidateClaims', () => {
       sddStageUses: [],
       unsupportedParts: ['Field description inference'],
       blockedDecisions: ['Cannot decide inference acceptability'],
+      objectHints: { minimalNextEvidence: ['Find field description documentation'] },
     }];
 
     const filtered = filterCandidateClaims(claims, validBundle);

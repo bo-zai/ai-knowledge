@@ -99,6 +99,41 @@ describe('runCapabilityClaimsLangGraph', () => {
     expect(result.graphTrace.validationErrors.length).toBeGreaterThan(0);
   });
 
+  it('records parser normalization notes in graphTrace', async () => {
+    const result = await runCapabilityClaimsLangGraph({
+      bundle: makeBundle(),
+      modelName: 'test-model',
+      model: makeModel([
+        JSON.stringify([
+          {
+            suggestedType: 'OPEN',
+            claimText: 'Validation oracle is missing.',
+            confidence: 'low',
+            evidenceRefs: [],
+            decisionPoints: [],
+            sddStageUses: ['requirement_clarification'],
+            unsupportedParts: [],
+            blockedDecisions: 'Cannot plan validation',
+            objectHints: { minimalNextEvidence: 'Find validation test' },
+          },
+          {
+            suggestedType: 'CAP',
+            claimText: 'Goods Order capability lets customers submit goods orders.',
+            confidence: 'high',
+            evidenceRefs: ['evidence://entry/EP-001'],
+            decisionPoints: ['requirement_intent'],
+            sddStageUses: ['requirement_clarification'],
+            unsupportedParts: [],
+            blockedDecisions: [],
+            objectHints: { canonicalTerm: 'Goods Order capability' },
+          },
+        ]),
+      ]),
+    });
+
+    expect(result.graphTrace.normalizationNotes.length).toBeGreaterThan(0);
+  });
+
   it('fails when no accepted non-OPEN claim remains after evidence filtering', async () => {
     await expect(runCapabilityClaimsLangGraph({
       bundle: makeBundle(),
