@@ -1,0 +1,16 @@
+# CAP-DB-KNOWLEDGE-GENERATION
+## Purpose
+- CAP-DB-KNOWLEDGE-GENERATION
+## Terms
+- (none)
+## Current Flow
+- FLOW-DB-KNOWLEDGE-GENERATION
+## Code Surface
+- MOD-SRC-MYBATIS
+## Contracts
+- CON-SQLPART
+## Validation
+- VER-DB-KNOWLEDGE-GENERATION
+## Unknowns
+- OPEN-N-DB
+- OPEN-N-API

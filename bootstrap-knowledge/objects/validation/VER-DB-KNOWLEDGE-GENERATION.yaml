@@ -1,0 +1,17 @@
+id: VER-DB-KNOWLEDGE-GENERATION
+type: VER
+description: |
+  generate-capability command is a validation anchor for DB knowledge generation.
+evidencePrimary:
+  - evidence://validation/VAL-001
+evidenceSupporting: []
+decisionPoints:
+  - validation_plan
+sddStageUses:
+  - validation
+  - review
+unsupportedParts:
+blockedDecisions:
+metadata:
+  kind: test
+  location: tests\integration\generate-capability.test.ts

@@ -1,0 +1,16 @@
+id: CAP-DB-KNOWLEDGE-GENERATION
+type: CAP
+description: |
+  DB knowledge generation is a discovered business capability supported by repository evidence.
+evidencePrimary:
+  - evidence://flow/FLOW-EVID-001
+evidenceSupporting: []
+decisionPoints:
+  - matched_capability
+sddStageUses:
+  - requirement_clarification
+  - requirement_specification
+unsupportedParts:
+blockedDecisions:
+metadata:
+  canonicalTerm: DB knowledge generation

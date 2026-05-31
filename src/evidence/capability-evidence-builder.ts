@@ -11,6 +11,10 @@ import type {
   OpenQuestionSeed,
 } from './evidence-bundle-schema.js';
 
+function byEvidenceRelevance<T extends { targetRelevance?: number }>(left: T, right: T): number {
+  return (right.targetRelevance ?? 0) - (left.targetRelevance ?? 0);
+}
+
 function mapEntrySignals(signals: EntrySignal[]): EvidenceEntryPoint[] {
   return signals.map((signal, index) => ({
     ref: `evidence://entry/EP-${String(index + 1).padStart(3, '0')}`,
@@ -19,35 +23,53 @@ function mapEntrySignals(signals: EntrySignal[]): EvidenceEntryPoint[] {
     name: signal.name,
     signature: signal.signature,
     description: signal.description,
+    targetRelevance: signal.targetRelevance,
+    matchedTerms: signal.matchedTerms,
+    sourceLocation: signal.location,
   }));
 }
 
 function mapBehaviorSignals(signals: BehaviorSignal[], limit = 12): EvidenceBehaviorSlice[] {
-  return signals.slice(0, limit).map((signal, index) => ({
+  // Sort by relevance before truncation
+  const sorted = [...signals].sort(byEvidenceRelevance);
+  return sorted.slice(0, limit).map((signal, index) => ({
     ref: `evidence://behavior/BEH-${String(index + 1).padStart(3, '0')}`,
     location: signal.location,
     verb: signal.verb,
     object: signal.object,
     summary: signal.context,
+    targetRelevance: signal.targetRelevance,
+    matchedTerms: signal.matchedTerms,
+    sourceLocation: signal.location,
   }));
 }
 
 function mapDataSignals(signals: DataSignal[]): EvidenceDataContract[] {
-  return signals.map((signal, index) => ({
+  // Sort by relevance
+  const sorted = [...signals].sort(byEvidenceRelevance);
+  return sorted.map((signal, index) => ({
     ref: `evidence://contract/CON-EVID-${String(index + 1).padStart(3, '0')}`,
     kind: signal.kind,
     location: signal.location,
     name: signal.name,
     fields: signal.fields,
+    targetRelevance: signal.targetRelevance,
+    matchedTerms: signal.matchedTerms,
+    sourceLocation: signal.location,
   }));
 }
 
 function mapTestSignals(signals: TestSignal[]): EvidenceValidationAnchor[] {
-  return signals.map((signal, index) => ({
+  // Sort by relevance
+  const sorted = [...signals].sort(byEvidenceRelevance);
+  return sorted.map((signal, index) => ({
     ref: `evidence://validation/VAL-${String(index + 1).padStart(3, '0')}`,
     kind: 'test' as const,
     location: signal.location,
     name: signal.testName,
+    targetRelevance: signal.targetRelevance,
+    matchedTerms: signal.matchedTerms,
+    sourceLocation: signal.location,
   }));
 }
 
@@ -57,6 +79,9 @@ function mapDocSignals(signals: DocSignal[]): Array<{
   kind: 'readme' | 'agents' | 'notes' | 'docs' | 'comment';
   excerpt: string;
   terms?: string[];
+  targetRelevance?: number;
+  matchedTerms?: string[];
+  sourceLocation?: string;
 }> {
   return signals.map((signal, index) => ({
     ref: `evidence://doc/DOC-${String(index + 1).padStart(3, '0')}`,
@@ -64,15 +89,23 @@ function mapDocSignals(signals: DocSignal[]): Array<{
     kind: signal.kind,
     excerpt: signal.constraints?.join('; ') || '',
     terms: signal.terms,
+    targetRelevance: signal.targetRelevance,
+    matchedTerms: signal.matchedTerms,
+    sourceLocation: signal.location,
   }));
 }
 
 function mapModuleClusters(clusters: ModuleCluster[]): EvidenceModuleSurface[] {
-  return clusters.map((cluster, index) => ({
+  // Sort by relevance
+  const sorted = [...clusters].sort(byEvidenceRelevance);
+  return sorted.map((cluster, index) => ({
     ref: `evidence://module/MOD-${String(index + 1).padStart(3, '0')}`,
     rootPath: cluster.rootPath,
     exports: cluster.moduleNames,
     responsibilities: [],
+    targetRelevance: cluster.targetRelevance,
+    matchedTerms: cluster.matchedTerms,
+    sourceLocation: cluster.rootPath,
   }));
 }
 
@@ -82,14 +115,22 @@ function buildFlowTraces(candidate: CapabilityCandidate): EvidenceFlowTrace[] {
     return [];
   }
 
-  const steps = candidate.behaviorAnchors.slice(0, 3).map(anchor => ({
+  // Use top-ranked behavior anchors (already sorted in discovery)
+  const topBehaviors = candidate.behaviorAnchors.slice(0, 3);
+  const steps = topBehaviors.map(anchor => ({
     action: `${anchor.verb} ${anchor.object}`,
     location: anchor.location,
   }));
 
+  // Compute relevance from top behaviors
+  const avgRelevance = topBehaviors.reduce((sum, b) => sum + (b.targetRelevance ?? 0), 0) / topBehaviors.length;
+
   return [{
     ref: 'evidence://flow/FLOW-EVID-001',
     steps,
+    targetRelevance: avgRelevance,
+    matchedTerms: topBehaviors.flatMap(b => b.matchedTerms ?? []),
+    sourceLocation: topBehaviors[0]?.location,
   }];
 }
 

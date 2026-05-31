@@ -1,0 +1,13 @@
+id: OPEN-N-DB
+type: OPEN
+description: |
+  No explicit external DB ownership contract found
+evidencePrimary:
+evidenceSupporting: []
+decisionPoints:
+sddStageUses:
+  - requirement_clarification
+unsupportedParts:
+blockedDecisions:
+  - Cannot proceed without resolving: No explicit external DB ownership contract found
+metadata:

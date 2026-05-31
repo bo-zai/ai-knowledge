@@ -7,6 +7,9 @@ export const EvidenceEntryPointSchema = z.object({
   name: z.string(),
   signature: z.string().optional(),
   description: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceBehaviorSliceSchema = z.object({
@@ -15,15 +18,21 @@ export const EvidenceBehaviorSliceSchema = z.object({
   verb: z.string(),
   object: z.string(),
   summary: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceDataContractSchema = z.object({
   ref: z.string().startsWith('evidence://contract/'),
-  kind: z.enum(['schema', 'type', 'interface', 'table', 'sql', 'api', 'event', 'output']),
+  kind: z.enum(['schema', 'type', 'interface', 'table', 'sql', 'api', 'event', 'output', 'field']),
   location: z.string(),
   name: z.string(),
   fields: z.array(z.string()).optional(),
   description: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceFlowTraceSchema = z.object({
@@ -33,6 +42,9 @@ export const EvidenceFlowTraceSchema = z.object({
     location: z.string().optional(),
     outcome: z.string().optional(),
   })),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceModuleSurfaceSchema = z.object({
@@ -41,6 +53,9 @@ export const EvidenceModuleSurfaceSchema = z.object({
   exports: z.array(z.string()),
   responsibilities: z.array(z.string()),
   dependencies: z.array(z.string()).optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceValidationAnchorSchema = z.object({
@@ -50,6 +65,9 @@ export const EvidenceValidationAnchorSchema = z.object({
   name: z.string(),
   assertion: z.string().optional(),
   oracle: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const EvidenceDocSnippetSchema = z.object({
@@ -58,6 +76,9 @@ export const EvidenceDocSnippetSchema = z.object({
   kind: z.enum(['readme', 'agents', 'notes', 'docs', 'comment']),
   excerpt: z.string(),
   terms: z.array(z.string()).optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  sourceLocation: z.string().optional(),
 });
 
 export const NegativeEvidenceSchema = z.object({

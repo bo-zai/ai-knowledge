@@ -24,6 +24,10 @@ export function makeObjectId(type: KnowledgeObjectType, name: string): string {
   return `${type}-${normalized}`;
 }
 
+function claimSource(claim: CandidateClaim): 'llm' | 'skeleton' | 'evidence_seed' {
+  return claim.source ?? 'llm';
+}
+
 function extractBehaviorRef(claim: CandidateClaim, bundle: EvidenceBundle): EvidenceBehaviorSlice | undefined {
   for (const ref of claim.evidenceRefs) {
     const behavior = bundle.behaviorSlices.find(b => b.ref === ref);
@@ -65,7 +69,8 @@ function extractValidationRef(claim: CandidateClaim, bundle: EvidenceBundle): Ev
 }
 
 function buildCapObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
-  const term = claim.objectHints?.canonicalTerm || bundle.capabilityHints.nameCandidates[0] || 'Unknown capability';
+  const hints = claim.objectHints;
+  const term = hints?.canonicalTerm || bundle.capabilityHints.nameCandidates[0] || 'Unknown capability';
   return {
     id: makeObjectId('CAP', term),
     type: 'CAP',
@@ -77,19 +82,22 @@ function buildCapObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
+      source: claimSource(claim),
       canonicalTerm: term,
+      ...(hints?.goal ? { goal: hints.goal } : {}),
+      ...(hints?.successCriteria ? { successCriteria: hints.successCriteria } : {}),
+      ...(hints?.nonGoals ? { nonGoals: hints.nonGoals } : {}),
     },
   };
 }
 
-function buildFlowObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
-  const flow = extractFlowRef(claim, bundle);
-  const subject = claim.objectHints?.subject || bundle.capabilityHints.nameCandidates[0] || 'unknown';
-  const steps = flow?.steps.map(s => s.action).join(' -> ') || claim.claimText;
+function buildTermObject(claim: CandidateClaim): KnowledgeObject {
+  const hints = claim.objectHints;
+  const canonicalTerm = hints?.canonicalTerm || claim.claimText.slice(0, 30);
   return {
-    id: makeObjectId('FLOW', subject),
-    type: 'FLOW',
-    description: `Flow: ${steps}`,
+    id: makeObjectId('TERM', canonicalTerm),
+    type: 'TERM',
+    description: claim.claimText,
     evidencePrimary: claim.evidenceRefs,
     evidenceSupporting: [],
     decisionPoints: claim.decisionPoints,
@@ -97,14 +105,43 @@ function buildFlowObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowled
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
-      steps: flow?.steps || [],
+      source: claimSource(claim),
+      canonicalTerm,
+      ...(hints?.businessDefinition ? { businessDefinition: hints.businessDefinition } : {}),
+      ...(hints?.aliases ? { aliases: hints.aliases } : {}),
+      ...(hints?.notEqualTo ? { notEqualTo: hints.notEqualTo } : {}),
+    },
+  };
+}
+
+function buildFlowObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
+  const hints = claim.objectHints;
+  const flow = extractFlowRef(claim, bundle);
+  const subject = hints?.subject || 'unknown';
+  return {
+    id: makeObjectId('FLOW', subject),
+    type: 'FLOW',
+    description: claim.claimText,
+    evidencePrimary: claim.evidenceRefs,
+    evidenceSupporting: [],
+    decisionPoints: claim.decisionPoints,
+    sddStageUses: claim.sddStageUses,
+    unsupportedParts: claim.unsupportedParts,
+    blockedDecisions: claim.blockedDecisions,
+    metadata: {
+      source: claimSource(claim),
+      ...(hints?.orderedSteps ? { orderedSteps: hints.orderedSteps } : {}),
+      ...(hints?.failureBranches ? { failureBranches: hints.failureBranches } : {}),
+      ...(hints?.compensation ? { compensation: hints.compensation } : {}),
+      ...(flow?.steps ? { evidenceSteps: flow.steps } : {}),
     },
   };
 }
 
 function buildModObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
+  const hints = claim.objectHints;
   const module = extractModuleRef(claim, bundle);
-  const path = claim.objectHints?.modulePath || module?.rootPath || 'unknown-module';
+  const path = hints?.modulePath || module?.rootPath || 'unknown-module';
   return {
     id: makeObjectId('MOD', path.replace(/\//g, '-')),
     type: 'MOD',
@@ -116,15 +153,20 @@ function buildModObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
+      source: claimSource(claim),
       rootPath: path,
-      exports: module?.exports || [],
+      ...(hints?.ownedResponsibility ? { ownedResponsibility: hints.ownedResponsibility } : {}),
+      ...(hints?.touchWhen ? { touchWhen: hints.touchWhen } : {}),
+      ...(hints?.doNotTouchWhen ? { doNotTouchWhen: hints.doNotTouchWhen } : {}),
+      ...(hints?.testAnchors ? { testAnchors: hints.testAnchors } : {}),
     },
   };
 }
 
 function buildConObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
+  const hints = claim.objectHints;
   const contract = extractContractRef(claim, bundle);
-  const name = contract?.name || 'unknown-contract';
+  const name = hints?.contractSubject || contract?.name || 'unknown-contract';
   return {
     id: makeObjectId('CON', name),
     type: 'CON',
@@ -136,15 +178,20 @@ function buildConObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
-      kind: contract?.kind || claim.objectHints?.contractKind || 'schema',
-      fields: contract?.fields || [],
+      source: claimSource(claim),
+      kind: hints?.contractKind || contract?.kind || 'schema',
+      subject: hints?.contractSubject || contract?.name,
+      ...(hints?.fieldSemantics ? { fieldSemantics: hints.fieldSemantics } : {}),
+      ...(hints?.validationRules ? { validationRules: hints.validationRules } : {}),
+      ...(hints?.schemaRef ? { schemaRef: hints.schemaRef } : {}),
     },
   };
 }
 
 function buildVerObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
+  const hints = claim.objectHints;
   const validation = extractValidationRef(claim, bundle);
-  const capability = bundle.capabilityHints.nameCandidates[0] || 'unknown';
+  const capability = bundle.capabilityHints.nameCandidates[0] || 'validation';
   return {
     id: makeObjectId('VER', capability),
     type: 'VER',
@@ -156,13 +203,18 @@ function buildVerObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
+      source: claimSource(claim),
       kind: validation?.kind || 'test',
       location: validation?.location,
+      ...(hints?.verificationGoal ? { verificationGoal: hints.verificationGoal } : {}),
+      ...(hints?.acceptanceOracle ? { acceptanceOracle: hints.acceptanceOracle } : {}),
+      ...(hints?.testAnchors ? { testAnchors: hints.testAnchors } : {}),
     },
   };
 }
 
-function buildOpenObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
+function buildOpenObject(claim: CandidateClaim): KnowledgeObject {
+  const hints = claim.objectHints;
   const question = claim.claimText.slice(0, 50).replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return {
     id: makeObjectId('OPEN', question || 'unknown'),
@@ -174,7 +226,12 @@ function buildOpenObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowled
     sddStageUses: claim.sddStageUses,
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
-    metadata: {},
+    metadata: {
+      source: claimSource(claim),
+      ...(hints?.minimalNextEvidence ? { minimalNextEvidence: hints.minimalNextEvidence } : {}),
+      ...(hints?.ownerToAsk ? { ownerToAsk: hints.ownerToAsk } : {}),
+      ...(hints?.escalationGate ? { escalationGate: hints.escalationGate } : {}),
+    },
   };
 }
 
@@ -191,6 +248,7 @@ function buildOpenFromSeed(seed: OpenQuestionSeed): KnowledgeObject {
     unsupportedParts: [],
     blockedDecisions: seed.blockedDecisions,
     metadata: {
+      source: 'evidence_seed',
       minimalNextEvidence: seed.minimalNextEvidence,
     },
   };
@@ -211,6 +269,9 @@ export function assembleCapabilityKnowledgeObjects(input: {
       case 'CAP':
         obj = buildCapObject(claim, bundle);
         break;
+      case 'TERM':
+        obj = buildTermObject(claim);
+        break;
       case 'FLOW':
         obj = buildFlowObject(claim, bundle);
         break;
@@ -224,22 +285,7 @@ export function assembleCapabilityKnowledgeObjects(input: {
         obj = buildVerObject(claim, bundle);
         break;
       case 'OPEN':
-        obj = buildOpenObject(claim, bundle);
-        break;
-      case 'TERM':
-        // MVP: TERM objects follow similar pattern
-        obj = {
-          id: makeObjectId('TERM', claim.claimText.slice(0, 30)),
-          type: 'TERM',
-          description: claim.claimText,
-          evidencePrimary: claim.evidenceRefs,
-          evidenceSupporting: [],
-          decisionPoints: claim.decisionPoints,
-          sddStageUses: claim.sddStageUses,
-          unsupportedParts: claim.unsupportedParts,
-          blockedDecisions: claim.blockedDecisions,
-          metadata: {},
-        };
+        obj = buildOpenObject(claim);
         break;
     }
 

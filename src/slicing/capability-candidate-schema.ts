@@ -6,6 +6,9 @@ export const EntrySignalSchema = z.object({
   name: z.string(),
   signature: z.string().optional(),
   description: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  role: z.string().optional(),
 });
 
 export const BehaviorSignalSchema = z.object({
@@ -13,13 +16,19 @@ export const BehaviorSignalSchema = z.object({
   verb: z.string(),
   object: z.string(),
   context: z.string().optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  role: z.string().optional(),
 });
 
 export const DataSignalSchema = z.object({
-  kind: z.enum(['schema', 'type', 'interface', 'table', 'sql', 'output']),
+  kind: z.enum(['schema', 'type', 'interface', 'table', 'sql', 'output', 'field']),
   location: z.string(),
   name: z.string(),
   fields: z.array(z.string()).optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  role: z.string().optional(),
 });
 
 export const TestSignalSchema = z.object({
@@ -27,6 +36,9 @@ export const TestSignalSchema = z.object({
   testName: z.string(),
   describeBlock: z.string().optional(),
   assertions: z.array(z.string()).optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  role: z.string().optional(),
 });
 
 export const DocSignalSchema = z.object({
@@ -34,12 +46,17 @@ export const DocSignalSchema = z.object({
   kind: z.enum(['readme', 'agents', 'notes', 'docs']),
   terms: z.array(z.string()).optional(),
   constraints: z.array(z.string()).optional(),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
 });
 
 export const ModuleClusterSchema = z.object({
   rootPath: z.string(),
   moduleNames: z.array(z.string()),
   cohesionScore: z.number().min(0).max(1),
+  targetRelevance: z.number().min(0).max(1).optional(),
+  matchedTerms: z.array(z.string()).optional(),
+  role: z.string().optional(),
 });
 
 export const CandidateRiskSchema = z.string();

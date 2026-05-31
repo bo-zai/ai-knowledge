@@ -221,4 +221,60 @@ describe('assembleCapabilityKnowledgeObjects', () => {
     const cap = objects.find(o => o.type === 'CAP');
     expect(cap?.description).toContain('DB knowledge generation');
   });
+
+  it('preserves term metadata from claim object hints', () => {
+    const bundle: EvidenceBundle = {
+      bundleId: 'BUNDLE-TERM-001',
+      candidateId: 'CAND-GOODS-ORDER',
+      repoProfile: { name: 'test-repo' },
+      confidence: 0.8,
+      risks: [],
+      capabilityHints: {
+        nameCandidates: ['Goods Order capability'],
+        relatedTerms: ['goods', 'order'],
+      },
+      entryPoints: [{
+        ref: 'evidence://entry/EP-001',
+        kind: 'service',
+        location: 'src/main/java/demo/OrderGoodsService.java',
+        name: 'OrderGoodsService',
+      }],
+      flowTraces: [],
+      behaviorSlices: [],
+      dataContracts: [],
+      moduleSurfaces: [],
+      validationAnchors: [],
+      docs: [],
+      negativeEvidence: [],
+      openQuestions: [],
+    };
+
+    const objects = assembleCapabilityKnowledgeObjects({
+      bundle,
+      claims: [
+        {
+          suggestedType: 'TERM',
+          claimText: 'goods is a business term evidenced within Goods Order capability.',
+          confidence: 'medium',
+          evidenceRefs: ['evidence://entry/EP-001'],
+          decisionPoints: ['business_vocabulary'],
+          sddStageUses: ['requirement_clarification'],
+          unsupportedParts: [],
+          blockedDecisions: [],
+          objectHints: {
+            canonicalTerm: 'goods',
+            termSource: 'evidence_match',
+            matchedEvidenceCount: 2,
+          },
+        },
+      ],
+    });
+
+    expect(objects).toHaveLength(1);
+    expect(objects[0]!.id).toBe('TERM-GOODS');
+    expect(objects[0]!.metadata).toMatchObject({
+      canonicalTerm: 'goods',
+    });
+    expect(objects[0]!.metadata.source).toBe('llm');
+  });
 });

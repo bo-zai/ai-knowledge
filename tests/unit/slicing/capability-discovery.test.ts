@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { CapabilityCandidateSchema } from '../../../src/slicing/capability-candidate-schema.js';
 import { normalizeCapabilityTerms, discoverCapabilities } from '../../../src/slicing/capability-discovery.js';
 
@@ -181,5 +184,417 @@ describe('discoverCapabilities', () => {
     const topCandidate = candidates[0];
     expect(topCandidate).toBeDefined();
     expect(topCandidate?.risks).toContain('no_external_boundary_found');
+  });
+});
+
+describe('discoverCapabilities Java/Spring/MyBatis fixture', () => {
+  it('discovers capability from Java/Spring/MyBatis fixture', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'java-discovery-'));
+
+    // Create Java source directories
+    const controllerDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'controller');
+    const serviceDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'service');
+    const mapperDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'mapper');
+    const resourcesMapperDir = join(repoPath, 'src', 'main', 'resources', 'mapper');
+    const testDir = join(repoPath, 'src', 'test', 'java', 'com', 'demo', 'service');
+
+    await mkdir(controllerDir, { recursive: true });
+    await mkdir(serviceDir, { recursive: true });
+    await mkdir(mapperDir, { recursive: true });
+    await mkdir(resourcesMapperDir, { recursive: true });
+    await mkdir(testDir, { recursive: true });
+
+    // CourseController.java
+    await writeFile(
+      join(controllerDir, 'CourseController.java'),
+      `package com.demo.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/courses")
+public class CourseController {
+    private final CourseService courseService;
+
+    public CourseController(CourseService courseService) {
+        this.courseService = courseService;
+    }
+
+    @GetMapping("/{id}")
+    public CourseDetail getCourseDetail(Long id) {
+        return courseService.getCourseDetail(id);
+    }
+
+    @GetMapping("/list")
+    public List<Course> listCourses() {
+        return courseService.listCourses();
+    }
+}`,
+      'utf8',
+    );
+
+    // CourseService.java
+    await writeFile(
+      join(serviceDir, 'CourseService.java'),
+      `package com.demo.service;
+
+import org.springframework.stereotype.Service;
+
+@Service
+public class CourseService {
+    private final CourseMapper courseMapper;
+
+    public CourseService(CourseMapper courseMapper) {
+        this.courseMapper = courseMapper;
+    }
+
+    public CourseDetail getCourseDetail(Long id) {
+        return courseMapper.selectCourseDetail(id);
+    }
+
+    public List<Course> listCourses() {
+        return courseMapper.selectAllCourses();
+    }
+
+    public void createCourse(Course course) {
+        courseMapper.insertCourse(course);
+    }
+
+    public void updateCourse(Long id, Course course) {
+        courseMapper.updateCourse(id, course);
+    }
+
+    public void deleteCourse(Long id) {
+        courseMapper.deleteCourse(id);
+    }
+}`,
+      'utf8',
+    );
+
+    // CourseMapper.java
+    await writeFile(
+      join(mapperDir, 'CourseMapper.java'),
+      `package com.demo.mapper;
+
+public interface CourseMapper {
+    CourseDetail selectCourseDetail(Long id);
+    List<Course> selectAllCourses();
+    void insertCourse(Course course);
+    void updateCourse(Long id, Course course);
+    void deleteCourse(Long id);
+}`,
+      'utf8',
+    );
+
+    // CourseMapper.xml (MyBatis)
+    await writeFile(
+      join(resourcesMapperDir, 'CourseMapper.xml'),
+      `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.demo.mapper.CourseMapper">
+  <select id="selectCourseDetail" resultType="com.demo.entity.CourseDetail">
+    select id, name, price, description from course where id = #{id}
+  </select>
+
+  <select id="selectAllCourses" resultType="com.demo.entity.Course">
+    select id, name, price from course
+  </select>
+
+  <insert id="insertCourse">
+    insert into course (name, price, description) values (#{name}, #{price}, #{description})
+  </insert>
+
+  <update id="updateCourse">
+    update course set name = #{name}, price = #{price} where id = #{id}
+  </update>
+
+  <delete id="deleteCourse">
+    delete from course where id = #{id}
+  </delete>
+</mapper>`,
+      'utf8',
+    );
+
+    // CourseServiceTest.java
+    await writeFile(
+      join(testDir, 'CourseServiceTest.java'),
+      `package com.demo.service;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class CourseServiceTest {
+    @Test
+    void shouldLoadCourseDetail() {
+        // test implementation
+    }
+
+    @Test
+    void shouldListAllCourses() {
+        // test implementation
+    }
+
+    @Test
+    void shouldCreateCourse() {
+        // test implementation
+    }
+}`,
+      'utf8',
+    );
+
+    const candidates = await discoverCapabilities({
+      repoRoot: repoPath,
+      targetTerms: ['course', 'mybatis'],
+      targetPaths: ['src/main/java', 'src/main/resources', 'src/test'],
+    });
+
+    expect(candidates.length).toBeGreaterThan(0);
+    const candidate = candidates[0]!;
+    expect(candidate.primaryEntryPoints.length).toBeGreaterThan(0);
+    expect(candidate.behaviorAnchors.length).toBeGreaterThan(0);
+    expect(candidate.dataAnchors.length).toBeGreaterThan(0);
+    expect(candidate.testAnchors.length).toBeGreaterThan(0);
+    expect(candidate.confidence).toBeGreaterThanOrEqual(0.55);
+  });
+
+  it('ranks target business signals above AOP cross-cutting modules', async () => {
+    const repoPath = await mkdtemp(join(tmpdir(), 'java-ranking-'));
+
+    // Create AOP directories first (alphabetically before Course)
+    const aopDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'aop');
+    const controllerDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'controller');
+    const serviceDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'service');
+    const mapperDir = join(repoPath, 'src', 'main', 'java', 'com', 'demo', 'mapper');
+    const resourcesMapperDir = join(repoPath, 'src', 'main', 'resources', 'mapper');
+
+    await mkdir(aopDir, { recursive: true });
+    await mkdir(controllerDir, { recursive: true });
+    await mkdir(serviceDir, { recursive: true });
+    await mkdir(mapperDir, { recursive: true });
+    await mkdir(resourcesMapperDir, { recursive: true });
+
+    // LogAop.java (cross-cutting, should be penalized)
+    await writeFile(
+      join(aopDir, 'LogAop.java'),
+      `package com.demo.aop;
+
+import org.aspectj.lang.annotation.Aspect;
+import org.springframework.stereotype.Component;
+
+@Aspect
+@Component
+public class LogAop {
+    public void logBefore() {
+        System.out.println("log before");
+    }
+
+    public void logAfter() {
+        System.out.println("log after");
+    }
+}`,
+      'utf8',
+    );
+
+    // RateLimitAspect.java (cross-cutting, should be penalized)
+    await writeFile(
+      join(aopDir, 'RateLimitAspect.java'),
+      `package com.demo.aop;
+
+import org.aspectj.lang.annotation.Aspect;
+import org.springframework.stereotype.Component;
+
+@Aspect
+@Component
+public class RateLimitAspect {
+    public void checkRate() {
+    }
+
+    public void limitRequest() {
+    }
+}`,
+      'utf8',
+    );
+
+    // CourseController.java (business)
+    await writeFile(
+      join(controllerDir, 'CourseController.java'),
+      `package com.demo.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/courses")
+public class CourseController {
+    @GetMapping("/{id}")
+    public Course getCourseDetail(Long id) {
+        return null;
+    }
+
+    @GetMapping("/list")
+    public List<Course> listCourses() {
+        return null;
+    }
+}`,
+      'utf8',
+    );
+
+    // CourseService.java (business)
+    await writeFile(
+      join(serviceDir, 'CourseService.java'),
+      `package com.demo.service;
+
+import org.springframework.stereotype.Service;
+
+@Service
+public class CourseService {
+    public Course getCourseDetail(Long id) {
+        return null;
+    }
+
+    public List<Course> listCourses() {
+        return null;
+    }
+}`,
+      'utf8',
+    );
+
+    // CourseMapper.xml (MyBatis)
+    await writeFile(
+      join(resourcesMapperDir, 'CourseMapper.xml'),
+      `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.demo.mapper.CourseMapper">
+  <select id="getCourseDetail" resultType="Course">
+    select id, name from course where id = #{id}
+  </select>
+</mapper>`,
+      'utf8',
+    );
+
+    const candidates = await discoverCapabilities({
+      repoRoot: repoPath,
+      targetTerms: ['course', 'mybatis'],
+      targetPaths: ['src/main/java', 'src/main/resources'],
+    });
+
+    expect(candidates.length).toBeGreaterThan(0);
+    const candidate = candidates[0]!;
+
+    // Verify business signals are ranked above AOP
+    expect(candidate.behaviorAnchors.length).toBeGreaterThan(0);
+    expect(candidate.behaviorAnchors[0]?.location.toLowerCase()).toContain('course');
+    expect(candidate.behaviorAnchors[0]?.location.toLowerCase()).not.toContain('aop');
+
+    // Verify data anchors contain course/mapper
+    expect(candidate.dataAnchors.length).toBeGreaterThan(0);
+    const topDataAnchor = candidate.dataAnchors[0];
+    expect(
+      topDataAnchor?.location.toLowerCase().includes('course') ||
+      topDataAnchor?.location.toLowerCase().includes('mapper') ||
+      topDataAnchor?.name.toLowerCase().includes('course')
+    ).toBe(true);
+
+    // Verify module clusters are specific, not whole src/main/java
+    expect(candidate.moduleClusters.length).toBeGreaterThan(0);
+    expect(candidate.moduleClusters[0]?.rootPath).not.toBe('src/main/java');
+    expect(
+      candidate.moduleClusters.some(c =>
+        c.rootPath.toLowerCase().includes('controller') ||
+        c.rootPath.toLowerCase().includes('service') ||
+        c.rootPath.toLowerCase().includes('mapper') ||
+        c.rootPath.toLowerCase().includes('course')
+      )
+    ).toBe(true);
+  });
+
+  it('uses business terms rather than mybatis as the capability name', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'capability-business-name-'));
+    await mkdir(join(repoRoot, 'src/main/java/com/demo/service/mall'), { recursive: true });
+    await mkdir(join(repoRoot, 'src/main/resources/mapper'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'src/main/java/com/demo/service/mall/OrderGoodsService.java'), `
+      package com.demo.service.mall;
+      import org.springframework.stereotype.Service;
+      @Service
+      public class OrderGoodsService {
+        public void checkProdStockAndCreateOrder() {}
+        public void findById() {}
+      }
+    `);
+
+    await writeFile(join(repoRoot, 'src/main/resources/mapper/OrderGoodsMapper.xml'), `
+      <mapper namespace="com.demo.mapper.OrderGoodsMapper">
+        <select id="selectOrderGoods" resultType="OrderGoods">select * from order_goods</select>
+      </mapper>
+    `);
+
+    const candidates = await discoverCapabilities({
+      repoRoot,
+      targetTerms: ['course', 'goods', 'order', 'mybatis'],
+      targetPaths: ['src/main/java', 'src/main/resources'],
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.nameCandidates[0]).toMatch(/goods|order/i);
+    expect(candidates[0]!.nameCandidates[0]).not.toMatch(/mybatis evidence processing/i);
+  });
+
+  it('detects roles on Windows-style paths after normalization', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'capability-windows-role-'));
+    await mkdir(join(repoRoot, 'src/main/java/com/demo/controller'), { recursive: true });
+    await writeFile(join(repoRoot, 'src/main/java/com/demo/controller/OrderController.java'), `
+      package com.demo.controller;
+      import org.springframework.web.bind.annotation.RestController;
+      @RestController
+      public class OrderController {
+        public void getOrder() {}
+      }
+    `);
+
+    const candidates = await discoverCapabilities({
+      repoRoot,
+      targetTerms: ['order'],
+      targetPaths: ['src/main/java'],
+    });
+
+    expect(candidates[0]!.primaryEntryPoints[0]!.role).toBe('controller');
+    expect(candidates[0]!.behaviorAnchors[0]!.role).toBe('controller');
+  });
+
+  it('prefers business terms that appear in high ranked evidence', async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'capability-evidence-name-'));
+    await mkdir(join(repoRoot, 'src/main/java/com/demo/aop'), { recursive: true });
+    await mkdir(join(repoRoot, 'src/main/java/com/demo/service/mall'), { recursive: true });
+
+    await writeFile(join(repoRoot, 'src/main/java/com/demo/aop/LogAop.java'), `
+      package com.demo.aop;
+      import org.springframework.stereotype.Component;
+      @Component
+      public class LogAop {
+        public void log() {}
+      }
+    `);
+
+    await writeFile(join(repoRoot, 'src/main/java/com/demo/service/mall/OrderGoodsService.java'), `
+      package com.demo.service.mall;
+      import org.springframework.stereotype.Service;
+      @Service
+      public class OrderGoodsService {
+        public void createOrderWithGoods() {}
+      }
+    `);
+
+    const candidates = await discoverCapabilities({
+      repoRoot,
+      targetTerms: ['course', 'goods', 'order', 'mybatis'],
+      targetPaths: ['src/main/java'],
+    });
+
+    const candidate = candidates[0]!;
+    expect(candidate.nameCandidates[0]).toMatch(/goods/i);
+    expect(candidate.nameCandidates[0]).toMatch(/order/i);
+    expect(candidate.nameCandidates[0]).not.toMatch(/log|aop|mybatis/i);
   });
 });
