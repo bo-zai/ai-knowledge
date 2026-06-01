@@ -1,21 +1,57 @@
+# 定义哪些钩子在什么阶段运行
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
 repos:
+  # --- 基础必备钩子（来自官方仓库）---
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0  # 使用最新的稳定版本
     hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
-      - id: check-toml
-      - id: detect-private-key
-      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  # --- 项目本地钩子（核心 TypeScript 工作流）---
   - repo: local
     hooks:
+      # 类型检查（参考自 codeql-action）
       - id: typecheck
-        name: TypeScript type check
-        entry: npm run typecheck
+        name: TypeScript Type Check
         language: system
-        pass_filenames: false
+        entry: npx tsc --noEmit
+        files: \.(ts|tsx)$
+        pass_filenames: false  # 检查整个项目，更安全
+
+      # 代码检查（参考自 codeql-action 和 hmpps-precommit-hooks）
+      - id: lint
+        name: ESLint
+        language: system
+        entry: npx eslint --fix
+        files: \.(ts|tsx|js|jsx)$
+        types_or: [javascript, jsx, ts, tsx]
+
+      # 代码格式化（大多数 TypeScript 项目的标准实践）
+      - id: format
+        name: Prettier
+        language: system
+        entry: npx prettier --write
+        files: \.(ts|tsx|js|jsx|json|css|scss|md)$
+
+      # 提交信息规范（参考自 hmpps-precommit-hooks 的测试集成思想）
+      - id: commitlint
+        name: Commitlint
+        language: system
+        entry: npx commitlint --edit
+        stages: [commit-msg]
+        always_run: true
+
+      # 单元测试（来自 hmpps-precommit-hooks 的实践）
       - id: test
-        name: Vitest
-        entry: npm test
+        name: Run Tests
         language: system
+        entry: npm test
         pass_filenames: false
+        stages: [pre-push]  # 在 pre-push 阶段运行，不影响本地提交速度
