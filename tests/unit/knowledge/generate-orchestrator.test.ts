@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runGenerateOrchestration } from '../../../src/knowledge/generate-orchestrator';
 import type { KnowledgePackageContribution } from '../../../src/packaging/knowledge-package-contribution';
+import type { GraphStatus } from '../../../src/query/prepare-generation';
+import type { PackageLayout } from '../../../src/knowledge/init-directory';
 
 function contribution(stage: 'db' | 'capability'): KnowledgePackageContribution {
   return {
@@ -11,6 +13,22 @@ function contribution(stage: 'db' | 'capability'): KnowledgePackageContribution 
     warnings: [],
   };
 }
+
+const mockGraphStatus: GraphStatus = {
+  status: 'reused',
+  nodeCount: 100,
+  edgeCount: 50,
+  analyzedAt: '2026-01-01T00:00:00Z',
+};
+
+const mockLayout: PackageLayout = {
+  packageRoot: '/out/bootstrap-knowledge',
+  objectsDir: '/out/bootstrap-knowledge/objects',
+  sharedDir: '/out/bootstrap-knowledge/objects/_共享',
+  evidenceDir: '/out/bootstrap-knowledge/evidence',
+  reportsDir: '/out/bootstrap-knowledge/reports',
+  catalogPath: '/out/bootstrap-knowledge/catalog.yaml',
+};
 
 describe('runGenerateOrchestration', () => {
   it('defaults to all and writes once', async () => {
@@ -24,7 +42,9 @@ describe('runGenerateOrchestration', () => {
       input: {
         repoPath: '/repo',
         outputRoot: '/out',
-        scope: { knowledge: 'all', inferred: true, inferredFrom: 'default', legacyArgsUsed: [], warnings: [] },
+        scope: { knowledge: 'all', inferred: true, inferredFrom: 'default', warnings: [] },
+        graphStatus: mockGraphStatus,
+        layout: mockLayout,
         llm: {},
       },
       deps,
@@ -51,9 +71,10 @@ describe('runGenerateOrchestration', () => {
           inferred: false,
           inferredFrom: 'explicit',
           target: { kind: 'db', value: 'users' },
-          legacyArgsUsed: [],
           warnings: [],
         },
+        graphStatus: mockGraphStatus,
+        layout: mockLayout,
         llm: {},
       },
       deps,
@@ -80,9 +101,10 @@ describe('runGenerateOrchestration', () => {
           inferred: false,
           inferredFrom: 'explicit',
           target: { kind: 'capability', value: 'order' },
-          legacyArgsUsed: [],
           warnings: [],
         },
+        graphStatus: mockGraphStatus,
+        layout: mockLayout,
         llm: {},
       },
       deps,

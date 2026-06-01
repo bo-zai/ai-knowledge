@@ -3,20 +3,15 @@ import path from 'node:path';
 import YAML from 'yaml';
 import type { GenerateKnowledge, GenerateTarget } from '../knowledge/generate-scope.js';
 import type { KnowledgePackageContribution } from './knowledge-package-contribution.js';
+import type { PackageLayout } from '../knowledge/init-directory.js';
 
 export async function writeKnowledgePackage(input: {
-  outputRoot: string;
+  layout: PackageLayout;
   knowledge: GenerateKnowledge;
   target?: GenerateTarget;
   contributions: KnowledgePackageContribution[];
 }): Promise<void> {
-  const packageRoot = path.resolve(input.outputRoot, 'bootstrap-knowledge');
-  if (path.basename(packageRoot) !== 'bootstrap-knowledge') {
-    throw new Error(`Refusing to clean invalid package root: ${packageRoot}`);
-  }
-
-  await fs.rm(packageRoot, { recursive: true, force: true });
-  await fs.mkdir(packageRoot, { recursive: true });
+  const packageRoot = input.layout.packageRoot;
 
   // Collect primary docs and supporting material paths
   const allFiles = input.contributions.flatMap(contribution => contribution.files);

@@ -260,7 +260,7 @@ export class ExtensionManager {
     if (this.warnedKeys.has(key)) return;
     this.warnedKeys.add(key);
     warn(
-      `GitNexus: ${label} extension unavailable; continuing without ${label} features. ${reason}`,
+      `ai-wiki: ${label} extension unavailable; continuing without ${label} features. ${reason}`,
     );
   }
 }

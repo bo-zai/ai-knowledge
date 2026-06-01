@@ -1,15 +1,32 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { writeKnowledgePackage } from '../../../src/packaging/knowledge-package-writer';
+import type { PackageLayout } from '../../../src/knowledge/init-directory';
 
 describe('writeKnowledgePackage', () => {
   it('writes db and capability objects into design-aligned directories', async () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'knowledge-package-writer-'));
 
+    // Create directory structure (simulate initDirectoryStructure)
+    const packageRoot = resolve(outputRoot, 'bootstrap-knowledge');
+    await mkdir(join(packageRoot, 'objects'), { recursive: true });
+    await mkdir(join(packageRoot, 'objects/_共享'), { recursive: true });
+    await mkdir(join(packageRoot, 'evidence'), { recursive: true });
+    await mkdir(join(packageRoot, 'reports'), { recursive: true });
+
+    const layout: PackageLayout = {
+      packageRoot,
+      objectsDir: join(packageRoot, 'objects'),
+      sharedDir: join(packageRoot, 'objects/_共享'),
+      evidenceDir: join(packageRoot, 'evidence'),
+      reportsDir: join(packageRoot, 'reports'),
+      catalogPath: join(packageRoot, 'catalog.yaml'),
+    };
+
     await writeKnowledgePackage({
-      outputRoot,
+      layout,
       knowledge: 'all',
       target: undefined,
       contributions: [

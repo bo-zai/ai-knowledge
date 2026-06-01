@@ -1,8 +1,6 @@
-import {
-  initLbug as initPool,
-  executeQuery as executePoolQuery,
-  closeLbug as closePool,
-} from '../engine/lbug/pool-adapter.js';
+import lbug from '@ladybugdb/core';
+import type { Connection } from '@ladybugdb/core';
+import { openLbugConnection, closeLbugConnection } from '../engine/lbug/lbug-config.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 export interface CapabilityMvpInventoryItem {
@@ -12,14 +10,22 @@ export interface CapabilityMvpInventoryItem {
   targetPaths: string[];
 }
 
-// Use repoRoot as repoId for pool adapter
-const REPO_ID = 'capability-inventory';
+/**
+ * Execute a Cypher query on a single connection and return rows.
+ * Uses read-only mode to avoid lock conflicts.
+ */
+async function executeQuery(conn: Connection, cypher: string): Promise<Record<string, unknown>[]> {
+  const queryResult = await conn.query(cypher);
+  const result = Array.isArray(queryResult) ? queryResult[0] : queryResult;
+  const rows = await result.getAll();
+  return rows as Record<string, unknown>[];
+}
 
 /**
  * Query all HTTP entry points (controller methods)
  * Each entry point is a business operation anchor
  */
-async function queryHttpEntryPoints(): Promise<Array<{
+async function queryHttpEntryPoints(conn: Connection): Promise<Array<{
   className: string;
   methodName: string;
   filePath: string;
@@ -31,8 +37,8 @@ async function queryHttpEntryPoints(): Promise<Array<{
     ORDER BY c.name, m.name
   `;
 
-  const rows = await executePoolQuery(REPO_ID, cypher);
-  return rows.map((row: Record<string, unknown>) => ({
+  const rows = await executeQuery(conn, cypher);
+  return rows.map((row) => ({
     className: String(row.className ?? ''),
     methodName: String(row.methodName ?? ''),
     filePath: String(row.filePath ?? ''),
@@ -42,7 +48,7 @@ async function queryHttpEntryPoints(): Promise<Array<{
 /**
  * Query all scheduled job entry points
  */
-async function queryJobEntryPoints(): Promise<Array<{
+async function queryJobEntryPoints(conn: Connection): Promise<Array<{
   className: string;
   methodName: string;
   filePath: string;
@@ -54,8 +60,8 @@ async function queryJobEntryPoints(): Promise<Array<{
     ORDER BY c.name
   `;
 
-  const rows = await executePoolQuery(REPO_ID, cypher);
-  return rows.map((row: Record<string, unknown>) => ({
+  const rows = await executeQuery(conn, cypher);
+  return rows.map((row) => ({
     className: String(row.className ?? ''),
     methodName: String(row.methodName ?? ''),
     filePath: String(row.filePath ?? ''),
@@ -132,7 +138,7 @@ function deriveTermsFromName(name: string): string[] {
  * Query services and data types called by entry class
  * Uses CALLS edges to find related code
  */
-async function queryCapabilityRelatedPaths(className: string): Promise<string[]> {
+async function queryCapabilityRelatedPaths(conn: Connection, className: string): Promise<string[]> {
   const paths: string[] = [];
 
   // Query services called by this class
@@ -147,9 +153,9 @@ async function queryCapabilityRelatedPaths(className: string): Promise<string[]>
   `;
 
   try {
-    const rows = await executePoolQuery(REPO_ID, serviceCypher);
+    const rows = await executeQuery(conn, serviceCypher);
     for (const row of rows) {
-      paths.push(String((row as Record<string, unknown>).filePath ?? ''));
+      paths.push(String(row.filePath ?? ''));
     }
   } catch {
     // Ignore errors
@@ -167,9 +173,9 @@ async function queryCapabilityRelatedPaths(className: string): Promise<string[]>
   `;
 
   try {
-    const rows = await executePoolQuery(REPO_ID, dataCypher);
+    const rows = await executeQuery(conn, dataCypher);
     for (const row of rows) {
-      paths.push(String((row as Record<string, unknown>).filePath ?? ''));
+      paths.push(String(row.filePath ?? ''));
     }
   } catch {
     // Ignore errors
@@ -229,12 +235,12 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
 
   const { lbugPath } = getStoragePaths(repoRoot);
 
-  // Use pool adapter (read-only, connection pool) to avoid lock conflicts
-  await initPool(REPO_ID, lbugPath);
+  // Use single read-only connection (no pool, no FTS loading)
+  const handle = await openLbugConnection(lbug, lbugPath, { readOnly: true });
 
   try {
-    const countRows = await executePoolQuery(REPO_ID, `MATCH (c:Class) RETURN count(c) AS cnt`);
-    const classCount = Number((countRows[0] as Record<string, unknown>)?.cnt ?? 0);
+    const countRows = await executeQuery(handle.conn, `MATCH (c:Class) RETURN count(c) AS cnt`);
+    const classCount = Number(countRows[0]?.cnt ?? 0);
 
     if (classCount === 0) {
       console.log(`[DEBUG] Graph DB empty`);
@@ -243,8 +249,8 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
 
     console.log(`[DEBUG] Graph has ${classCount} classes`);
 
-    const httpEntries = await queryHttpEntryPoints();
-    const jobEntries = await queryJobEntryPoints();
+    const httpEntries = await queryHttpEntryPoints(handle.conn);
+    const jobEntries = await queryJobEntryPoints(handle.conn);
 
     console.log(`[DEBUG] ${httpEntries.length} HTTP entries, ${jobEntries.length} job entries`);
 
@@ -270,7 +276,7 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
       if (!primaryPath) continue;
 
       const normalizedPrimary = normalizePath(primaryPath, repoRoot);
-      const relatedPaths = await queryCapabilityRelatedPaths(className);
+      const relatedPaths = await queryCapabilityRelatedPaths(handle.conn, className);
       const normalizedRelated = relatedPaths.map(p => normalizePath(p, repoRoot));
 
       const allPaths = [normalizedPrimary, ...normalizedRelated.slice(0, 7)];
@@ -307,7 +313,7 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
     inventory.sort((a, b) => b.targetPaths.length - a.targetPaths.length);
     return inventory.slice(0, 15);
   } finally {
-    await closePool(REPO_ID);
+    await closeLbugConnection(handle);
   }
 }
 

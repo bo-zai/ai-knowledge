@@ -324,6 +324,7 @@ export async function runCapabilityKnowledgePipeline(
   };
 
   // Step 1: 发现候选能力
+  console.log(`[DEBUG] runCapabilityKnowledgePipeline: calling discoverCapabilities, terms=${targetTerms.join(',')}, paths=${targetPaths.join(',')}`);
   const discoveryInput: DiscoverCapabilitiesInput = {
     repoRoot,
     targetTerms,
@@ -331,8 +332,10 @@ export async function runCapabilityKnowledgePipeline(
   };
 
   const candidates = await discoverCapabilities(discoveryInput);
+  console.log(`[DEBUG] runCapabilityKnowledgePipeline: discoverCapabilities returned ${candidates.length} candidates`);
 
   // Step 2: 选择置信度最高的候选（无候选时创建合成候选以支持 provider claims）
+  console.log(`[DEBUG] runCapabilityKnowledgePipeline: selecting top candidate`);
   const repoName = repoRoot.split('/').pop() || 'unknown';
   let topCandidate: CapabilityCandidate;
   let bundle: EvidenceBundle;
@@ -348,10 +351,13 @@ export async function runCapabilityKnowledgePipeline(
     if (!topCandidate) {
       return emptyResult;
     }
+    console.log(`[DEBUG] runCapabilityKnowledgePipeline: building evidence bundle`);
     bundle = buildEvidenceBundle(topCandidate, repoName);
+    console.log(`[DEBUG] runCapabilityKnowledgePipeline: evidence bundle built`);
   }
 
   // Step 4: 获取 claims (必须使用 provider)
+  console.log(`[DEBUG] runCapabilityKnowledgePipeline: calling claimsProvider`);
   let providerClaims: CandidateClaim[] = [];
   let providerDebug: CapabilityClaimsProviderResult['debug'] | undefined;
   let providerGraphTrace: CapabilityClaimsProviderResult['graphTrace'] | undefined;
@@ -361,7 +367,11 @@ export async function runCapabilityKnowledgePipeline(
 
   llmCalled = true;
   try {
+    console.log(`[DEBUG] runCapabilityKnowledgePipeline: claimsProvider starting LLM call...`);
+    const startTime = Date.now();
     const providerResult = await claimsProvider(bundle);
+    const elapsed = Date.now() - startTime;
+    console.log(`[DEBUG] runCapabilityKnowledgePipeline: claimsProvider returned after ${elapsed}ms, claims=${providerResult.claims?.length ?? 0}`);
     providerClaims = providerResult.claims;
     providerDebug = providerResult.debug;
     providerGraphTrace = providerResult.graphTrace;
@@ -373,12 +383,14 @@ export async function runCapabilityKnowledgePipeline(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.log(`[DEBUG] runCapabilityKnowledgePipeline: claimsProvider error: ${message}`);
     if (message.startsWith('LLM generation failed:')) {
       throw error;
     }
     throw new Error(`LLM generation failed: ${message}`);
   }
 
+  console.log(`[DEBUG] runCapabilityKnowledgePipeline: filtering claims`);
   const filteredProviderClaims = filterCandidateClaims(providerClaims, bundle);
   const skeletonClaims = filterCandidateClaims(buildSkeletonClaims(bundle), bundle);
 

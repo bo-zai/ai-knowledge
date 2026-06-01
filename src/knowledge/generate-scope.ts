@@ -8,17 +8,13 @@ export interface GenerateTarget {
 export interface ResolveGenerateScopeInput {
   knowledge?: string;
   target?: string;
-  terms?: string[];
-  paths?: string[];
-  slice?: string;
 }
 
 export interface ResolvedGenerateScope {
   knowledge: GenerateKnowledge;
   inferred: boolean;
-  inferredFrom: 'default' | 'explicit' | 'legacy';
+  inferredFrom: 'default' | 'explicit';
   target?: GenerateTarget;
-  legacyArgsUsed: string[];
   warnings: string[];
 }
 
@@ -62,58 +58,15 @@ function resolveTarget(knowledge: GenerateKnowledge, rawTarget?: string): Genera
   return { kind: knowledge, value: rawTarget.trim() };
 }
 
-function inferKnowledgeFromLegacy(input: ResolveGenerateScopeInput): GenerateKnowledge | null {
-  const hasTerms = input.terms && input.terms.length > 0;
-  const hasPaths = input.paths && input.paths.length > 0;
-  const hasSlice = !!input.slice;
-
-  if (input.knowledge) return null; // explicit takes priority
-
-  if (hasTerms || hasPaths) return 'capability';
-  if (hasSlice) return 'db';
-  return null;
-}
-
-function inferTargetFromLegacy(input: ResolveGenerateScopeInput): GenerateTarget | undefined {
-  if (input.target) return undefined; // explicit takes priority
-
-  // --terms order → capability:order
-  if (input.terms && input.terms.length > 0) {
-    return { kind: 'capability', value: input.terms[0] };
-  }
-
-  // --slice database:users → db:users
-  if (input.slice) {
-    const parts = input.slice.split(':');
-    if (parts.length >= 2) {
-      const kind = parts[0] === 'database' ? 'db' : (parts[0] as 'db' | 'capability');
-      return { kind, value: parts.slice(1).join(':') };
-    }
-    return { kind: 'db', value: input.slice };
-  }
-
-  return undefined;
-}
-
 export function resolveGenerateScope(input: ResolveGenerateScopeInput): ResolvedGenerateScope {
   const warnings: string[] = [];
-  const legacyArgsUsed: string[] = [];
 
-  if (input.terms && input.terms.length > 0) legacyArgsUsed.push('terms');
-  if (input.paths && input.paths.length > 0) legacyArgsUsed.push('paths');
-  if (input.slice) legacyArgsUsed.push('slice');
-
-  const legacyKnowledge = inferKnowledgeFromLegacy(input);
   let inferred = false;
-  let inferredFrom: 'default' | 'explicit' | 'legacy' = 'explicit';
+  let inferredFrom: 'default' | 'explicit' = 'explicit';
 
   let rawKnowledge: string;
   if (input.knowledge) {
     rawKnowledge = input.knowledge;
-  } else if (legacyKnowledge) {
-    rawKnowledge = legacyKnowledge;
-    inferred = true;
-    inferredFrom = 'legacy';
   } else {
     rawKnowledge = 'all';
     inferred = true;
@@ -122,21 +75,15 @@ export function resolveGenerateScope(input: ResolveGenerateScopeInput): Resolved
 
   assertKnowledge(rawKnowledge);
 
-  if (legacyArgsUsed.length > 0) {
-    warnings.push('legacy generate filters were used; prefer --knowledge and --target');
-  }
-
-  // Target: explicit --target takes priority, then legacy inference
   const target = input.target
     ? resolveTarget(rawKnowledge as GenerateKnowledge, input.target)
-    : inferTargetFromLegacy(input);
+    : undefined;
 
   return {
     knowledge: rawKnowledge as GenerateKnowledge,
     inferred,
     inferredFrom,
     target,
-    legacyArgsUsed,
     warnings,
   };
 }

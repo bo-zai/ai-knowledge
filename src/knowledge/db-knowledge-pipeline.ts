@@ -1,8 +1,7 @@
 import type OpenAI from 'openai';
 import path from 'path';
 import { logger } from '../shared/logger.js';
-import { prepareKnowledgeGeneration } from '../query/prepare-generation.js';
-import { ensureIndex, hasIndex, discoverSlices } from '../query/index-service.js';
+import { discoverSlices } from '../query/index-service.js';
 import { buildSlicePlan } from '../slicing/build-slice-plan.js';
 import {
   buildRepoEvidenceBundle,
@@ -44,11 +43,12 @@ import type { SliceKind, SliceSeed } from '../slicing/types.js';
 import type { GenerateTarget } from './generate-scope.js';
 import type { KnowledgePackageContribution, KnowledgePackageStageReport } from '../packaging/knowledge-package-contribution.js';
 import type { SliceDebugTrace } from '../packaging/write-debug-logs.js';
+import type { GraphStatus } from '../query/prepare-generation.js';
 
 export interface RunDbKnowledgePipelineInput {
   repoPath: string;
   target?: GenerateTarget;
-  forceAnalyze?: boolean;
+  graphStatus: GraphStatus;
   verbose?: boolean;
   modelConfig: {
     baseUrl: string;
@@ -440,7 +440,7 @@ export function buildDbStageReport(input: {
 export async function runDbKnowledgePipeline(
   input: RunDbKnowledgePipelineInput,
 ): Promise<KnowledgePackageContribution> {
-  const { repoPath, target, forceAnalyze, verbose, modelConfig } = input;
+  const { repoPath, target, graphStatus, verbose, modelConfig } = input;
   const mockMode = isMockModel(modelConfig.model);
 
   // Build slice filter from target
@@ -449,8 +449,8 @@ export async function runDbKnowledgePipeline(
     sliceFilter = { kind: 'database', raw: `database:${target.value}`, target: target.value.toLowerCase() };
   }
 
-  // 1. Preflight
-  await prepareKnowledgeGeneration({ repoPath, forceAnalyze, mockMode });
+  // Graph data already initialized by Step 1a
+  logger.info(`Using graph status: ${graphStatus.status}`);
 
   // 2. Build DB evidence bundles
   const companionCoreRepoPath = await resolveCompanionCoreRepoPath(repoPath);

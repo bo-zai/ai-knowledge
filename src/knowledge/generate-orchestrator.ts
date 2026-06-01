@@ -1,11 +1,15 @@
 import { logger } from '../shared/logger.js';
 import type { ResolvedGenerateScope } from './generate-scope.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
+import type { GraphStatus } from '../query/prepare-generation.js';
+import type { PackageLayout } from './init-directory.js';
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
   outputRoot: string;
   scope: ResolvedGenerateScope;
+  graphStatus: GraphStatus;
+  layout: PackageLayout;
   forceAnalyze?: boolean;
   verbose?: boolean;
   llm: {
@@ -20,7 +24,7 @@ export interface GenerateOrchestrationDeps {
   runDb: (input: GenerateOrchestrationInput) => Promise<KnowledgePackageContribution>;
   runCapability: (input: GenerateOrchestrationInput) => Promise<KnowledgePackageContribution>;
   writePackage: (input: {
-    outputRoot: string;
+    layout: PackageLayout;
     knowledge: ResolvedGenerateScope['knowledge'];
     target: ResolvedGenerateScope['target'];
     contributions: KnowledgePackageContribution[];
@@ -81,7 +85,7 @@ export async function runGenerateOrchestration(input: {
   }
 
   await input.deps.writePackage({
-    outputRoot: input.input.outputRoot,
+    layout: input.input.layout,
     knowledge: scope.knowledge,
     target: scope.target,
     contributions,

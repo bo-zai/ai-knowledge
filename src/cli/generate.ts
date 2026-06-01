@@ -7,7 +7,6 @@ import {
   loadLlmConfigFile,
 } from '../config/model-config.js';
 import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
-import { ensureIndex, hasIndex } from '../query/index-service.js';
 import { createCapabilityLlmClaimsProvider } from '../generation/capability-llm-claims-provider.js';
 import {
   runCapabilityKnowledgePipeline,
@@ -26,12 +25,8 @@ import { runDbKnowledgePipeline } from '../knowledge/db-knowledge-pipeline.js';
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
 import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
-
-function parseCommaList(value?: string): string[] {
-  return value
-    ? value.split(',').map(item => item.trim()).filter(item => item.length > 0)
-    : [];
-}
+import { initGraphData } from '../query/prepare-generation.js';
+import { initDirectoryStructure } from '../knowledge/init-directory.js';
 
 function isMockModel(model: string): boolean {
   return model.startsWith('test-');
@@ -42,9 +37,6 @@ interface GenerateOptions {
   path?: string;
   knowledge?: string;
   target?: string;
-  slice?: string;
-  terms?: string;
-  paths?: string;
   out?: string;
   llmConfig?: string;
   model?: string;
@@ -67,16 +59,10 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   const repoPath = resolved.repoPath;
   logger.debug(`Resolved repo path from ${resolved.source}: ${repoPath}`);
 
-  const targetTerms = parseCommaList(options.terms);
-  const targetPaths = parseCommaList(options.paths);
-
   // Resolve generation scope
   const scope = resolveGenerateScope({
     knowledge: options.knowledge,
     target: options.target,
-    terms: targetTerms.length > 0 ? targetTerms : undefined,
-    paths: targetPaths.length > 0 ? targetPaths : undefined,
-    slice: options.slice,
   });
 
   for (const warning of scope.warnings) {
@@ -111,6 +97,17 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   const outputRoot = options.out ? path.resolve(options.out) : repoPath;
 
+  // Step 1a: Initialize graph data
+  const graphStatus = await initGraphData({
+    repoPath,
+    forceAnalyze: options.forceAnalyze,
+    mockMode,
+  });
+  logger.info(`Graph status: ${graphStatus.status}, nodes: ${graphStatus.nodeCount}, edges: ${graphStatus.edgeCount}`);
+
+  // Step 1b: Initialize directory structure
+  const layout = await initDirectoryStructure(outputRoot);
+
   // Build orchestration deps
   const deps: GenerateOrchestrationDeps = {
     runDb: async (input: GenerateOrchestrationInput) => {
@@ -118,7 +115,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       return runDbKnowledgePipeline({
         repoPath: input.repoPath,
         target: dbTarget,
-        forceAnalyze: input.forceAnalyze,
+        graphStatus: input.graphStatus,
         verbose: input.verbose,
         modelConfig,
       });
@@ -151,11 +148,6 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         console.log(`  LLM model: ${capResolvedConfig.model}`);
       }
 
-      await ensureIndex(input.repoPath);
-      if (!(await hasIndex(input.repoPath))) {
-        throw new Error(`No analysis index found for ${input.repoPath}. Run analysis first or use --force-analyze.`);
-      }
-
       const provider = createCapabilityLlmClaimsProvider({
         model: capResolvedConfig.model,
         apiKey: capApiKey,
@@ -178,10 +170,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         };
       };
 
-      // Detect full capability request (no target, no legacy terms/paths)
-      const targetSingleRequested = input.scope.target?.kind === 'capability';
-      const legacySingleRequested = targetTerms.length > 0 || targetPaths.length > 0;
-      const fullCapabilityRequested = !targetSingleRequested && !legacySingleRequested;
+      // Full capability request (no target specified)
+      const fullCapabilityRequested = !input.scope.target;
 
       if (fullCapabilityRequested) {
         const full = await runFullCapabilityMvpPipeline({
@@ -213,8 +203,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         };
       }
 
-      const capTerms = input.scope.target?.kind === 'capability' ? [input.scope.target.value] : targetTerms;
-      const capPaths = targetPaths.length > 0 ? targetPaths : ['src'];
+      // Single capability target
+      const capTerms = input.scope.target?.kind === 'capability' ? [input.scope.target.value] : [];
+      const capPaths = ['src'];
 
       let result;
       try {
@@ -228,7 +219,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       } catch (error) {
         if (error instanceof CapabilityKnowledgeGenerationError) {
           await writeKnowledgePackage({
-            outputRoot: input.outputRoot,
+            layout: input.layout,
             knowledge: 'capability',
             target: input.scope.target,
             contributions: [{
@@ -270,7 +261,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
     writePackage: async (input) => {
       await writeKnowledgePackage({
-        outputRoot: input.outputRoot,
+        layout: input.layout,
         knowledge: input.knowledge,
         target: input.target,
         contributions: input.contributions,
@@ -282,6 +273,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     repoPath,
     outputRoot,
     scope,
+    graphStatus,
+    layout,
     forceAnalyze: options.forceAnalyze,
     verbose: options.verbose,
     llm: {

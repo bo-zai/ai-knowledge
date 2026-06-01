@@ -46,8 +46,10 @@ export async function runFullCapabilityMvpPipeline(input: {
   claimsProvider: (bundle: EvidenceBundle) => Promise<CapabilityClaimsProviderResult>;
   model?: string;
 }): Promise<FullCapabilityMvpResult> {
+  console.log('[DEBUG] runFullCapabilityMvpPipeline: starting');
   // Auto-discover project capabilities
   const inventory = await buildCapabilityMvpInventory(input.repoRoot);
+  console.log(`[DEBUG] runFullCapabilityMvpPipeline: inventory built, ${inventory.length} items`);
 
   if (inventory.length === 0) {
     throw new Error('No business capabilities discovered in project. Use --target or --terms to specify capability focus.');
@@ -58,7 +60,9 @@ export async function runFullCapabilityMvpPipeline(input: {
   const warnings: string[] = [];
 
   for (const item of inventory) {
+    console.log(`[DEBUG] runFullCapabilityMvpPipeline: processing ${item.name}`);
     try {
+      console.log(`[DEBUG] runFullCapabilityMvpPipeline: calling runCapabilityKnowledgePipeline for ${item.name}`);
       const result = await runCapabilityKnowledgePipeline({
         repoRoot: input.repoRoot,
         targetTerms: item.targetTerms,
@@ -66,6 +70,7 @@ export async function runFullCapabilityMvpPipeline(input: {
         claimsProvider: input.claimsProvider,
         llmMode: { requested: true, required: true, model: input.model },
       });
+      console.log(`[DEBUG] runFullCapabilityMvpPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`);
 
       const primaryDoc = result.files.find(file => file.path.startsWith('capabilities/') && file.path.endsWith('.md'))?.path;
       const compatibilityView = result.files.find(file => file.path.startsWith('views/capabilities/') && file.path.endsWith('.md'))?.path;
