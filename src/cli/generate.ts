@@ -12,8 +12,10 @@ import { createCapabilityLlmClaimsProvider } from '../generation/capability-llm-
 import {
   runCapabilityKnowledgePipeline,
   capabilityResultToContribution,
+  CapabilityKnowledgeGenerationError,
   type CapabilityClaimsProviderResult,
 } from '../knowledge/capability-knowledge-pipeline.js';
+import { runFullCapabilityMvpPipeline } from '../knowledge/full-capability-mvp-pipeline.js';
 import { resolveGenerateScope } from '../knowledge/generate-scope.js';
 import {
   runGenerateOrchestration,
@@ -81,10 +83,10 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     logger.warn(warning);
   }
 
-  // Load model config
+  // Load model config from the target repo
   const fileConfig = options.llmConfig
     ? await loadLlmConfigFile(options.llmConfig)
-    : await loadDefaultLlmConfigFile();
+    : await loadDefaultLlmConfigFile(repoPath);
 
   const resolvedConfig = resolveModelConfig({
     baseUrl: options.baseUrl,
@@ -92,7 +94,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     model: options.model,
     fileConfig,
   });
-  const apiKey = resolvedConfig.apiKey || getEnvVar(resolvedConfig.apiKeyEnv);
+  const apiKey = resolvedConfig.apiKey || getEnvVarOptional(resolvedConfig.apiKeyEnv) || '';
   const modelConfig = {
     baseUrl: resolvedConfig.baseUrl,
     apiKey,
@@ -160,8 +162,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         baseUrl: capResolvedConfig.baseUrl,
       });
 
-      const claimsProvider = async (bundle: EvidenceBundle): Promise<CapabilityClaimsProviderResult> => {
-        const result = await provider(bundle);
+      const claimsProvider = async (bundle: EvidenceBundle, repairPrompt?: string): Promise<CapabilityClaimsProviderResult> => {
+        const result = await provider(bundle, repairPrompt);
         return {
           claims: result.claims,
           debug: {
@@ -176,15 +178,76 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         };
       };
 
+      // Detect full capability request (no target, no legacy terms/paths)
+      const targetSingleRequested = input.scope.target?.kind === 'capability';
+      const legacySingleRequested = targetTerms.length > 0 || targetPaths.length > 0;
+      const fullCapabilityRequested = !targetSingleRequested && !legacySingleRequested;
+
+      if (fullCapabilityRequested) {
+        const full = await runFullCapabilityMvpPipeline({
+          repoRoot: input.repoPath,
+          claimsProvider,
+          model: capResolvedConfig.model,
+        });
+
+        console.log(`Generated ${full.report.succeeded} capability documents (${full.report.failed} failed)`);
+        for (const warning of full.warnings) {
+          console.warn(`Warning: ${warning}`);
+        }
+
+        return {
+          stage: 'capability',
+          files: full.files,
+          objects: full.objects,
+          report: {
+            stage: 'capability',
+            ran: true,
+            succeeded: full.report.succeeded,
+            failed: full.report.failed,
+            details: {
+              capabilityGenerationMode: 'full-mvp',
+              capabilities: full.report.capabilities,
+            },
+          },
+          warnings: full.warnings,
+        };
+      }
+
       const capTerms = input.scope.target?.kind === 'capability' ? [input.scope.target.value] : targetTerms;
-      const capPaths = targetPaths.length > 0 ? targetPaths : [];
-      const result = await runCapabilityKnowledgePipeline({
-        repoRoot: input.repoPath,
-        targetTerms: capTerms,
-        targetPaths: capPaths,
-        claimsProvider,
-        llmMode: { requested: true, required: true, model: capResolvedConfig.model },
-      });
+      const capPaths = targetPaths.length > 0 ? targetPaths : ['src'];
+
+      let result;
+      try {
+        result = await runCapabilityKnowledgePipeline({
+          repoRoot: input.repoPath,
+          targetTerms: capTerms,
+          targetPaths: capPaths,
+          claimsProvider,
+          llmMode: { requested: true, required: true, model: capResolvedConfig.model },
+        });
+      } catch (error) {
+        if (error instanceof CapabilityKnowledgeGenerationError) {
+          await writeKnowledgePackage({
+            outputRoot: input.outputRoot,
+            knowledge: 'capability',
+            target: input.scope.target,
+            contributions: [{
+              stage: 'capability',
+              files: error.debugFiles,
+              objects: [],
+              report: {
+                stage: 'capability',
+                ran: true,
+                succeeded: 0,
+                failed: 1,
+                details: { error: error.message },
+              },
+              warnings: [error.message],
+            }],
+          });
+        }
+        throw error;
+      }
 
       if (result.files.length === 0) {
         throw new Error(`No capability knowledge files generated for target repository: ${input.repoPath}`);

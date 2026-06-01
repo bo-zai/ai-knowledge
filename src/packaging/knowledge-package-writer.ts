@@ -18,9 +18,36 @@ export async function writeKnowledgePackage(input: {
   await fs.rm(packageRoot, { recursive: true, force: true });
   await fs.mkdir(packageRoot, { recursive: true });
 
+  // Collect primary docs and supporting material paths
+  const allFiles = input.contributions.flatMap(contribution => contribution.files);
+  const primaryCapabilityDocs = allFiles
+    .filter(file => file.path.startsWith('capabilities/') && file.path.endsWith('.md'))
+    .map(file => file.path)
+    .sort();
+  const compatibilityViews = allFiles
+    .filter(file => file.path.startsWith('views/capabilities/') && file.path.endsWith('.md'))
+    .map(file => file.path)
+    .sort();
+
   const objects = input.contributions.flatMap(contribution => contribution.objects);
   const catalog: Record<string, unknown> = {
     version: 1,
+    entry: {
+      summary: 'bootstrap-knowledge is a generated capability knowledge package for coding agents.',
+      primary_docs: primaryCapabilityDocs,
+      compatibility_views: compatibilityViews,
+      supporting_material: {
+        objects: 'objects/**',
+        evidence: 'evidence/index.jsonl',
+        reports: 'reports/**',
+        debug: 'debug/**',
+      },
+      agent_must: [
+        'read matching capabilities/*.md before planning capability changes',
+        'use evidence refs for key claims',
+        'stop when unknown boundaries block implementation or validation',
+      ],
+    },
     generation: {
       knowledge: input.knowledge,
       target: input.target ?? null,
@@ -33,6 +60,7 @@ export async function writeKnowledgePackage(input: {
       object.id,
       { type: object.type, path: object.path, slice_ids: object.sliceIds ?? [] },
     ])),
+    capability_docs: primaryCapabilityDocs,
     unknown_escalation_rules: [
       { if_no_term_match_for_core_noun: true },
       { if_external_system_has_no_contract: true },

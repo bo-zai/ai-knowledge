@@ -9,6 +9,7 @@ export const EntrySignalSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   role: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const BehaviorSignalSchema = z.object({
@@ -19,6 +20,7 @@ export const BehaviorSignalSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   role: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const DataSignalSchema = z.object({
@@ -29,6 +31,7 @@ export const DataSignalSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   role: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const TestSignalSchema = z.object({

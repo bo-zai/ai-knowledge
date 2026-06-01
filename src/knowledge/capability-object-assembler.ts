@@ -142,6 +142,7 @@ function buildModObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
   const hints = claim.objectHints;
   const module = extractModuleRef(claim, bundle);
   const path = hints?.modulePath || module?.rootPath || 'unknown-module';
+  const entryPoints = extractModEntrySymbols(claim, bundle, path);
   return {
     id: makeObjectId('MOD', path.replace(/\//g, '-')),
     type: 'MOD',
@@ -156,6 +157,7 @@ function buildModObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
       source: claimSource(claim),
       rootPath: path,
       ...(hints?.ownedResponsibility ? { ownedResponsibility: hints.ownedResponsibility } : {}),
+      ...(entryPoints.length > 0 ? { entryPoints } : {}),
       ...(hints?.touchWhen ? { touchWhen: hints.touchWhen } : {}),
       ...(hints?.doNotTouchWhen ? { doNotTouchWhen: hints.doNotTouchWhen } : {}),
       ...(hints?.testAnchors ? { testAnchors: hints.testAnchors } : {}),
@@ -163,10 +165,93 @@ function buildModObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
   };
 }
 
+function extractModEntrySymbols(claim: CandidateClaim, bundle: EvidenceBundle, modulePath: string): string[] {
+  const entries: string[] = [];
+  const pathLower = modulePath.toLowerCase();
+
+  // Extract from entry points that match this module
+  for (const ep of bundle.entryPoints) {
+    const locLower = ep.location.toLowerCase();
+    if (matchesModulePath(locLower, pathLower)) {
+      const name = ep.name || '';
+      if (ep.kind === 'http' && ep.signature) {
+        // Controller with routes: extract route as entry
+        const routeParts = ep.signature.match(/@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(([^)]*)\)/g) || [];
+        for (const route of routeParts.slice(0, 3)) {
+          entries.push(`${name}.${route}`);
+        }
+      } else if (ep.signature && !ep.signature.includes('@')) {
+        // Method signature from caller tracing
+        entries.push(`${name}.${ep.signature}`);
+      } else {
+        entries.push(name);
+      }
+    }
+  }
+
+  // Extract from behavior slices that match this module
+  for (const beh of bundle.behaviorSlices) {
+    const locLower = beh.location.toLowerCase();
+    if (matchesModulePath(locLower, pathLower)) {
+      const className = beh.location.split('/').pop()?.replace('.java', '') || '';
+      const methodRef = `${beh.verb} ${beh.object}`;
+      const entry = className ? `${className}.${methodRef}` : methodRef;
+      if (!entries.includes(entry)) {
+        entries.push(entry);
+      }
+    }
+  }
+
+  return entries.slice(0, 10);
+}
+
+function matchesModulePath(fileLocation: string, modulePath: string): boolean {
+  // Check if the file location contains the module path
+  const normalizedPath = modulePath.replace(/\//g, '.');
+  const parts = normalizedPath.split('.').filter(Boolean);
+  for (const part of parts) {
+    if (part.length > 2 && fileLocation.includes(part.toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function buildConObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {
   const hints = claim.objectHints;
   const contract = extractContractRef(claim, bundle);
   const name = hints?.contractSubject || contract?.name || 'unknown-contract';
+  const kind = hints?.contractKind || contract?.kind || 'schema';
+
+  const baseMetadata: Record<string, unknown> = {
+    source: claimSource(claim),
+    kind,
+    subject: hints?.contractSubject || contract?.name,
+  };
+
+  if (kind === 'api' && contract) {
+    const routeInfo = extractApiRouteInfo(contract);
+    return {
+      id: makeObjectId('CON', name),
+      type: 'CON',
+      description: claim.claimText,
+      evidencePrimary: claim.evidenceRefs,
+      evidenceSupporting: [],
+      decisionPoints: claim.decisionPoints,
+      sddStageUses: claim.sddStageUses,
+      unsupportedParts: claim.unsupportedParts,
+      blockedDecisions: claim.blockedDecisions,
+      metadata: {
+        ...baseMetadata,
+        httpMethod: routeInfo.method,
+        routePath: routeInfo.path,
+        controllerClass: routeInfo.controllerClass,
+        ...(hints?.fieldSemantics ? { fieldSemantics: hints.fieldSemantics } : {}),
+        ...(hints?.validationRules ? { validationRules: hints.validationRules } : {}),
+      },
+    };
+  }
+
   return {
     id: makeObjectId('CON', name),
     type: 'CON',
@@ -178,14 +263,24 @@ function buildConObject(claim: CandidateClaim, bundle: EvidenceBundle): Knowledg
     unsupportedParts: claim.unsupportedParts,
     blockedDecisions: claim.blockedDecisions,
     metadata: {
-      source: claimSource(claim),
-      kind: hints?.contractKind || contract?.kind || 'schema',
-      subject: hints?.contractSubject || contract?.name,
+      ...baseMetadata,
       ...(hints?.fieldSemantics ? { fieldSemantics: hints.fieldSemantics } : {}),
       ...(hints?.validationRules ? { validationRules: hints.validationRules } : {}),
       ...(hints?.schemaRef ? { schemaRef: hints.schemaRef } : {}),
     },
   };
+}
+
+function extractApiRouteInfo(contract: EvidenceDataContract): { method: string; path: string; controllerClass: string } {
+  // contract.name is like "GET /goods/add" or "POST /courseTemplate/page"
+  const parts = (contract.name || '').split(' ');
+  const method = parts[0] || 'ANY';
+  const path = parts[1] || '';
+  // Extract controller class from location
+  const controllerClass = contract.location
+    ? contract.location.split('/').pop()?.replace('.java', '') || ''
+    : '';
+  return { method, path, controllerClass };
 }
 
 function buildVerObject(claim: CandidateClaim, bundle: EvidenceBundle): KnowledgeObject {

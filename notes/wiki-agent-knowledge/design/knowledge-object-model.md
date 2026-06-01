@@ -33,6 +33,9 @@ target_tasks:
 expected_failure_if_missing:
 expected_failure_if_stale:
 target_metrics:
+confidence:
+risk_if_wrong:
+usage_policy:
 ```
 
 ## 公共字段说明
@@ -67,6 +70,86 @@ target_metrics:
   - 如果过期，Agent 典型会被误导成什么错
 - `target_metrics`
   - 这条知识被保留后希望改善哪些指标
+- `confidence`
+  - 该对象当前可信度，建议分为 `high`、`medium`、`low`
+- `risk_if_wrong`
+  - 如果 Agent 错用这条知识，可能造成的风险，建议分为 `low`、`medium`、`high`、`critical`
+- `usage_policy`
+  - Agent 在不同可信度和风险下如何使用该对象，例如可直接规划、只能提示、必须先验证或必须提问
+
+## 可信度、风险与使用策略
+
+知识对象不能只表达“是什么”，还必须表达“能不能直接用来做计划”。
+
+建议规范：
+
+```yaml
+confidence:
+  level: high | medium | low
+  reason:
+  evidence_tier: tier1 | tier2 | tier3
+
+risk_if_wrong: low | medium | high | critical
+
+usage_policy:
+  can_plan_with: true | false
+  must_verify_before_use: true | false
+  must_ask_if_conflict: true | false
+  must_not_override:
+    - OWN
+    - INV
+    - CON
+```
+
+使用规则：
+
+- `high confidence` 且风险不高的对象，可以作为 change plan 的直接依据。
+- `medium confidence` 对象可以用于缩小搜索范围，但关键结论仍需补充证据。
+- `low confidence` 对象只能用于提示和提问，不能独立支撑改动计划。
+- `risk_if_wrong` 为 `high` 或 `critical` 的对象，即使可信度高，也必须在计划中显式引用证据和验证项。
+- `Tier 3` 证据不能单独支撑稳定事实，只能进入 `OPEN`、candidate claim 或低可信对象。
+
+高风险对象通常包括：
+
+- source of truth
+- 外部系统契约
+- 支付、资金、权限、审计、合规相关边界
+- 数据一致性和幂等语义
+- 删除、回滚、补偿和不可逆状态变更
+
+## stale_if 机器可解析约束
+
+`stale_if` 不应只写自然语言。它应尽量绑定到可检测的代码或契约锚点。
+
+建议结构：
+
+```yaml
+stale_if:
+  paths:
+    - src/order/**
+    - src/main/resources/mappers/OrderMapper.xml
+  symbols:
+    - OrderService.createOrder
+    - RefundService.applyRefund
+  tables:
+    - orders
+    - refund_records
+  endpoints:
+    - POST /api/orders
+  contracts:
+    - pay.refund.callback.v1
+  tests:
+    - OrderServiceTest
+  configs:
+    - application-payment.yml
+```
+
+使用规则：
+
+- 命中 `stale_if` 的对象应进入待复核状态。
+- stale 对象可以保留，但 `catalog.yaml` 应标记其状态。
+- Agent 可以读取 stale 对象理解历史上下文，但不能把它作为当前事实直接规划。
+- 如果 stale 对象涉及高风险边界，Agent 必须停下并要求新证据。
 
 ## 13 类核心对象
 

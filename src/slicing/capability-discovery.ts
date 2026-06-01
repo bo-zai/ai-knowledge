@@ -233,6 +233,17 @@ function byRelevanceDesc<T extends { targetRelevance?: number; location?: string
   return (left.location ?? '').localeCompare(right.location ?? '');
 }
 
+function extractJavaFieldNames(content: string): string[] {
+  const fields: string[] = [];
+  const fieldRegex = /\b(private|protected|public)\s+[\w<>\[\], ?]+\s+(\w+)\s*;/g;
+  let fieldMatch: RegExpExecArray | null;
+  while ((fieldMatch = fieldRegex.exec(content)) !== null) {
+    const fieldName = fieldMatch[2];
+    if (fieldName) fields.push(fieldName);
+  }
+  return [...new Set(fields)];
+}
+
 async function scanDirectory(dir: string): Promise<string[]> {
   const files: string[] = [];
   try {
@@ -273,6 +284,10 @@ function extractJavaEntrySignals(content: string, location: string, targetTerms:
 
   const relevance = computeTargetRelevance([location, className, routeSignature], targetTerms);
 
+  // Find the line number of the class definition for startLine
+  const classLineMatch = content.match(/^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m);
+  const startLine = classLineMatch ? content.slice(0, classLineMatch.index ?? 0).split('\n').length + 1 : undefined;
+
   if (hasController || routeMatches.length > 0) {
     signals.push({
       kind: 'http',
@@ -283,6 +298,7 @@ function extractJavaEntrySignals(content: string, location: string, targetTerms:
       targetRelevance: relevance.score,
       matchedTerms: relevance.matchedTerms,
       role: 'controller',
+      startLine,
     });
   } else if (hasScheduled) {
     signals.push({
@@ -317,6 +333,91 @@ function extractJavaEntrySignals(content: string, location: string, targetTerms:
   }
 
   return signals;
+}
+
+/**
+ * For each discovered service entry, scan other files for @Resource/@Autowired
+ * injections of that service and add the callers as additional entry signals.
+ */
+/**
+ * Use graph (Cypher) to find callers of discovered services.
+ * Queries CALLS edges from controller/service methods to the target service.
+ */
+async function collectCallerSignals(
+  serviceSignals: EntrySignal[],
+  _targetPaths: string[],
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<EntrySignal[]> {
+  if (serviceSignals.length === 0) return [];
+
+  const serviceNames = [...new Set(serviceSignals.map(s => s.name).filter(Boolean))];
+  if (serviceNames.length === 0) return [];
+
+  const callerSignals: EntrySignal[] = [];
+  const seen = new Set<string>();
+
+  // Use graph to find callers via CALLS edges
+  for (const serviceName of serviceNames) {
+    // Cypher: find all methods that CALL methods of the target service class
+    // LadybugDB uses CodeRelation table with type property for ALL edges
+    const escapedName = escapeCypherString(serviceName);
+    const cypher = `
+      MATCH (serviceClass:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(target:Method)
+      WHERE serviceClass.name = '${escapedName}'
+      MATCH (caller:Method)-[r:CodeRelation {type: 'CALLS'}]->(target)
+      MATCH (callerClass:Class)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(caller)
+      RETURN DISTINCT callerClass.name AS className, callerClass.filePath AS filePath, caller.name AS methodName, caller.startLine AS startLine
+      LIMIT 50
+    `;
+
+    try {
+      const rows = await executeQuery(cypher);
+      for (const row of (rows || [])) {
+        const className = row.className as string;
+        const filePath = row.filePath as string;
+        const methodName = row.methodName as string;
+        const startLine = Number((row as Record<string, unknown>).startLine ?? undefined);
+
+        if (!filePath || !className) continue;
+
+        const relative = path.relative(repoRoot, filePath).replace(/\\/g, '/');
+        if (!relative.endsWith('.java')) continue;
+
+        const key = `${relative}:${className}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const normalizedPath = relative.toLowerCase();
+        const hasController = normalizedPath.includes('/controller');
+        const hasService = normalizedPath.includes('/service');
+
+        let kind: EntrySignal['kind'] = 'handler';
+        let role: string | undefined;
+        if (hasController) { kind = 'http'; role = 'controller'; }
+        else if (hasService) { kind = 'service'; role = 'service'; }
+
+        const relevance = computeTargetRelevance([relative, className, serviceName, methodName], targetTerms);
+        const boostedRelevance = Math.min(1, relevance.score + 0.3);
+
+        callerSignals.push({
+          kind,
+          location: relative,
+          name: className,
+          signature: methodName,
+          description: `Caller of ${serviceName} (caller tracing via graph)`,
+          targetRelevance: boostedRelevance,
+          matchedTerms: [...new Set([...relevance.matchedTerms, serviceName])],
+          role,
+          startLine: isNaN(startLine) ? undefined : startLine,
+        });
+      }
+    } catch {
+      // Graph query failed; fall back to no caller signals for this service
+    }
+  }
+
+  return callerSignals;
 }
 
 async function collectEntrySignals(targetPaths: string[], repoRoot: string, targetTerms: string[]): Promise<EntrySignal[]> {
@@ -426,6 +527,7 @@ async function collectBehaviorSignals(targetPaths: string[], repoRoot: string, t
           if (name) {
             const terms = normalizeCapabilityTerms(name);
             const relevance = computeTargetRelevance([relative, name], targetTerms);
+            const startLine = content.slice(0, methodMatch.index ?? 0).split('\n').length + 1;
             signals.push({
               location: relative,
               verb: terms[0] || name,
@@ -433,6 +535,7 @@ async function collectBehaviorSignals(targetPaths: string[], repoRoot: string, t
               targetRelevance: relevance.score,
               matchedTerms: relevance.matchedTerms,
               role,
+              startLine,
             });
           }
         }
@@ -485,13 +588,16 @@ async function collectDataSignals(targetPaths: string[], repoRoot: string, targe
         const typeMatch = content.match(/\b(class|interface|enum)\s+(\w+)/);
         if (typeMatch) {
           const relevance = computeTargetRelevance([relative, typeMatch[2]], targetTerms);
+          const startLine = content.slice(0, typeMatch.index ?? 0).split('\n').length + 1;
           signals.push({
             kind: 'type',
             location: relative,
             name: typeMatch[2],
+            fields: extractJavaFieldNames(content),
             targetRelevance: relevance.score,
             matchedTerms: relevance.matchedTerms,
             role,
+            startLine,
           });
         }
 
@@ -654,44 +760,69 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
     return [];
   }
 
+  // Try graph-based discovery first (uses LadybugDB at .knowledge/lbug)
+  try {
+    const { lbugPath } = getStoragePaths(repoRoot);
+    await initLbug(lbugPath);
+
+    // Check if the graph actually has data (empty DB means no knowledge has been analyzed)
+    const classCountRows = await executeQuery(`MATCH (c:Class) RETURN count(c) AS cnt`);
+    const classCount = Number((classCountRows[0] as Record<string, unknown>)?.cnt ?? 0);
+    if (classCount === 0) {
+      await closeLbug();
+      return discoverCapabilitiesFromFilesystem(input);
+    }
+
+    return discoverCapabilitiesFromGraph(input);
+  } catch {
+    // Fall back to file-system scanning if graph is not available
+    return discoverCapabilitiesFromFilesystem(input);
+  }
+}
+
+// ============================================================================
+// Filesystem-based capability discovery (fallback when graph is unavailable)
+// ============================================================================
+
+async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInput): Promise<CapabilityCandidate[]> {
+  const { repoRoot, targetTerms = [], targetPaths = [] } = input;
+
+  if (targetTerms.length === 0 && targetPaths.length === 0) {
+    return [];
+  }
+
   const candidates: CapabilityCandidate[] = [];
 
-  // 收集信号
   const primaryEntryPoints = await collectEntrySignals(targetPaths, repoRoot, targetTerms);
   const behaviorAnchors = await collectBehaviorSignals(targetPaths, repoRoot, targetTerms);
   const dataAnchors = await collectDataSignals(targetPaths, repoRoot, targetTerms);
   const testAnchors = await collectTestSignals(repoRoot, targetPaths, targetTerms);
   const moduleClusters = await analyzeModuleClusters(targetPaths, repoRoot, targetTerms);
 
-  // 排序信号 (按 relevance 降序)
   primaryEntryPoints.sort(byRelevanceDesc);
   behaviorAnchors.sort(byRelevanceDesc);
   dataAnchors.sort(byRelevanceDesc);
   testAnchors.sort(byRelevanceDesc);
   moduleClusters.sort(byRelevanceDesc);
 
-  // 计算 confidence breakdown
   const entrySignal = primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
   const behaviorSignal = behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
   const dataSignal = dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
   const testSignal = testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
-  const docSignal = 0.4; // MVP: 使用固定值
+  const docSignal = 0.4;
   const graphCohesion = moduleClusters.length > 1 ? 0.75 : 0.5;
 
   const confidence = computeConfidence(entrySignal, behaviorSignal, dataSignal, testSignal, docSignal, graphCohesion);
 
-  // 分类 target terms 并生成候选名称
   const { businessTerms, technicalTerms } = classifyTargetTerms(targetTerms);
   const nameCandidates: string[] = [];
   const relatedTerms: string[] = [...targetTerms];
 
-  // 从 target terms 合并 domain phrases
   for (const term of targetTerms) {
     const normalized = normalizeCapabilityTerms(term);
     relatedTerms.push(...normalized);
   }
 
-  // 使用业务术语生成能力名称
   const businessCapabilityName = deriveBusinessCapabilityName({
     businessTerms,
     entrySignals: primaryEntryPoints,
@@ -707,12 +838,10 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
 
   nameCandidates.push(businessCapabilityName);
 
-  // 技术术语只作为 relatedTerms，不决定能力名称
   if (technicalTerms.includes('mybatis') && !relatedTerms.includes('mybatis mapper')) {
     relatedTerms.push('mybatis mapper');
   }
 
-  // 构建候选
   const candidate: CapabilityCandidate = {
     candidateId: `CAND-${targetTerms.map(t => t.toUpperCase()).join('-')}`,
     nameCandidates,
@@ -736,7 +865,6 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
     missingSignals: ['No explicit external DB ownership contract found'],
   };
 
-  // 只返回置信度 >= 0.55 的候选
   if (candidate.confidence >= 0.55) {
     candidates.push(candidate);
   }
@@ -756,7 +884,7 @@ function buildPathFilterCypher(varName: string, targetPaths: string[]): string {
   if (targetPaths.length === 0) return 'true';
   const clauses = targetPaths.map(p => {
     const normalized = escapeCypherString(p.replace(/\\/g, '/'));
-    return `STARTS WITH(${varName}.filePath, '${normalized}')`;
+    return `${varName}.filePath STARTS WITH '${normalized}'`;
   });
   return `(${clauses.join(' OR ')})`;
 }
@@ -768,7 +896,9 @@ async function queryGraphEntrySignals(
 ): Promise<EntrySignal[]> {
   const cypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Controller|Service|Component|Handler)$' RETURN c.name as name, c.filePath as filePath`;
   const rows = await executeQuery(cypher);
-  return rows.map((row: Record<string, unknown>) => {
+  const results: EntrySignal[] = [];
+
+  for (const row of rows) {
     const name = String(row.name ?? '');
     const filePath = String(row.filePath ?? '');
     const relevance = computeTargetRelevance([filePath, name], targetTerms);
@@ -777,8 +907,8 @@ async function queryGraphEntrySignals(
     let role: string | undefined;
     if (lower.includes('controller')) { kind = 'http'; role = 'controller'; }
     else if (lower.includes('service')) { kind = 'service'; role = 'service'; }
-    else if (lower.includes('controller')) { kind = 'http'; role = 'controller'; }
-    return {
+
+    const signal: EntrySignal = {
       kind,
       location: filePath,
       name,
@@ -787,12 +917,35 @@ async function queryGraphEntrySignals(
       matchedTerms: relevance.matchedTerms,
       role,
     };
-  }).sort(byRelevanceDesc);
+
+    // For HTTP controllers, extract route annotations for signature and startLine
+    if (kind === 'http') {
+      try {
+        const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(repoRoot, filePath);
+        const content = await fs.readFile(resolvedPath, 'utf-8');
+        const routeMatches = [...content.matchAll(/@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\(([^)]*)\))?/g)];
+        if (routeMatches.length > 0) {
+          signal.signature = routeMatches.map(m => m[0]).join(' ');
+          // Extract startLine from class definition
+          const classMatch = content.match(/^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m);
+          if (classMatch) {
+            signal.startLine = content.slice(0, classMatch.index).split('\n').length + 1;
+          }
+        }
+      } catch {
+        // File may not be readable; skip signature
+      }
+    }
+
+    results.push(signal);
+  }
+
+  return results.sort(byRelevanceDesc);
 }
 
 async function queryGraphBehaviorSignals(
   pathFilter: string,
-  repoRoot: string,
+  _repoRoot: string,
   targetTerms: string[],
 ): Promise<BehaviorSignal[]> {
   const cypher = `MATCH (m:Method) WHERE ${pathFilter} RETURN m.name as name, m.filePath as filePath LIMIT 500`;
@@ -802,7 +955,6 @@ async function queryGraphBehaviorSignals(
     const filePath = String(row.filePath ?? '');
     const relevance = computeTargetRelevance([filePath, name], targetTerms);
     const terms = normalizeCapabilityTerms(name);
-    // Determine role from file path
     const normalizedPath = normalizePathForMatch(filePath);
     const role = normalizedPath.includes('/controller/') ? 'controller' :
                  normalizedPath.includes('/service/') ? 'service' :
@@ -824,11 +976,10 @@ async function queryGraphDataSignals(
   targetTerms: string[],
 ): Promise<DataSignal[]> {
   const classCypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN c.name as name, c.filePath as filePath`;
-  const interfaceCypher = `MATCH (i:Interface) WHERE ${pathFilter} AND i.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN i.name as name, i.filePath as filePath`;
-  const [classRows, interfaceRows] = await Promise.all([
-    executeQuery(classCypher),
-    executeQuery(interfaceCypher),
-  ]);
+  const interfaceCypher = `MATCH (c:Interface) WHERE ${pathFilter} AND c.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN c.name as name, c.filePath as filePath`;
+  // Run sequentially to avoid shared connection concurrency issues
+  const classRows = await executeQuery(classCypher);
+  const interfaceRows = await executeQuery(interfaceCypher);
   const allRows = [
     ...classRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
     ...interfaceRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
@@ -858,11 +1009,12 @@ async function queryGraphTestSignals(
   for (const row of rows) {
     const name = String((row as Record<string, unknown>).name ?? '');
     const filePath = String((row as Record<string, unknown>).filePath ?? '');
+    const startLine = Number((row as Record<string, unknown>).startLine ?? undefined);
     const key = `${filePath}:${name}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const relevance = computeTargetRelevance([filePath, name], targetTerms);
-    signals.push({ location: filePath, testName: name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role: 'test' });
+    signals.push({ location: filePath, testName: name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role: 'test', startLine: isNaN(startLine) ? undefined : startLine });
   }
   signals.sort(byRelevanceDesc);
   return signals;

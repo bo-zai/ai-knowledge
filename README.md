@@ -1,6 +1,58 @@
 # RKG (Repo Knowledge Generator)
 
-一个独立的 TypeScript/Node.js CLI 工具，用于从嵌入式分析引擎和 OpenAI-compatible LLM 生成 `bootstrap-knowledge/` 知识包。
+一个独立的 TypeScript/Node.js CLI 工具，用于给目标代码仓库生成 `bootstrap-knowledge/` 知识包。
+
+`bootstrap-knowledge/` 的目标读者是 Claude Code 这类代码 Agent。它不是普通 wiki，也不是源码摘要，而是一个按需检索的业务与系统知识层，帮助 Agent 在接到新需求后完成：
+
+- 业务术语理解
+- 能力归因
+- 外部系统与 source of truth 判断
+- 契约、状态、失败语义识别
+- 代码改动面定位
+- 验证计划生成
+- 未知问题升级
+
+## 核心边界
+
+本项目的职责是控制知识包的结构、证据、schema 和落盘。
+
+- `src/engine/`、`src/query/`、`src/mybatis/` 负责提供结构化代码图谱、执行流、SQL 和表字段证据。
+- `src/slicing/`、`src/evidence/`、`src/knowledge/` 负责发现生成范围、构建证据包并协调知识对象生成。
+- `src/generation/` 负责调用 OpenAI-compatible LLM 生成对象内容。
+- `src/packaging/` 负责渲染并写入 `bootstrap-knowledge/`。
+
+LLM 只负责生成知识内容，不负责决定对象 ID、对象路径、对象类型或 `catalog.yaml` 结构。所有外部边界数据必须经过 schema 校验；没有证据但会影响决策的问题必须进入 `OPEN`，不能伪装成事实。
+
+## 输出结构
+
+生成结果默认写入目标仓库的 `bootstrap-knowledge/`：
+
+```text
+bootstrap-knowledge/
+├── catalog.yaml          # Agent 检索路由表
+├── maps/                 # 仓库结构、模块和入口点地图
+├── objects/              # 权威知识对象
+├── views/                # 面向任务的组合页
+├── evidence/             # 证据索引
+├── reports/              # 生成报告
+└── debug/                # 调试材料，可选
+```
+
+其中：
+
+- `objects/` 是权威事实来源，一文件一对象。
+- `views/` 只编排对象，不新增权威事实。
+- `catalog.yaml` 告诉 Agent 该按什么顺序读取哪些对象。
+- `maps/` 帮助 Agent 快速定位代码结构、模块边界和入口点。
+- `evidence/` 和 `reports/` 用于追溯生成质量与失败原因。
+
+## 设计文档
+
+设计入口位于：
+
+- [notes/wiki-agent-knowledge/design/README.md](./notes/wiki-agent-knowledge/design/README.md)
+
+如果需要理解本项目为什么这样生成知识包，建议从该入口开始，再按顺序阅读对象模型、文档架构、模板和评测标准。
 
 ## 安装
 

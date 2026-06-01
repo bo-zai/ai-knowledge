@@ -1,4 +1,6 @@
 import type { KnowledgeObject } from '../knowledge/capability-object-assembler.js';
+import { buildCapabilityDocModel } from '../knowledge/capability-doc-model.js';
+import { renderCapabilityMarkdown } from './capability-markdown-renderer.js';
 
 export interface EvidenceIndexItem {
   ref: string;
@@ -8,6 +10,7 @@ export interface EvidenceIndexItem {
   summary?: string;
   targetRelevance?: number;
   matchedTerms?: string[];
+  startLine?: number;
 }
 
 export interface CapabilityGenerationReport {
@@ -80,13 +83,24 @@ const TYPE_TO_DIR: Record<string, string> = {
 };
 
 function buildObjectYaml(object: KnowledgeObject): string {
+  const domain = inferDomainFromObject(object);
+  const owner = (object.metadata.owner as string | undefined) ?? '';
+  const taskTriggers = inferTaskTriggers(object.type, object.metadata);
+  const staleIf = inferStaleIf(object.type);
+
   const lines = [
     `id: ${object.id}`,
     `type: ${object.type}`,
-    `description: |`,
-    `  ${object.description}`,
-    `evidencePrimary:`,
+    `domain: ${domain}`,
+    `owner: ${owner}`,
+    `task_triggers:`,
   ];
+  for (const trigger of taskTriggers) {
+    lines.push(`  - ${trigger}`);
+  }
+  lines.push(`description: |`);
+  lines.push(`  ${object.description}`);
+  lines.push(`evidencePrimary:`);
 
   for (const ref of object.evidencePrimary) {
     lines.push(`  - ${ref}`);
@@ -113,6 +127,11 @@ function buildObjectYaml(object: KnowledgeObject): string {
     lines.push(`  - ${bd}`);
   }
 
+  lines.push(`stale_if:`);
+  for (const condition of staleIf) {
+    lines.push(`  - ${condition}`);
+  }
+
   lines.push(`metadata:`);
   for (const [key, value] of Object.entries(object.metadata)) {
     if (typeof value === 'string') {
@@ -128,6 +147,82 @@ function buildObjectYaml(object: KnowledgeObject): string {
   }
 
   return lines.join('\n');
+}
+
+function inferDomainFromObject(object: KnowledgeObject): string {
+  // Try metadata domain first
+  const metaDomain = object.metadata.domain as string | undefined;
+  if (metaDomain) return String(metaDomain);
+
+  // Infer from rootPath or subject
+  const rootPath = object.metadata.rootPath as string | undefined;
+  if (rootPath) {
+    const parts = rootPath.split('/').filter(Boolean);
+    if (parts.length > 0) return parts[0];
+  }
+
+  const subject = object.metadata.subject as string | undefined;
+  if (subject) return subject.toLowerCase().split(' ')[0];
+
+  // Default from ID
+  const idParts = object.id.split('-');
+  return idParts.length > 1 ? idParts.slice(1, -1).join('-').toLowerCase() : 'unknown';
+}
+
+function inferTaskTriggers(objType: string, metadata: Record<string, unknown>): string[] {
+  const triggers: string[] = [];
+  switch (objType) {
+    case 'CAP':
+      triggers.push('Adding new business feature');
+      triggers.push('Changing capability scope or non-goals');
+      break;
+    case 'TERM':
+      triggers.push('Business vocabulary changes');
+      triggers.push('Introducing new domain concept');
+      break;
+    case 'FLOW':
+      triggers.push('Changing business process order');
+      triggers.push('Adding failure branch or compensation');
+      break;
+    case 'MOD':
+      triggers.push('Adding new API endpoint or method');
+      triggers.push('Changing module boundary or responsibility');
+      break;
+    case 'CON':
+      triggers.push('Changing API request/response contract');
+      triggers.push('Modifying data schema or field semantics');
+      break;
+    case 'VER':
+      triggers.push('Changing acceptance criteria');
+      triggers.push('Adding new validation scenario');
+      break;
+    case 'OPEN':
+      triggers.push('New evidence resolves the unknown');
+      triggers.push('Decision becomes unblocked');
+      break;
+  }
+  return triggers;
+}
+
+function inferStaleIf(objType: string): string[] {
+  switch (objType) {
+    case 'CAP':
+      return ['Business goal changes', 'Capability scope changes'];
+    case 'TERM':
+      return ['Business vocabulary evolves', 'New aliases discovered'];
+    case 'FLOW':
+      return ['Business process changes', 'New failure scenarios identified'];
+    case 'MOD':
+      return ['File structure changes', 'Module responsibility changes'];
+    case 'CON':
+      return ['API contract changes', 'Schema evolution'];
+    case 'VER':
+      return ['Test suite changes', 'Acceptance criteria updated'];
+    case 'OPEN':
+      return ['New evidence becomes available', 'Decision is resolved'];
+    default:
+      return ['Related code changes'];
+  }
 }
 
 function buildCatalogYaml(objects: KnowledgeObject[], capabilityId: string): string {
@@ -186,40 +281,13 @@ function objectLine(obj: KnowledgeObject): string {
   return `- ${obj.id}: ${obj.description}`;
 }
 
-export function buildCapabilityView(objects: KnowledgeObject[], capabilityId: string): string {
-  const cap = objects.find(o => o.id === capabilityId) ?? objects.find(o => o.type === 'CAP');
-  const terms = objects.filter(o => o.type === 'TERM');
-  const flows = objects.filter(o => o.type === 'FLOW');
-  const mods = objects.filter(o => o.type === 'MOD');
-  const cons = objects.filter(o => o.type === 'CON');
-  const vers = objects.filter(o => o.type === 'VER');
-  const opens = objects.filter(o => o.type === 'OPEN');
-
-  const sections: Array<{ heading: string; items: KnowledgeObject[] }> = [
-    { heading: 'Requirement Intent', items: cap ? [cap] : [] },
-    { heading: 'Current Behavior', items: flows },
-    { heading: 'Business Terms', items: terms },
-    { heading: 'Contracts', items: cons },
-    { heading: 'Code Anchors', items: mods },
-    { heading: 'Validation', items: vers },
-    { heading: 'Unknowns and Escalation', items: opens },
-  ];
-
-  const lines = [`# ${capabilityId}`, ''];
-
-  for (const section of sections) {
-    lines.push(`## ${section.heading}`);
-    if (section.items.length === 0) {
-      lines.push('- (none)');
-    } else {
-      for (const item of section.items) {
-        lines.push(objectLine(item));
-      }
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n').trimEnd() + '\n';
+export function buildCapabilityView(
+  objects: KnowledgeObject[],
+  capabilityId: string,
+  evidenceIndex?: EvidenceIndexItem[],
+): string {
+  const model = buildCapabilityDocModel({ objects, capabilityId, evidenceIndex });
+  return renderCapabilityMarkdown(model);
 }
 
 function buildEvidenceIndexJsonl(evidenceIndex: EvidenceIndexItem[]): string {
@@ -251,10 +319,19 @@ export function buildCapabilityKnowledgeFiles(input: {
     });
   }
 
-  // 生成 capability view
+  // 生成 capability markdown（主入口）
+  const capabilityMarkdown = buildCapabilityView(objects, capabilityId, evidenceIndex);
+
+  // 生成主 capability Markdown
+  files.push({
+    path: `capabilities/${capabilityId}.md`,
+    content: capabilityMarkdown,
+  });
+
+  // 生成兼容性 view
   files.push({
     path: `views/capabilities/${capabilityId}.md`,
-    content: buildCapabilityView(objects, capabilityId),
+    content: capabilityMarkdown,
   });
 
   // 生成 evidence index

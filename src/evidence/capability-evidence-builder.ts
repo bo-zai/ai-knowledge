@@ -15,6 +15,66 @@ function byEvidenceRelevance<T extends { targetRelevance?: number }>(left: T, ri
   return (right.targetRelevance ?? 0) - (left.targetRelevance ?? 0);
 }
 
+const MIN_RELEVANCE = 0.5;
+
+function hasTargetRelevance(item: { targetRelevance?: number }): boolean {
+  return (item.targetRelevance ?? 0) >= MIN_RELEVANCE;
+}
+
+function topRelevant<T extends { targetRelevance?: number }>(
+  items: T[],
+  limit: number,
+  fallbackLimit: number,
+): T[] {
+  const sorted = [...items].sort(byEvidenceRelevance);
+  const relevant = sorted.filter(hasTargetRelevance).slice(0, limit);
+  if (relevant.length > 0) return relevant;
+  return sorted.slice(0, fallbackLimit);
+}
+
+function mapHttpEntryPointsToApiContracts(entryPoints: EvidenceEntryPoint[]): EvidenceDataContract[] {
+  const httpEntries = entryPoints.filter(ep => ep.kind === 'http' && ep.signature);
+  const contracts: EvidenceDataContract[] = [];
+
+  for (const ep of httpEntries) {
+    const routeParts = parseRouteSignature(ep.signature ?? '');
+    for (const route of routeParts) {
+      contracts.push({
+        ref: `evidence://contract/API-${String(contracts.length + 1).padStart(3, '0')}`,
+        kind: 'api' as const,
+        location: ep.location,
+        name: `${route.method} ${route.path}`,
+        fields: [],
+        description: `${route.method} ${route.path} — ${ep.name}`,
+        targetRelevance: ep.targetRelevance,
+        matchedTerms: ep.matchedTerms,
+        sourceLocation: ep.location,
+      });
+    }
+  }
+
+  return contracts;
+}
+
+interface ParsedRoute { method: string; path: string }
+
+function parseRouteSignature(signature: string): ParsedRoute[] {
+  const routes: ParsedRoute[] = [];
+  // Match @GetMapping("/path"), @PostMapping(value = "/path"), @RequestMapping("/path"), etc.
+  const routeRegex = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*(?:\(\s*(?:value\s*=\s*)?["']([^"']*)["']\s*\)|\(([^)]*)\))?/g;
+  let match: RegExpExecArray | null;
+  while ((match = routeRegex.exec(signature)) !== null) {
+    const mappingType = match[1].toLowerCase();
+    const pathArg = match[2] ?? match[3] ?? '';
+    const method = mappingType === 'request' ? 'ANY' : mappingType.toUpperCase();
+    const cleanedPath = pathArg.replace(/^\s*value\s*=\s*/, '').replace(/^["']|["']$/g, '').trim();
+    if (cleanedPath) {
+      routes.push({ method, path: cleanedPath });
+    }
+  }
+  return routes;
+}
+
 function mapEntrySignals(signals: EntrySignal[]): EvidenceEntryPoint[] {
   return signals.map((signal, index) => ({
     ref: `evidence://entry/EP-${String(index + 1).padStart(3, '0')}`,
@@ -26,6 +86,7 @@ function mapEntrySignals(signals: EntrySignal[]): EvidenceEntryPoint[] {
     targetRelevance: signal.targetRelevance,
     matchedTerms: signal.matchedTerms,
     sourceLocation: signal.location,
+    startLine: signal.startLine,
   }));
 }
 
@@ -41,6 +102,7 @@ function mapBehaviorSignals(signals: BehaviorSignal[], limit = 12): EvidenceBeha
     targetRelevance: signal.targetRelevance,
     matchedTerms: signal.matchedTerms,
     sourceLocation: signal.location,
+    startLine: signal.startLine,
   }));
 }
 
@@ -56,6 +118,7 @@ function mapDataSignals(signals: DataSignal[]): EvidenceDataContract[] {
     targetRelevance: signal.targetRelevance,
     matchedTerms: signal.matchedTerms,
     sourceLocation: signal.location,
+    startLine: signal.startLine,
   }));
 }
 
@@ -70,6 +133,7 @@ function mapTestSignals(signals: TestSignal[]): EvidenceValidationAnchor[] {
     targetRelevance: signal.targetRelevance,
     matchedTerms: signal.matchedTerms,
     sourceLocation: signal.location,
+    startLine: signal.startLine,
   }));
 }
 
@@ -167,12 +231,22 @@ function buildOpenQuestions(candidate: CapabilityCandidate): OpenQuestionSeed[] 
 }
 
 export function buildEvidenceBundle(candidate: CapabilityCandidate, repoName: string): EvidenceBundle {
-  const entryPoints = mapEntrySignals(candidate.primaryEntryPoints);
-  const behaviorSlices = mapBehaviorSignals(candidate.behaviorAnchors);
-  const dataContracts = mapDataSignals(candidate.dataAnchors);
-  const validationAnchors = mapTestSignals(candidate.testAnchors);
-  const moduleSurfaces = mapModuleClusters(candidate.moduleClusters);
-  const docs = mapDocSignals(candidate.docAnchors);
+  // Scope evidence by relevance before mapping
+  const scopedEntries = topRelevant(candidate.primaryEntryPoints, 30, 8);
+  const scopedBehaviors = topRelevant(candidate.behaviorAnchors, 12, 6);
+  const scopedData = topRelevant(candidate.dataAnchors, 80, 20);
+  const scopedTests = topRelevant(candidate.testAnchors, 40, 10);
+  const scopedModules = topRelevant(candidate.moduleClusters, 10, 4);
+  const scopedDocs = topRelevant(candidate.docAnchors, 20, 5);
+
+  const entryPoints = mapEntrySignals(scopedEntries);
+  const behaviorSlices = mapBehaviorSignals(scopedBehaviors);
+  const dataContracts = mapDataSignals(scopedData);
+  const apiContracts = mapHttpEntryPointsToApiContracts(entryPoints);
+  const allContracts = [...dataContracts, ...apiContracts];
+  const validationAnchors = mapTestSignals(scopedTests);
+  const moduleSurfaces = mapModuleClusters(scopedModules);
+  const docs = mapDocSignals(scopedDocs);
   const flowTraces = buildFlowTraces(candidate);
   const negativeEvidence = buildNegativeEvidence(candidate);
   const openQuestions = buildOpenQuestions(candidate);
@@ -193,7 +267,7 @@ export function buildEvidenceBundle(candidate: CapabilityCandidate, repoName: st
     entryPoints,
     flowTraces,
     behaviorSlices,
-    dataContracts,
+    dataContracts: allContracts,
     moduleSurfaces,
     validationAnchors,
     docs,

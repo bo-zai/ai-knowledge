@@ -15,6 +15,7 @@ export interface RunCapabilityClaimsLangGraphInput {
   apiKey?: string;
   baseUrl?: string;
   model?: ModelLike;
+  repairPrompt?: string;
 }
 
 export interface CapabilityClaimsLangGraphResult {
@@ -92,7 +93,7 @@ function buildRepairPrompt(rawText: string | undefined, error: string | undefine
 
 export async function runCapabilityClaimsLangGraph(input: RunCapabilityClaimsLangGraphInput): Promise<CapabilityClaimsLangGraphResult> {
   const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildCapabilityClaimPrompt(input.bundle);
+  const userPrompt = input.repairPrompt ?? buildCapabilityClaimPrompt(input.bundle);
   const model = input.model ?? new ChatOpenAI({
     model: input.modelName,
     apiKey: input.apiKey,

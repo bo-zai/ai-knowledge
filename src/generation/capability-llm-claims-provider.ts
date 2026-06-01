@@ -284,6 +284,31 @@ function normalizeClaimShape(item: unknown, index: number): NormalizeResult {
       notes.push(`claim[${index}].objectHints.orderedSteps: string[] normalized to step objects`);
     }
 
+    // Normalize contractKind: map common non-standard values to valid enum
+    const VALID_CONTRACT_KINDS = new Set(['schema', 'sql', 'api', 'event', 'output']);
+    if (typeof hints.contractKind === 'string' && !VALID_CONTRACT_KINDS.has(hints.contractKind)) {
+      const rawKind = hints.contractKind.toLowerCase();
+      if (rawKind.includes('api') || rawKind.includes('request') || rawKind.includes('response')) {
+        hints.contractKind = 'api';
+        notes.push(`claim[${index}].objectHints.contractKind: "${hints.contractKind}" normalized to "api"`);
+      } else if (rawKind.includes('sql') || rawKind.includes('mapper') || rawKind.includes('query')) {
+        hints.contractKind = 'sql';
+        notes.push(`claim[${index}].objectHints.contractKind: "${hints.contractKind}" normalized to "sql"`);
+      } else if (rawKind.includes('event') || rawKind.includes('message') || rawKind.includes('queue')) {
+        hints.contractKind = 'event';
+        notes.push(`claim[${index}].objectHints.contractKind: "${hints.contractKind}" normalized to "event"`);
+      } else {
+        hints.contractKind = 'schema';
+        notes.push(`claim[${index}].objectHints.contractKind: "${hints.contractKind}" normalized to "schema" (default fallback)`);
+      }
+    }
+
+    // Normalize fieldSemantics: convert string to empty object
+    if (typeof hints.fieldSemantics === 'string') {
+      hints.fieldSemantics = {};
+      notes.push(`claim[${index}].objectHints.fieldSemantics: string converted to empty object`);
+    }
+
     record.objectHints = hints;
   }
 
@@ -341,13 +366,14 @@ export function parseCapabilityClaimJson(text: string): CandidateClaim[] {
 }
 
 export function createCapabilityLlmClaimsProvider(input: CreateCapabilityLlmClaimsProviderInput) {
-  return async function provideCapabilityClaims(bundle: EvidenceBundle): Promise<CapabilityLlmClaimsProviderResult> {
+  return async function provideCapabilityClaims(bundle: EvidenceBundle, repairPrompt?: string): Promise<CapabilityLlmClaimsProviderResult> {
     const result = await runCapabilityClaimsLangGraph({
       bundle,
       modelName: input.model,
       apiKey: input.apiKey,
       baseUrl: input.baseUrl,
       model: input.modelInstance,
+      repairPrompt,
     });
 
     return {

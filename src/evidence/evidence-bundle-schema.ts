@@ -10,6 +10,7 @@ export const EvidenceEntryPointSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const EvidenceBehaviorSliceSchema = z.object({
@@ -21,6 +22,7 @@ export const EvidenceBehaviorSliceSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const EvidenceDataContractSchema = z.object({
@@ -33,6 +35,7 @@ export const EvidenceDataContractSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const EvidenceFlowTraceSchema = z.object({
@@ -56,6 +59,7 @@ export const EvidenceModuleSurfaceSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const EvidenceValidationAnchorSchema = z.object({
@@ -68,6 +72,7 @@ export const EvidenceValidationAnchorSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const EvidenceDocSnippetSchema = z.object({

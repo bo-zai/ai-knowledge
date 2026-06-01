@@ -133,20 +133,33 @@ describe('buildCapabilityKnowledgeFiles', () => {
     expect(viewFile).toBeDefined();
   });
 
-  it('capability view includes required business knowledge sections', () => {
+  it('capability view includes fixed 10 sections', () => {
     const files = buildCapabilityKnowledgeFiles({
       objects,
       capabilityId: 'CAP-DB-KNOWLEDGE-GENERATION',
     });
 
     const viewFile = files.find(f => f.path === 'views/capabilities/CAP-DB-KNOWLEDGE-GENERATION.md');
-    expect(viewFile?.content).toContain('## Requirement Intent');
-    expect(viewFile?.content).toContain('## Current Behavior');
-    expect(viewFile?.content).toContain('## Business Terms');
-    expect(viewFile?.content).toContain('## Contracts');
-    expect(viewFile?.content).toContain('## Code Anchors');
-    expect(viewFile?.content).toContain('## Validation');
-    expect(viewFile?.content).toContain('## Unknowns and Escalation');
+    expect(viewFile?.content).toContain('## 1. 能力结论');
+    expect(viewFile?.content).toContain('## 2. 什么时候会用到这份知识');
+    expect(viewFile?.content).toContain('## 3. 业务术语');
+    expect(viewFile?.content).toContain('## 4. 当前行为');
+    expect(viewFile?.content).toContain('## 5. 入口与代码位置');
+    expect(viewFile?.content).toContain('## 6. 改动定位建议');
+    expect(viewFile?.content).toContain('## 7. 数据与契约');
+    expect(viewFile?.content).toContain('## 8. 不能猜的边界');
+    expect(viewFile?.content).toContain('## 9. 验证方式');
+    expect(viewFile?.content).toContain('## 10. 证据索引');
+  });
+
+  it('generates primary capability Markdown under capabilities/', () => {
+    const files = buildCapabilityKnowledgeFiles({
+      objects,
+      capabilityId: 'CAP-DB-KNOWLEDGE-GENERATION',
+    });
+
+    const primaryFile = files.find(f => f.path === 'capabilities/CAP-DB-KNOWLEDGE-GENERATION.md');
+    expect(primaryFile).toBeDefined();
   });
 
   it('catalog includes capability routing mapping', () => {
@@ -218,25 +231,31 @@ describe('buildCapabilityView', () => {
     },
   ];
 
-  it('includes object ID and description on each line', () => {
+  it('includes content from objects', () => {
     const view = buildCapabilityView(objects, 'CAP-TEST');
 
-    // 每行包含对象 ID 和简短描述
-    expect(view).toContain('- CAP-TEST: Test capability');
-    expect(view).toContain('- FLOW-TEST: Test flow');
-    expect(view).toContain('- OPEN-TEST: Test unknown');
+    // 内容包含对象描述，不只是 ID bullet
+    expect(view).toContain('Test capability');
+    expect(view).toContain('Test flow');
+    expect(view).toContain('Test unknown');
+    expect(view).toContain('## 9. 验证方式');
+    // 验证章节不为空（不能是 "(none)"）
+    expect(view).not.toContain('## Validation\n- (none)');
   });
 
-  it('builds capability view using business knowledge sections', () => {
+  it('builds capability view using fixed 10 sections', () => {
     const view = buildCapabilityView(objects, 'CAP-TEST');
 
-    expect(view).toContain('## Requirement Intent');
-    expect(view).toContain('## Current Behavior');
-    expect(view).toContain('## Business Terms');
-    expect(view).toContain('## Contracts');
-    expect(view).toContain('## Code Anchors');
-    expect(view).toContain('## Validation');
-    expect(view).toContain('## Unknowns and Escalation');
+    expect(view).toContain('## 1. 能力结论');
+    expect(view).toContain('## 2. 什么时候会用到这份知识');
+    expect(view).toContain('## 3. 业务术语');
+    expect(view).toContain('## 4. 当前行为');
+    expect(view).toContain('## 5. 入口与代码位置');
+    expect(view).toContain('## 6. 改动定位建议');
+    expect(view).toContain('## 7. 数据与契约');
+    expect(view).toContain('## 8. 不能猜的边界');
+    expect(view).toContain('## 9. 验证方式');
+    expect(view).toContain('## 10. 证据索引');
   });
 
   it('includes navigation summary', () => {

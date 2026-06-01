@@ -114,10 +114,13 @@ const FieldSemanticSchema = z.union([
   z.string(),
   z.object({
     meaning: z.string().optional(),
+    businessMeaning: z.string().optional(),
+    dataType: z.string().optional(),
+    constraints: z.array(z.string()).optional(),
     validation: z.array(z.string()).optional(),
     evidenceRef: z.string().optional(),
     notes: z.array(z.string()).optional(),
-  }).strict(),
+  }).passthrough(),
 ]);
 
 const ObjectHintSchema = z.object({

@@ -123,7 +123,9 @@ verification_plan:
 
 ## 4. 核心指标
 
-建议固定 8 个指标：
+建议固定两组指标。
+
+第一组评估最终计划质量：
 
 - `term_grounding_accuracy`
 - `boundary_accuracy`
@@ -133,6 +135,25 @@ verification_plan:
 - `change_surface_precision`
 - `verification_completeness`
 - `unsupported_assumption_rate`
+
+第二组评估上下文检索质量：
+
+- `context_recall`
+  - gold case 要求读取的对象中，Agent 实际读取了多少
+- `context_precision`
+  - Agent 读取的对象中，有多少与任务相关
+- `context_efficiency`
+  - 完成任务理解所消耗的对象数、token 数和读取轮次是否合理
+- `used_context_ratio`
+  - Agent 读取的对象中，有多少最终进入关键判断
+- `unsupported_context_usage`
+  - Agent 是否使用了未引用对象、过期对象或低可信对象做关键判断
+- `stale_object_reliance`
+  - Agent 是否依赖 stale 对象输出当前事实
+
+最终计划质量回答“计划对不对”。
+
+上下文检索质量回答“Agent 是不是用正确方式得到这个计划”。
 
 ## 5. 一票否决项
 
@@ -166,7 +187,45 @@ verification_plan:
 - 不改变决策
 - 或者只是装饰性信息
 
-## 7. 对象类型与指标映射
+## 7. 检索过程记录
+
+每次评测不仅记录最终答案，还要记录 Agent 的上下文使用过程。
+
+建议输出：
+
+```yaml
+context_trace:
+  retrieved_objects:
+    - id:
+      reason:
+      trigger:
+      token_estimate:
+  used_objects:
+    - id:
+      used_for:
+      decision_field:
+  skipped_required_objects:
+    - id:
+      expected_reason:
+  unsupported_claims:
+    - claim:
+      decision_field:
+      why_unsupported:
+  stale_objects_used:
+    - id:
+      used_for:
+      risk:
+```
+
+记录规则：
+
+- `retrieved_objects` 表示 Agent 读取过，不代表有效。
+- `used_objects` 表示对象实际影响了最终判断。
+- 如果对象被读取但没有影响判断，应计入上下文效率成本。
+- 如果最终判断没有对象 ID 或证据引用，应计入 unsupported assumption。
+- 如果使用 stale 对象支撑当前事实，应按风险等级扣分。
+
+## 8. 对象类型与指标映射
 
 - `TERM`
   - 重点看 `term_grounding_accuracy`
@@ -183,7 +242,7 @@ verification_plan:
 - `OPEN`
   - 重点看 `unsupported_assumption_rate`
 
-## 8. 稳定层保留标准
+## 9. 稳定层保留标准
 
 建议一条知识进入稳定层，至少满足以下之一：
 
@@ -197,8 +256,11 @@ verification_plan:
 - 或 `source_of_truth_accuracy` 提升 `>= 10pp`
 - 或 `change_surface_precision` 提升 `>= 15pp`
 - 或 `unsupported_assumption_rate` 下降 `>= 30%`
+- 或 `context_recall` 提升 `>= 15pp`
+- 或 `context_precision` 提升 `>= 15pp`
+- 或 `used_context_ratio` 提升 `>= 20%`
 
-## 9. 删除 / 降级标准
+## 10. 删除 / 降级标准
 
 以下情况建议降级或删除：
 
@@ -207,8 +269,11 @@ verification_plan:
 - 只对一次性任务有用
 - 只是显性代码事实，读代码很快可得
 - 被组合页重复覆盖且没有独立作用
+- 经常被读取但没有进入 `used_objects`
+- 经常引发错误自信或 stale reliance
+- token 成本明显高于它带来的决策收益
 
-## 10. Freshness 机制
+## 11. Freshness 机制
 
 每条对象都应声明 `stale_if`，并能映射到：
 
@@ -220,7 +285,28 @@ verification_plan:
 
 一旦触发，应进入待复核列表。
 
-## 11. 推荐评测目录
+Freshness 评测应覆盖两类失败：
+
+- stale 对象继续被当作当前事实使用
+- 代码已经变化但对象没有被标记待复核
+
+建议记录：
+
+```yaml
+freshness_check:
+  changed_anchors:
+    - path:
+    - symbol:
+    - table:
+    - endpoint:
+  affected_objects:
+    - id:
+      stale_reason:
+      risk_if_wrong:
+      required_action: review | regenerate | block_usage
+```
+
+## 12. 推荐评测目录
 
 ```text
 evaluation/
@@ -234,7 +320,7 @@ evaluation/
 └── experiment-runs/
 ```
 
-## 12. 评测哲学
+## 13. 评测哲学
 
 不是问：
 
@@ -243,5 +329,6 @@ evaluation/
 而是问：
 
 - “Agent 因为它而更少犯错了吗”
+- “Agent 是否用更少、更相关、更可追溯的上下文完成判断”
 
 这点是整个设计最重要的收口。
