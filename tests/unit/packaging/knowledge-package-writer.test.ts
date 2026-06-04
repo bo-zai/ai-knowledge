@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { writeKnowledgePackage } from '../../../src/packaging/knowledge-package-writer';
-import type { PackageLayout } from '../../../src/knowledge/init-directory';
+import type { PackageLayout, KnowledgeDir } from '../../../src/knowledge/init-directory';
 
 describe('writeKnowledgePackage', () => {
   it('writes db and capability objects into design-aligned directories', async () => {
@@ -11,18 +11,32 @@ describe('writeKnowledgePackage', () => {
 
     // Create directory structure (simulate initDirectoryStructure)
     const packageRoot = resolve(outputRoot, 'ai-knowledge');
-    await mkdir(join(packageRoot, 'objects'), { recursive: true });
-    await mkdir(join(packageRoot, 'objects/_共享'), { recursive: true });
-    await mkdir(join(packageRoot, 'evidence'), { recursive: true });
+    await mkdir(join(packageRoot, 'capabilities'), { recursive: true });
+    await mkdir(join(packageRoot, 'concepts'), { recursive: true });
+    await mkdir(join(packageRoot, 'boundaries'), { recursive: true });
+    await mkdir(join(packageRoot, 'external-systems'), { recursive: true });
+    await mkdir(join(packageRoot, 'constraints'), { recursive: true });
+    await mkdir(join(packageRoot, 'relations'), { recursive: true });
+    await mkdir(join(packageRoot, 'data-model'), { recursive: true });
+    await mkdir(join(packageRoot, 'workflows'), { recursive: true });
     await mkdir(join(packageRoot, 'reports'), { recursive: true });
+
+    const knowledgeDirs: Record<KnowledgeDir, string> = {
+      capabilities: join(packageRoot, 'capabilities'),
+      concepts: join(packageRoot, 'concepts'),
+      boundaries: join(packageRoot, 'boundaries'),
+      'external-systems': join(packageRoot, 'external-systems'),
+      constraints: join(packageRoot, 'constraints'),
+      relations: join(packageRoot, 'relations'),
+      'data-model': join(packageRoot, 'data-model'),
+      workflows: join(packageRoot, 'workflows'),
+    };
 
     const layout: PackageLayout = {
       packageRoot,
-      objectsDir: join(packageRoot, 'objects'),
-      sharedDir: join(packageRoot, 'objects/_共享'),
-      evidenceDir: join(packageRoot, 'evidence'),
+      indexMdPath: join(packageRoot, 'index.md'),
+      knowledgeDirs,
       reportsDir: join(packageRoot, 'reports'),
-      catalogPath: join(packageRoot, 'catalog.yaml'),
     };
 
     await writeKnowledgePackage({
@@ -46,11 +60,6 @@ describe('writeKnowledgePackage', () => {
         },
       ],
     });
-
-    const catalog = await readFile(join(outputRoot, 'ai-knowledge', 'catalog.yaml'), 'utf-8');
-    expect(catalog).toContain('knowledge: all');
-    expect(catalog).toContain('DB-users');
-    expect(catalog).toContain('CAP-ORDER');
 
     const report = await readFile(join(outputRoot, 'ai-knowledge', 'reports', 'generation.json'), 'utf-8');
     expect(report).toContain('"knowledge": "all"');

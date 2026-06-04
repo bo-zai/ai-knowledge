@@ -5,6 +5,8 @@ import type { KnowledgePackageContribution } from '../packaging/knowledge-packag
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { PackageLayout } from './init-directory.js';
 import type { KnowledgeType } from '../schemas/knowledge-type.js';
+import type { EvidenceGroup } from '../evidence/type-evidence-builder.js';
+import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
@@ -55,6 +57,8 @@ export interface GenerateTypeInput {
     capabilityNames?: string[];
     tagPool?: string[];
   };
+  /** Pre-built evidence groups to skip database access (for parallel LLM generation) */
+  preparedEvidenceGroups?: EvidenceGroup[];
 }
 
 /**
@@ -134,11 +138,51 @@ export async function runGenerateOrchestration(input: {
         }
       }
     } else {
-      // Phase 2: All types can run in parallel (they don't depend on each other)
-      // Each type's groups are also parallel within the type
+      // Phase 2: All types can run in parallel for LLM generation,
+      // but evidence queries must be sequential to avoid database lock conflicts on Windows.
+      // First, sequentially build evidence for all types
+      const evidenceResults: Array<{ type: KnowledgeType; groups: EvidenceGroup[] }> = [];
+
+      for (const type of phaseTypes) {
+        try {
+          // Build evidence bundles - this opens the database
+          const evidenceGroups = await buildEvidenceBundlesByPackage({
+            repoPath,
+            type,
+            target: scope.target?.kind === type ? scope.target : undefined,
+            graphStatus,
+          });
+          evidenceResults.push({ type, groups: evidenceGroups });
+          logger.info(`${type}: ${evidenceGroups.length} evidence groups prepared`);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          logger.error(`${type} evidence preparation failed: ${msg}`);
+          evidenceResults.push({ type, groups: [] });
+        }
+      }
+
+      // Then, run LLM generation for all types in parallel (no database access needed)
       const typeResults = await Promise.allSettled(
-        phaseTypes.map(type =>
-          input.deps.runGeneratorForType({
+        evidenceResults.map(({ type, groups }) => {
+          if (groups.length === 0) {
+            // Return failed contribution for empty evidence
+            return Promise.resolve([{
+              stage: type.toLowerCase(),
+              files: [],
+              objects: [],
+              report: {
+                stage: type.toLowerCase(),
+                ran: true,
+                succeeded: 0,
+                failed: 1,
+                details: { error: 'no_evidence_found' },
+              },
+              warnings: ['no_evidence_found'],
+            }] as KnowledgePackageContribution[]);
+          }
+
+          // Run LLM generation with prepared evidence
+          return input.deps.runGeneratorForType({
             repoPath,
             type,
             target: scope.target?.kind === type ? scope.target : undefined,
@@ -147,8 +191,10 @@ export async function runGenerateOrchestration(input: {
             verbose,
             llm,
             dependencies,
-          }),
-        ),
+            // Pass prepared evidence groups to avoid database access
+            preparedEvidenceGroups: groups,
+          });
+        }),
       );
 
       for (const [i, result] of typeResults.entries()) {
@@ -180,6 +226,8 @@ export async function runGenerateOrchestration(input: {
     }
   }
 
+  logger.info(`Writing package with ${contributions.length} contributions...`);
+
   // Write final package
   await input.deps.writePackage({
     layout,
@@ -187,6 +235,8 @@ export async function runGenerateOrchestration(input: {
     target: scope.target,
     contributions,
   });
+
+  logger.info('Package written successfully');
 
   // Print summary
   printSummary(contributions);

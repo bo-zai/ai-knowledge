@@ -1,74 +1,48 @@
 /**
- * 统一的知识类型到目录映射
+ * Knowledge Type to Directory Mapping
  *
- * 设计文档定义的 8 类知识（业务视角）：
- * - CAPABILITY: 能力目录
- * - CONCEPT: 概念知识
- * - BOUNDARY: 边界知识
- * - EXTERNAL: 外部系统交互
- * - CONSTRAINT: 约束知识
- * - RELATION: 能力关系
- * - DATA_MODEL: 数据模型
- * - WORKFLOW: 跨域业务流程
- *
- * 兼容旧类型（技术视角）：
- * - TERM → concepts
- * - CON → contracts（保留技术契约类型）
- * - FLOW → workflows
- * - MOD → modules（保留技术模块类型）
- * - OPEN → boundaries
- * - OWN → ownership（保留所有权类型）
- * - VER → validation（保留验证类型）
- * - DB → data-model
- * - CAP → capabilities
+ * Maps knowledge types to their output directories per design/03-knowledge-directory-structure.md.
  */
 
-/** 设计文档定义的业务知识类型 */
-export type KnowledgeType =
-  | 'CAPABILITY'
-  | 'CONCEPT'
-  | 'BOUNDARY'
-  | 'EXTERNAL'
-  | 'CONSTRAINT'
-  | 'RELATION'
-  | 'DATA_MODEL'
-  | 'WORKFLOW';
+import type { KnowledgeType, LegacyType } from '../schemas/knowledge-type.js';
+import type { KnowledgeDir, AllObjectDir } from '../knowledge/init-directory.js';
 
-/** 兼容的技术类型（旧实现） */
-export type LegacyObjectType =
-  | 'TERM'
-  | 'CON'
-  | 'FLOW'
-  | 'MOD'
-  | 'OPEN'
-  | 'OWN'
-  | 'VER'
-  | 'DB'
-  | 'CAP';
-
-/** 所有支持的类型 */
-export type AllObjectType = KnowledgeType | LegacyObjectType;
+// Re-export types from knowledge-type.ts for convenience
+export type { KnowledgeType, LegacyType } from '../schemas/knowledge-type.js';
+// Re-export directory types for convenience
+export type { KnowledgeDir, AllObjectDir } from '../knowledge/init-directory.js';
 
 /**
- * 类型到输出目录的映射
- *
- * 设计文档 03 定义的目录结构：
- * - capabilities/
- * - concepts/
- * - boundaries/
- * - external-systems/
- * - constraints/
- * - relations/
- * - data-model/
- * - workflows/
- *
- * 兼容旧实现保留的目录：
- * - contracts/（CON）
- * - modules/（MOD）
- * - ownership/（OWN）
- * - validation/（VER）
+ * AllObjectType: 所有知识对象类型（业务类型 + 技术类型）
  */
-export const TYPE_TO_DIR: Record<AllObjectType, string> = {
+export type AllObjectType = KnowledgeType | LegacyType;
+
+/**
+ * TYPE_TO_DIR: 知识类型 → 输出目录映射
+ *
+ * 包含设计文档定义的 8 类业务知识目录和 9 类技术类型目录：
+ * 业务知识：
+ * - capabilities: 能力目录知识
+ * - concepts: 概念知识
+ * - boundaries: 边界知识
+ * - external-systems: 外部系统交互知识
+ * - constraints: 约束知识
+ * - relations: 能力关系知识
+ * - data-model: 数据模型知识
+ * - workflows: 跨域业务流程知识
+ *
+ * 技术类型（旧实现）：
+ * - terms: 术语
+ * - contracts: 契约
+ * - flows: 流程
+ * - modules: 模块
+ * - open: 开放问题
+ * - ownership: 所有权
+ * - validation: 验证锚点
+ * - db: 数据库
+ * - capabilities: 能力声明
+ */
+export const TYPE_TO_DIR: Record<AllObjectType, AllObjectDir> = {
   // 设计文档 8 类（业务视角）
   CAPABILITY: 'capabilities',
   CONCEPT: 'concepts',
@@ -79,44 +53,53 @@ export const TYPE_TO_DIR: Record<AllObjectType, string> = {
   DATA_MODEL: 'data-model',
   WORKFLOW: 'workflows',
 
-  // 兼容旧类型（技术视角）
-  TERM: 'concepts',
+  // 技术类型映射到业务类型目录（设计文档规范）
+  TERM: 'concepts',        // 术语 → 概念知识
+  DB: 'data-model',        // 数据库 → 数据模型
+  CAP: 'capabilities',     // 能力声明 → 能力目录
+  FLOW: 'workflows',       // 流程 → 跨域业务流程
+  OPEN: 'boundaries',      // 开放问题 → 边界知识
+
+  // 纯技术类型保持原有目录
   CON: 'contracts',
-  FLOW: 'workflows',
   MOD: 'modules',
-  OPEN: 'boundaries',
   OWN: 'ownership',
   VER: 'validation',
-  DB: 'data-model',
-  CAP: 'capabilities',
 };
 
 /**
- * 获取类型对应的输出目录
+ * DIR_TO_TYPE: 输出目录 → 知识类型反向映射
+ *
+ * 用于从文件路径解析知识类型。
+ * 注意：一个目录可能对应多种类型（业务类型和技术类型）。
  */
-export function getDirForType(type: AllObjectType): string {
-  return TYPE_TO_DIR[type] ?? 'unknown';
+export const DIR_TO_TYPE: Record<string, AllObjectType> = {
+  // 业务目录（优先返回业务类型）
+  capabilities: 'CAPABILITY',
+  concepts: 'CONCEPT',
+  boundaries: 'BOUNDARY',
+  'external-systems': 'EXTERNAL',
+  constraints: 'CONSTRAINT',
+  relations: 'RELATION',
+  'data-model': 'DATA_MODEL',
+  workflows: 'WORKFLOW',
+
+  // 纯技术目录
+  contracts: 'CON',
+  modules: 'MOD',
+  ownership: 'OWN',
+  validation: 'VER',
+};
+
+/**
+ * Get type from directory name.
+ */
+export function getTypeFromDir(dirName: string): AllObjectType | undefined {
+  return DIR_TO_TYPE[dirName.toLowerCase()];
 }
 
 /**
- * 判断是否为设计文档定义的业务类型
- */
-export function isKnowledgeType(type: string): type is KnowledgeType {
-  return type in TYPE_TO_DIR && !isLegacyObjectType(type);
-}
-
-/**
- * 判断是否为兼容的技术类型
- */
-export function isLegacyObjectType(type: string): type is LegacyObjectType {
-  const legacyTypes: Set<string> = new Set([
-    'TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB', 'CAP'
-  ]);
-  return legacyTypes.has(type);
-}
-
-/**
- * 获取所有设计文档定义的业务类型
+ * Get all knowledge types (business types only).
  */
 export function getKnowledgeTypes(): KnowledgeType[] {
   return [
@@ -132,37 +115,50 @@ export function getKnowledgeTypes(): KnowledgeType[] {
 }
 
 /**
- * 获取所有兼容的技术类型
+ * Get the output directory for any object type (business or legacy).
  */
-export function getLegacyObjectTypes(): LegacyObjectType[] {
-  return ['TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB', 'CAP'];
+export function getDirForType(type: AllObjectType): AllObjectDir {
+  const dir = TYPE_TO_DIR[type];
+  if (!dir) {
+    throw new Error(`Unknown knowledge type: ${type}`);
+  }
+  return dir;
 }
 
 /**
- * 设计文档业务类型与兼容技术类型的映射
+ * Get the output directory for a knowledge type (business types only).
+ * @deprecated Use getDirForType instead for broader type support.
  */
-export const KNOWLEDGE_TO_LEGACY: Record<KnowledgeType, LegacyObjectType[]> = {
-  CAPABILITY: ['CAP'],
-  CONCEPT: ['TERM'],
-  BOUNDARY: ['OPEN'],
-  EXTERNAL: [],
-  CONSTRAINT: [],
-  RELATION: [],
-  DATA_MODEL: ['DB'],
-  WORKFLOW: ['FLOW'],
-};
+export function getKnowledgeDir(type: KnowledgeType): KnowledgeDir {
+  const dir = TYPE_TO_DIR[type];
+  if (!dir) {
+    throw new Error(`Unknown knowledge type: ${type}`);
+  }
+  // Cast is safe because KnowledgeType maps to KnowledgeDir
+  return dir as KnowledgeDir;
+}
 
 /**
- * 兼容技术类型到设计文档业务类型的反向映射
+ * Convert name to kebab-case filename.
+ * Per design/03-knowledge-directory-structure.md: use kebab-case, no spaces, no non-ASCII chars.
  */
-export const LEGACY_TO_KNOWLEDGE: Record<LegacyObjectType, KnowledgeType | undefined> = {
-  CAP: 'CAPABILITY',
-  TERM: 'CONCEPT',
-  CON: undefined, // 技术契约类型，无业务对应
-  FLOW: 'WORKFLOW',
-  MOD: undefined, // 技术模块类型，无业务对应
-  OPEN: 'BOUNDARY',
-  OWN: undefined, // 所有权类型，无业务对应
-  VER: undefined, // 验证类型，无业务对应
-  DB: 'DATA_MODEL',
-};
+export function toKebabCase(name: string): string {
+  // 替换空格和非ASCII字符
+  let result = name
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]/g, '');
+
+  // 确保不以数字开头
+  if (result.match(/^\d/)) {
+    result = 'k-' + result;
+  }
+
+  // 如果结果是空字符串（输入全是中文等非ASCII字符），使用备用方案
+  if (!result) {
+    // 使用时间戳作为备用ID
+    result = `obj-${Date.now()}`;
+  }
+
+  return result;
+}

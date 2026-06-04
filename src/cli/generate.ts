@@ -17,7 +17,7 @@ import {
   type GenerateTypeInput,
 } from '../knowledge/generate-orchestrator.js';
 import { runKnowledgeGeneratorForGroups, type LlmClaimsProvider } from '../generation/knowledge-generator.js';
-import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
+import { buildEvidenceBundlesByPackage, type EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
 import { initGraphData } from '../query/prepare-generation.js';
@@ -116,15 +116,20 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // Build deps for orchestration
   const deps: GenerateOrchestrationDeps = {
     runGeneratorForType: async (input: GenerateTypeInput): Promise<KnowledgePackageContribution[]> => {
-      const { type, target, verbose } = input;
+      const { type, target, verbose, preparedEvidenceGroups } = input;
 
-      // Build evidence bundles grouped by package
-      const evidenceGroups = await buildEvidenceBundlesByPackage({
-        repoPath: input.repoPath,
-        type,
-        target,
-        graphStatus: input.graphStatus,
-      });
+      // Use prepared evidence groups if provided (avoids database access)
+      let evidenceGroups = preparedEvidenceGroups;
+
+      if (!evidenceGroups) {
+        // Build evidence bundles grouped by package (opens database)
+        evidenceGroups = await buildEvidenceBundlesByPackage({
+          repoPath: input.repoPath,
+          type,
+          target,
+          graphStatus: input.graphStatus,
+        });
+      }
 
       if (evidenceGroups.length === 0) {
         logger.warn(`No evidence found for ${type}`);

@@ -1,6 +1,7 @@
-import lbug from '@ladybugdb/core';
-import type { Connection } from '@ladybugdb/core';
-import { openLbugConnection, closeLbugConnection } from '../engine/lbug/lbug-config.js';
+import {
+  withReadOnlyLbug,
+  type ReadOnlyQueryExecutor,
+} from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 export interface CapabilityMvpInventoryItem {
@@ -11,21 +12,10 @@ export interface CapabilityMvpInventoryItem {
 }
 
 /**
- * Execute a Cypher query on a single connection and return rows.
- * Uses read-only mode to avoid lock conflicts.
- */
-async function executeQuery(conn: Connection, cypher: string): Promise<Record<string, unknown>[]> {
-  const queryResult = await conn.query(cypher);
-  const result = Array.isArray(queryResult) ? queryResult[0] : queryResult;
-  const rows = await result.getAll();
-  return rows as Record<string, unknown>[];
-}
-
-/**
  * Query all HTTP entry points (controller methods)
  * Each entry point is a business operation anchor
  */
-async function queryHttpEntryPoints(conn: Connection): Promise<Array<{
+async function queryHttpEntryPoints(query: ReadOnlyQueryExecutor): Promise<Array<{
   className: string;
   methodName: string;
   filePath: string;
@@ -37,7 +27,7 @@ async function queryHttpEntryPoints(conn: Connection): Promise<Array<{
     ORDER BY c.name, m.name
   `;
 
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   return rows.map((row) => ({
     className: String(row.className ?? ''),
     methodName: String(row.methodName ?? ''),
@@ -48,7 +38,7 @@ async function queryHttpEntryPoints(conn: Connection): Promise<Array<{
 /**
  * Query all scheduled job entry points
  */
-async function queryJobEntryPoints(conn: Connection): Promise<Array<{
+async function queryJobEntryPoints(query: ReadOnlyQueryExecutor): Promise<Array<{
   className: string;
   methodName: string;
   filePath: string;
@@ -60,7 +50,7 @@ async function queryJobEntryPoints(conn: Connection): Promise<Array<{
     ORDER BY c.name
   `;
 
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   return rows.map((row) => ({
     className: String(row.className ?? ''),
     methodName: String(row.methodName ?? ''),
@@ -138,7 +128,7 @@ function deriveTermsFromName(name: string): string[] {
  * Query services and data types called by entry class
  * Uses CALLS edges to find related code
  */
-async function queryCapabilityRelatedPaths(conn: Connection, className: string): Promise<string[]> {
+async function queryCapabilityRelatedPaths(query: ReadOnlyQueryExecutor, className: string): Promise<string[]> {
   const paths: string[] = [];
 
   // Query services called by this class
@@ -153,7 +143,7 @@ async function queryCapabilityRelatedPaths(conn: Connection, className: string):
   `;
 
   try {
-    const rows = await executeQuery(conn, serviceCypher);
+    const rows = await query(serviceCypher);
     for (const row of rows) {
       paths.push(String(row.filePath ?? ''));
     }
@@ -173,7 +163,7 @@ async function queryCapabilityRelatedPaths(conn: Connection, className: string):
   `;
 
   try {
-    const rows = await executeQuery(conn, dataCypher);
+    const rows = await query(dataCypher);
     for (const row of rows) {
       paths.push(String(row.filePath ?? ''));
     }
@@ -235,11 +225,8 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
 
   const { lbugPath } = getStoragePaths(repoRoot);
 
-  // Use single read-only connection (no pool, no FTS loading)
-  const handle = await openLbugConnection(lbug, lbugPath, { readOnly: true });
-
-  try {
-    const countRows = await executeQuery(handle.conn, `MATCH (c:Class) RETURN count(c) AS cnt`);
+  return withReadOnlyLbug(lbugPath, async query => {
+    const countRows = await query(`MATCH (c:Class) RETURN count(c) AS cnt`);
     const classCount = Number(countRows[0]?.cnt ?? 0);
 
     if (classCount === 0) {
@@ -249,8 +236,8 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
 
     console.log(`[DEBUG] Graph has ${classCount} classes`);
 
-    const httpEntries = await queryHttpEntryPoints(handle.conn);
-    const jobEntries = await queryJobEntryPoints(handle.conn);
+    const httpEntries = await queryHttpEntryPoints(query);
+    const jobEntries = await queryJobEntryPoints(query);
 
     console.log(`[DEBUG] ${httpEntries.length} HTTP entries, ${jobEntries.length} job entries`);
 
@@ -276,7 +263,7 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
       if (!primaryPath) continue;
 
       const normalizedPrimary = normalizePath(primaryPath, repoRoot);
-      const relatedPaths = await queryCapabilityRelatedPaths(handle.conn, className);
+      const relatedPaths = await queryCapabilityRelatedPaths(query, className);
       const normalizedRelated = relatedPaths.map(p => normalizePath(p, repoRoot));
 
       const allPaths = [normalizedPrimary, ...normalizedRelated.slice(0, 7)];
@@ -312,9 +299,7 @@ export async function discoverProjectCapabilities(repoRoot: string): Promise<Cap
 
     inventory.sort((a, b) => b.targetPaths.length - a.targetPaths.length);
     return inventory.slice(0, 15);
-  } finally {
-    await closeLbugConnection(handle);
-  }
+  });
 }
 
 export async function buildCapabilityMvpInventory(repoRoot: string): Promise<CapabilityMvpInventoryItem[]> {

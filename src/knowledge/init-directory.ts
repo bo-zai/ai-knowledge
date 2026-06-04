@@ -2,6 +2,7 @@
  * Directory Structure Initialization
  *
  * Creates the knowledge package output directory skeleton before generation.
+ * Follows design/03-knowledge-directory-structure.md specification.
  */
 
 import fs from 'node:fs/promises';
@@ -9,23 +10,54 @@ import path from 'node:path';
 import { logger } from '../shared/logger.js';
 import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 
+// 设计文档定义的 8 类知识目录（业务视角）
+export const KNOWLEDGE_DIRS = [
+  'capabilities',
+  'concepts',
+  'boundaries',
+  'external-systems',
+  'constraints',
+  'relations',
+  'data-model',
+  'workflows',
+] as const;
+
+// 技术类型目录（旧实现）
+export const LEGACY_DIRS = [
+  'terms',
+  'contracts',
+  'flows',
+  'modules',
+  'open',
+  'ownership',
+  'validation',
+  'db',
+] as const;
+
+// 所有目录类型（业务 + 技术）
+export const ALL_DIRS = [
+  ...KNOWLEDGE_DIRS,
+  ...LEGACY_DIRS,
+] as const;
+
+export type KnowledgeDir = typeof KNOWLEDGE_DIRS[number];
+export type LegacyDir = typeof LEGACY_DIRS[number];
+export type AllObjectDir = typeof ALL_DIRS[number];
+
 /**
  * Package layout with paths to key directories and files.
  */
 export interface PackageLayout {
   packageRoot: string;       // {outputRoot}/ai-knowledge
-  objectsDir: string;        // {packageRoot}/objects
-  sharedDir: string;         // {packageRoot}/objects/_共享（兼容）
-  evidenceDir: string;       // {packageRoot}/evidence
-  reportsDir: string;        // {packageRoot}/reports
-  catalogPath: string;       // {packageRoot}/catalog.yaml
+  indexMdPath: string;       // {packageRoot}/index.md
+  knowledgeDirs: Record<KnowledgeDir, string>;  // 各知识类型目录路径
+  reportsDir: string;        // {packageRoot}/reports (生成报告)
 }
 
 /**
  * Initialize the knowledge package directory structure.
  *
  * Creates empty directory skeleton (no knowledge files yet).
- * Domain directories are created later during generation.
  */
 export async function initDirectoryStructure(outputRoot: string): Promise<PackageLayout> {
   const packageRoot = path.resolve(outputRoot, DEFAULT_KNOWLEDGE_DIR);
@@ -42,26 +74,27 @@ export async function initDirectoryStructure(outputRoot: string): Promise<Packag
 
   // Create directory skeleton
   await fs.mkdir(packageRoot, { recursive: true });
-  const objectsDir = path.join(packageRoot, 'objects');
-  const sharedDir = path.join(objectsDir, '_共享');
-  const evidenceDir = path.join(packageRoot, 'evidence');
-  const reportsDir = path.join(packageRoot, 'reports');
 
-  await fs.mkdir(objectsDir, { recursive: true });
-  await fs.mkdir(sharedDir, { recursive: true });
-  await fs.mkdir(evidenceDir, { recursive: true });
+  // 创建各知识类型目录
+  const knowledgeDirs: Record<KnowledgeDir, string> = {} as Record<KnowledgeDir, string>;
+  for (const dirName of KNOWLEDGE_DIRS) {
+    const dirPath = path.join(packageRoot, dirName);
+    await fs.mkdir(dirPath, { recursive: true });
+    knowledgeDirs[dirName] = dirPath;
+  }
+
+  // 创建报告目录（用于存储生成报告）
+  const reportsDir = path.join(packageRoot, 'reports');
   await fs.mkdir(reportsDir, { recursive: true });
 
-  const catalogPath = path.join(packageRoot, 'catalog.yaml');
+  const indexMdPath = path.join(packageRoot, 'index.md');
 
   logger.info('Directory structure initialized');
 
   return {
     packageRoot,
-    objectsDir,
-    sharedDir,
-    evidenceDir,
+    indexMdPath,
+    knowledgeDirs,
     reportsDir,
-    catalogPath,
   };
 }

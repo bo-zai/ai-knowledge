@@ -1,21 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
-import lbug from '@ladybugdb/core';
-import type { Connection } from '@ladybugdb/core';
 import type { CapabilityCandidate, EntrySignal, BehaviorSignal, DataSignal, TestSignal, DocSignal, ModuleCluster } from './capability-candidate-schema.js';
-import { openLbugConnection, closeLbugConnection } from '../engine/lbug/lbug-config.js';
+import {
+  withReadOnlyLbug,
+  type ReadOnlyQueryExecutor,
+} from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
-
-/**
- * Execute a Cypher query on a single connection and return rows.
- * Uses read-only mode to avoid lock conflicts and FTS extension loading.
- */
-async function executeQuery(conn: Connection, cypher: string): Promise<Record<string, unknown>[]> {
-  const queryResult = await conn.query(cypher);
-  const result = Array.isArray(queryResult) ? queryResult[0] : queryResult;
-  const rows = await result.getAll();
-  return rows as Record<string, unknown>[];
-}
 
 const DOMAIN_PHRASES = [
   'db object',
@@ -353,7 +343,7 @@ function extractJavaEntrySignals(content: string, location: string, targetTerms:
  * Queries CALLS edges from controller/service methods to the target service.
  */
 async function collectCallerSignals(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   serviceSignals: EntrySignal[],
   _targetPaths: string[],
   repoRoot: string,
@@ -382,7 +372,7 @@ async function collectCallerSignals(
     `;
 
     try {
-      const rows = await executeQuery(conn, cypher);
+      const rows = await query(cypher);
       for (const row of (rows || [])) {
         const className = row.className as string;
         const filePath = row.filePath as string;
@@ -777,25 +767,19 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
   const { lbugPath } = getStoragePaths(repoRoot);
   console.log(`[DEBUG] discoverCapabilities: lbugPath=${lbugPath}`);
   try {
-    console.log(`[DEBUG] discoverCapabilities: opening connection`);
-    const handle = await openLbugConnection(lbug, lbugPath, { readOnly: true });
-    console.log(`[DEBUG] discoverCapabilities: connection opened`);
+    return await withReadOnlyLbug(lbugPath, async query => {
+      const classCountRows = await query(`MATCH (c:Class) RETURN count(c) AS cnt`);
+      const classCount = Number(classCountRows[0]?.cnt ?? 0);
+      console.log(`[DEBUG] discoverCapabilities: classCount=${classCount}`);
+      if (classCount === 0) {
+        return discoverCapabilitiesFromFilesystem(input);
+      }
 
-    // Check if the graph actually has data (empty DB means no knowledge has been analyzed)
-    const classCountRows = await executeQuery(handle.conn, `MATCH (c:Class) RETURN count(c) AS cnt`);
-    const classCount = Number(classCountRows[0]?.cnt ?? 0);
-    console.log(`[DEBUG] discoverCapabilities: classCount=${classCount}`);
-    if (classCount === 0) {
-      await closeLbugConnection(handle);
-      return discoverCapabilitiesFromFilesystem(input);
-    }
-
-    console.log(`[DEBUG] discoverCapabilities: calling discoverCapabilitiesFromGraph`);
-    const result = await discoverCapabilitiesFromGraph(handle.conn, input);
-    console.log(`[DEBUG] discoverCapabilities: discoverCapabilitiesFromGraph returned ${result.length} candidates`);
-    await closeLbugConnection(handle);
-    console.log(`[DEBUG] discoverCapabilities: connection closed`);
-    return result;
+      console.log(`[DEBUG] discoverCapabilities: calling discoverCapabilitiesFromGraph`);
+      const result = await discoverCapabilitiesFromGraph(query, input);
+      console.log(`[DEBUG] discoverCapabilities: discoverCapabilitiesFromGraph returned ${result.length} candidates`);
+      return result;
+    });
   } catch (err) {
     console.log(`[DEBUG] discoverCapabilities: caught error ${err}`);
     // Fall back to file-system scanning if graph is not available
@@ -913,13 +897,13 @@ function buildPathFilterCypher(varName: string, targetPaths: string[]): string {
 }
 
 async function queryGraphEntrySignals(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   pathFilter: string,
   repoRoot: string,
   targetTerms: string[],
 ): Promise<EntrySignal[]> {
   const cypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Controller|Service|Component|Handler)$' RETURN c.name as name, c.filePath as filePath`;
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   const results: EntrySignal[] = [];
 
   for (const row of rows) {
@@ -968,13 +952,13 @@ async function queryGraphEntrySignals(
 }
 
 async function queryGraphBehaviorSignals(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   pathFilter: string,
   _repoRoot: string,
   targetTerms: string[],
 ): Promise<BehaviorSignal[]> {
   const cypher = `MATCH (m:Method) WHERE ${pathFilter} RETURN m.name as name, m.filePath as filePath LIMIT 500`;
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   return rows.map((row: Record<string, unknown>) => {
     const name = String(row.name ?? '');
     const filePath = String(row.filePath ?? '');
@@ -996,7 +980,7 @@ async function queryGraphBehaviorSignals(
 }
 
 async function queryGraphDataSignals(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   pathFilter: string,
   repoRoot: string,
   targetTerms: string[],
@@ -1004,8 +988,8 @@ async function queryGraphDataSignals(
   const classCypher = `MATCH (c:Class) WHERE ${pathFilter} AND c.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN c.name as name, c.filePath as filePath`;
   const interfaceCypher = `MATCH (c:Interface) WHERE ${pathFilter} AND c.name =~ '.*(Entity|DTO|VO|Request|Response|DO|PO|BO|Model)$' RETURN c.name as name, c.filePath as filePath`;
   // Run sequentially to avoid shared connection concurrency issues
-  const classRows = await executeQuery(conn, classCypher);
-  const interfaceRows = await executeQuery(conn, interfaceCypher);
+  const classRows = await query(classCypher);
+  const interfaceRows = await query(interfaceCypher);
   const allRows = [
     ...classRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
     ...interfaceRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
@@ -1024,13 +1008,13 @@ async function queryGraphDataSignals(
 }
 
 async function queryGraphTestSignals(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   pathFilter: string,
   repoRoot: string,
   targetTerms: string[],
 ): Promise<TestSignal[]> {
   const cypher = `MATCH (m:Method) WHERE ${pathFilter} AND m.filePath =~ '.*(test|spec).*' RETURN m.name as name, m.filePath as filePath LIMIT 300`;
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   const seen = new Set<string>();
   const signals: TestSignal[] = [];
   for (const row of rows) {
@@ -1047,9 +1031,9 @@ async function queryGraphTestSignals(
   return signals;
 }
 
-async function queryGraphModuleClusters(conn: Connection, targetTerms: string[]): Promise<ModuleCluster[]> {
+async function queryGraphModuleClusters(query: ReadOnlyQueryExecutor, targetTerms: string[]): Promise<ModuleCluster[]> {
   const cypher = `MATCH (c:Community) RETURN c.heuristicLabel as label, c.symbolCount as symbolCount, c.cohesion as cohesion LIMIT 8`;
-  const rows = await executeQuery(conn, cypher);
+  const rows = await query(cypher);
   return rows.map((row: Record<string, unknown>) => {
     const label = String(row.label ?? '');
     const cohesion = Number(row.cohesion ?? row.symbolCount ?? 0);
@@ -1065,7 +1049,7 @@ async function queryGraphModuleClusters(conn: Connection, targetTerms: string[])
 }
 
 export async function discoverCapabilitiesFromGraph(
-  conn: Connection,
+  query: ReadOnlyQueryExecutor,
   input: DiscoverCapabilitiesInput,
 ): Promise<CapabilityCandidate[]> {
   const { repoRoot, targetTerms = [], targetPaths = [] } = input;
@@ -1080,11 +1064,11 @@ export async function discoverCapabilitiesFromGraph(
 
   const candidates: CapabilityCandidate[] = [];
 
-  const primaryEntryPoints = await queryGraphEntrySignals(conn, pathFilter, repoRoot, targetTerms);
-  const behaviorAnchors = await queryGraphBehaviorSignals(conn, methodPathFilter, repoRoot, targetTerms);
-  const dataAnchors = await queryGraphDataSignals(conn, pathFilter, repoRoot, targetTerms);
-  const testAnchors = await queryGraphTestSignals(conn, methodPathFilter, repoRoot, targetTerms);
-  const moduleClusters = await queryGraphModuleClusters(conn, targetTerms);
+  const primaryEntryPoints = await queryGraphEntrySignals(query, pathFilter, repoRoot, targetTerms);
+  const behaviorAnchors = await queryGraphBehaviorSignals(query, methodPathFilter, repoRoot, targetTerms);
+  const dataAnchors = await queryGraphDataSignals(query, pathFilter, repoRoot, targetTerms);
+  const testAnchors = await queryGraphTestSignals(query, methodPathFilter, repoRoot, targetTerms);
+  const moduleClusters = await queryGraphModuleClusters(query, targetTerms);
 
   // Compute confidence (reuse existing logic)
   const entrySignal = primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;

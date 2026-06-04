@@ -9,7 +9,7 @@
 import fs, { access } from 'fs/promises';
 import path from 'path';
 import type { ResultMapDef, EntityEvidence } from './types.js';
-import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
+import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 /**
@@ -59,29 +59,23 @@ async function resolveEntityFromGraph(
   try {
     const { lbugPath } = getStoragePaths(repoPath);
     await access(lbugPath); // Only use graph if DB already exists
-    await initLbug(lbugPath);
+    const graphResult = await withReadOnlyLbug(lbugPath, async query => {
+      const escapedClass = escapeCypherString(className);
+      const classRows = await query(
+        `MATCH (c:Class) WHERE c.name = '${escapedClass}' RETURN c.filePath AS fp, count(c) AS cnt`,
+      );
+      const cnt = Number((classRows[0] as Record<string, unknown>)?.cnt ?? 0);
+      const filePath = (classRows[0] as Record<string, unknown>)?.fp as string | undefined;
+      if (cnt === 0 || !filePath) return null;
 
-    // Check graph has this class
-    const escapedClass = escapeCypherString(className);
-    const classRows = await executeQuery(
-      `MATCH (c:Class) WHERE c.name = '${escapedClass}' RETURN c.filePath AS fp, count(c) AS cnt`,
-    );
-    const cnt = Number((classRows[0] as Record<string, unknown>)?.cnt ?? 0);
-    if (cnt === 0) {
-      await closeLbug();
-      return null;
-    }
+      const propRows = await query(
+        `MATCH (c:Class)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property) WHERE c.name = '${escapedClass}' RETURN p.name AS name, p.declaredType AS type ORDER BY r.step`,
+      );
+      return { filePath, propRows };
+    });
+    if (!graphResult) return null;
 
-    const filePath = (classRows[0] as Record<string, unknown>)?.fp as string | undefined;
-    if (!filePath) {
-      await closeLbug();
-      return null;
-    }
-
-    // Get class properties (fields)
-    const propRows = await executeQuery(
-      `MATCH (c:Class)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property) WHERE c.name = '${escapedClass}' RETURN p.name AS name, p.declaredType AS type ORDER BY r.step`,
-    );
+    const { filePath, propRows } = graphResult;
 
     // Read file for class comment (not in graph)
     const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(repoPath, filePath);
@@ -103,8 +97,6 @@ async function resolveEntityFromGraph(
           mappedColumn: mapping?.column ?? toSnakeCase(propName),
         };
       });
-
-    await closeLbug();
 
     if (fields.length === 0 && !content) return null;
 

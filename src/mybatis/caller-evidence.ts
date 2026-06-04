@@ -9,7 +9,10 @@
 import fs, { access } from 'fs/promises';
 import path from 'path';
 import type { CallerEvidence } from './types.js';
-import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
+import {
+  withReadOnlyLbug,
+  type ReadOnlyQueryExecutor,
+} from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 /**
@@ -26,21 +29,17 @@ export async function resolveCallerEvidence(args: {
   try {
     const { lbugPath } = getStoragePaths(repoPath);
     await access(lbugPath); // Only use graph if DB already exists
-    await initLbug(lbugPath);
+    return await withReadOnlyLbug(lbugPath, async query => {
+      const classRows = await query(
+        `MATCH (c:Class) WHERE c.name = '${escapeCypherString(mapperClass)}' RETURN count(c) AS cnt`,
+      );
+      const classCount = Number((classRows[0] as Record<string, unknown>)?.cnt ?? 0);
+      if (classCount === 0) {
+        return findMapperCallersFallback(repoPath, mapperClass, methodId);
+      }
 
-    // Verify graph has data
-    const classRows = await executeQuery(
-      `MATCH (c:Class) WHERE c.name = '${escapeCypherString(mapperClass)}' RETURN count(c) AS cnt`,
-    );
-    const classCount = Number((classRows[0] as Record<string, unknown>)?.cnt ?? 0);
-    if (classCount === 0) {
-      await closeLbug();
-      return findMapperCallersFallback(repoPath, mapperClass, methodId);
-    }
-
-    const callers = await findMapperCallersFromGraph(repoPath, mapperClass, methodId);
-    await closeLbug();
-    return callers;
+      return findMapperCallersFromGraph(repoPath, mapperClass, methodId, query);
+    });
   } catch {
     return findMapperCallersFallback(repoPath, mapperClass, methodId);
   }
@@ -53,6 +52,7 @@ async function findMapperCallersFromGraph(
   repoPath: string,
   mapperClass: string,
   methodId: string,
+  executeQuery: ReadOnlyQueryExecutor,
 ): Promise<CallerEvidence[]> {
   const escapedClass = escapeCypherString(mapperClass);
   const escapedMethod = escapeCypherString(methodId);

@@ -99,11 +99,19 @@ export async function runKnowledgeGenerator(
   const parsed = parseLlmResponse(rawText);
 
   // Convert to contribution
-  const objects: KnowledgeObject[] = parsed.objects.map((obj: Record<string, unknown>) => ({
-    id: (obj.id as string) || (obj[getNameField(type)] as string) || `OBJ-${Date.now()}`,
-    type,
-    ...obj,
-  }));
+  // ID 优先级：1. 显式 id 字段（英文） 2. aliases 中的英文名 3. name 字段 4. 时间戳备用
+  const objects: KnowledgeObject[] = parsed.objects.map((obj: Record<string, unknown>) => {
+    // 尝试从 aliases 中提取英文名（ASCII字符）
+    const aliases = obj.aliases as string[] | undefined;
+    const englishAlias = aliases?.find(a => /^[\w\-]+$/.test(a));
+
+    const id = extractEnglishId(obj.id as string) ||
+               englishAlias ||
+               extractEnglishId(obj[getNameField(type)] as string) ||
+               `obj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    return { id, type, ...obj };
+  });
 
   const files: Array<{ path: string; content: string }> = [];
   for (const obj of objects) {
@@ -152,8 +160,11 @@ export async function runKnowledgeGeneratorForGroups(
     return [];
   }
 
+  // Use all evidence groups (debug limit removed)
+  const groupsToProcess = evidenceGroups;
+
   if (verbose) {
-    console.log(`Generating ${type} knowledge for ${evidenceGroups.length} groups...`);
+    console.log(`Generating ${type} knowledge for ${groupsToProcess.length} groups...`);
   }
 
   // 限制并发数为 3，避免速率限制
@@ -161,9 +172,9 @@ export async function runKnowledgeGeneratorForGroups(
   const contributions: KnowledgePackageContribution[] = [];
 
   // 使用 p-limit 控制并发
-  const tasks = evidenceGroups.map((group, idx) =>
+  const tasks = groupsToProcess.map((group, idx) =>
     limit(async () => {
-      logger.debug(`Processing group ${idx + 1}/${evidenceGroups.length}: ${group.groupId}`);
+      logger.debug(`Processing group ${idx + 1}/${groupsToProcess.length}: ${group.groupId}`);
       const result = await runKnowledgeGenerator(
         input,
         group.bundle,
@@ -175,13 +186,27 @@ export async function runKnowledgeGeneratorForGroups(
         groupId: group.groupId,
         packagePath: group.packagePath,
       };
-      logger.debug(`Completed group ${idx + 1}/${evidenceGroups.length}: ${result.report.succeeded} succeeded`);
+      logger.debug(`Completed group ${idx + 1}/${groupsToProcess.length}: ${result.report.succeeded} succeeded`);
       return result;
     }),
   );
 
   // 执行所有任务（受并发限制）
-  const results = await Promise.allSettled(tasks);
+  // Add timeout protection - if tasks don't complete in reasonable time, continue
+  const TASK_TIMEOUT_MS = 180_000; // 3 minutes per group
+
+  const results = await Promise.allSettled(
+    tasks.map(task =>
+      Promise.race([
+        task,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Task timeout')), TASK_TIMEOUT_MS)
+        )
+      ])
+    )
+  );
+
+  logger.debug(`All ${results.length} tasks completed`);
 
   for (const [idx, result] of results.entries()) {
     if (result.status === 'fulfilled') {
@@ -232,6 +257,17 @@ function getNameField(type: KnowledgeType): string {
     WORKFLOW: 'workflow_name',
   };
   return nameFields[type];
+}
+
+/**
+ * 提取英文标识符（仅ASCII字符）作为有效的文件名ID。
+ * 如果输入包含非ASCII字符（如中文），返回空字符串。
+ */
+function extractEnglishId(name: string | undefined): string {
+  if (!name) return '';
+  // 仅保留ASCII字符
+  const asciiPart = name.replace(/[^\w\-]/g, '');
+  return asciiPart.toLowerCase();
 }
 
 interface ParsedLlmResponse {

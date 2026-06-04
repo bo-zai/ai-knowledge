@@ -10,7 +10,8 @@
  */
 
 import type { AnalyzeResult } from '../engine/analyze/run-analyze.js';
-import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
+import { getDatabase } from '../engine/lbug/lbug-adapter.js';
+import { initReadOnlyLbugWithDb, withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
 import { logger } from '../shared/logger.js';
 
@@ -44,11 +45,12 @@ export async function ensureIndex(repoPath: string, options?: { force?: boolean 
 export async function runAnalysis(repoPath: string, options?: { force?: boolean }): Promise<AnalyzeResult> {
   // Lazy-load full analysis to avoid pulling in Leiden at module load time
   const { runFullAnalysis } = await import('../engine/analyze/run-analyze.js');
-  return runFullAnalysis(
+  const result = await runFullAnalysis(
     repoPath,
     {
       force: options?.force ?? false,
       embeddings: false,
+      preserveLbugConnection: true,
     },
     {
       onProgress: (phase, percent, message) => {
@@ -59,6 +61,14 @@ export async function runAnalysis(repoPath: string, options?: { force?: boolean 
       },
     },
   );
+
+  const db = getDatabase();
+  if (db) {
+    const { lbugPath } = getStoragePaths(repoPath);
+    await initReadOnlyLbugWithDb(lbugPath, db);
+  }
+
+  return result;
 }
 
 /**
@@ -79,9 +89,7 @@ export interface DiscoveryResult {
 export async function discoverSlices(repoPath: string): Promise<DiscoveryResult> {
   const { lbugPath } = getStoragePaths(repoPath);
   logger.info(`Opening analysis index for slice discovery: ${lbugPath}`);
-  await initLbug(lbugPath);
-
-  try {
+  return withReadOnlyLbug(lbugPath, async executeQuery => {
     // Query each node label for slice discovery
     const routes: DiscoveryResult['routes'] = [];
     const processes: DiscoveryResult['processes'] = [];
@@ -175,10 +183,7 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
     logger.info(`Table slice discovery returned ${tables.length} slices`);
 
     return { routes, processes, tools, communities, tables };
-  } finally {
-    logger.info('Closing analysis index for slice discovery');
-    await closeLbug();
-  }
+  });
 }
 
 // ============================================
@@ -207,15 +212,8 @@ export async function initQueryService(repoPath: string): Promise<void> {
 export async function runCypherQuery(repoPath: string, cypher: string, limit?: number): Promise<any[]> {
   const { lbugPath } = getStoragePaths(repoPath);
 
-  await initLbug(lbugPath);
-
   const query = limit ? `${cypher} LIMIT ${limit}` : cypher;
-
-  try {
-    return await executeQuery(query);
-  } finally {
-    await closeLbug();
-  }
+  return withReadOnlyLbug(lbugPath, executeQuery => executeQuery(query));
 }
 
 /**

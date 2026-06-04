@@ -91,6 +91,8 @@ export interface AnalyzeOptions {
    * of a pipeline re-index.
    */
   allowDuplicateName?: boolean;
+  /** 嵌入式调用可保留当前数据库句柄，交给后续只读查询复用。 */
+  preserveLbugConnection?: boolean;
 }
 
 export interface AnalyzeResult {
@@ -485,8 +487,9 @@ export async function runFullAnalysis(
     // Keep generated .knowledge contents ignored without editing the user's root .gitignore.
     await ensureKnowledgeIgnored(repoPath);
 
-    // ── Close LadybugDB ──────────────────────────────────────────────
-    await closeLbug();
+    if (!options.preserveLbugConnection) {
+      await closeLbug();
+    }
 
     progress('done', 100, 'Done');
 

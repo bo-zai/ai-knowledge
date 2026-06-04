@@ -8,9 +8,7 @@
 import { logger } from '../shared/logger.js';
 import { hasIndex, runAnalysis } from './index-service.js';
 import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
-import lbug from '@ladybugdb/core';
-import type { Database, Connection } from '@ladybugdb/core';
-import { openLbugConnection, closeLbugConnection } from '../engine/lbug/lbug-config.js';
+import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { NODE_TABLES, REL_TABLE_NAME } from '../engine/lbug/schema.js';
 
 export type GraphStatusType = 'created' | 'reused' | 'reanalyzed' | 'skipped_for_mock';
@@ -73,49 +71,37 @@ async function queryGraphStats(repoPath: string): Promise<{ nodeCount: number; e
 
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= LOCK_RETRY_ATTEMPTS; attempt++) {
-    let handle: { db: Database; conn: Connection } | null = null;
     try {
-      // Open in read-only mode to avoid lock conflicts
-      handle = await openLbugConnection(lbug, lbugPath, { readOnly: true });
+      return await withReadOnlyLbug(lbugPath, async query => {
+        let nodeCount = 0;
+        for (const tableName of NODE_TABLES) {
+          try {
+            const data = await query(
+              `MATCH (n:${escapeTableName(tableName)}) RETURN count(n) AS cnt`,
+            );
+            if (data.length > 0) {
+              nodeCount += Number(data[0]?.cnt ?? data[0]?.[0] ?? 0);
+            }
+          } catch {
+            // Some tables may not exist, skip
+          }
+        }
 
-      // Count nodes across all node tables (using Cypher, not SQL)
-      let nodeCount = 0;
-      for (const tableName of NODE_TABLES) {
+        let edgeCount = 0;
         try {
-          const result = await handle.conn.query(
-            `MATCH (n:${escapeTableName(tableName)}) RETURN count(n) AS cnt`
+          const data = await query(
+            `MATCH ()-[r:${REL_TABLE_NAME}]->() RETURN count(r) AS cnt`,
           );
-          const rows = Array.isArray(result) ? result[0] : result;
-          const data = await rows.getAll();
           if (data.length > 0) {
-            nodeCount += Number(data[0]?.cnt ?? data[0]?.[0] ?? 0);
+            edgeCount = Number(data[0]?.cnt ?? data[0]?.[0] ?? 0);
           }
         } catch {
-          // Some tables may not exist, skip
+          // Relationship table may not exist
         }
-      }
 
-      // Count relationships (edges)
-      let edgeCount = 0;
-      try {
-        const result = await handle.conn.query(
-          `MATCH ()-[r:${REL_TABLE_NAME}]->() RETURN count(r) AS cnt`
-        );
-        const rows = Array.isArray(result) ? result[0] : result;
-        const data = await rows.getAll();
-        if (data.length > 0) {
-          edgeCount = Number(data[0]?.cnt ?? data[0]?.[0] ?? 0);
-        }
-      } catch {
-        // Relationship table may not exist
-      }
-
-      await closeLbugConnection(handle);
-      return { nodeCount, edgeCount };
+        return { nodeCount, edgeCount };
+      });
     } catch (err: any) {
-      if (handle) {
-        await closeLbugConnection(handle).catch(() => {});
-      }
       lastError = err instanceof Error ? err : new Error(String(err));
 
       if (!isDbBusyError(err) || attempt === LOCK_RETRY_ATTEMPTS) {
@@ -180,6 +166,12 @@ export async function initGraphData(input: PreflightInput): Promise<GraphStatus>
   if (!hadIndex) {
     logger.info('No index found: creating new index');
     await runAnalysis(repoPath, { force: false });
+
+    // Wait for database file handle to be released on Windows
+    // LadybugDB may not immediately release file locks after close()
+    // 2 seconds is enough for most cases based on testing
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
     const { nodeCount, edgeCount } = await queryGraphStats(repoPath);
     const { storagePath } = getStoragePaths(repoPath);
     const meta = await loadMeta(storagePath);

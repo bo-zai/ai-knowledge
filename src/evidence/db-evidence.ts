@@ -1,6 +1,6 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { initLbug, executeQuery, closeLbug } from '../engine/lbug/lbug-adapter.js';
+import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 type DbFieldSource = 'comment' | 'inferred';
@@ -341,15 +341,12 @@ export async function findMapperXmlFiles(rootPath: string): Promise<string[]> {
     const { lbugPath } = getStoragePaths(rootPath);
     await access(lbugPath);
 
-    await initLbug(lbugPath);
-    const fileRows = await executeQuery(
-      `MATCH (f:File) WHERE toLower(f.name) ENDS WITH 'mapper.xml' RETURN f.filePath AS fp`,
+    const fileRows = await withReadOnlyLbug(lbugPath, query =>
+      query(`MATCH (f:File) WHERE toLower(f.name) ENDS WITH 'mapper.xml' RETURN f.filePath AS fp`),
     );
     const graphFiles = (fileRows || [])
       .map((row: Record<string, unknown>) => row.fp as string)
       .filter(Boolean);
-    await closeLbug();
-
     if (graphFiles.length > 0) {
       return graphFiles.map((fp: string) =>
         fp.startsWith('/') || /^[A-Za-z]:/.test(fp) ? fp : join(rootPath, fp),
