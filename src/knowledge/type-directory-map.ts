@@ -78,11 +78,16 @@ export const DIR_TO_TYPE: Record<string, AllObjectType> = {
   capabilities: 'CAPABILITY',
   concepts: 'CONCEPT',
   boundaries: 'BOUNDARY',
+  boundary: 'BOUNDARY',      // 单数形式兼容
   'external-systems': 'EXTERNAL',
+  'external-system': 'EXTERNAL',  // 单数形式兼容
   constraints: 'CONSTRAINT',
+  constraint: 'CONSTRAINT',  // 单数形式兼容
   relations: 'RELATION',
+  relation: 'RELATION',      // 单数形式兼容
   'data-model': 'DATA_MODEL',
   workflows: 'WORKFLOW',
+  workflow: 'WORKFLOW',      // 单数形式兼容
 
   // 纯技术目录
   contracts: 'CON',

@@ -169,6 +169,65 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
     lines.push('');
   }
 
+  // 边界知识特有字段
+  const boundaryType = getStringField(fields, 'boundary_type');
+  if (boundaryType) {
+    lines.push(`## 边界类型`);
+    lines.push('');
+    const typeLabels: Record<string, string> = {
+      limitation: '局限性',
+      disabled_feature: '禁用功能',
+    };
+    lines.push(typeLabels[boundaryType] || boundaryType);
+    lines.push('');
+  }
+
+  const detailedDescription = getStringField(fields, 'detailed_description_zh');
+  if (detailedDescription) {
+    lines.push(`## 详细说明`);
+    lines.push('');
+    lines.push(detailedDescription);
+    lines.push('');
+  }
+
+  const relatedCapability = getStringField(fields, 'related_capability');
+  if (relatedCapability) {
+    lines.push(`## 关联能力`);
+    lines.push('');
+    lines.push(relatedCapability);
+    lines.push('');
+  }
+
+  // 约束知识特有字段
+  const constraintType = getStringField(fields, 'constraint_type');
+  if (constraintType) {
+    lines.push(`## 约束类型`);
+    lines.push('');
+    const typeLabels: Record<string, string> = {
+      business_rule: '业务规则',
+      technical: '技术约束',
+      data: '数据约束',
+    };
+    lines.push(typeLabels[constraintType] || constraintType);
+    lines.push('');
+  }
+
+  const triggerCondition = getStringField(fields, 'trigger_condition');
+  if (triggerCondition) {
+    lines.push(`## 触发条件`);
+    lines.push('');
+    lines.push(triggerCondition);
+    lines.push('');
+  }
+
+  const violationConsequence = getStringField(fields, 'violation_consequence');
+  if (violationConsequence) {
+    lines.push(`## 违反后果`);
+    lines.push('');
+    lines.push(violationConsequence);
+    lines.push('');
+  }
+
   // 关键区分
   const keyDifferentiation = getStringField(fields, 'key_differentiation');
   if (keyDifferentiation) {
