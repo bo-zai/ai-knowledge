@@ -1,68 +1,103 @@
 import { describe, expect, it } from 'vitest';
-import { resolveGenerateScope } from '../../../src/knowledge/generate-scope';
+import { resolveGenerateScope, getGenerationOrder } from '../../../src/knowledge/generate-scope.js';
+import { ALL_KNOWLEDGE_TYPES } from '../../../src/schemas/knowledge-type.js';
 
 describe('resolveGenerateScope', () => {
   it('defaults to all knowledge when no selector is provided', () => {
-    expect(resolveGenerateScope({})).toEqual({
-      knowledge: 'all',
-      inferred: true,
-      inferredFrom: 'default',
-      target: undefined,
-      warnings: [],
+    const result = resolveGenerateScope({});
+    expect(result.knowledge).toBe('all');
+    expect(result.inferred).toBe(true);
+    expect(result.inferredFrom).toBe('default');
+    expect(result.types).toEqual(ALL_KNOWLEDGE_TYPES);
+    expect(result.target).toBeUndefined();
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('accepts phase1 knowledge', () => {
+    const result = resolveGenerateScope({ knowledge: 'phase1' });
+    expect(result.knowledge).toBe('phase1');
+    expect(result.types).toContain('CONCEPT');
+    expect(result.types).toContain('DATA_MODEL');
+    expect(result.types).toContain('CAPABILITY');
+  });
+
+  it('accepts phase2 knowledge', () => {
+    const result = resolveGenerateScope({ knowledge: 'phase2' });
+    expect(result.knowledge).toBe('phase2');
+    expect(result.types).toContain('BOUNDARY');
+    expect(result.types).toContain('EXTERNAL');
+    expect(result.types).toContain('CONSTRAINT');
+    expect(result.types).toContain('RELATION');
+    expect(result.types).toContain('WORKFLOW');
+  });
+
+  // Test all 8 knowledge types
+  for (const type of ALL_KNOWLEDGE_TYPES) {
+    it(`accepts ${type.toLowerCase()} knowledge`, () => {
+      const result = resolveGenerateScope({ knowledge: type.toLowerCase() });
+      expect(result.knowledge).toBe(type);
+      expect(result.types).toEqual([type]);
     });
-  });
+  }
 
-  it('accepts db knowledge without target', () => {
-    expect(resolveGenerateScope({ knowledge: 'db' }).knowledge).toBe('db');
-  });
-
-  it('accepts capability knowledge without target', () => {
-    expect(resolveGenerateScope({ knowledge: 'capability' }).knowledge).toBe('capability');
-  });
-
-  it('parses db target for db knowledge', () => {
-    expect(resolveGenerateScope({ knowledge: 'db', target: 'users' }).target).toEqual({
-      kind: 'db',
-      value: 'users',
-    });
-  });
-
-  it('parses capability target for capability knowledge', () => {
-    expect(resolveGenerateScope({ knowledge: 'capability', target: 'order' }).target).toEqual({
-      kind: 'capability',
-      value: 'order',
+  it('parses typed target', () => {
+    const result = resolveGenerateScope({ knowledge: 'concept', target: 'concept:order-status' });
+    expect(result.target).toEqual({
+      kind: 'CONCEPT',
+      value: 'order-status',
     });
   });
 
   it('requires typed target for all knowledge', () => {
     expect(() => resolveGenerateScope({ knowledge: 'all', target: 'users' })).toThrow(
-      '--target must use db:<name> or capability:<name> when --knowledge all is used',
+      '--target must use <type>:<name> format',
     );
   });
 
-  it('allows typed db target for all knowledge', () => {
-    expect(resolveGenerateScope({ knowledge: 'all', target: 'db:users' }).target).toEqual({
-      kind: 'db',
-      value: 'users',
+  it('allows typed target for all knowledge', () => {
+    const result = resolveGenerateScope({ knowledge: 'all', target: 'concept:order-status' });
+    expect(result.target).toEqual({
+      kind: 'CONCEPT',
+      value: 'order-status',
     });
   });
 
-  it('allows typed capability target for all knowledge', () => {
-    expect(resolveGenerateScope({ knowledge: 'all', target: 'capability:order' }).target).toEqual({
-      kind: 'capability',
-      value: 'order',
-    });
+  it('rejects mismatched target for specific knowledge', () => {
+    expect(() =>
+      resolveGenerateScope({ knowledge: 'concept', target: 'capability:order' }),
+    ).toThrow('is not valid for --knowledge CONCEPT');
   });
 
-  it('rejects capability target for db knowledge', () => {
-    expect(() => resolveGenerateScope({ knowledge: 'db', target: 'capability:order' })).toThrow(
-      '--knowledge db cannot use capability target',
+  it('rejects invalid knowledge type', () => {
+    expect(() => resolveGenerateScope({ knowledge: 'invalid' })).toThrow(
+      'Invalid --knowledge value: invalid',
     );
   });
+});
 
-  it('rejects db target for capability knowledge', () => {
-    expect(() => resolveGenerateScope({ knowledge: 'capability', target: 'db:users' })).toThrow(
-      '--knowledge capability cannot use db target',
-    );
+describe('getGenerationOrder', () => {
+  it('returns phases in correct order for all types', () => {
+    const phases = getGenerationOrder(ALL_KNOWLEDGE_TYPES);
+    expect(phases.length).toBe(4); // concept, data_model, capability, parallel
+  });
+
+  it('returns single phase for single type', () => {
+    const phases = getGenerationOrder(['CONCEPT']);
+    expect(phases.length).toBe(1);
+    expect(phases[0]).toEqual(['CONCEPT']);
+  });
+
+  it('groups parallel types together', () => {
+    const phases = getGenerationOrder(['BOUNDARY', 'EXTERNAL', 'CONSTRAINT']);
+    expect(phases.length).toBe(1);
+    expect(phases[0]).toEqual(['BOUNDARY', 'EXTERNAL', 'CONSTRAINT']);
+  });
+
+  it('maintains phase1 order', () => {
+    const phases = getGenerationOrder(['CAPABILITY', 'CONCEPT', 'DATA_MODEL']);
+    expect(phases.length).toBe(3);
+    expect(phases[0]).toEqual(['CONCEPT']);
+    expect(phases[1]).toEqual(['DATA_MODEL']);
+    expect(phases[2]).toEqual(['CAPABILITY']);
   });
 });

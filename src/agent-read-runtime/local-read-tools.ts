@@ -6,6 +6,8 @@ import type { BudgetState } from './context-budget.js';
 import { recordToolCall, recordToolResult, truncateToolResult } from './context-budget.js';
 import type { TraceCollector } from './trace.js';
 
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
+
 const SKIPPED_SEARCH_DIRS = new Set([
   '.git',
   'node_modules',
@@ -13,7 +15,7 @@ const SKIPPED_SEARCH_DIRS = new Set([
   'build',
   'coverage',
   '.knowledge',
-  'bootstrap-knowledge',
+  DEFAULT_KNOWLEDGE_DIR,
 ]);
 
 const SKIPPED_BINARY_EXTENSIONS = new Set([

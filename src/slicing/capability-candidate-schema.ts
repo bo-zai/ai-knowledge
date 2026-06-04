@@ -42,6 +42,7 @@ export const TestSignalSchema = z.object({
   targetRelevance: z.number().min(0).max(1).optional(),
   matchedTerms: z.array(z.string()).optional(),
   role: z.string().optional(),
+  startLine: z.number().optional(),
 });
 
 export const DocSignalSchema = z.object({

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf D:/workspace/other_project/music-education-app/ai-knowledge/*)",
+      "Bash(node dist/cli/index.js generate --repo D:/workspace/other_project/music-education-app --llm-config D:/workspace/other_project/music-education-app/llm.config.json --knowledge concept --verbose --log-file D:/workspace/other_project/music-education-app/generate-debug.log)"
+    ]
+  }
+}

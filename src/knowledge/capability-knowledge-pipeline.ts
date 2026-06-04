@@ -481,7 +481,7 @@ export async function runCapabilityKnowledgePipeline(
   const capabilityId = capObject?.id || 'UNKNOWN-CAPABILITY';
 
   // Guard against repository fallback capability only when no explicit target
-  const noExplicitTarget = input.targetTerms.length === 0 && input.targetPaths.length === 0;
+  const noExplicitTarget = targetTerms.length === 0 && targetPaths.length === 0;
   if (isRepositoryFallbackCapability(capabilityId, topCandidate.candidateId) && noExplicitTarget) {
     throw new CapabilityKnowledgeGenerationError(
       'Capability generation failed: repository-level fallback capability is not a valid business capability',
@@ -651,15 +651,7 @@ function mergeClaimsByTypeAndText(
   return result;
 }
 
-const TYPE_TO_DIR: Record<string, string> = {
-  CAP: 'capabilities',
-  TERM: 'terms',
-  FLOW: 'flows',
-  MOD: 'modules',
-  CON: 'contracts',
-  VER: 'validation',
-  OPEN: 'open',
-};
+import { TYPE_TO_DIR } from './type-directory-map.js';
 
 export function capabilityResultToContribution(
   result: RunCapabilityKnowledgePipelineResult,

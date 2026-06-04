@@ -1,5 +1,5 @@
 import { fileExists, readText } from '../shared/fs.js';
-import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
 import YAML from 'yaml';
 
@@ -15,16 +15,16 @@ export async function runStatus(options: StatusOptions): Promise<void> {
     positionalPath: options.path,
   });
   const repoPath = resolved.repoPath;
-  const bootstrapDir = DEFAULT_BOOTSTRAP_DIR;
-  const manifestPath = `${repoPath}/${bootstrapDir}/manifest.yaml`;
-  const catalogPath = `${repoPath}/${bootstrapDir}/catalog.yaml`;
-  const coveragePath = `${repoPath}/${bootstrapDir}/reports/coverage-report.yaml`;
+  const knowledgeDir = DEFAULT_KNOWLEDGE_DIR;
+  const manifestPath = `${repoPath}/${knowledgeDir}/manifest.yaml`;
+  const catalogPath = `${repoPath}/${knowledgeDir}/catalog.yaml`;
+  const coveragePath = `${repoPath}/${knowledgeDir}/reports/coverage-report.yaml`;
 
   const exists = await fileExists(manifestPath);
 
   if (!exists) {
-    console.log(`bootstrap-knowledge: missing`);
-    console.log(`Path: ${repoPath}/${bootstrapDir}`);
+    console.log(`ai-knowledge: missing`);
+    console.log(`Path: ${repoPath}/${knowledgeDir}`);
     console.log(`To generate, run: rkg generate ${repoPath}`);
     return;
   }
@@ -34,8 +34,8 @@ export async function runStatus(options: StatusOptions): Promise<void> {
     const manifestContent = await readText(manifestPath);
     const manifest = YAML.parse(manifestContent) as Record<string, unknown>;
 
-    console.log(`bootstrap-knowledge: present`);
-    console.log(`Path: ${repoPath}/${bootstrapDir}`);
+    console.log(`ai-knowledge: present`);
+    console.log(`Path: ${repoPath}/${knowledgeDir}`);
     console.log('');
     console.log('=== Manifest ===');
     console.log(`Schema Version: ${manifest.schema_version}`);
@@ -109,7 +109,7 @@ export async function runStatus(options: StatusOptions): Promise<void> {
     }
 
   } catch (error) {
-    console.log(`bootstrap-knowledge: error reading package`);
+    console.log(`ai-knowledge: error reading package`);
     console.log(`Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

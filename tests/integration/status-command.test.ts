@@ -6,17 +6,17 @@ import { execa } from 'execa';
 
 describe('status command', () => {
   it('reports missing package before generation', async () => {
-    const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-'));
+    const repo = await mkdtemp(join(tmpdir(), 'ai-knowledge-'));
     await writeFile(join(repo, 'README.md'), '# test repo');
     const result = await execa('node', ['dist/cli/index.js', 'status', '--repo', repo]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('bootstrap-knowledge');
+    expect(result.stdout).toContain('ai-knowledge');
     expect(result.stdout).toContain('missing');
   });
 
   it('reports structured status when package exists', async () => {
-    const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-status-'));
-    const bootstrapDir = join(repo, 'bootstrap-knowledge');
+    const repo = await mkdtemp(join(tmpdir(), 'ai-knowledge-status-'));
+    const bootstrapDir = join(repo, 'ai-knowledge');
     const reportsDir = join(bootstrapDir, 'reports');
 
     await mkdir(bootstrapDir, { recursive: true });
@@ -68,7 +68,7 @@ is_empty: false
 
     const result = await execa('node', ['dist/cli/index.js', 'status', '--repo', repo]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain('bootstrap-knowledge: present');
+    expect(result.stdout).toContain('ai-knowledge: present');
     expect(result.stdout).toContain('Manifest');
     expect(result.stdout).toContain('Catalog');
     expect(result.stdout).toContain('Total Objects: 2');
@@ -76,8 +76,8 @@ is_empty: false
   });
 
   it('reports partial status when failures exist', async () => {
-    const repo = await mkdtemp(join(tmpdir(), 'bootstrap-knowledge-partial-'));
-    const bootstrapDir = join(repo, 'bootstrap-knowledge');
+    const repo = await mkdtemp(join(tmpdir(), 'ai-knowledge-partial-'));
+    const bootstrapDir = join(repo, 'ai-knowledge');
     const reportsDir = join(bootstrapDir, 'reports');
 
     await mkdir(bootstrapDir, { recursive: true });

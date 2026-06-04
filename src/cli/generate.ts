@@ -1,32 +1,28 @@
 import path from 'path';
-import { logger, setLogLevel } from '../shared/logger.js';
+import { logger, setLogLevel, setLogFile, closeLogFile } from '../shared/logger.js';
 import { getEnvVar, getEnvVarOptional } from '../config/env.js';
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import {
   resolveModelConfig,
   loadDefaultLlmConfigFile,
   loadLlmConfigFile,
 } from '../config/model-config.js';
+import type { ModelConfig } from '../config/model-config.js';
 import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
-import { createCapabilityLlmClaimsProvider } from '../generation/capability-llm-claims-provider.js';
-import {
-  runCapabilityKnowledgePipeline,
-  capabilityResultToContribution,
-  CapabilityKnowledgeGenerationError,
-  type CapabilityClaimsProviderResult,
-} from '../knowledge/capability-knowledge-pipeline.js';
-import { runFullCapabilityMvpPipeline } from '../knowledge/full-capability-mvp-pipeline.js';
 import { resolveGenerateScope } from '../knowledge/generate-scope.js';
 import {
   runGenerateOrchestration,
   type GenerateOrchestrationInput,
   type GenerateOrchestrationDeps,
+  type GenerateTypeInput,
 } from '../knowledge/generate-orchestrator.js';
-import { runDbKnowledgePipeline } from '../knowledge/db-knowledge-pipeline.js';
+import { runKnowledgeGeneratorForGroups, type LlmClaimsProvider } from '../generation/knowledge-generator.js';
+import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
-import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
 import { initGraphData } from '../query/prepare-generation.js';
 import { initDirectoryStructure } from '../knowledge/init-directory.js';
+import { createOpenAiClient, generateWithClient } from '../generation/llm-client.js';
 
 function isMockModel(model: string): boolean {
   return model.startsWith('test-');
@@ -44,11 +40,19 @@ interface GenerateOptions {
   apiKeyEnv?: string;
   forceAnalyze?: boolean;
   verbose?: boolean;
+  logFile?: string;
 }
 
 export async function runGenerate(options: GenerateOptions): Promise<void> {
   if (options.verbose) {
     setLogLevel('debug');
+  }
+
+  // 设置日志文件
+  if (options.logFile) {
+    const logPath = path.resolve(options.logFile);
+    setLogFile(logPath);
+    logger.info(`Logging to file: ${logPath}`);
   }
 
   // Resolve target repo path
@@ -69,7 +73,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     logger.warn(warning);
   }
 
-  // Load model config from the target repo
+  // Load model config
   const fileConfig = options.llmConfig
     ? await loadLlmConfigFile(options.llmConfig)
     : await loadDefaultLlmConfigFile(repoPath);
@@ -80,8 +84,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     model: options.model,
     fileConfig,
   });
+
   const apiKey = resolvedConfig.apiKey || getEnvVarOptional(resolvedConfig.apiKeyEnv) || '';
-  const modelConfig = {
+  const modelConfig: ModelConfig = {
     baseUrl: resolvedConfig.baseUrl,
     apiKey,
     apiKeyEnv: resolvedConfig.apiKeyEnv,
@@ -89,174 +94,79 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   };
   const mockMode = isMockModel(modelConfig.model);
 
-  logger.info(`Generating bootstrap-knowledge for ${repoPath}`);
-  logger.info(`Knowledge: ${scope.knowledge}${scope.inferred ? ' (default)' : ''}`);
+  logger.info(`Generating ai-knowledge for ${repoPath}`);
+  logger.info(`Knowledge types: ${scope.types.join(', ')}`);
   if (scope.target) {
     logger.info(`Target: ${scope.target.kind}:${scope.target.value}`);
   }
 
   const outputRoot = options.out ? path.resolve(options.out) : repoPath;
 
-  // Step 1a: Initialize graph data
+  // Initialize graph data
   const graphStatus = await initGraphData({
     repoPath,
     forceAnalyze: options.forceAnalyze,
     mockMode,
   });
-  logger.info(`Graph status: ${graphStatus.status}, nodes: ${graphStatus.nodeCount}, edges: ${graphStatus.edgeCount}`);
+  logger.info(`Graph status: ${graphStatus.status}, nodes: ${graphStatus.nodeCount}`);
 
-  // Step 1b: Initialize directory structure
+  // Initialize directory structure
   const layout = await initDirectoryStructure(outputRoot);
 
-  // Build orchestration deps
+  // Build deps for orchestration
   const deps: GenerateOrchestrationDeps = {
-    runDb: async (input: GenerateOrchestrationInput) => {
-      const dbTarget = input.scope.target?.kind === 'db' ? input.scope.target : undefined;
-      return runDbKnowledgePipeline({
+    runGeneratorForType: async (input: GenerateTypeInput): Promise<KnowledgePackageContribution[]> => {
+      const { type, target, verbose } = input;
+
+      // Build evidence bundles grouped by package
+      const evidenceGroups = await buildEvidenceBundlesByPackage({
         repoPath: input.repoPath,
-        target: dbTarget,
+        type,
+        target,
         graphStatus: input.graphStatus,
-        verbose: input.verbose,
-        modelConfig,
-      });
-    },
-
-    runCapability: async (input: GenerateOrchestrationInput) => {
-      // Resolve capability-specific LLM config using repo path (not project-level cwd)
-      const capFileConfig = options.llmConfig
-        ? await loadLlmConfigFile(options.llmConfig)
-        : await loadDefaultLlmConfigFile(input.repoPath);
-
-      const capResolvedConfig = resolveModelConfig({
-        baseUrl: options.baseUrl,
-        apiKeyEnv: options.apiKeyEnv,
-        model: options.model,
-        fileConfig: capFileConfig,
       });
 
-      const capApiKey = capResolvedConfig.apiKey || getEnvVarOptional(capResolvedConfig.apiKeyEnv);
-      if (!capApiKey) {
-        throw new Error(
-          `LLM API key is missing. Set ${capResolvedConfig.apiKeyEnv} environment variable or provide apiKey in config file.`,
-        );
-      }
-
-      if (input.verbose) {
-        console.log('Generating capability knowledge:');
-        console.log(`  Repository: ${input.repoPath}`);
-        console.log(`  LLM runtime: langgraph`);
-        console.log(`  LLM model: ${capResolvedConfig.model}`);
-      }
-
-      const provider = createCapabilityLlmClaimsProvider({
-        model: capResolvedConfig.model,
-        apiKey: capApiKey,
-        baseUrl: capResolvedConfig.baseUrl,
-      });
-
-      const claimsProvider = async (bundle: EvidenceBundle, repairPrompt?: string): Promise<CapabilityClaimsProviderResult> => {
-        const result = await provider(bundle, repairPrompt);
-        return {
-          claims: result.claims,
-          debug: {
-            request: {
-              model: result.model,
-              systemPrompt: result.systemPrompt,
-              userPrompt: result.userPrompt,
-            },
-            response: { rawText: result.rawText },
+      if (evidenceGroups.length === 0) {
+        logger.warn(`No evidence found for ${type}`);
+        return [{
+          stage: type.toLowerCase(),
+          files: [],
+          objects: [],
+          report: {
+            stage: type.toLowerCase(),
+            ran: true,
+            succeeded: 0,
+            failed: 1,
+            details: { error: 'no_evidence_found' },
           },
-          graphTrace: result.graphTrace,
+          warnings: ['no_evidence_found'],
+        }];
+      }
+
+      // Create LLM client using OpenAI-compatible format
+      const clientConfig: ModelConfig = {
+        baseUrl: input.llm.baseUrl || modelConfig.baseUrl,
+        apiKey: apiKey,
+        model: input.llm.model || modelConfig.model,
+        apiKeyEnv: input.llm.apiKeyEnv || modelConfig.apiKeyEnv,
+      };
+      const client = createOpenAiClient(clientConfig);
+
+      // Create claims provider using llm-client
+      const claimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
+        const result = await generateWithClient(client, clientConfig.model, systemPrompt, userPrompt);
+        return {
+          rawText: result.text,
+          model: clientConfig.model,
+          usage: {
+            promptTokens: 0,
+            completionTokens: result.chunks,
+          },
         };
       };
 
-      // Full capability request (no target specified)
-      const fullCapabilityRequested = !input.scope.target;
-
-      if (fullCapabilityRequested) {
-        const full = await runFullCapabilityMvpPipeline({
-          repoRoot: input.repoPath,
-          claimsProvider,
-          model: capResolvedConfig.model,
-        });
-
-        console.log(`Generated ${full.report.succeeded} capability documents (${full.report.failed} failed)`);
-        for (const warning of full.warnings) {
-          console.warn(`Warning: ${warning}`);
-        }
-
-        return {
-          stage: 'capability',
-          files: full.files,
-          objects: full.objects,
-          report: {
-            stage: 'capability',
-            ran: true,
-            succeeded: full.report.succeeded,
-            failed: full.report.failed,
-            details: {
-              capabilityGenerationMode: 'full-mvp',
-              capabilities: full.report.capabilities,
-            },
-          },
-          warnings: full.warnings,
-        };
-      }
-
-      // Single capability target
-      const capTerms = input.scope.target?.kind === 'capability' ? [input.scope.target.value] : [];
-      const capPaths = ['src'];
-
-      let result;
-      try {
-        result = await runCapabilityKnowledgePipeline({
-          repoRoot: input.repoPath,
-          targetTerms: capTerms,
-          targetPaths: capPaths,
-          claimsProvider,
-          llmMode: { requested: true, required: true, model: capResolvedConfig.model },
-        });
-      } catch (error) {
-        if (error instanceof CapabilityKnowledgeGenerationError) {
-          await writeKnowledgePackage({
-            layout: input.layout,
-            knowledge: 'capability',
-            target: input.scope.target,
-            contributions: [{
-              stage: 'capability',
-              files: error.debugFiles,
-              objects: [],
-              report: {
-                stage: 'capability',
-                ran: true,
-                succeeded: 0,
-                failed: 1,
-                details: { error: error.message },
-              },
-              warnings: [error.message],
-            }],
-          });
-        }
-        throw error;
-      }
-
-      if (result.files.length === 0) {
-        throw new Error(`No capability knowledge files generated for target repository: ${input.repoPath}`);
-      }
-
-      // Log capability generation summary
-      console.log(`Generated ${result.files.length} files for capability: ${result.metadata.capabilityId}`);
-      console.log(`Object types: ${result.objects.map(o => o.type).join(', ')}`);
-      const llm = result.metadata.llm;
-      console.log('LLM runtime: langgraph');
-      console.log(`  Called: ${llm.called}, Succeeded: ${llm.succeeded}`);
-      console.log(`  Claims: ${llm.rawClaimCount} raw, ${llm.acceptedClaimCount} accepted, ${llm.skeletonClaimCount} skeleton, ${llm.finalClaimCount} final`);
-      if (llm.error) console.log(`  Error: ${llm.error}`);
-      for (const warning of result.metadata.warnings) {
-        console.warn(`Warning: ${warning}`);
-      }
-
-      return capabilityResultToContribution(result);
+      // Run generator for all evidence groups (parallel)
+      return runKnowledgeGeneratorForGroups(input, evidenceGroups, claimsProvider);
     },
 
     writePackage: async (input) => {
@@ -285,16 +195,11 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     },
   };
 
-  const { contributions } = await runGenerateOrchestration({
+  await runGenerateOrchestration({
     input: orchestrationInput,
     deps,
   });
 
-  // Print summary
-  for (const c of contributions) {
-    const status = c.report.ran ? `${c.report.succeeded} succeeded, ${c.report.failed} failed` : 'skipped';
-    logger.info(`${c.stage} stage: ${status}`);
-  }
-
-  logger.info(`Bootstrap-knowledge generated at ${path.join(outputRoot, 'bootstrap-knowledge')}`);
+  logger.info(`ai-knowledge generated at ${path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR)}`);
+  closeLogFile();
 }

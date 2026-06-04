@@ -1,5 +1,5 @@
 import { removeDir, fileExists } from '../shared/fs.js';
-import { DEFAULT_BOOTSTRAP_DIR } from '../config/defaults.js';
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
 
 interface CleanOptions {
@@ -14,16 +14,16 @@ export async function runClean(options: CleanOptions): Promise<void> {
     positionalPath: options.path,
   });
   const repoPath = resolved.repoPath;
-  const bootstrapDir = DEFAULT_BOOTSTRAP_DIR;
-  const bootstrapPath = `${repoPath}/${bootstrapDir}`;
+  const knowledgeDir = DEFAULT_KNOWLEDGE_DIR;
+  const knowledgePath = `${repoPath}/${knowledgeDir}`;
 
-  const exists = await fileExists(bootstrapPath);
+  const exists = await fileExists(knowledgePath);
 
   if (!exists) {
-    console.log(`bootstrap-knowledge not found at ${bootstrapPath}`);
+    console.log(`ai-knowledge not found at ${knowledgePath}`);
     return;
   }
 
-  await removeDir(bootstrapPath);
-  console.log(`Removed ${bootstrapPath}`);
+  await removeDir(knowledgePath);
+  console.log(`Removed ${knowledgePath}`);
 }

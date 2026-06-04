@@ -1,5 +1,6 @@
 import { ensureDir, removeDir, writeText } from '../shared/fs.js';
 import YAML from 'yaml';
+import { getDirForType } from '../knowledge/type-directory-map.js';
 
 export async function writePackage(input: {
   repoPath: string;
@@ -37,21 +38,7 @@ export async function writePackage(input: {
 
   // 写入对象文件
   for (const object of input.objects) {
-    const typeDir = mapTypeToDir(object.type);
+    const typeDir = getDirForType(object.type as any);
     await writeText(`${basePath}/objects/${typeDir}/${object.id}.md`, object.content);
   }
-}
-
-function mapTypeToDir(type: string): string {
-  const mapping: Record<string, string> = {
-    TERM: 'terms',
-    CON: 'contracts',
-    FLOW: 'flows',
-    MOD: 'modules',
-    OPEN: 'open',
-    OWN: 'ownership',
-    VER: 'validation',
-    DB: 'db',
-  };
-  return mapping[type] ?? 'unknown';
 }

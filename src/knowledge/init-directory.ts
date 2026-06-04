@@ -7,14 +7,15 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '../shared/logger.js';
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 
 /**
  * Package layout with paths to key directories and files.
  */
 export interface PackageLayout {
-  packageRoot: string;       // {outputRoot}/bootstrap-knowledge
+  packageRoot: string;       // {outputRoot}/ai-knowledge
   objectsDir: string;        // {packageRoot}/objects
-  sharedDir: string;         // {packageRoot}/objects/_共享
+  sharedDir: string;         // {packageRoot}/objects/_共享（兼容）
   evidenceDir: string;       // {packageRoot}/evidence
   reportsDir: string;        // {packageRoot}/reports
   catalogPath: string;       // {packageRoot}/catalog.yaml
@@ -27,11 +28,11 @@ export interface PackageLayout {
  * Domain directories are created later during generation.
  */
 export async function initDirectoryStructure(outputRoot: string): Promise<PackageLayout> {
-  const packageRoot = path.resolve(outputRoot, 'bootstrap-knowledge');
+  const packageRoot = path.resolve(outputRoot, DEFAULT_KNOWLEDGE_DIR);
 
-  // Safety check: must be bootstrap-knowledge
-  if (path.basename(packageRoot) !== 'bootstrap-knowledge') {
-    throw new Error(`Refusing to initialize invalid package root: ${packageRoot} (basename must be 'bootstrap-knowledge')`);
+  // Safety check: must be ai-knowledge
+  if (path.basename(packageRoot) !== DEFAULT_KNOWLEDGE_DIR) {
+    throw new Error(`Refusing to initialize invalid package root: ${packageRoot} (basename must be '${DEFAULT_KNOWLEDGE_DIR}')`);
   }
 
   logger.info(`Initializing directory structure at ${packageRoot}`);

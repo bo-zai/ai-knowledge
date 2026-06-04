@@ -1,6 +1,8 @@
 import type { KnowledgeObject } from '../knowledge/capability-object-assembler.js';
 import { buildCapabilityDocModel } from '../knowledge/capability-doc-model.js';
 import { renderCapabilityMarkdown } from './capability-markdown-renderer.js';
+import { TYPE_TO_DIR } from '../knowledge/type-directory-map.js';
+import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 
 export interface EvidenceIndexItem {
   ref: string;
@@ -71,16 +73,6 @@ export interface CapabilityLlmDebug {
     validationErrors: string[];
   };
 }
-
-const TYPE_TO_DIR: Record<string, string> = {
-  CAP: 'capabilities',
-  TERM: 'terms',
-  FLOW: 'flows',
-  MOD: 'modules',
-  CON: 'contracts',
-  VER: 'validation',
-  OPEN: 'open',
-};
 
 function buildObjectYaml(object: KnowledgeObject): string {
   const domain = inferDomainFromObject(object);
@@ -381,10 +373,10 @@ export async function writeCapabilityKnowledgePackage(input: {
 
   const { outputRoot, objects, capabilityId, evidenceIndex, report, debug } = input;
 
-  // 安全清理 bootstrap-knowledge 目录
-  const packageRoot = path.resolve(outputRoot, 'bootstrap-knowledge');
+  // 安全清理 ai-knowledge 目录
+  const packageRoot = path.resolve(outputRoot, DEFAULT_KNOWLEDGE_DIR);
 
-  if (path.basename(packageRoot) !== 'bootstrap-knowledge') {
+  if (path.basename(packageRoot) !== DEFAULT_KNOWLEDGE_DIR) {
     throw new Error(`Refusing to clean invalid package root: ${packageRoot}`);
   }
 

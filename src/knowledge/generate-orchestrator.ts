@@ -1,8 +1,10 @@
 import { logger } from '../shared/logger.js';
-import type { ResolvedGenerateScope } from './generate-scope.js';
+import type { ResolvedGenerateScope, GenerateTarget } from './generate-scope.js';
+import { getGenerationOrder } from './generate-scope.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { PackageLayout } from './init-directory.js';
+import type { KnowledgeType } from '../schemas/knowledge-type.js';
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
@@ -20,76 +22,223 @@ export interface GenerateOrchestrationInput {
   };
 }
 
+/**
+ * Dependencies for generation orchestration.
+ * runGeneratorForType now returns multiple contributions (one per evidence group).
+ */
 export interface GenerateOrchestrationDeps {
-  runDb: (input: GenerateOrchestrationInput) => Promise<KnowledgePackageContribution>;
-  runCapability: (input: GenerateOrchestrationInput) => Promise<KnowledgePackageContribution>;
+  runGeneratorForType: (input: GenerateTypeInput) => Promise<KnowledgePackageContribution[]>;
   writePackage: (input: {
     layout: PackageLayout;
     knowledge: ResolvedGenerateScope['knowledge'];
-    target: ResolvedGenerateScope['target'];
+    target?: GenerateTarget;
     contributions: KnowledgePackageContribution[];
   }) => Promise<void>;
 }
 
-function shouldRunDb(scope: ResolvedGenerateScope): boolean {
-  if (scope.knowledge === 'db') return true;
-  if (scope.knowledge === 'capability') return false;
-  return !scope.target || scope.target.kind === 'db';
-}
-
-function shouldRunCapability(scope: ResolvedGenerateScope): boolean {
-  if (scope.knowledge === 'capability') return true;
-  if (scope.knowledge === 'db') return false;
-  return !scope.target || scope.target.kind === 'capability';
-}
-
-function errorContribution(stage: 'db' | 'capability', error: string): KnowledgePackageContribution {
-  return {
-    stage,
-    files: [],
-    objects: [],
-    report: { stage, ran: true, succeeded: 0, failed: 1, details: { error } },
-    warnings: [error],
+export interface GenerateTypeInput {
+  repoPath: string;
+  type: KnowledgeType;
+  target?: GenerateTarget;
+  layout: PackageLayout;
+  graphStatus: GraphStatus;
+  verbose?: boolean;
+  llm: {
+    model?: string;
+    baseUrl?: string;
+    apiKeyEnv?: string;
+    llmConfig?: string;
+  };
+  dependencies?: {
+    conceptNames?: string[];
+    dataModelNames?: string[];
+    capabilityNames?: string[];
+    tagPool?: string[];
   };
 }
 
+/**
+ * Orchestrate knowledge generation following design doc phases:
+ * - Phase 1 (sequential types): CONCEPT → DATA_MODEL → CAPABILITY
+ *   - Each type's evidence groups are processed in parallel
+ * - Phase 2 (parallel types): BOUNDARY, EXTERNAL, CONSTRAINT, RELATION, WORKFLOW
+ */
 export async function runGenerateOrchestration(input: {
   input: GenerateOrchestrationInput;
   deps: GenerateOrchestrationDeps;
 }): Promise<{ contributions: KnowledgePackageContribution[] }> {
+  const { scope, repoPath, layout, graphStatus, verbose, llm } = input.input;
   const contributions: KnowledgePackageContribution[] = [];
-  const { scope } = input.input;
-  // Only suppress errors when the user didn't specify any generation params at all
-  const suppressErrors = scope.inferred && scope.inferredFrom === 'default';
 
-  if (shouldRunDb(scope)) {
-    try {
-      contributions.push(await input.deps.runDb(input.input));
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.warn(`DB stage failed: ${msg}`);
-      if (!suppressErrors) throw error;
-      contributions.push(errorContribution('db', msg));
+  const types = scope.types;
+  if (types.length === 0) {
+    logger.warn('No knowledge types to generate');
+    return { contributions };
+  }
+
+  // Get generation order (array of type arrays per phase)
+  const phases = getGenerationOrder(types);
+
+  // Track generated names for phase dependencies
+  const generatedNames: Record<string, string[]> = {
+    concept: [],
+    dataModel: [],
+    capability: [],
+  };
+  const tagPool: string[] = [];
+
+  logger.info(`Generating ${types.length} knowledge types in ${phases.length} phases`);
+
+  for (const [phaseIndex, phaseTypes] of phases.entries()) {
+    logger.info(`Phase ${phaseIndex + 1}: ${phaseTypes.join(', ')}`);
+
+    // Build dependencies from previous phases
+    const dependencies = {
+      conceptNames: generatedNames.concept,
+      dataModelNames: generatedNames.dataModel,
+      capabilityNames: generatedNames.capability,
+      tagPool,
+    };
+
+    if (phaseIndex < 3) {
+      // Phase 1: Sequential type execution, but each type's groups are parallel
+      for (const type of phaseTypes) {
+        try {
+          // runGeneratorForType returns multiple contributions (parallel groups)
+          const typeContributions = await input.deps.runGeneratorForType({
+            repoPath,
+            type,
+            target: scope.target?.kind === type ? scope.target : undefined,
+            layout,
+            graphStatus,
+            verbose,
+            llm,
+            dependencies,
+          });
+
+          // Merge all contributions from this type
+          for (const contribution of typeContributions) {
+            contributions.push(contribution);
+            updateGeneratedNames(generatedNames, tagPool, contribution);
+          }
+
+          // Log summary for this type
+          const succeeded = typeContributions.filter(c => c.report.succeeded > 0).length;
+          const failed = typeContributions.filter(c => c.report.failed > 0).length;
+          logger.info(`${type}: ${succeeded} groups succeeded, ${failed} failed`);
+
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          logger.error(`${type} generation failed: ${msg}`);
+          throw error;
+        }
+      }
+    } else {
+      // Phase 2: All types can run in parallel (they don't depend on each other)
+      // Each type's groups are also parallel within the type
+      const typeResults = await Promise.allSettled(
+        phaseTypes.map(type =>
+          input.deps.runGeneratorForType({
+            repoPath,
+            type,
+            target: scope.target?.kind === type ? scope.target : undefined,
+            layout,
+            graphStatus,
+            verbose,
+            llm,
+            dependencies,
+          }),
+        ),
+      );
+
+      for (const [i, result] of typeResults.entries()) {
+        const type = phaseTypes[i];
+        if (result.status === 'fulfilled') {
+          for (const contribution of result.value) {
+            contributions.push(contribution);
+            updateGeneratedNames(generatedNames, tagPool, contribution);
+          }
+        } else {
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          logger.error(`${type} generation failed: ${msg}`);
+          // Add failed contribution
+          contributions.push({
+            stage: type.toLowerCase(),
+            files: [],
+            objects: [],
+            report: {
+              stage: type.toLowerCase(),
+              ran: true,
+              succeeded: 0,
+              failed: 1,
+              details: { error: msg },
+            },
+            warnings: [msg],
+          });
+        }
+      }
     }
   }
 
-  if (shouldRunCapability(scope)) {
-    try {
-      contributions.push(await input.deps.runCapability(input.input));
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.warn(`Capability stage failed: ${msg}`);
-      if (!suppressErrors) throw error;
-      contributions.push(errorContribution('capability', msg));
-    }
-  }
-
+  // Write final package
   await input.deps.writePackage({
-    layout: input.input.layout,
+    layout,
     knowledge: scope.knowledge,
     target: scope.target,
     contributions,
   });
 
+  // Print summary
+  printSummary(contributions);
+
   return { contributions };
+}
+
+function updateGeneratedNames(
+  generatedNames: Record<string, string[]>,
+  tagPool: string[],
+  contribution: KnowledgePackageContribution,
+): void {
+  // Extract names from generated objects
+  for (const obj of contribution.objects) {
+    const name = obj.id;
+    if (obj.type === 'CONCEPT' || obj.type === 'TERM') {
+      generatedNames.concept.push(name);
+    } else if (obj.type === 'DATA_MODEL' || obj.type === 'DB') {
+      generatedNames.dataModel.push(name);
+    } else if (obj.type === 'CAPABILITY' || obj.type === 'CAP') {
+      generatedNames.capability.push(name);
+    }
+  }
+
+  // Extract tags
+  for (const obj of contribution.objects) {
+    const tags = (obj as unknown as Record<string, unknown>).tags;
+    if (Array.isArray(tags)) {
+      for (const tag of tags) {
+        if (typeof tag === 'string' && !tagPool.includes(tag)) {
+          tagPool.push(tag);
+        }
+      }
+    }
+  }
+}
+
+function printSummary(contributions: KnowledgePackageContribution[]): void {
+  // Group by stage
+  const stageSummary = new Map<string, { succeeded: number; failed: number }>();
+
+  for (const c of contributions) {
+    const stage = c.stage;
+    if (!stageSummary.has(stage)) {
+      stageSummary.set(stage, { succeeded: 0, failed: 0 });
+    }
+    const summary = stageSummary.get(stage)!;
+    summary.succeeded += c.report.succeeded;
+    summary.failed += c.report.failed;
+  }
+
+  for (const [stage, summary] of stageSummary.entries()) {
+    logger.info(`${stage} stage: ${summary.succeeded} succeeded, ${summary.failed} failed`);
+  }
 }

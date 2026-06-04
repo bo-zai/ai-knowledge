@@ -107,7 +107,7 @@ describe('buildCapabilityKnowledgeFiles', () => {
     const capFile = files.find(f => f.path.includes('objects/capabilities/CAP-DB-KNOWLEDGE-GENERATION'));
     expect(capFile).toBeDefined();
 
-    const flowFile = files.find(f => f.path.includes('objects/flows/'));
+    const flowFile = files.find(f => f.path.includes('objects/workflows/'));
     expect(flowFile).toBeDefined();
 
     const modFile = files.find(f => f.path.includes('objects/modules/'));
@@ -119,7 +119,7 @@ describe('buildCapabilityKnowledgeFiles', () => {
     const verFile = files.find(f => f.path.includes('objects/validation/'));
     expect(verFile).toBeDefined();
 
-    const openFile = files.find(f => f.path.includes('objects/open/'));
+    const openFile = files.find(f => f.path.includes('objects/boundaries/'));
     expect(openFile).toBeDefined();
   });
 
@@ -481,9 +481,9 @@ describe('report with LangGraph metadata', () => {
 });
 
 describe('writeCapabilityKnowledgePackage', () => {
-  it('removes stale files from previous bootstrap-knowledge output before writing', async () => {
+  it('removes stale files from previous ai-knowledge output before writing', async () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'capability-clean-output-'));
-    const staleFile = join(outputRoot, 'bootstrap-knowledge', 'objects', 'contracts', 'CON-LOGAOP.yaml');
+    const staleFile = join(outputRoot, 'ai-knowledge', 'objects', 'contracts', 'CON-LOGAOP.yaml');
     await mkdir(dirname(staleFile), { recursive: true });
     await writeFile(staleFile, 'id: CON-LOGAOP\n');
 
@@ -515,6 +515,6 @@ describe('writeCapabilityKnowledgePackage', () => {
     });
 
     await expect(access(staleFile)).rejects.toThrow();
-    await expect(access(join(outputRoot, 'bootstrap-knowledge', 'catalog.yaml'))).resolves.toBeUndefined();
+    await expect(access(join(outputRoot, 'ai-knowledge', 'catalog.yaml'))).resolves.toBeUndefined();
   });
 });

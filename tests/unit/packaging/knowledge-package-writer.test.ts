@@ -10,7 +10,7 @@ describe('writeKnowledgePackage', () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'knowledge-package-writer-'));
 
     // Create directory structure (simulate initDirectoryStructure)
-    const packageRoot = resolve(outputRoot, 'bootstrap-knowledge');
+    const packageRoot = resolve(outputRoot, 'ai-knowledge');
     await mkdir(join(packageRoot, 'objects'), { recursive: true });
     await mkdir(join(packageRoot, 'objects/_共享'), { recursive: true });
     await mkdir(join(packageRoot, 'evidence'), { recursive: true });
@@ -47,12 +47,12 @@ describe('writeKnowledgePackage', () => {
       ],
     });
 
-    const catalog = await readFile(join(outputRoot, 'bootstrap-knowledge', 'catalog.yaml'), 'utf-8');
+    const catalog = await readFile(join(outputRoot, 'ai-knowledge', 'catalog.yaml'), 'utf-8');
     expect(catalog).toContain('knowledge: all');
     expect(catalog).toContain('DB-users');
     expect(catalog).toContain('CAP-ORDER');
 
-    const report = await readFile(join(outputRoot, 'bootstrap-knowledge', 'reports', 'generation.json'), 'utf-8');
+    const report = await readFile(join(outputRoot, 'ai-knowledge', 'reports', 'generation.json'), 'utf-8');
     expect(report).toContain('"knowledge": "all"');
     expect(report).toContain('"db"');
     expect(report).toContain('"capability"');

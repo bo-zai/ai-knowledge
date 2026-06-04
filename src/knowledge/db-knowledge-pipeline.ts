@@ -44,6 +44,7 @@ import type { GenerateTarget } from './generate-scope.js';
 import type { KnowledgePackageContribution, KnowledgePackageStageReport } from '../packaging/knowledge-package-contribution.js';
 import type { SliceDebugTrace } from '../packaging/write-debug-logs.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
+import { TYPE_TO_DIR, getDirForType } from './type-directory-map.js';
 
 export interface RunDbKnowledgePipelineInput {
   repoPath: string;
@@ -141,11 +142,7 @@ function inferObjectType(sliceKind: string): 'CON' | 'FLOW' | 'MOD' | 'TERM' | '
 }
 
 function getObjectPath(type: string, id: string): string {
-  const typeDirs: Record<string, string> = {
-    TERM: 'terms', CON: 'contracts', FLOW: 'flows', MOD: 'modules',
-    OPEN: 'open', OWN: 'ownership', VER: 'validation', DB: 'db',
-  };
-  return `objects/${typeDirs[type] ?? 'unknown'}/${id}.md`;
+  return `objects/${getDirForType(type as any)}/${id}.md`;
 }
 
 function getPromptBuilderForSliceKind(kind: string): ((input: unknown) => { system: string; user: string }) | null {
@@ -445,7 +442,7 @@ export async function runDbKnowledgePipeline(
 
   // Build slice filter from target
   let sliceFilter: SliceFilter | null = null;
-  if (target?.kind === 'db') {
+  if (target?.kind === 'DATA_MODEL') {
     sliceFilter = { kind: 'database', raw: `database:${target.value}`, target: target.value.toLowerCase() };
   }
 
