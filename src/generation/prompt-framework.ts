@@ -68,6 +68,35 @@ export const BASE_SYSTEM_PROMPT = `你是一个代码知识提取专家。你必
 3. **证据约束**：只能使用提供的 evidence 中的信息，禁止虚构不存在的能力、概念、约束或证据路径。
 4. **引用约束**：引用其他知识条目时，必须使用已生成的名称（在 dependencies 中提供），禁止自创名称。
 
+## 一句话定位（summary_zh）
+
+每个知识条目必须包含 summary_zh 字段：
+- 用一句话说明"这是什么业务场景下的什么"
+- 帮助 Agent 快速判断是否需要深入阅读
+- 不要翻译代码名称，要说明业务场景和作用
+
+示例：
+- "课表中每个练习任务的分类标识，决定了数据来源和属性结构的不同处理路径"
+- "订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等）"
+
+## 别名（aliases）
+
+每个知识条目必须包含 aliases 字段：
+- 必须包含代码中的英文命名（如 OrderStatusEnum、CoursewareType）
+- 可包含业务术语中的其他叫法（如"订单状态码"、"课件分类"）
+- 英文别名用于生成文件名，必须提供
+
+## 证据（evidence）
+
+每个知识条目必须包含 evidence 字段：
+- 列出生成该知识的代码证据路径
+- 格式：文件路径或文件路径#方法名/字段名
+- 帮助 Agent 定位代码位置
+
+示例：
+- ["OrderStatusEnum.java", "OrderDO.java#status"]
+- ["UserService.java#bind", "application.yml#smsCheckSwitch"]
+
 ## 价值门槛
 
 生成的知识必须提供 Agent 无法从代码中 3 分钟内得出的信息增量。
@@ -142,9 +171,11 @@ function buildCapabilityRules(): string {
 ### 产物示例
 {
   "domain_name": "订单管理",
+  "summary_zh": "商品购买的订单全生命周期管理域，支持创建、支付、取消、查询等订单操作",
   "domain_description_zh": "商品购买的订单全生命周期管理",
   "domain_business_context": "支持支付宝、微信和余额三种支付渠道，支付回调与定时任务存在竞态条件",
   "entry_class": "OrderController",
+  "aliases": ["Order", "订单域", "OrderModule"],
   "operations": [
     {
       "operation_name": "创建订单",
@@ -155,6 +186,7 @@ function buildCapabilityRules(): string {
       "tags": ["订单", "创建", "购买"]
     }
   ],
+  "evidence": ["OrderController.java", "OrderService.java", "OrderDO.java"],
   "tags": ["订单", "交易", "购买"]
 }`;
 }
@@ -184,8 +216,9 @@ function buildConceptRules(): string {
 ### 产物示例
 {
   "concept_name": "订单状态",
+  "summary_zh": "订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等）",
   "business_meaning_zh": "订单从创建到完成的流转状态标识，控制订单可执行的操作",
-  "aliases": ["OrderStatus", "订单状态码", "orderStatus"],
+  "aliases": ["OrderStatus", "订单状态码", "orderStatus", "OrderStatusEnum"],
   "value_explanation": [
     { "value": "101", "business_meaning_zh": "待支付，用户可取消" },
     { "value": "201", "business_meaning_zh": "已支付，等待发货" }
@@ -195,6 +228,7 @@ function buildConceptRules(): string {
   "code_manifestation": [
     { "kind": "enum", "name": "OrderStatusEnum", "location": "OrderDO.status" }
   ],
+  "evidence": ["OrderStatusEnum.java", "OrderDO.java#status", "OrderService.java#submit"],
   "applicable_scope": "仅适用于主订单流程，退款流程有独立状态机",
   "tags": ["订单", "状态", "流转"]
 }`;
@@ -221,8 +255,10 @@ function buildBoundaryRules(): string {
 ### 产物示例
 {
   "boundary_title": "支付渠道局限",
+  "summary_zh": "支付能力仅支持支付宝和微信两个渠道，不支持银联或信用卡等其他支付方式",
   "boundary_type": "limitation",
   "detailed_description_zh": "当前只支持支付宝和微信支付两个渠道，不支持银联、信用卡",
+  "aliases": ["PaymentChannelLimit", "支付渠道限制", "渠道局限"],
   "related_capability": "订单管理",
   "evidence": ["AlipayConfig.java", "WxpayConfig.java"],
   "applicable_scope": "仅影响支付渠道选择",
@@ -248,11 +284,14 @@ function buildExternalRules(): string {
 ### 产物示例
 {
   "external_system_name": "微信支付",
+  "summary_zh": "学生端和教师端的在线支付外部系统，通过 SDK 实现统一下单和回调处理",
   "interaction_purpose_zh": "学生端和教师端的在线支付",
   "interaction_method": "sdk",
   "repository_role": "caller",
   "interaction_entry": "WxPayServiceImpl",
+  "aliases": ["WechatPay", "wxpay", "微信支付SDK"],
   "visible_interaction_scope": ["统一下单", "订单查询", "接收支付回调"],
+  "evidence": ["WxPayServiceImpl.java", "WxpayConfig.java", "application.yml#wechat.pay"],
   "applicable_scope": "仅中国大陆地区微信支付",
   "tags": ["支付", "微信", "第三方"]
 }`;
@@ -282,8 +321,10 @@ function buildConstraintRules(): string {
 ### 产物示例
 {
   "constraint_name": "学生绑定老师频率限制",
+  "summary_zh": "同一学生一年内只能绑定一次老师，防止频繁更换师徒关系",
   "constraint_type": "business_rule",
   "constraint_description_zh": "同一个学生一年内只能绑定一次老师",
+  "aliases": ["StudentBindLimit", "师徒绑定限制", "绑定频率限制"],
   "trigger_condition": "绑定时间在上次绑定一年内",
   "violation_consequence": "抛出 UserException: 同一个用户一年之内只能绑定一次",
   "evidence": ["UserService.java#bind"],
@@ -317,8 +358,10 @@ function buildRelationRules(): string {
 ### 产物示例
 {
   "relation_name": "课表制定触发评分更新",
+  "summary_zh": "练习录音打分后通过 EventBus 异步更新课表中的最高评分",
   "relation_type": "async_trigger",
   "participating_capabilities": ["课表制定", "练习录音评分"],
+  "aliases": ["ScoreUpdateTrigger", "评分更新触发", "课表评分关系"],
   "relation_description_zh": "练习录音打分通过 EventBus 异步更新课表中的最高评分",
   "evidence": ["ScoreListener.handleScore", "BasicEventBus.post"],
   "applicable_scope": "仅教师为学生制定课表后的评分场景",
@@ -350,7 +393,9 @@ function buildDataModelRules(): string {
 ### 产物示例
 {
   "aggregate_name": "订单聚合",
+  "summary_zh": "用户购买商品产生的交易记录聚合，包含订单主体、订单商品项和购买记录",
   "aggregate_description_zh": "用户购买商品产生的交易记录",
+  "aliases": ["OrderAggregate", "订单模型", "OrderModel"],
   "core_entities": [
     { "name": "OrderDO", "role": "聚合根", "description": "订单主体" },
     { "name": "OrderGoodsDO", "role": "子实体", "description": "订单商品项" }
@@ -388,7 +433,9 @@ function buildWorkflowRules(): string {
 ### 产物示例
 {
   "workflow_name": "商品购买全流程",
+  "summary_zh": "用户从浏览商品到完成支付的端到端购买路径，涉及商品浏览、购物车、订单管理和支付四个域",
   "business_goal": "用户从浏览商品到完成支付的购买路径",
+  "aliases": ["PurchaseFlow", "购买流程", "OrderFlow"],
   "involved_domains": ["商品浏览", "购物车", "订单管理", "支付"],
   "steps": [
     { "order": 1, "domain": "商品浏览", "action": "浏览商品", "description": "查看商品列表和详情" },

@@ -58,6 +58,14 @@ export async function writeKnowledgePackage(input: {
     }
   }
 
+  // 生成 concepts 目录的 _glossary.md（术语速查表）
+  // 设计文档 03 要求：Agent 在需求澄清阶段快速确认术语含义
+  if (objectsByType.concepts && objectsByType.concepts.length > 0) {
+    const glossaryPath = path.join(layout.knowledgeDirs.concepts, '_glossary.md');
+    const glossaryContent = generateGlossary(objectsByType.concepts);
+    await fs.writeFile(glossaryPath, glossaryContent, 'utf-8');
+  }
+
   // 生成全局 index.md
   const indexMdContent = generateGlobalIndex(layout, objectsByType);
   await fs.writeFile(layout.indexMdPath, indexMdContent, 'utf-8');
@@ -106,7 +114,15 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
   const fields = parseYamlFields(yamlContent);
 
   // 头部格式（设计文档要求）
-  const conceptName = getStringField(fields, 'concept_name') ?? id;
+  const conceptName = getStringField(fields, 'concept_name')
+    ?? getStringField(fields, 'domain_name')
+    ?? getStringField(fields, 'boundary_title')
+    ?? getStringField(fields, 'constraint_name')
+    ?? getStringField(fields, 'workflow_name')
+    ?? getStringField(fields, 'aggregate_name')
+    ?? getStringField(fields, 'external_system_name')
+    ?? getStringField(fields, 'relation_name')
+    ?? id;
   lines.push(`# ${conceptName}`);
   lines.push('');
   lines.push(`> 类型：${type}`);
@@ -121,6 +137,15 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
     lines.push(`> 标签：${formatTags(tags)}`);
   }
   lines.push('');
+
+  // 一句话定位（summary_zh）- 放在头部后，帮助 Agent 快速判断相关性
+  const summaryZh = getStringField(fields, 'summary_zh');
+  if (summaryZh) {
+    lines.push(`## 一句话定位`);
+    lines.push('');
+    lines.push(summaryZh);
+    lines.push('');
+  }
 
   // 别名
   const aliases = getArrayField<string>(fields, 'aliases');
@@ -168,13 +193,15 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
     lines.push('');
   }
 
-  // 关联概念
+  // 关联概念（添加链接格式，帮助 Agent 直接跳转）
   const relatedConcepts = getArrayField<string>(fields, 'related_concepts');
   if (relatedConcepts && relatedConcepts.length > 0) {
     lines.push(`## 关联概念`);
     lines.push('');
     for (const concept of relatedConcepts) {
-      lines.push(`- ${concept}`);
+      // 尝试生成链接格式：[概念名](concepts/概念名.md)
+      const conceptFileName = toKebabCase(concept) + '.md';
+      lines.push(`- [${concept}](concepts/${conceptFileName})`);
     }
     lines.push('');
   }
@@ -203,6 +230,17 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
     lines.push(`## 置信度`);
     lines.push('');
     lines.push(confidence);
+    lines.push('');
+  }
+
+  // 证据（evidence）- 帮助 Agent 定位代码位置
+  const evidence = getArrayField<string>(fields, 'evidence');
+  if (evidence && evidence.length > 0) {
+    lines.push(`## 证据`);
+    lines.push('');
+    for (const ev of evidence) {
+      lines.push(`- ${ev}`);
+    }
     lines.push('');
   }
 
@@ -404,6 +442,39 @@ function generateGlobalIndex(layout: PackageLayout, objectsByType: Record<Knowle
       }
       lines.push('');
     }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate _glossary.md for concepts directory.
+ * Per design/03-knowledge-directory-structure.md: 术语速查表，帮助 Agent 快速匹配术语。
+ */
+function generateGlossary(objects: Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>): string {
+  const lines: string[] = [];
+
+  lines.push('# 术语速查');
+  lines.push('');
+  lines.push('| 术语 | 定义 | 别名 | 详情 |');
+  lines.push('|------|------|------|------|');
+
+  for (const obj of objects) {
+    const fields = parseYamlFieldsFromMd(obj.content);
+    const fileName = toKebabCase(obj.id) + '.md';
+
+    // 定义优先使用 summary_zh（一句话定位），其次使用 business_meaning_zh
+    const definition = getStringField(fields, 'summary_zh')
+      ?? getStringField(fields, 'business_meaning_zh')
+      ?? '';
+
+    // 别名格式化
+    const aliases = getArrayField<string>(fields, 'aliases');
+    const aliasesStr = aliases && aliases.length > 0
+      ? aliases.join(', ')
+      : '';
+
+    lines.push(`| ${obj.id} | ${definition} | ${aliasesStr} | [${fileName}](${fileName}) |`);
   }
 
   return lines.join('\n');
