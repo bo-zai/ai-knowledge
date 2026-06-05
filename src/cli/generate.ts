@@ -126,29 +126,40 @@ async function runConceptFiveLayerGeneration(
 
   const filterTasks = allCandidates.map((candidate, idx) =>
     limit(async () => {
-      logger.debug(`CONCEPT filter ${idx + 1}/${allCandidates.length}: ${candidate.className} (mark: ${candidate.suspiciousMark || 'none'})`);
-      logger.debug(`CONCEPT codeSnippet: ${candidate.codeSnippet || 'none'}`);
-      logger.debug(`CONCEPT enumValues: ${candidate.enumValues?.join(', ') || 'none'}`);
-      const prompt = buildLlmFilterPrompt(candidate);
-      logger.debug(`CONCEPT filter prompt for ${candidate.className}: ${prompt}`);
-      const result = await claimsProvider('你是一个知识价值判断专家。', prompt);
-      logger.debug(`CONCEPT filter raw response for ${candidate.className}: ${result.rawText}`);
-
       try {
-        const parsed = JSON.parse(result.rawText.trim().replace(/^```json\n?|\n?```$/g, '').trim());
-        llmResults.set(candidate.className, parsed);
-        logger.info(`CONCEPT filter result: ${candidate.className} -> keep=${parsed.keep}, concept=${parsed.businessConcept || 'N/A'}, reason=${parsed.reason || 'N/A'}`);
-      } catch (e) {
-        // 解析失败，默认保留（保守策略）
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        logger.warn(`CONCEPT filter parse failed for ${candidate.className}: ${errorMsg}`);
-        llmResults.set(candidate.className, { keep: true, reason: 'parse_failed' });
-      }
+        logger.debug(`CONCEPT filter ${idx + 1}/${allCandidates.length}: ${candidate.className} (mark: ${candidate.suspiciousMark || 'none'})`);
+        logger.debug(`CONCEPT codeSnippet: ${candidate.codeSnippet || 'none'}`);
+        logger.debug(`CONCEPT enumValues: ${candidate.enumValues?.join(', ') || 'none'}`);
+        const prompt = buildLlmFilterPrompt(candidate);
+        logger.debug(`CONCEPT filter prompt for ${candidate.className}: ${prompt}`);
 
-      // 更新进度条
-      completedCount++;
-      progressBar.update(completedCount, { lastCandidate: candidate.className.slice(0, 20) });
-      flushLogFile(); // 实时刷新日志
+        // LLM调用（可能失败）
+        const result = await claimsProvider('你是一个知识价值判断专家。', prompt);
+        logger.debug(`CONCEPT filter raw response for ${candidate.className}: ${result.rawText}`);
+
+        // JSON解析
+        try {
+          const parsed = JSON.parse(result.rawText.trim().replace(/^```json\n?|\n?```$/g, '').trim());
+          llmResults.set(candidate.className, parsed);
+          logger.info(`CONCEPT filter result: ${candidate.className} -> keep=${parsed.keep}, concept=${parsed.businessConcept || 'N/A'}, reason=${parsed.reason || 'N/A'}`);
+        } catch (parseError) {
+          // JSON解析失败
+          const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+          logger.warn(`CONCEPT filter parse failed for ${candidate.className}: ${errorMsg}`);
+          llmResults.set(candidate.className, { keep: true, reason: 'parse_failed' });
+        }
+      } catch (llmError) {
+        // LLM调用失败（网络/超时/API错误）
+        const errorMsg = llmError instanceof Error ? llmError.message : String(llmError);
+        logger.error(`CONCEPT filter LLM call failed for ${candidate.className}: ${errorMsg}`);
+        // 使用保守策略：默认保留
+        llmResults.set(candidate.className, { keep: true, reason: 'llm_call_failed' });
+      } finally {
+        // 无论成功还是失败，都更新进度条
+        completedCount++;
+        progressBar.update(completedCount, { lastCandidate: candidate.className.slice(0, 20) });
+        flushLogFile();
+      }
     })
   );
 

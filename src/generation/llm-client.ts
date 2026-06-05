@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { ModelConfig } from '../config/model-config.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { logger } from '../shared/logger.js';
 
 /** LLM request timeout in milliseconds (2 minutes for complex prompts) */
 const LLM_TIMEOUT_MS = 120_000;
@@ -87,12 +88,14 @@ export async function generateWithClient(
     return await nonStreamingFallback(client, model, messages, startedAt, 'Empty streaming response');
   } catch (streamError) {
     // Streaming failed - fallback to non-streaming
+    const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
+    logger.warn(`LLM streaming failed, fallback to non-streaming: ${errorMsg}`);
     return await nonStreamingFallback(
       client,
       model,
       messages,
       startedAt,
-      streamError instanceof Error ? streamError.message : String(streamError),
+      errorMsg,
     );
   }
 }
@@ -107,22 +110,31 @@ async function nonStreamingFallback(
   startedAt: string,
   streamError: string,
 ): Promise<LlmGenerationResult> {
-  const response = await client.chat.completions.create({
-    model,
-    messages,
-    temperature: 0,
-  });
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      messages,
+      temperature: 0,
+    });
 
-  const finishedAt = new Date().toISOString();
-  const durationMs = Date.now() - new Date(startedAt).getTime();
+    const finishedAt = new Date().toISOString();
+    const durationMs = Date.now() - new Date(startedAt).getTime();
 
-  return {
-    text: response.choices[0]?.message?.content ?? '',
-    mode: 'non_streaming_fallback',
-    startedAt,
-    finishedAt,
-    durationMs,
-    chunks: 0,
-    streamError,
-  };
+    logger.debug(`LLM non-streaming fallback succeeded in ${durationMs}ms`);
+
+    return {
+      text: response.choices[0]?.message?.content ?? '',
+      mode: 'non_streaming_fallback',
+      startedAt,
+      finishedAt,
+      durationMs,
+      chunks: 0,
+      streamError,
+    };
+  } catch (nonStreamError) {
+    const errorMsg = nonStreamError instanceof Error ? nonStreamError.message : String(nonStreamError);
+    logger.error(`LLM non-streaming fallback failed: ${errorMsg}`);
+    // 向上抛出异常，由调用者处理
+    throw nonStreamError;
+  }
 }
