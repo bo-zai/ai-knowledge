@@ -2,12 +2,15 @@ import type { KnowledgeType } from '../schemas/knowledge-type.js';
 import type { EvidenceBundle } from './evidence-bundle-schema.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { GenerateTarget } from '../knowledge/generate-scope.js';
+import type { ConceptCandidate, FilteredCandidate, SuspiciousMark } from './concept-filter.js';
+import { executeLayer1And2, hardFilterBatch, softMarkBatch } from './concept-filter.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 import {
   withReadOnlyLbug,
   type ReadOnlyQueryExecutor,
 } from '../engine/lbug/read-only-session.js';
 import { logger } from '../shared/logger.js';
+import { batchExtractClassSnippets } from '../shared/fs.js';
 
 export interface BuildEvidenceInput {
   repoPath: string;
@@ -238,8 +241,14 @@ function groupByPackagePath<T extends { filePath: string }>(
 // ============================================================================
 
 /**
- * CONCEPT: Query business entities grouped by package.
- * VO/DTO/Req/Resp/Property classes are grouped by their directory.
+ * CONCEPT: Query candidate classes with layered filtering.
+ *
+ * 第一层硬过滤在 Cypher 查询中执行：
+ * - 排除测试类、工具类、框架层代码、启动类
+ * - 不主动匹配 VO/DTO/Config（交给第二层软标记处理）
+ *
+ * 第二层软标记在查询结果中执行：
+ * - 对可疑候选打标记（transmission_class、config_class、simple_enum）
  */
 async function queryConceptEvidenceByPackage(
   repoPath: string,
@@ -249,26 +258,83 @@ async function queryConceptEvidenceByPackage(
   const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : '';
   const repoName = repoPath.split('/').pop() || 'unknown';
 
-  // Query business data objects
-  const dataObjCypher = `
-    MATCH (c:Class) WHERE c.name =~ '(?i).*(VO|DTO|Req|Resp|Property|Param|Config)$' ${targetFilter}
-    RETURN c.name as name, c.filePath as filePath
-    LIMIT 30
+  // 第一层硬过滤：在 Cypher 查询中排除明显无价值的类
+  // 同时提取字段定义作为 codeSnippet，帮助 LLM 判断业务价值
+  const candidateCypher = `
+    MATCH (c:Class)
+    WHERE true ${targetFilter}
+    AND NOT c.name =~ '(?i).*(Util|Helper|Common|Base|Abstract|Factory|Builder|Adapter|Wrapper|Proxy)$'
+    AND NOT c.name =~ '(?i).*(Application|Main|Bootstrap|Launcher)$'
+    AND NOT c.filePath =~ '(?i).*(test|Test|spec|_test).*'
+    AND NOT c.filePath =~ '(?i).*(framework|infrastructure|util|common).*'
+    AND NOT c.filePath =~ '(?i).*(node_modules|target|build|dist).*'
+    OPTIONAL MATCH (c)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property)
+    WITH c, collect(p.name) as fieldNames
+    RETURN c.name as name, c.filePath as filePath, fieldNames as fieldList
+    LIMIT 50
   `;
-  const dataObjResults = await executeQuery(dataObjCypher);
+  const candidateResults = await executeQuery(candidateCypher);
 
-  // Query entity directory classes
-  const entityDirCypher = `
-    MATCH (c:Class) WHERE c.filePath =~ '(?i).*entity.*' ${targetFilter}
-    AND NOT c.filePath =~ '(?i).*test.*'
-    RETURN c.name as name, c.filePath as filePath
-    LIMIT 30
-  `;
-  const entityDirResults = await executeQuery(entityDirCypher);
+  // 转换为候选列表（图谱可能没有字段信息）
+  const candidates: ConceptCandidate[] = (candidateResults as Array<{ name: string; filePath: string; fieldList?: string[] }>).map(row => {
+    // 检测是否是枚举类（类名包含 Enum 或 Type）
+    const isEnum = row.name.includes('Enum') || row.name.endsWith('Type');
 
-  // Combine and group by package
-  const allResults = [...dataObjResults, ...entityDirResults] as Array<{ name: string; filePath: string }>;
-  const packageGroups = groupByPackagePath(allResults, 6);
+    return {
+      className: row.name,
+      filePath: row.filePath,
+      codeSnippet: undefined, // 先设为 undefined，后续通过文件读取填充
+      enumValues: isEnum && row.fieldList ? row.fieldList.filter(v => v.length > 0) : undefined,
+    };
+  });
+
+  logger.info(`CONCEPT: ${candidates.length} candidates before filtering`);
+
+  // 对没有代码片段的候选，通过读取文件填充
+  const candidatesWithoutSnippet = candidates.filter(c => !c.codeSnippet);
+  if (candidatesWithoutSnippet.length > 0) {
+    logger.info(`CONCEPT: Reading files for ${candidatesWithoutSnippet.length} candidates without graph data`);
+    const snippets = await batchExtractClassSnippets(
+      repoPath,
+      candidatesWithoutSnippet.map(c => ({ filePath: c.filePath, className: c.className })),
+      500,
+    );
+
+    // 将读取到的代码片段填充回候选
+    for (const c of candidates) {
+      const snippet = snippets.get(c.className);
+      if (snippet) {
+        c.codeSnippet = snippet;
+      }
+    }
+
+    // 统计填充结果
+    const filledCount = candidates.filter(c => c.codeSnippet).length;
+    logger.info(`CONCEPT: ${filledCount} candidates now have code snippets`);
+  }
+
+  // 执行第一、二层过滤
+  const filteredCandidates = executeLayer1And2(candidates, repoPath);
+
+  // 统计软标记分布
+  const markStats = {
+    unmarked: 0,
+    transmission_class: 0,
+    config_class: 0,
+    simple_enum: 0,
+  };
+  for (const c of filteredCandidates) {
+    if (!c.suspiciousMark) {
+      markStats.unmarked++;
+    } else {
+      markStats[c.suspiciousMark]++;
+    }
+  }
+  logger.info(`CONCEPT: after filtering - ${filteredCandidates.length} candidates`);
+  logger.info(`CONCEPT: soft marks - unmarked: ${markStats.unmarked}, transmission: ${markStats.transmission_class}, config: ${markStats.config_class}, simple_enum: ${markStats.simple_enum}`);
+
+  // 按包路径分组（保留软标记信息）
+  const packageGroups = groupByPackagePathWithMarks(filteredCandidates, 8);
 
   const groups: EvidenceGroup[] = [];
 
@@ -280,8 +346,14 @@ async function queryConceptEvidenceByPackage(
       ref: `evidence://contract/CON-${String(idx + 1).padStart(3, '0')}`,
       kind: 'type',
       location: row.filePath,
-      name: row.name,
+      name: row.className,
       fields: [],
+      // 将软标记、代码片段、枚举值存储在 customData 中，供 LLM 筛选使用
+      customData: {
+        suspiciousMark: row.suspiciousMark,
+        codeSnippet: row.codeSnippet,
+        enumValues: row.enumValues,
+      },
     }));
 
     groups.push({
@@ -294,7 +366,7 @@ async function queryConceptEvidenceByPackage(
         confidence: 0.7,
         risks: [],
         capabilityHints: {
-          nameCandidates: rows.map(r => r.name),
+          nameCandidates: rows.map(r => r.className),
           relatedTerms: [],
         },
         entryPoints: [],
@@ -308,6 +380,35 @@ async function queryConceptEvidenceByPackage(
         openQuestions: [],
       },
     });
+  }
+
+  return groups;
+}
+
+/**
+ * 按包路径分组（保留软标记信息）
+ */
+function groupByPackagePathWithMarks<T extends { filePath: string }>(
+  results: T[],
+  maxGroupSize: number = 8,
+): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+
+  for (const row of results) {
+    const packagePath = extractPackagePath(row.filePath);
+
+    if (!groups.has(packagePath)) {
+      groups.set(packagePath, []);
+    }
+
+    const group = groups.get(packagePath)!;
+
+    if (group.length >= maxGroupSize) {
+      const subGroupId = `${packagePath}-${groups.size}`;
+      groups.set(subGroupId, [row]);
+    } else {
+      group.push(row);
+    }
   }
 
   return groups;
@@ -472,7 +573,7 @@ async function queryCapabilityEvidenceByPackage(
 }
 
 /**
- * BOUNDARY: Query config files (single group, typically small).
+ * BOUNDARY: Query config files, grouped by config type for multiple boundary extraction.
  */
 async function queryBoundaryEvidenceByPackage(
   repoPath: string,
@@ -481,10 +582,11 @@ async function queryBoundaryEvidenceByPackage(
 ): Promise<EvidenceGroup[]> {
   const repoName = repoPath.split('/').pop() || 'unknown';
 
+  // 查询配置文件，按类型分组
   const configCypher = `
     MATCH (f:File) WHERE f.name =~ '(?i).*(config|properties|yaml|yml)$'
     RETURN f.name as name, f.filePath as filePath
-    LIMIT 10
+    LIMIT 20
   `;
   const configResults = await executeQuery(configCypher);
 
@@ -492,34 +594,65 @@ async function queryBoundaryEvidenceByPackage(
     return [];
   }
 
-  const docs: EvidenceBundle['docs'] = configResults.map((row, idx) => ({
-    ref: `evidence://doc/DOC-${String(idx + 1).padStart(3, '0')}`,
-    location: row.filePath as string || '',
-    kind: 'docs',
-    excerpt: `Configuration file: ${row.name}`,
-  }));
+  // 按配置类型分组（支付、短信、缓存、数据库等）
+  const configTypeKeywords: Record<string, string[]> = {
+    '支付': ['pay', 'wxpay', 'alipay', 'payment'],
+    '短信': ['sms', 'message', 'notify'],
+    '缓存': ['redis', 'cache', 'memcache'],
+    '数据库': ['db', 'mysql', 'datasource', 'jdbc'],
+    '存储': ['oss', 'storage', 'file', 'upload'],
+    '定时任务': ['job', 'schedule', 'quartz', 'task'],
+    '安全': ['security', 'auth', 'login', 'token'],
+    '通用': ['application', 'config', 'bootstrap'],
+  };
 
-  return [{
-    groupId: 'BOUNDARY-configs',
-    packagePath: 'config',
-    bundle: {
-      bundleId: 'BUNDLE-BOUNDARY',
-      candidateId: 'CAND-BOUNDARY',
-      repoProfile: { name: repoName },
-      confidence: 0.5,
-      risks: ['boundary_requires_manual_review'],
-      capabilityHints: { nameCandidates: [], relatedTerms: [] },
-      entryPoints: [],
-      behaviorSlices: [],
-      dataContracts: [],
-      validationAnchors: [],
-      moduleSurfaces: [],
-      flowTraces: [],
-      docs,
-      negativeEvidence: [],
-      openQuestions: [],
-    },
-  }];
+  // 为每个配置文件创建独立的 evidence group，帮助 LLM 提取多条边界
+  const groups: EvidenceGroup[] = [];
+  let groupIdx = 0;
+
+  for (const row of configResults) {
+    const filePath = row.filePath as string || '';
+    const fileName = row.name as string || '';
+
+    // 确定配置类型
+    let configType = '通用';
+    for (const [type, keywords] of Object.entries(configTypeKeywords)) {
+      if (keywords.some(k => fileName.toLowerCase().includes(k) || filePath.toLowerCase().includes(k))) {
+        configType = type;
+        break;
+      }
+    }
+
+    groupIdx++;
+    groups.push({
+      groupId: `BOUNDARY-${configType}-${groupIdx}`,
+      packagePath: `config/${configType}`,
+      bundle: {
+        bundleId: `BUNDLE-BOUNDARY-${configType}`,
+        candidateId: `CAND-BOUNDARY-${groupIdx}`,
+        repoProfile: { name: repoName },
+        confidence: 0.6,
+        risks: ['boundary_requires_manual_review'],
+        capabilityHints: { nameCandidates: [], relatedTerms: [configType] },
+        entryPoints: [],
+        behaviorSlices: [],
+        dataContracts: [],
+        validationAnchors: [],
+        moduleSurfaces: [],
+        flowTraces: [],
+        docs: [{
+          ref: `evidence://doc/DOC-${String(groupIdx).padStart(3, '0')}`,
+          location: filePath,
+          kind: 'docs',
+          excerpt: `${configType}配置文件: ${fileName}`,
+        }],
+        negativeEvidence: [],
+        openQuestions: [],
+      },
+    });
+  }
+
+  return groups;
 }
 
 /**

@@ -36,6 +36,7 @@ export const EvidenceDataContractSchema = z.object({
   matchedTerms: z.array(z.string()).optional(),
   sourceLocation: z.string().optional(),
   startLine: z.number().optional(),
+  customData: z.record(z.unknown()).optional(), // 自定义数据（如软标记信息）
 });
 
 export const EvidenceFlowTraceSchema = z.object({

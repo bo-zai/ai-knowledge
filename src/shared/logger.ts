@@ -14,6 +14,17 @@ let currentLevel: LogLevel = 'info';
 let logFilePath: string | null = null;
 let logStream: fs.WriteStream | null = null;
 
+/**
+ * 格式化为北京时间（东八区 UTC+8）
+ */
+function formatBeijingTime(): string {
+  const now = new Date();
+  // 东八区偏移 8 小时
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  // 格式：2026-06-04 15:46:58
+  return beijingTime.toISOString().replace('T', ' ').slice(0, 19);
+}
+
 export function setLogLevel(level: LogLevel): void {
   currentLevel = level;
 }
@@ -41,7 +52,7 @@ export function closeLogFile(): void {
 
 export function log(level: LogLevel, message: string, data?: unknown): void {
   if (LOG_LEVELS[level] >= LOG_LEVELS[currentLevel]) {
-    const timestamp = new Date().toISOString();
+    const timestamp = formatBeijingTime();
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
     const fullMessage = data !== undefined
       ? `${prefix} ${message} ${JSON.stringify(data)}`
