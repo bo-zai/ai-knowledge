@@ -1,6 +1,7 @@
 import { logger } from '../shared/logger.js';
 import type { LlmClaimsProvider } from './knowledge-generator.js';
 import type { KnowledgeType } from '../schemas/knowledge-type.js';
+import { LLM_DEFAULTS } from '../config/defaults.js';
 import {
   getRepairPrompt,
   getRetrySystemPrompt,
@@ -94,11 +95,11 @@ export interface LlmJsonCallResult<T = Record<string, unknown>> {
   fallbackUsed: boolean;
 }
 
-/** 默认超时时间：120秒 */
-const DEFAULT_TIMEOUT_MS = 120000;
+/** 默认超时时间（毫秒） */
+const DEFAULT_TIMEOUT_MS = LLM_DEFAULTS.timeoutSeconds * 1000;
 
 /** 默认最大重试次数 */
-const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_MAX_RETRIES = LLM_DEFAULTS.maxRetries;
 
 /**
  * 带超时的 LLM 调用
