@@ -12,3 +12,14 @@ export const KNOWLEDGE_TYPES = [
   'CAPABILITY', 'CONCEPT', 'BOUNDARY', 'EXTERNAL',
   'CONSTRAINT', 'RELATION', 'DATA_MODEL', 'WORKFLOW'
 ] as const;
+
+/** LLM 配置默认值 */
+export const LLM_DEFAULTS = {
+  model: 'gpt-4o',
+  baseUrl: 'https://api.openai.com/v1',
+  apiKeyEnv: 'OPENAI_API_KEY',
+
+  concurrency: 3,
+  timeoutSeconds: 120,
+  maxRetries: 3,
+};
