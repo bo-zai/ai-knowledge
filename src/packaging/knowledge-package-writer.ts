@@ -421,10 +421,25 @@ function generateTypeIndex(dir: KnowledgeDir, objects: Array<{ id: string; type:
 function parseYamlFieldsFromMd(mdContent: string): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
 
+  // 提取一句话定位（summary_zh）
+  const summaryMatch = mdContent.match(/## 一句话定位\s*\n\s*(.*?)\n/);
+  if (summaryMatch) {
+    fields.summary_zh = summaryMatch[1];
+  }
+
   // 提取业务含义
   const businessMatch = mdContent.match(/## 业务含义\s*\n\s*(.*?)\n/);
   if (businessMatch) {
     fields.business_meaning_zh = businessMatch[1];
+  }
+
+  // 提取别名（列表项）
+  const aliasesMatch = mdContent.match(/## 别名[\s\S]*?\n(- .*\n)+/);
+  if (aliasesMatch) {
+    const aliasLines = aliasesMatch[0].match(/- (.*)/g);
+    if (aliasLines) {
+      fields.aliases = aliasLines.map(line => line.replace(/^- /, '').trim());
+    }
   }
 
   // 提取标签
