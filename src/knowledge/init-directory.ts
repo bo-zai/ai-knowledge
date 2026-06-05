@@ -69,8 +69,27 @@ export async function initDirectoryStructure(outputRoot: string): Promise<Packag
 
   logger.info(`Initializing directory structure at ${packageRoot}`);
 
-  // Clean old output
-  await fs.rm(packageRoot, { recursive: true, force: true });
+  // Clean old output (先尝试删除，失败则清空内容)
+  try {
+    await fs.rm(packageRoot, { recursive: true, force: true });
+  } catch (e) {
+    // Windows 上可能有文件锁定，尝试只删除知识子目录
+    logger.debug(`Cannot fully remove ${packageRoot}, cleaning subdirectories`);
+    for (const dirName of KNOWLEDGE_DIRS) {
+      const subDir = path.join(packageRoot, dirName);
+      try {
+        await fs.rm(subDir, { recursive: true, force: true });
+      } catch {
+        // 忽略子目录删除失败
+      }
+    }
+    // 清理 reports 目录
+    try {
+      await fs.rm(path.join(packageRoot, 'reports'), { recursive: true, force: true });
+    } catch {
+      // 忽略
+    }
+  }
 
   // Create directory skeleton
   await fs.mkdir(packageRoot, { recursive: true });

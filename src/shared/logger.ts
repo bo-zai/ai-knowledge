@@ -40,13 +40,36 @@ export function setLogFile(filePath: string): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  logStream = fs.createWriteStream(filePath, { flags: 'a' });
+  // 使用 sync: true 确保实时写入（参考 GitNexus logger）
+  logStream = fs.createWriteStream(filePath, { flags: 'a', encoding: 'utf8' });
 }
 
 export function closeLogFile(): void {
   if (logStream) {
     logStream.end();
     logStream = null;
+  }
+}
+
+/**
+ * 刷新日志缓冲区到磁盘（参考 GitNexus flushLoggerSync）
+ */
+export function flushLogFile(): void {
+  if (logStream) {
+    // WriteStream 没有 flush 方法，使用底层 fd 同步刷新
+    try {
+      const fd = (logStream as any).fd;
+      if (fd !== undefined && fd !== null) {
+        // 尝试 fdatasync（更快的刷新），失败则用 fsync
+        try {
+          fs.fdatasyncSync(fd);
+        } catch {
+          fs.fsyncSync(fd);
+        }
+      }
+    } catch {
+      // 忽略刷新错误
+    }
   }
 }
 
@@ -58,16 +81,20 @@ export function log(level: LogLevel, message: string, data?: unknown): void {
       ? `${prefix} ${message} ${JSON.stringify(data)}`
       : `${prefix} ${message}`;
 
-    // 写入 console
+    // 写入 stderr（参考 GitNexus：stderr 用于日志，stdout 用于数据）
     if (data !== undefined) {
-      console.error(`${prefix} ${message}`, data);
+      process.stderr.write(`${prefix} ${message} ${JSON.stringify(data)}\n`);
     } else {
-      console.error(`${prefix} ${message}`);
+      process.stderr.write(`${prefix} ${message}\n`);
     }
 
-    // 写入日志文件
+    // 写入日志文件并立即刷新
     if (logStream) {
       logStream.write(fullMessage + '\n');
+      // 关键日志（error/warn）立即刷新
+      if (level === 'error' || level === 'warn') {
+        flushLogFile();
+      }
     }
   }
 }

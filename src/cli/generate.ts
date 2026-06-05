@@ -1,5 +1,6 @@
 import path from 'path';
-import { logger, setLogLevel, setLogFile, closeLogFile } from '../shared/logger.js';
+import cliProgress from 'cli-progress';
+import { logger, setLogLevel, setLogFile, closeLogFile, flushLogFile } from '../shared/logger.js';
 import { getEnvVar, getEnvVarOptional } from '../config/env.js';
 import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import {
@@ -17,6 +18,7 @@ import {
   type GenerateTypeInput,
 } from '../knowledge/generate-orchestrator.js';
 import { runKnowledgeGeneratorForGroups, type LlmClaimsProvider } from '../generation/knowledge-generator.js';
+import { callLlmForJson, generateBatchStatsReport, type LlmJsonCallResult } from '../generation/llm-json-client.js';
 import { buildEvidenceBundlesByPackage, type EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
@@ -106,8 +108,21 @@ async function runConceptFiveLayerGeneration(
 
   // 第三层：LLM 筛选（并行调用，限制并发）
   logger.info(`CONCEPT: Layer 3 - LLM filtering for ${allCandidates.length} candidates`);
+
+  // 创建进度条（stderr 输出，不影响 stdout 数据）
+  const progressBar = new cliProgress.SingleBar({
+    format: 'Layer 3 过滤 |{bar}| {percentage}% | {value}/{total} 候选 | {lastCandidate}',
+    barCompleteChar: '█',
+    barIncompleteChar: '░',
+    hideCursor: true,
+    barsize: 30,
+  }, cliProgress.Presets.shades_classic);
+
+  progressBar.start(allCandidates.length, 0, { lastCandidate: '启动中...' });
+
   const limit = pLimit(2); // 降低并发避免速率限制
   const llmResults = new Map<string, LlmFilterResult>();
+  let completedCount = 0;
 
   const filterTasks = allCandidates.map((candidate, idx) =>
     limit(async () => {
@@ -129,10 +144,17 @@ async function runConceptFiveLayerGeneration(
         logger.warn(`CONCEPT filter parse failed for ${candidate.className}: ${errorMsg}`);
         llmResults.set(candidate.className, { keep: true, reason: 'parse_failed' });
       }
+
+      // 更新进度条
+      completedCount++;
+      progressBar.update(completedCount, { lastCandidate: candidate.className.slice(0, 20) });
+      flushLogFile(); // 实时刷新日志
     })
   );
 
   await Promise.all(filterTasks);
+  progressBar.stop();
+  process.stderr.write('\n'); // 进度条结束后换行，避免日志混在一起
 
   // 统计筛选结果
   const keptCount = Array.from(llmResults.values()).filter(r => r.keep).length;
@@ -169,9 +191,21 @@ async function runConceptFiveLayerGeneration(
   }
 
   // 第五层：LLM 生成（每组生成一条概念知识）
-  logger.info('CONCEPT: Layer 5 - Generating knowledge for each concept group');
+  logger.info('CONCEPT: Layer 5 - Generating knowledge for each concept groups');
   const contributions: KnowledgePackageContribution[] = [];
   const generateLimit = pLimit(3);
+
+  // 创建 Layer 5 进度条
+  const genProgressBar = new cliProgress.SingleBar({
+    format: 'Layer 5 生成 |{bar}| {percentage}% | {value}/{total} 概念组 | {lastGroup}',
+    barCompleteChar: '█',
+    barIncompleteChar: '░',
+    hideCursor: true,
+    barsize: 30,
+  }, cliProgress.Presets.shades_classic);
+
+  genProgressBar.start(conceptGroups.length, 0, { lastGroup: '启动中...' });
+  let genCompletedCount = 0;
 
   const generateTasks = conceptGroups.map((group, idx) =>
     generateLimit(async () => {
@@ -201,18 +235,38 @@ async function runConceptFiveLayerGeneration(
       const { system, user } = buildPromptFramework(promptConfig);
       logger.debug(`CONCEPT generate prompt: system=${system.length} chars, user=${user.length} chars`);
 
-      const result = await claimsProvider(system, user);
-      logger.debug(`CONCEPT generate response: ${result.rawText.length} chars`);
+      // 使用新的 LLM JSON 调用工具
+      const llmResult = await callLlmForJson<Record<string, unknown> | Record<string, unknown>[]>({
+        systemPrompt: system,
+        userPrompt: user,
+        claimsProvider,
+        knowledgeType: 'CONCEPT',
+        repairContext: {
+          conceptName: group.conceptName,
+          codeSnippet: group.candidates[0]?.codeSnippet,
+        },
+        maxRetries: 3,
+        timeout: 120000,
+        fallbackContext: {
+          conceptName: group.conceptName,
+          kebabId: toKebabCase(group.conceptName),
+        },
+        logLabel: `CONCEPT generate "${group.conceptName}"`,
+      });
 
-      // 解析生成结果
+      logger.debug(`CONCEPT generate response: ${llmResult.rawOutput.length} chars, source=${llmResult.successSource}`);
+
+      // 解析生成结果（已由工具处理）
       let objects: Record<string, unknown>[] = [];
-      try {
-        const parsed = JSON.parse(result.rawText.trim().replace(/^```json\n?|\n?```$/g, '').trim());
-        objects = Array.isArray(parsed) ? parsed : (parsed.objects || [parsed]);
-        logger.info(`CONCEPT generate "${group.conceptName}": parsed ${objects.length} objects`);
-      } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : String(e);
-        logger.error(`CONCEPT generate parse failed for "${group.conceptName}": ${errorMsg}`);
+      if (llmResult.success && llmResult.data) {
+        if (Array.isArray(llmResult.data)) {
+          objects = llmResult.data;
+        } else {
+          objects = [llmResult.data];
+        }
+        logger.info(`CONCEPT generate "${group.conceptName}": ${objects.length} objects, fallback=${llmResult.fallbackUsed}`);
+      } else {
+        logger.error(`CONCEPT generate failed for "${group.conceptName}"`);
         objects = [];
       }
 
@@ -224,6 +278,11 @@ async function runConceptFiveLayerGeneration(
         logger.debug(`CONCEPT object: aliases=${aliases?.join(',')}, id=${id}`);
         return { id, type: 'CONCEPT', ...obj };
       });
+
+      // 更新进度条并刷新日志
+      genCompletedCount++;
+      genProgressBar.update(genCompletedCount, { lastGroup: group.conceptName.slice(0, 15) });
+      flushLogFile();
 
       const files = processedObjects.map(obj => ({
         path: `objects/concept/${obj.id}.yaml`,
@@ -238,6 +297,7 @@ async function runConceptFiveLayerGeneration(
           path: `objects/concept/${o.id}.yaml`,
         })),
         files,
+        llmResult, // 保存 LLM 结果用于统计
         report: {
           stage: 'concept',
           ran: true,
@@ -246,7 +306,9 @@ async function runConceptFiveLayerGeneration(
           details: {
             conceptName: group.conceptName,
             candidateCount: group.candidates.length,
-            model: result.model,
+            successSource: llmResult.successSource,
+            fallbackUsed: llmResult.fallbackUsed,
+            retryCount: llmResult.llmStats.totalCalls,
           },
         },
         warnings: [],
@@ -255,7 +317,13 @@ async function runConceptFiveLayerGeneration(
   );
 
   const generateResults = await Promise.all(generateTasks);
+  genProgressBar.stop();
+  process.stderr.write('\n'); // 进度条结束后换行
   contributions.push(...generateResults);
+
+  // 生成统计报告
+  const layer5Results = generateResults.map(r => (r as any).llmResult as LlmJsonCallResult);
+  generateBatchStatsReport(layer5Results, 'CONCEPT Layer 5');
 
   logger.info(`CONCEPT: Five-layer generation complete - ${contributions.length} contributions, ${contributions.reduce((sum, c) => sum + c.report.succeeded, 0)} objects generated`);
 
