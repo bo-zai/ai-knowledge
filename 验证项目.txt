@@ -1,0 +1,9 @@
+真实的项目：
+
+1. D:\workspace\other_project\music-education-admin
+
+2. D:\workspace\other_project\music-education-app
+
+3. D:\workspace\other_project\music-education-core
+
+4. D:\workspace\other_project\joyrpc

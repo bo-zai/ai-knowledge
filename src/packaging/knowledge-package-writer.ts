@@ -23,6 +23,17 @@ export async function writeKnowledgePackage(input: {
   // 收集所有生成的对象
   const objects = contributions.flatMap(c => c.objects);
 
+  // 先收集所有已生成概念的 ID 集合（用于修正关联链接）
+  const generatedConceptIds = new Set<string>();
+  for (const contribution of contributions) {
+    for (const file of contribution.files) {
+      const { id, type } = parseFileData(file);
+      if (type === 'CONCEPT' || type === 'CON') {
+        generatedConceptIds.add(toKebabCase(id));
+      }
+    }
+  }
+
   // 按类型分组
   const objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>> = {} as Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>;
 
@@ -30,7 +41,7 @@ export async function writeKnowledgePackage(input: {
   for (const contribution of contributions) {
     for (const file of contribution.files) {
       // 解析文件路径，获取类型和内容
-      const { id, type, content } = parseFileData(file);
+      const { id, type, content } = parseFileData(file, generatedConceptIds);
       const dirName = getTypeDir(type);
       const dir = dirName as KnowledgeDir;
 
@@ -87,7 +98,7 @@ export async function writeKnowledgePackage(input: {
 /**
  * Parse file data to extract id, type and convert yaml to md content.
  */
-function parseFileData(file: { path: string; content: string }): { id: string; type: KnowledgeType | LegacyType; content: string } {
+function parseFileData(file: { path: string; content: string }, generatedConceptIds?: Set<string>): { id: string; type: KnowledgeType | LegacyType; content: string } {
   // 文件路径格式: objects/{dir}/{id}.yaml
   const parts = file.path.split('/');
   const dirName = parts[1]?.toLowerCase() || 'concepts';
@@ -98,7 +109,7 @@ function parseFileData(file: { path: string; content: string }): { id: string; t
   const type = getTypeFromDir(dirName) ?? 'CONCEPT';
 
   // 将 yaml 内容转换为 md 格式
-  const mdContent = yamlToMd(id, type, file.content);
+  const mdContent = yamlToMd(id, type, file.content, generatedConceptIds);
 
   return { id, type, content: mdContent };
 }
@@ -106,7 +117,7 @@ function parseFileData(file: { path: string; content: string }): { id: string; t
 /**
  * Convert yaml content to markdown format per design/03-knowledge-directory-structure.md.
  */
-function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: string): string {
+function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: string, generatedConceptIds?: Set<string>): string {
   const lines: string[] = [];
   const timestamp = new Date().toISOString();
 
@@ -258,9 +269,15 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
     lines.push(`## 关联概念`);
     lines.push('');
     for (const concept of relatedConcepts) {
-      // 尝试生成链接格式：[概念名](concepts/概念名.md)
-      const conceptFileName = toKebabCase(concept) + '.md';
-      lines.push(`- [${concept}](concepts/${conceptFileName})`);
+      // 检查概念是否存在于已生成集合中
+      const conceptFileName = toKebabCase(concept);
+      if (generatedConceptIds && generatedConceptIds.has(conceptFileName)) {
+        // 存在则生成链接
+        lines.push(`- [${concept}](concepts/${conceptFileName}.md)`);
+      } else {
+        // 不存在则只显示名称
+        lines.push(`- ${concept}`);
+      }
     }
     lines.push('');
   }

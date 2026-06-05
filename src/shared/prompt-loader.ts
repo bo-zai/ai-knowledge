@@ -16,13 +16,16 @@
 
 import { readFile as readFileAsync } from 'node:fs/promises';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { fileExists } from './fs.js';
 
 /**
- * 提示词模板目录
+ * 提示词模板目录 - 基于脚本所在目录而非运行时 cwd
  */
-const PROMPTS_DIR = join(process.cwd(), 'src', 'prompts');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROMPTS_DIR = join(__dirname, '..', 'prompts');
 
 /**
  * 提示词模板类

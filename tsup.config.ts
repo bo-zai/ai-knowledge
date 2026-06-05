@@ -15,6 +15,19 @@ const copyAssets = async (): Promise<void> => {
     console.log('Copied vendor/leiden to dist');
   }
 
+  // Copy prompts
+  const promptsSrc = path.resolve('src/prompts');
+  const promptsDest = path.resolve('dist/prompts');
+  if (fs.existsSync(promptsSrc)) {
+    fs.mkdirSync(promptsDest, { recursive: true });
+    for (const file of fs.readdirSync(promptsSrc)) {
+      if (file.endsWith('.md')) {
+        fs.copyFileSync(path.join(promptsSrc, file), path.join(promptsDest, file));
+      }
+    }
+    console.log('Copied prompts to dist');
+  }
+
   // Copy scripts
   const scriptsSrc = path.resolve('scripts');
   const scriptsDest = path.resolve('dist/scripts');

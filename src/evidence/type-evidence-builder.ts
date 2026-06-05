@@ -10,7 +10,7 @@ import {
   type ReadOnlyQueryExecutor,
 } from '../engine/lbug/read-only-session.js';
 import { logger } from '../shared/logger.js';
-import { batchExtractClassSnippets } from '../shared/fs.js';
+import { extractClassCodes } from '../code-extractor/index.js';
 
 export interface BuildEvidenceInput {
   repoPath: string;
@@ -69,7 +69,7 @@ export async function buildEvidenceBundlesByPackage(
       const groups = await withReadOnlyLbug(lbugPath, async query => {
         switch (type) {
           case 'CONCEPT':
-            return queryConceptEvidenceByPackage(repoPath, target, query);
+            return queryConceptEvidenceByPackage(repoPath, lbugPath, target, query);
           case 'DATA_MODEL':
             return queryDataModelEvidenceByPackage(repoPath, target, query);
           case 'CAPABILITY':
@@ -252,28 +252,69 @@ function groupByPackagePath<T extends { filePath: string }>(
  */
 async function queryConceptEvidenceByPackage(
   repoPath: string,
+  lbugPath: string,
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
   const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : '';
   const repoName = repoPath.split('/').pop() || 'unknown';
 
-  // 第一层硬过滤：在 Cypher 查询中排除明显无价值的类
-  // 同时提取字段定义作为 codeSnippet，帮助 LLM 判断业务价值
-  const candidateCypher = `
+  // 第一层：优先选取业务核心类（Controller > Service > Entity）
+  // 焖后补充其他类，确保业务概念覆盖完整
+
+  // 第一批：Controller 类（业务入口）
+  const controllerCypher = `
     MATCH (c:Class)
-    WHERE true ${targetFilter}
-    AND NOT c.name =~ '(?i).*(Util|Helper|Common|Base|Abstract|Factory|Builder|Adapter|Wrapper|Proxy)$'
-    AND NOT c.name =~ '(?i).*(Application|Main|Bootstrap|Launcher)$'
+    WHERE c.name =~ '(?i).*Controller$' ${targetFilter}
+    AND NOT c.filePath =~ '(?i).*(test|Test|spec|_test).*'
+    AND NOT c.filePath =~ '(?i).*(node_modules|target|build|dist).*'
+    OPTIONAL MATCH (c)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property)
+    WITH c, collect(p.name) as fieldNames
+    RETURN c.name as name, c.filePath as filePath, fieldNames as fieldList, 'controller' as priority
+    LIMIT 20
+  `;
+  const controllerResults = await executeQuery(controllerCypher);
+
+  // 第二批：Service 类（业务逻辑）
+  const serviceCypher = `
+    MATCH (c:Class)
+    WHERE c.name =~ '(?i).*Service$' ${targetFilter}
+    AND NOT c.name =~ '(?i).*(Util|Helper|Common|Base|Abstract)$'
     AND NOT c.filePath =~ '(?i).*(test|Test|spec|_test).*'
     AND NOT c.filePath =~ '(?i).*(framework|infrastructure|util|common).*'
     AND NOT c.filePath =~ '(?i).*(node_modules|target|build|dist).*'
     OPTIONAL MATCH (c)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property)
     WITH c, collect(p.name) as fieldNames
-    RETURN c.name as name, c.filePath as filePath, fieldNames as fieldList
-    LIMIT 50
+    RETURN c.name as name, c.filePath as filePath, fieldNames as fieldList, 'service' as priority
+    LIMIT 15
   `;
-  const candidateResults = await executeQuery(candidateCypher);
+  const serviceResults = await executeQuery(serviceCypher);
+
+  // 第三批：Entity/DO/VO 类（数据模型）
+  const entityCypher = `
+    MATCH (c:Class)
+    WHERE c.name =~ '(?i).*(Entity|DO|VO|DTO|Config|Property)$' ${targetFilter}
+    AND NOT c.name =~ '(?i).*(Util|Helper|Common|Base|Abstract)$'
+    AND NOT c.filePath =~ '(?i).*(test|Test|spec|_test).*'
+    AND NOT c.filePath =~ '(?i).*(framework|infrastructure|util|common).*'
+    AND NOT c.filePath =~ '(?i).*(node_modules|target|build|dist).*'
+    OPTIONAL MATCH (c)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property)
+    WITH c, collect(p.name) as fieldNames
+    RETURN c.name as name, c.filePath as filePath, fieldNames as fieldList, 'entity' as priority
+    LIMIT 15
+  `;
+  const entityResults = await executeQuery(entityCypher);
+
+  // 合并候选（去重）
+  const candidateMap = new Map<string, { name: string; filePath: string; fieldList?: string[]; priority: string }>();
+  for (const row of [...controllerResults, ...serviceResults, ...entityResults] as Array<{ name: string; filePath: string; fieldList?: string[]; priority: string }>) {
+    const key = `${row.filePath}:${row.name}`;
+    if (!candidateMap.has(key)) {
+      candidateMap.set(key, row);
+    }
+  }
+
+  const candidateResults = Array.from(candidateMap.values());
 
   // 转换为候选列表（图谱可能没有字段信息）
   const candidates: ConceptCandidate[] = (candidateResults as Array<{ name: string; filePath: string; fieldList?: string[] }>).map(row => {
@@ -290,21 +331,25 @@ async function queryConceptEvidenceByPackage(
 
   logger.info(`CONCEPT: ${candidates.length} candidates before filtering`);
 
-  // 对没有代码片段的候选，通过读取文件填充
+  // 使用新的代码提取器提取代码片段（优先从图数据库，Fallback 到文件解析）
   const candidatesWithoutSnippet = candidates.filter(c => !c.codeSnippet);
   if (candidatesWithoutSnippet.length > 0) {
     logger.info(`CONCEPT: Reading files for ${candidatesWithoutSnippet.length} candidates without graph data`);
-    const snippets = await batchExtractClassSnippets(
-      repoPath,
+
+    const extractResult = await extractClassCodes(
       candidatesWithoutSnippet.map(c => ({ filePath: c.filePath, className: c.className })),
-      500,
+      { dbPath: lbugPath },
     );
 
-    // 将读取到的代码片段填充回候选
+    logger.info(`CONCEPT: extraction stats - success: ${extractResult.successCount}, fallback: ${extractResult.fallbackCount}, fail: ${extractResult.failCount}`);
+
+    // 将提取到的代码片段填充回候选
     for (const c of candidates) {
-      const snippet = snippets.get(c.className);
-      if (snippet) {
-        c.codeSnippet = snippet;
+      const key = `${c.filePath}:${c.className}`;
+      const extracted = extractResult.results.get(key);
+      if (extracted) {
+        // 使用精简片段（类声明 + 字段 + 方法签名）
+        c.codeSnippet = extracted.compactSnippet;
       }
     }
 
