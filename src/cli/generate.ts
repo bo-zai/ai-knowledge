@@ -71,6 +71,7 @@ async function runConceptFiveLayerGeneration(
   input: GenerateTypeInput,
   evidenceGroups: EvidenceGroup[],
   claimsProvider: LlmClaimsProvider,
+  concurrency: number,
 ): Promise<KnowledgePackageContribution[]> {
   const { repoPath, verbose } = input;
   const { lbugPath } = getStoragePaths(repoPath);
@@ -131,7 +132,7 @@ async function runConceptFiveLayerGeneration(
 
   progressBar.start(allCandidates.length, 0, { lastCandidate: '启动中...' });
 
-  const limit = pLimit(2); // 降低并发避免速率限制
+  const limit = pLimit(concurrency); // 使用配置的并发数
   const llmResults = new Map<string, LlmFilterResult>();
   let completedCount = 0;
 
@@ -215,7 +216,7 @@ async function runConceptFiveLayerGeneration(
   // 第五层：LLM 生成（每组生成一条概念知识）
   logger.info('CONCEPT: Layer 5 - Generating knowledge for each concept groups');
   const contributions: KnowledgePackageContribution[] = [];
-  const generateLimit = pLimit(3);
+  const generateLimit = pLimit(concurrency);
 
   // 创建 Layer 5 进度条
   const genProgressBar = new cliProgress.SingleBar({
@@ -698,7 +699,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
           }];
         }
 
-        return await runConceptFiveLayerGeneration(input, evidenceGroups, claimsProvider);
+        return await runConceptFiveLayerGeneration(input, evidenceGroups, claimsProvider, finalConfig.concurrency);
       }
 
       // Use prepared evidence groups if provided (avoids database access)
