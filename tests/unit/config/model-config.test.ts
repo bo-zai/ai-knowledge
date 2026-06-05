@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 
 import {
-  loadDefaultLlmConfigFile,
   loadLlmConfigFile,
   resolveModelConfig,
 } from '../../../src/config/model-config.js';
+import { LLM_DEFAULTS } from '../../../src/config/defaults.js';
 
 describe('model-config', () => {
   it('loads an explicit JSON config file', async () => {
@@ -22,6 +22,9 @@ describe('model-config', () => {
           baseUrl: 'https://example.test/v1',
           apiKeyEnv: 'CUSTOM_KEY',
           apiKey: 'custom-secret',
+          concurrency: 5,
+          timeout: 60,
+          maxRetries: 2,
         },
         null,
         2,
@@ -36,72 +39,21 @@ describe('model-config', () => {
       baseUrl: 'https://example.test/v1',
       apiKeyEnv: 'CUSTOM_KEY',
       apiKey: 'custom-secret',
+      concurrency: 5,
+      timeout: 60,
+      maxRetries: 2,
     });
   });
 
-  it('loads the default llm.config.json from the working directory', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'llm-default-config-'));
-    const configPath = join(dir, 'llm.config.json');
-
-    await writeFile(
-      configPath,
-      JSON.stringify(
-        {
-          model: 'local-model',
-          baseUrl: 'https://gateway.test/v1',
-          apiKeyEnv: 'LOCAL_KEY',
-          apiKey: 'local-secret',
-        },
-        null,
-        2,
-      ),
-      'utf8',
-    );
-
-    const config = await loadDefaultLlmConfigFile(dir);
-
-    expect(config).toEqual({
-      model: 'local-model',
-      baseUrl: 'https://gateway.test/v1',
-      apiKeyEnv: 'LOCAL_KEY',
-      apiKey: 'local-secret',
-    });
-  });
-
-  it('resolves config with cli arguments overriding file config', () => {
-    const resolved = resolveModelConfig({
-      model: 'cli-model',
-      baseUrl: 'https://cli.test/v1',
-      apiKeyEnv: 'CLI_KEY',
-      fileConfig: {
-        model: 'file-model',
-        baseUrl: 'https://file.test/v1',
-        apiKeyEnv: 'FILE_KEY',
-      },
-      env: {
-        CLI_KEY: 'cli-secret',
-        FILE_KEY: 'file-secret',
-      },
-    });
-
-    expect(resolved).toEqual({
-      model: 'cli-model',
-      baseUrl: 'https://cli.test/v1',
-      apiKeyEnv: 'CLI_KEY',
-      apiKey: 'cli-secret',
-    });
-  });
-
-  it('falls back to file config before defaults', () => {
+  it('resolves config with file config', () => {
     const resolved = resolveModelConfig({
       fileConfig: {
         model: 'file-model',
         baseUrl: 'https://file.test/v1',
         apiKeyEnv: 'FILE_KEY',
-        apiKey: 'file-secret-direct',
-      },
-      env: {
-        FILE_KEY: 'file-secret',
+        concurrency: 4,
+        timeout: 90,
+        maxRetries: 2,
       },
     });
 
@@ -109,24 +61,44 @@ describe('model-config', () => {
       model: 'file-model',
       baseUrl: 'https://file.test/v1',
       apiKeyEnv: 'FILE_KEY',
-      apiKey: 'file-secret-direct',
+      apiKey: '',
+      concurrency: 4,
+      timeoutMs: 90000,
+      maxRetries: 2,
     });
   });
 
-  it('prefers direct apiKey over env-derived apiKey', () => {
+  it('uses defaults when no file config provided', () => {
+    const resolved = resolveModelConfig({});
+
+    expect(resolved).toEqual({
+      model: LLM_DEFAULTS.model,
+      baseUrl: LLM_DEFAULTS.baseUrl,
+      apiKeyEnv: LLM_DEFAULTS.apiKeyEnv,
+      apiKey: '',
+      concurrency: LLM_DEFAULTS.concurrency,
+      timeoutMs: LLM_DEFAULTS.timeoutSeconds * 1000,
+      maxRetries: LLM_DEFAULTS.maxRetries,
+    });
+  });
+
+  it('falls back to defaults for invalid concurrency', () => {
     const resolved = resolveModelConfig({
-      apiKey: 'direct-secret',
-      apiKeyEnv: 'ENV_KEY',
-      env: {
-        ENV_KEY: 'env-secret',
+      fileConfig: {
+        concurrency: 0,
       },
     });
 
-    expect(resolved).toEqual({
-      model: 'gpt-4o',
-      baseUrl: 'https://api.openai.com/v1',
-      apiKeyEnv: 'ENV_KEY',
-      apiKey: 'direct-secret',
+    expect(resolved.concurrency).toBe(LLM_DEFAULTS.concurrency);
+  });
+
+  it('falls back to defaults for invalid timeout', () => {
+    const resolved = resolveModelConfig({
+      fileConfig: {
+        timeout: -1,
+      },
     });
+
+    expect(resolved.timeoutMs).toBe(LLM_DEFAULTS.timeoutSeconds * 1000);
   });
 });

@@ -5,7 +5,6 @@ import { getEnvVar, getEnvVarOptional } from '../config/env.js';
 import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import {
   resolveModelConfig,
-  loadDefaultLlmConfigFile,
   loadLlmConfigFile,
 } from '../config/model-config.js';
 import type { ModelConfig } from '../config/model-config.js';
@@ -43,6 +42,18 @@ import { getStoragePaths } from '../engine/storage/repo-manager.js';
 import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { toKebabCase } from '../knowledge/type-directory-map.js';
 import pLimit from 'p-limit';
+import {
+  collectProjectTypeEvidence,
+  identifyProjectType,
+  buildProjectContext,
+  saveProjectContext,
+  loadProjectContext,
+  generateArchitectureOverview,
+  loadGenerationMeta,
+  saveGenerationMeta,
+  getCurrentCommitHash,
+  shouldReidentifyProjectType,
+} from '../architecture/index.js';
 
 function isMockModel(model: string): boolean {
   return model.startsWith('test-');
@@ -504,9 +515,6 @@ interface GenerateOptions {
   target?: string;
   out?: string;
   llmConfig?: string;
-  model?: string;
-  baseUrl?: string;
-  apiKeyEnv?: string;
   forceAnalyze?: boolean;
   verbose?: boolean;
   logFile?: string;
@@ -545,29 +553,24 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // Load model config
   const fileConfig = options.llmConfig
     ? await loadLlmConfigFile(options.llmConfig)
-    : await loadDefaultLlmConfigFile(repoPath);
+    : undefined;
 
-  const resolvedConfig = resolveModelConfig({
-    baseUrl: options.baseUrl,
-    apiKeyEnv: options.apiKeyEnv,
-    model: options.model,
-    fileConfig,
-  });
+  const modelConfig = resolveModelConfig({ fileConfig });
 
-  const apiKey = resolvedConfig.apiKey || getEnvVarOptional(resolvedConfig.apiKeyEnv) || '';
-  const modelConfig: ModelConfig = {
-    baseUrl: resolvedConfig.baseUrl,
+  const apiKey = modelConfig.apiKey || getEnvVarOptional(modelConfig.apiKeyEnv) || '';
+  const finalConfig: ModelConfig = {
+    ...modelConfig,
     apiKey,
-    apiKeyEnv: resolvedConfig.apiKeyEnv,
-    model: resolvedConfig.model,
   };
-  const mockMode = isMockModel(modelConfig.model);
+
+  const mockMode = isMockModel(finalConfig.model);
 
   logger.info(`Generating ai-knowledge for ${repoPath}`);
   logger.info(`Knowledge types: ${scope.types.join(', ')}`);
   if (scope.target) {
     logger.info(`Target: ${scope.target.kind}:${scope.target.value}`);
   }
+  logger.info(`Using LLM config: model=${finalConfig.model}, concurrency=${finalConfig.concurrency}, timeout=${finalConfig.timeoutMs}ms`);
 
   const outputRoot = options.out ? path.resolve(options.out) : repoPath;
 
@@ -582,6 +585,54 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // Initialize directory structure
   const layout = await initDirectoryStructure(outputRoot);
 
+  // ========== 项目类型识别和架构概览生成（阶段 0） ==========
+
+  // 创建 LLM claims provider
+  const archClient = createOpenAiClient(finalConfig);
+  const archClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
+    const result = await generateWithClient(archClient, finalConfig.model, systemPrompt, userPrompt);
+    return {
+      rawText: result.text,
+      model: finalConfig.model,
+      usage: { promptTokens: 0, completionTokens: result.chunks },
+    };
+  };
+
+  // 检查是否已有项目上下文
+  let projectContext = await loadProjectContext(outputRoot);
+  const existingMeta = await loadGenerationMeta(outputRoot);
+  const commitHash = await getCurrentCommitHash(repoPath);
+
+  // 判断是否需要重新识别项目类型
+  const needsReidentification = shouldReidentifyProjectType(existingMeta, false);
+
+  if (!projectContext || needsReidentification) {
+    logger.info('Identifying project type...');
+
+    // 收集识别证据
+    const evidence = await collectProjectTypeEvidence(repoPath);
+
+    // LLM 识别项目类型
+    const identificationResult = await identifyProjectType(evidence, archClaimsProvider);
+
+    // 构建并保存项目上下文
+    projectContext = buildProjectContext(identificationResult);
+    await saveProjectContext(projectContext, outputRoot);
+
+    logger.info(`Project type identified: ${projectContext.projectType} (confidence: ${projectContext.confidence})`);
+  } else {
+    logger.info(`Using existing project context: ${projectContext.projectType}`);
+  }
+
+  // 生成架构概览
+  logger.info('Generating architecture overview...');
+  await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot);
+
+  // 保存生成元信息
+  await saveGenerationMeta(outputRoot, commitHash, projectContext.identifiedAt);
+
+  // ========== 构建编排依赖 ==========
+
   // Build deps for orchestration
   const deps: GenerateOrchestrationDeps = {
     runGeneratorForType: async (input: GenerateTypeInput): Promise<KnowledgePackageContribution[]> => {
@@ -589,10 +640,13 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
       // Create LLM client using OpenAI-compatible format
       const clientConfig: ModelConfig = {
-        baseUrl: input.llm.baseUrl || modelConfig.baseUrl,
+        baseUrl: input.llm.baseUrl || finalConfig.baseUrl,
         apiKey: apiKey,
-        model: input.llm.model || modelConfig.model,
-        apiKeyEnv: input.llm.apiKeyEnv || modelConfig.apiKeyEnv,
+        model: input.llm.model || finalConfig.model,
+        apiKeyEnv: input.llm.apiKeyEnv || finalConfig.apiKeyEnv,
+        concurrency: finalConfig.concurrency,
+        timeoutMs: finalConfig.timeoutMs,
+        maxRetries: finalConfig.maxRetries,
       };
       const client = createOpenAiClient(clientConfig);
 
@@ -700,9 +754,6 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     forceAnalyze: options.forceAnalyze,
     verbose: options.verbose,
     llm: {
-      model: options.model,
-      baseUrl: options.baseUrl,
-      apiKeyEnv: options.apiKeyEnv,
       llmConfig: options.llmConfig,
     },
   };

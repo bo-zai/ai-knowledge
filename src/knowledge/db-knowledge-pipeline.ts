@@ -1,4 +1,5 @@
 import type OpenAI from 'openai';
+import type { ModelConfig } from '../config/model-config.js';
 import path from 'path';
 import { logger } from '../shared/logger.js';
 import { discoverSlices } from '../query/index-service.js';
@@ -51,12 +52,7 @@ export interface RunDbKnowledgePipelineInput {
   target?: GenerateTarget;
   graphStatus: GraphStatus;
   verbose?: boolean;
-  modelConfig: {
-    baseUrl: string;
-    apiKey: string;
-    apiKeyEnv: string;
-    model: string;
-  };
+  modelConfig: ModelConfig;
 }
 
 async function resolveCompanionCoreRepoPath(repoPath: string): Promise<string | undefined> {
