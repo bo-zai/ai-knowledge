@@ -588,49 +588,52 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   // ========== 项目类型识别和架构概览生成（阶段 0） ==========
 
-  // 创建 LLM claims provider
-  const archClient = createOpenAiClient(finalConfig);
-  const archClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
-    const result = await generateWithClient(archClient, finalConfig.model, systemPrompt, userPrompt);
-    return {
-      rawText: result.text,
-      model: finalConfig.model,
-      usage: { promptTokens: 0, completionTokens: result.chunks },
+  // 只在需要生成 ARCHITECTURE 时执行
+  if (scope.types.includes('ARCHITECTURE')) {
+    // 创建 LLM claims provider
+    const archClient = createOpenAiClient(finalConfig);
+    const archClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
+      const result = await generateWithClient(archClient, finalConfig.model, systemPrompt, userPrompt);
+      return {
+        rawText: result.text,
+        model: finalConfig.model,
+        usage: { promptTokens: 0, completionTokens: result.chunks },
+      };
     };
-  };
 
-  // 检查是否已有项目上下文
-  let projectContext = await loadProjectContext(outputRoot);
-  const existingMeta = await loadGenerationMeta(outputRoot);
-  const commitHash = await getCurrentCommitHash(repoPath);
+    // 检查是否已有项目上下文
+    let projectContext = await loadProjectContext(outputRoot);
+    const existingMeta = await loadGenerationMeta(outputRoot);
+    const commitHash = await getCurrentCommitHash(repoPath);
 
-  // 判断是否需要重新识别项目类型
-  const needsReidentification = shouldReidentifyProjectType(existingMeta, false);
+    // 判断是否需要重新识别项目类型
+    const needsReidentification = shouldReidentifyProjectType(existingMeta, false);
 
-  if (!projectContext || needsReidentification) {
-    logger.info('Identifying project type...');
+    if (!projectContext || needsReidentification) {
+      logger.info('Identifying project type...');
 
-    // 收集识别证据
-    const evidence = await collectProjectTypeEvidence(repoPath);
+      // 收集识别证据
+      const evidence = await collectProjectTypeEvidence(repoPath);
 
-    // LLM 识别项目类型
-    const identificationResult = await identifyProjectType(evidence, archClaimsProvider);
+      // LLM 识别项目类型
+      const identificationResult = await identifyProjectType(evidence, archClaimsProvider);
 
-    // 构建并保存项目上下文
-    projectContext = buildProjectContext(identificationResult);
-    await saveProjectContext(projectContext, outputRoot);
+      // 构建并保存项目上下文
+      projectContext = buildProjectContext(identificationResult);
+      await saveProjectContext(projectContext, outputRoot);
 
-    logger.info(`Project type identified: ${projectContext.projectType} (confidence: ${projectContext.confidence})`);
-  } else {
-    logger.info(`Using existing project context: ${projectContext.projectType}`);
+      logger.info(`Project type identified: ${projectContext.projectType} (confidence: ${projectContext.confidence})`);
+    } else {
+      logger.info(`Using existing project context: ${projectContext.projectType}`);
+    }
+
+    // 生成架构概览
+    logger.info('Generating architecture overview...');
+    await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot);
+
+    // 保存生成元信息
+    await saveGenerationMeta(outputRoot, commitHash, projectContext.identifiedAt);
   }
-
-  // 生成架构概览
-  logger.info('Generating architecture overview...');
-  await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot);
-
-  // 保存生成元信息
-  await saveGenerationMeta(outputRoot, commitHash, projectContext.identifiedAt);
 
   // ========== 构建编排依赖 ==========
 
