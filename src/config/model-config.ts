@@ -1,19 +1,37 @@
 import type OpenAI from 'openai';
 
 import { fileExists, readText } from '../shared/fs.js';
+import { LLM_DEFAULTS } from './defaults.js';
+
+export interface LlmConfigFile {
+  /** LLM 模型名称 */
+  model?: string;
+  /** API 基础 URL */
+  baseUrl?: string;
+  /** API 密钥环境变量名 */
+  apiKeyEnv?: string;
+  /** API 密钥（直接提供，可选） */
+  apiKey?: string;
+
+  /** 全局 LLM 并发数 */
+  concurrency?: number;
+  /** 单次调用超时（秒） */
+  timeout?: number;
+  /** 最大重试次数 */
+  maxRetries?: number;
+}
 
 export interface ModelConfig {
   baseUrl: string;
   apiKey: string;
   apiKeyEnv: string;
   model: string;
-}
-
-export interface LlmConfigFile {
-  model?: string;
-  baseUrl?: string;
-  apiKeyEnv?: string;
-  apiKey?: string;
+  /** 全局并发数 */
+  concurrency: number;
+  /** 超时（毫秒，内部使用） */
+  timeoutMs: number;
+  /** 最大重试次数 */
+  maxRetries: number;
 }
 
 export async function loadLlmConfigFile(configPath: string): Promise<LlmConfigFile> {
