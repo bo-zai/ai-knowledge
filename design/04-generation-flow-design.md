@@ -6,15 +6,18 @@
 
 ## 总体流程
 
-生成流程分为 6 个步骤，依次执行：
+生成流程分为 7 个步骤，依次执行：
 
 ```
-仓库扫描 → AST 图谱构建 → 候选提取与过滤 → 分组与批处理 → LLM 生成 → 产物校验 → 落盘
+仓库扫描 → AST 图谱构建 → 项目类型识别 → 候选提取与过滤 → 分组与批处理 → LLM 生成 → 产物校验 → 落盘
 ```
 
-其中"LLM 生成"按 02 定义的三个生成阶段调度执行：
+其中"项目类型识别"是新增的独立步骤，识别结果存储在 `project-context.json`，供后续所有知识生成阶段复用。
+
+"LLM 生成"按 02 定义的四个生成阶段调度执行：
 
 ```
+生成阶段 0（包级元知识）：架构概览（依赖项目类型识别结果）
 生成阶段 1（基础）：概念知识 → 数据模型 → 能力目录（按序生成，后者可引用前者名称）
 生成阶段 2（引用）：边界知识、外部系统交互、约束知识、能力关系、跨域业务流程
 生成阶段 3（投影）：术语速查表
@@ -126,7 +129,117 @@ AST 解析前应过滤纯注释代码，避免将无活跃代码的元素传入 
 
 AST 图谱的具体构建方式（解析工具、存储格式、索引策略）由实现方案定义。
 
-## 步骤 3：候选提取与过滤
+## 步骤 3：项目类型识别
+
+### 目标
+
+识别目标仓库的项目类型（backend-service、frontend-app、cli-tool 等），为后续知识生成提供项目类型上下文。项目类型决定了：
+- 架构概览的提取重点和输出格式
+- 能力目录的入口类型识别策略（HTTP 入口 vs 路由入口 vs CLI 命令）
+- 概念知识的候选范围（业务概念 vs UI 状态 vs API 概念）
+
+### 识别证据收集
+
+项目类型识别需要收集以下基础证据：
+
+- **目录树**：顶层 2~3 层目录结构，用于判断组织模式（如 components/ 表示前端、domain/ 表示 DDD 后端）
+- **配置文件**：package.json、pom.xml、go.mod 等依赖声明文件，用于识别技术栈和框架
+- **入口文件候选**：main.go、Application.java、index.ts、cli.ts 等可能的入口文件
+- **已有文档片段**：README.md 中描述项目性质的片段（如 "CLI tool for..."、"React admin dashboard"）
+
+### 项目类型分类
+
+参见 02 知识类型规格中"架构概览知识"章节的项目类型分类表。主要类型包括：
+
+- **backend-service**：HTTP/RPC 服务，有业务逻辑层
+- **frontend-app**：SPA/MPA 前端应用
+- **cli-tool**：命令行工具
+- **library**：可导入的库/SDK
+- **mobile-app**：移动应用
+
+复合类型包括：fullstack（前后端共存）、monorepo（多包仓库）、microservices（多服务仓库）。
+
+特殊类型包括：config-only、api-definition、static-site、test-only。
+
+### LLM 识别流程
+
+项目类型识别使用 LLM 进行判断，而非硬编码规则匹配：
+
+**输入**：
+```json
+{
+  "directory_tree": "src/\n  controller/\n  service/\n  domain/",
+  "config_files": ["pom.xml", "application.yml"],
+  "entry_candidates": ["Application.java", "*Controller.java"],
+  "readme_snippet": "订单管理系统，提供订单创建、支付、查询等功能"
+}
+```
+
+**输出**：
+```json
+{
+  "project_type": "backend-service",
+  "confidence": 0.95,
+  "identification_evidence": [
+    "pom.xml 显示 Spring Boot 依赖",
+    "目录结构包含 controller/service/repository 分层",
+    "README 描述为订单管理系统"
+  ]
+}
+```
+
+### 识别结果存储
+
+项目类型识别结果存储在知识包根目录的 `project-context.json` 文件中：
+
+```json
+{
+  "projectType": "backend-service",
+  "techStack": ["Spring Boot 2.7", "MyBatis", "RocketMQ"],
+  "primaryLanguage": "java",
+  "framework": "spring-boot",
+  "confidence": 0.95,
+  "identifiedAt": "2026-06-05T14:30:00Z",
+  "identificationEvidence": [
+    "pom.xml 显示 Spring Boot 依赖",
+    "目录结构包含 controller/service/repository 分层"
+  ],
+  "packages": null
+}
+```
+
+对于复合类型（monorepo、fullstack），`packages` 字段记录各子包的类型信息：
+
+```json
+{
+  "projectType": "monorepo",
+  "packages": [
+    {"name": "web", "path": "packages/web", "type": "frontend-app"},
+    {"name": "server", "path": "packages/server", "type": "backend-service"}
+  ]
+}
+```
+
+### 后续阶段复用
+
+后续知识生成阶段通过读取 `project-context.json` 获取项目类型：
+
+- **架构概览生成**：根据 projectType 选择对应提示词模板
+- **能力目录生成**：根据 projectType 选择入口识别策略
+- **概念知识生成**：根据 projectType 调整候选范围
+- **约束知识生成**：根据 projectType 调整约束类型识别（业务规则 vs UI 约束 vs API 约束）
+
+### 识别优先级
+
+为避免误判，项目类型识别按以下优先级执行：
+
+1. **monorepo 检测**：packages/ 或 apps/ 目录 + workspaces 配置 → 直接识别为 monorepo
+2. **microservices 检测**：多个 docker-compose.yml + 多入口服务 → 直接识别为 microservices
+3. **fullstack 检测**：前后端特征同时存在 → 直接识别为 fullstack
+4. **mobile-app 检测**：android/ 或 ios/ 目录 + 移动框架依赖 → 直接识别为 mobile-app
+5. **LLM 综合判断**：以上特征均不匹配时，交给 LLM 从证据中综合判断
+
+## 步骤 4：候选提取与过滤
 
 ### 目标
 
@@ -231,7 +344,7 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 
 这些信息将作为 LLM 生成时的输入上下文。
 
-## 步骤 4：分组与批处理
+## 步骤 5：分组与批处理
 
 ### 目标
 
@@ -286,7 +399,7 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 
 边界知识、外部系统交互和数据模型的条目数量通常较少（边界 5~15 条、外部系统数量有限、数据模型与实体数量正相关），不需要特殊的大仓库处理策略。
 
-## 步骤 5：LLM 生成
+## 步骤 6：LLM 生成
 
 ### LLM 调用输入
 
@@ -318,7 +431,30 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 
 ### 生成调度
 
-按 02 定义的三阶段执行：
+按 02 定义的四个阶段执行：
+
+**生成阶段 0（包级元知识）**：架构概览生成，依赖项目类型识别结果。
+
+架构概览生成流程：
+- 读取步骤 3 存储的 `project-context.json`，获取项目类型
+- 根据项目类型选择对应的提示词模板（rules-architecture-backend.md、rules-architecture-frontend.md 等）
+- 收集架构证据：
+  - 顶层目录列表及其用途
+  - 构建产物目录（target/、dist/、build/）
+  - 生成产物目录（ai-knowledge/、.codegraph/）
+  - 依赖目录（node_modules/）
+  - 分层结构约定（从包结构推断）
+  - 分包约定（从类命名推断，如 *Controller、*Service 后缀）
+- 调用 LLM 生成架构概览知识
+- 写入 `architecture.md` 到知识包根目录
+
+架构概览生成约束：
+- 目录结构表格必须包含"编码时"列
+- 忽略目录必须包含 `ai-knowledge/` 和 `.codegraph/`
+- 不描述具体业务模块的包路径和类名（属于能力目录）
+- 通过"业务领域导航"链接到能力目录
+
+架构概览生成后，`project-context.json` 中的项目类型信息可供后续阶段复用，指导能力目录、概念知识等类型的生成策略。
 
 **生成阶段 1（基础）**：概念知识、数据模型、能力目录按顺序生成。
 
@@ -338,13 +474,15 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 
 所有知识条目生成完成后，程序从条目中提取概要信息生成索引文件：
 
-- `index.md`：从每个知识条目文件中提取一级标题和一句话描述。能力目录取域级信息（不取操作级信息），其他类型取条目级信息
+- `architecture.md`：架构概览知识，位于知识包根目录，与 index.md 平级
+- `project-context.json`：项目类型上下文，位于知识包根目录，供后续生成阶段和 Agent 读取
+- `index.md`：从每个知识条目文件中提取一级标题和一句话描述。能力目录取域级信息（不取操作级信息），其他类型取条目级信息。架构概览链接位于 index.md 顶部
 - `_index.md`：从该类型下所有条目中提取名称、描述、标签和文件路径
 - `_glossary.md`：从概念知识中提取术语、定义、别名和文件路径
 
 索引生成不涉及 LLM 调用，由程序直接组装。
 
-## 步骤 6：产物校验
+## 步骤 7：产物校验
 
 ### 校验维度
 
@@ -424,6 +562,8 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 | 已有文档变更 | 可能影响所有引用该文档作为证据的知识条目 |
 | 新增文件 | 根据文件类型判断应新增的知识条目 |
 | 删除文件 | 标记关联知识条目为待审查 |
+| 目录结构变更 | `architecture.md` 和 `project-context.json`（当顶层目录增删或重命名时） |
+| 构建配置变更 | `architecture.md` 和 `project-context.json`（当技术栈依赖显著变化时） |
 
 ### 更新策略
 
@@ -433,6 +573,13 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 - 从所有条目的最新状态重新生成 `index.md`
 - 更新标签池：读取现有 `_index.md` 中的标签，增量添加新标签
 - 保留未受影响条目的生成时间不变
+- **架构概览增量更新**：
+  - `project-context.json` 默认复用，不重新识别项目类型（除非目录结构或构建配置显著变化）
+  - `architecture.md` 仅在以下情况重新生成：
+    - 顶层目录增删或重命名
+    - 技术栈依赖显著变化（如框架升级、新增核心依赖）
+    - 入口文件位置变化
+  - 其他业务代码变更不触发架构概览重新生成
 
 ### 全量重建触发
 
@@ -458,15 +605,45 @@ AST 图谱的具体构建方式（解析工具、存储格式、索引策略）�
 
 ## 生成报告
 
-每次生成（包括全量生成和增量更新）完成后，生成程序应输出一份生成报告，包含：
+每次生成（包括全量生成和增量更新）完成后，生成程序应输出一份生成报告，存储在 `reports/generation.json`，包含：
 
 - 生成统计：成功条目数、失败条目数、丢弃条目数
 - 校验结果汇总：各维度的通过率和典型问题
 - 标签池变更：新增的标签、废弃的标签
 - 增量更新信息（如适用）：变更文件数、受影响条目数、未受影响条目数
 - 失败详情：每个失败分组的分组信息和失败原因
+- 项目类型信息：识别的项目类型、置信度、识别依据
 
-生成报告的格式由实现方案定义。
+生成报告示例：
+
+```json
+{
+  "generatedAt": "2026-06-05T14:30:00Z",
+  "projectType": "backend-service",
+  "stats": {
+    "totalObjects": 46,
+    "successCount": 42,
+    "retrySuccessCount": 3,
+    "fallbackCount": 1,
+    "failCount": 0
+  },
+  "validation": {
+    "structurePassRate": 1.0,
+    "evidencePassRate": 0.95,
+    "referencePassRate": 1.0
+  },
+  "stages": {
+    "architecture": {"ran": true, "succeeded": 1, "failed": 0},
+    "concept": {"ran": true, "succeeded": 12, "failed": 1},
+    "capability": {"ran": true, "succeeded": 8, "failed": 0}
+  },
+  "failures": [
+    {"stage": "concept", "group": "订单状态", "reason": "JSON parse failed"}
+  ]
+}
+```
+
+Agent 可读取此报告快速了解知识库的整体质量和生成过程信息。
 
 ## 设计决策
 

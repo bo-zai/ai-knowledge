@@ -1,7 +1,8 @@
 /**
  * Knowledge Type Definitions
  *
- * 设计文档 02 定义的 8 类知识（业务视角）：
+ * 设计文档 02 定义的 9 类知识（业务视角）：
+ * 0. ARCHITECTURE - 架构概览（包级元知识）
  * 1. CAPABILITY - 能力目录
  * 2. CONCEPT - 概念知识
  * 3. BOUNDARY - 边界知识
@@ -26,6 +27,7 @@ import { z } from 'zod';
  * 来自设计文档 02-knowledge-type-spec.md
  */
 export const KnowledgeTypeSchema = z.enum([
+  'ARCHITECTURE',
   'CAPABILITY',
   'CONCEPT',
   'BOUNDARY',
@@ -42,6 +44,7 @@ export type KnowledgeType = z.infer<typeof KnowledgeTypeSchema>;
  * 所有业务知识类型列表
  */
 export const ALL_KNOWLEDGE_TYPES: KnowledgeType[] = [
+  'ARCHITECTURE',
   'CAPABILITY',
   'CONCEPT',
   'BOUNDARY',
@@ -56,6 +59,7 @@ export const ALL_KNOWLEDGE_TYPES: KnowledgeType[] = [
  * 业务知识类型的中文名称
  */
 export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
+  ARCHITECTURE: '架构概览',
   CAPABILITY: '能力目录',
   CONCEPT: '概念知识',
   BOUNDARY: '边界知识',
@@ -68,8 +72,10 @@ export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
 
 /**
  * 业务知识类型对应的输出目录
+ * ARCHITECTURE 放在知识库根目录，其他类型放在子目录
  */
 export const KNOWLEDGE_TYPE_DIRS: Record<KnowledgeType, string> = {
+  ARCHITECTURE: '', // 根目录
   CAPABILITY: 'capabilities',
   CONCEPT: 'concepts',
   BOUNDARY: 'boundaries',
@@ -161,6 +167,7 @@ export const LEGACY_TO_KNOWLEDGE_MAP: Record<LegacyType, KnowledgeType | undefin
  * 一个业务类型可能对应多个技术类型。
  */
 export const KNOWLEDGE_TO_LEGACY_MAP: Record<KnowledgeType, LegacyType[]> = {
+  ARCHITECTURE: [],           // 新类型，无技术对应
   CAPABILITY: ['CAP'],
   CONCEPT: ['TERM'],
   BOUNDARY: ['OPEN'],
@@ -244,10 +251,12 @@ export function getTypeDir(type: KnowledgeType | LegacyType): string {
  * 生成阶段枚举
  *
  * 设计文档定义的生成顺序：
+ * - 阶段 0: 架构概览（项目类型识别 + architecture.md）
  * - 阶段 1: 概念 → 数据模型 → 能力目录（按序）
  * - 阶段 2: 其他类型并行
  */
 export const GenerationPhaseSchema = z.enum([
+  'architecture',
   'concept',
   'data_model',
   'capability',
@@ -260,6 +269,7 @@ export type GenerationPhase = z.infer<typeof GenerationPhaseSchema>;
  * 各生成阶段对应的类型
  */
 export const PHASE_TO_TYPES: Record<GenerationPhase, KnowledgeType[]> = {
+  architecture: ['ARCHITECTURE'],
   concept: ['CONCEPT'],
   data_model: ['DATA_MODEL'],
   capability: ['CAPABILITY'],

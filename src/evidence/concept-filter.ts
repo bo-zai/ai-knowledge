@@ -21,12 +21,13 @@ export interface ConceptCandidate {
   filePath: string;
   codeSnippet?: string; // 字段定义或枚举值
   enumValues?: string[]; // 枚举值列表（如果是枚举类）
+  suspiciousMark?: SuspiciousMark; // 可选：发现阶段预设的标记（如 external_enum_usage）
 }
 
 /**
  * 软标记类型
  */
-export type SuspiciousMark = 'transmission_class' | 'config_class' | 'simple_enum';
+export type SuspiciousMark = 'transmission_class' | 'config_class' | 'simple_enum' | 'external_enum_usage';
 
 /**
  * 经过第一、二层过滤的候选
@@ -136,7 +137,12 @@ function matchesAnyPattern(text: string, patterns: RegExp[]): boolean {
  * 返回 true 表示应该过滤掉（排除）
  */
 export function hardFilter(candidate: ConceptCandidate, repoPath: string): boolean {
-  const { className, filePath } = candidate;
+  const { className, filePath, suspiciousMark } = candidate;
+
+  // 外部引用候选（已在发现阶段进行业务判断）跳过硬过滤
+  if (suspiciousMark === 'external_enum_usage') {
+    return false;  // 保留外部引用候选
+  }
 
   // gitignore 检查
   if (isGitIgnored(filePath, repoPath)) {
@@ -219,25 +225,9 @@ export function softMark(candidate: ConceptCandidate): SuspiciousMark | null {
   const { className, enumValues } = candidate;
 
   // 简单枚举标记（值数量 < 3）
+  // 注意：命名自解释判断是语言特定的，在语言适配器中实现
   if (enumValues && enumValues.length < 3) {
-    // 检查是否命名自解释（如 MALE/FEMALE）
-    const values = enumValues.map(v => v.toUpperCase());
-    const selfExplainingPatterns = [
-      ['MALE', 'FEMALE'],
-      ['TRUE', 'FALSE'],
-      ['YES', 'NO'],
-      ['ON', 'OFF'],
-      ['ENABLE', 'DISABLE'],
-    ];
-
-    const isSelfExplaining = selfExplainingPatterns.some(pattern => {
-      const upperValues = values.map(v => v.toUpperCase());
-      return pattern.every(v => upperValues.includes(v));
-    });
-
-    if (isSelfExplaining) {
-      return 'simple_enum';
-    }
+    return 'simple_enum';
   }
 
   // 传输类标记

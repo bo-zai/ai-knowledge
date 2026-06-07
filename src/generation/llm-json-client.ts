@@ -102,6 +102,65 @@ const DEFAULT_TIMEOUT_MS = LLM_DEFAULTS.timeoutSeconds * 1000;
 const DEFAULT_MAX_RETRIES = LLM_DEFAULTS.maxRetries;
 
 /**
+ * 退避配置
+ */
+const BACKOFF_CONFIG = {
+  /** 基础退避时间（毫秒） */
+  baseMs: 1000,
+  /** 最大退避时间（毫秒） */
+  maxMs: 30000,
+  /** 退避指数倍数 */
+  multiplier: 2,
+};
+
+/**
+ * 全局调用间隔控制（避免并发429）
+ */
+let lastCallTimeMs = 0;
+const MIN_CALL_INTERVAL_MS = 2000;  // 每次调用间隔至少2秒
+
+/**
+ * 等待指定毫秒
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 等待全局调用间隔
+ */
+async function waitForGlobalInterval(): Promise<void> {
+  const elapsed = Date.now() - lastCallTimeMs;
+  if (elapsed < MIN_CALL_INTERVAL_MS) {
+    await sleep(MIN_CALL_INTERVAL_MS - elapsed);
+  }
+  lastCallTimeMs = Date.now();
+}
+
+/**
+ * 计算退避时间
+ */
+function calculateBackoffMs(attempt: number): number {
+  const backoffMs = BACKOFF_CONFIG.baseMs * Math.pow(BACKOFF_CONFIG.multiplier, attempt - 1);
+  return Math.min(backoffMs, BACKOFF_CONFIG.maxMs);
+}
+
+/**
+ * 带超时和全局间隔的 LLM 调用
+ */
+async function callWithTimeoutAndInterval(
+  claimsProvider: LlmClaimsProvider,
+  systemPrompt: string,
+  userPrompt: string,
+  timeoutMs: number,
+): Promise<{ rawText: string; durationMs: number }> {
+  // 等待全局调用间隔
+  await waitForGlobalInterval();
+
+  return callWithTimeout(claimsProvider, systemPrompt, userPrompt, timeoutMs);
+}
+
+/**
  * 带超时的 LLM 调用
  */
 async function callWithTimeout(
@@ -265,7 +324,7 @@ export async function callLlmForJson<T = Record<string, unknown>>(
   logger.debug(`${logLabel}: 第1次调用开始`);
 
   try {
-    const callResult = await callWithTimeout(claimsProvider, systemPrompt, userPrompt, timeout);
+    const callResult = await callWithTimeoutAndInterval(claimsProvider, systemPrompt, userPrompt, timeout);
     lastRawOutput = callResult.rawText;
     stats.totalCalls++;
     stats.totalDurationMs += callResult.durationMs;
@@ -316,6 +375,11 @@ export async function callLlmForJson<T = Record<string, unknown>>(
   while (attempt < maxRetries) {
     attempt++;
 
+    // 退避等待（指数退避）
+    const backoffMs = calculateBackoffMs(attempt);
+    logger.debug(`${logLabel}: 退避等待 ${backoffMs}ms 后重试`);
+    await sleep(backoffMs);
+
     // 选择修复提示词和 systemPrompt
     const repairPrompt = getRepairPrompt(
       attempt,
@@ -329,7 +393,7 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     logger.debug(`${logLabel}: 第${attempt}次重试开始，提示词=${attempt <= 2 ? '完整' : '简化'}`);
 
     try {
-      const callResult = await callWithTimeout(claimsProvider, retrySystem, repairPrompt, timeout);
+      const callResult = await callWithTimeoutAndInterval(claimsProvider, retrySystem, repairPrompt, timeout);
       lastRawOutput = callResult.rawText;
       stats.totalCalls++;
       stats.totalDurationMs += callResult.durationMs;

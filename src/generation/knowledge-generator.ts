@@ -102,7 +102,10 @@ export async function runKnowledgeGenerator(
   // ID 优先级：1. 显式 id 字段（英文） 2. aliases 中的英文名 3. name 字段 4. 时间戳备用
   const objects: KnowledgeObject[] = parsed.objects.map((obj: Record<string, unknown>) => {
     // 尝试从 aliases 中提取英文名（ASCII字符）
-    const aliases = obj.aliases as string[] | undefined;
+    // 确保 aliases 是数组（LLM 可能返回字符串）
+    const aliasesRaw = obj.aliases;
+    const aliases = Array.isArray(aliasesRaw) ? aliasesRaw :
+                    (typeof aliasesRaw === 'string' ? [aliasesRaw] : undefined);
     const englishAlias = aliases?.find(a => /^[\w\-]+$/.test(a));
 
     const id = extractEnglishId(obj.id as string) ||
@@ -247,6 +250,7 @@ function getPhaseForType(type: KnowledgeType): PromptConfig['phase'] {
 
 function getNameField(type: KnowledgeType): string {
   const nameFields: Record<KnowledgeType, string> = {
+    ARCHITECTURE: 'architecture_overview_name',
     CAPABILITY: 'domain_name',
     CONCEPT: 'concept_name',
     BOUNDARY: 'boundary_title',

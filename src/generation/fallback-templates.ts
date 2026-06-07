@@ -5,6 +5,26 @@ import { toKebabCase } from '../knowledge/type-directory-map.js';
  * 知识类型降级模板配置
  */
 export const FALLBACK_TEMPLATES: Record<KnowledgeType, Record<string, unknown>> = {
+  ARCHITECTURE: {
+    architecture_overview_name: '{projectName}',
+    summary_zh: '{projectName}架构概览（待人工补充）',
+    project_type: 'unknown',
+    tech_stack: [],
+    package_mode: '未识别',
+    layer_package_paths: [],
+    directory_structure: [],
+    ignore_directories: [
+      { path: 'node_modules/', reason: 'npm 依赖' },
+      { path: 'dist/', reason: '构建产物' },
+      { path: 'ai-knowledge/', reason: '知识库生成产物' },
+      { path: '.codegraph/', reason: '代码索引文件' },
+    ],
+    coding_conventions: [],
+    debug_entrypoints: [],
+    evidence: [],
+    warnings: ['llm_json_parse_failed', 'manual_review_required'],
+  },
+
   CONCEPT: {
     concept_name: '{conceptName}',
     summary_zh: '{conceptName}概念（待人工补充）',
@@ -86,6 +106,10 @@ export const FALLBACK_TEMPLATES: Record<KnowledgeType, Record<string, unknown>> 
  * 上下文字段到模板变量的映射
  */
 export const CONTEXT_FIELD_MAPPING: Record<KnowledgeType, Record<string, string>> = {
+  ARCHITECTURE: {
+    projectName: 'architecture_overview_name',
+  },
+
   CONCEPT: {
     conceptName: 'concept_name',
     kebabId: 'aliases',
@@ -168,6 +192,20 @@ export function generateFallbackObject(
     }
   }
 
+  // 全局替换：对所有字符串字段替换所有占位符
+  for (const [key, value] of Object.entries(result)) {
+    if (typeof value === 'string') {
+      let strValue = value;
+      for (const [contextKey, contextValue] of Object.entries(context)) {
+        if (typeof contextValue === 'string') {
+          const placeholder = `{${contextKey}}`;
+          strValue = strValue.replace(placeholder, contextValue);
+        }
+      }
+      result[key] = strValue;
+    }
+  }
+
   // 生成 kebabId（如果没有提供）
   const nameKey = type === 'CONCEPT' ? 'conceptName'
     : type === 'CAPABILITY' ? 'capabilityName'
@@ -200,6 +238,7 @@ export function generateFallbackObject(
  */
 export function getDefaultContextNameField(type: KnowledgeType): string {
   const mapping: Record<KnowledgeType, string> = {
+    ARCHITECTURE: 'projectName',
     CONCEPT: 'conceptName',
     CAPABILITY: 'capabilityName',
     BOUNDARY: 'boundaryName',

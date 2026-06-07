@@ -2,7 +2,7 @@ import path from 'path';
 import cliProgress from 'cli-progress';
 import { logger, setLogLevel, setLogFile, closeLogFile, flushLogFile } from '../shared/logger.js';
 import { getEnvVar, getEnvVarOptional } from '../config/env.js';
-import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
+import { DEFAULT_KNOWLEDGE_DIR, LLM_DEFAULTS } from '../config/defaults.js';
 import {
   resolveModelConfig,
   loadLlmConfigFile,
@@ -18,6 +18,7 @@ import {
 } from '../knowledge/generate-orchestrator.js';
 import { runKnowledgeGeneratorForGroups, type LlmClaimsProvider } from '../generation/knowledge-generator.js';
 import { callLlmForJson, generateBatchStatsReport, type LlmJsonCallResult } from '../generation/llm-json-client.js';
+import { verifyConcept, recordFailure, type VerifyResult } from '../generation/concept-verifier.js';
 import { buildEvidenceBundlesByPackage, type EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
@@ -145,8 +146,14 @@ async function runConceptFiveLayerGeneration(
         const prompt = buildLlmFilterPrompt(candidate);
         logger.debug(`CONCEPT filter prompt for ${candidate.className}: ${prompt}`);
 
-        // LLM调用（可能失败）
-        const result = await claimsProvider('你是一个知识价值判断专家。', prompt);
+        // LLM调用（带超时控制）
+        const filterTimeout = 60000; // 60秒超时
+        const result = await Promise.race([
+          claimsProvider('你是一个知识价值判断专家。', prompt),
+          new Promise<{ rawText: string }>((_, reject) =>
+            setTimeout(() => reject(new Error(`Layer 3 filter timeout after ${filterTimeout}ms`)), filterTimeout)
+          )
+        ]);
         logger.debug(`CONCEPT filter raw response for ${candidate.className}: ${result.rawText}`);
 
         // JSON解析
@@ -268,8 +275,7 @@ async function runConceptFiveLayerGeneration(
           conceptName: group.conceptName,
           codeSnippet: group.candidates[0]?.codeSnippet,
         },
-        maxRetries: 3,
-        timeout: 120000,
+        maxRetries: LLM_DEFAULTS.maxRetries,
         fallbackContext: {
           conceptName: group.conceptName,
           kebabId: toKebabCase(group.conceptName),
@@ -282,10 +288,18 @@ async function runConceptFiveLayerGeneration(
       // 解析生成结果（已由工具处理）
       let objects: Record<string, unknown>[] = [];
       if (llmResult.success && llmResult.data) {
+        // LLM 返回格式：{ objects: [...], warnings: [...] } 或直接数组
         if (Array.isArray(llmResult.data)) {
           objects = llmResult.data;
+        } else if (llmResult.data.objects && Array.isArray(llmResult.data.objects)) {
+          // 提取 objects 数组
+          objects = llmResult.data.objects as Record<string, unknown>[];
         } else {
           objects = [llmResult.data];
+        }
+        // DEBUG: 打印对象的 keys 检查字段名
+        for (const obj of objects) {
+          logger.debug(`CONCEPT object keys: ${Object.keys(obj).join(', ')}`);
         }
         logger.info(`CONCEPT generate "${group.conceptName}": ${objects.length} objects, fallback=${llmResult.fallbackUsed}`);
       } else {
@@ -293,12 +307,66 @@ async function runConceptFiveLayerGeneration(
         objects = [];
       }
 
-      // 提取英文 ID
-      const processedObjects = objects.map((obj, objIdx) => {
-        const aliases = obj.aliases as string[] | undefined;
-        const englishId = aliases?.find(a => /^[a-zA-Z]/.test(a));
-        const id = englishId ? toKebabCase(englishId) : toKebabCase(group.conceptName) + (objIdx > 0 ? `-${objIdx}` : '');
-        logger.debug(`CONCEPT object: aliases=${aliases?.join(',')}, id=${id}`);
+      // ========== 验证修正步骤 ==========
+      // 对每个生成的对象进行验证修正
+      let verifiedObjects: Record<string, unknown>[] = [];
+      const verifyFailures: Array<{ conceptName: string; reason: string; ruleId?: string }> = [];
+
+      for (const obj of objects) {
+        // 调用验证修正
+        const verifyResult = await verifyConcept({
+          conceptContent: obj,
+          className: String(obj.concept_name || group.conceptName),
+          filePath: group.candidates[0]?.filePath || '',
+          suspiciousMark: group.candidates[0]?.suspiciousMark,
+          enumValues: obj.enumValues as string[] | undefined,
+        }, claimsProvider);
+
+        if (verifyResult.action === 'accept') {
+          // 合格，直接使用
+          verifiedObjects.push(obj);
+        } else if (verifyResult.action === 'fix' && verifyResult.fixedContent) {
+          // 需修正，使用修正内容
+          verifiedObjects.push(verifyResult.fixedContent);
+          logger.info(`CONCEPT verify: "${obj.concept_name}" fixed`);
+        } else if (verifyResult.action === 'reject') {
+          // 拒绝，不写入，记录失败
+          verifyFailures.push({
+            conceptName: String(obj.concept_name || group.conceptName),
+            reason: verifyResult.reason,
+            ruleId: verifyResult.ruleId,
+          });
+          recordFailure({
+            conceptName: String(obj.concept_name || group.conceptName),
+            reason: verifyResult.reason,
+            ruleId: verifyResult.ruleId,
+            candidates: group.candidates.map(c => ({
+              className: c.className,
+              filePath: c.filePath,
+              suspiciousMark: c.suspiciousMark,
+            })),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+      // 如果所有对象都被拒绝，记录整体失败
+      if (verifiedObjects.length === 0 && objects.length > 0) {
+        logger.warn(`CONCEPT: 所有对象被验证拒绝，概念 "${group.conceptName}" 不生成`);
+      }
+
+      // 提取英文 ID：优先使用 kebab-case 格式的业务英文别名
+      const processedObjects = verifiedObjects.map((obj, objIdx) => {
+        const aliasesRaw = obj.aliases;
+        // 确保 aliases 是数组（LLM 可能返回字符串）
+        const aliases = Array.isArray(aliasesRaw) ? aliasesRaw :
+                        (typeof aliasesRaw === 'string' ? [aliasesRaw] : undefined);
+        // 优先使用 kebab-case 格式的业务英文别名（如 "alipay-merchant-config"）
+        const kebabAlias = aliases?.find(a => /^[a-z][a-z-]+$/.test(a));
+        // 如果没有 kebab-case，使用其他英文命名（如 PascalCase 的代码类名）
+        const otherEnglishId = aliases?.find(a => /^[a-zA-Z]/.test(a) && !/^[a-z][a-z-]+$/.test(a));
+        const id = kebabAlias ?? (otherEnglishId ? toKebabCase(otherEnglishId) : `obj-${Date.now()}-${objIdx}`);
+        logger.debug(`CONCEPT object: aliases=${aliases?.join(',')}, id=${id}, kebab=${kebabAlias}, other=${otherEnglishId}`);
         return { id, type: 'CONCEPT', ...obj };
       });
 
@@ -416,7 +484,10 @@ async function runBoundaryTwoStageGeneration(
 
     // 构建 contribution，从 aliases 中提取英文 ID
     const objects = parsed.objects.map((obj, index) => {
-      const aliases = obj.aliases as string[] | undefined;
+      const aliasesRaw = obj.aliases;
+      // 确保 aliases 是数组（LLM 可能返回字符串）
+      const aliases = Array.isArray(aliasesRaw) ? aliasesRaw :
+                      (typeof aliasesRaw === 'string' ? [aliasesRaw] : undefined);
       const englishId = aliases?.find(a => /^[a-zA-Z]/.test(a));
       const id = englishId ? toKebabCase(englishId) : `boundary-${Date.now()}-${index}`;
 

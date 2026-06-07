@@ -11,6 +11,7 @@ import { logger } from '../shared/logger.js';
 import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 
 // 设计文档定义的 8 类知识目录（业务视角）
+// ARCHITECTURE 类型使用根目录（空字符串），不在子目录中
 export const KNOWLEDGE_DIRS = [
   'capabilities',
   'concepts',
@@ -34,8 +35,9 @@ export const LEGACY_DIRS = [
   'db',
 ] as const;
 
-// 所有目录类型（业务 + 技术）
+// 所有目录类型（业务 + 技术 + 根目录）
 export const ALL_DIRS = [
+  '', // 根目录（用于 ARCHITECTURE 类型）
   ...KNOWLEDGE_DIRS,
   ...LEGACY_DIRS,
 ] as const;

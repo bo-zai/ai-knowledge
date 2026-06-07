@@ -82,7 +82,7 @@ export function resolveModelConfig(input: {
 
   return {
     baseUrl: fileConfig?.baseUrl ?? LLM_DEFAULTS.baseUrl,
-    apiKey: fileConfig?.apiKey ?? '',
+    apiKey: fileConfig?.apiKey ?? LLM_DEFAULTS.apiKey,
     apiKeyEnv: fileConfig?.apiKeyEnv ?? LLM_DEFAULTS.apiKeyEnv,
     model: fileConfig?.model ?? LLM_DEFAULTS.model,
     concurrency,

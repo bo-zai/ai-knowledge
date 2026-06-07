@@ -43,7 +43,8 @@ export type AllObjectType = KnowledgeType | LegacyType;
  * - capabilities: 能力声明
  */
 export const TYPE_TO_DIR: Record<AllObjectType, AllObjectDir> = {
-  // 设计文档 8 类（业务视角）
+  // 设计文档 9 类（业务视角）
+  ARCHITECTURE: '', // 根目录，architecture.md
   CAPABILITY: 'capabilities',
   CONCEPT: 'concepts',
   BOUNDARY: 'boundaries',
@@ -108,6 +109,7 @@ export function getTypeFromDir(dirName: string): AllObjectType | undefined {
  */
 export function getKnowledgeTypes(): KnowledgeType[] {
   return [
+    'ARCHITECTURE',
     'CAPABILITY',
     'CONCEPT',
     'BOUNDARY',

@@ -884,3 +884,387 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 - 流程步骤中的能力域名称必须与能力目录中的域名称一致
 - 关键分支描述必须有代码证据支撑，不推断未实现的分支
 - 跨域业务流程是最高价值的知识类型，条目数量应少而精（典型项目 3~8 条），只记录核心的端到端业务路径
+
+---
+
+## 9. 架构概览知识
+
+### 定义
+
+架构概览知识描述项目的整体结构组织方式和通用编码约定，帮助 Agent 快速建立全局认知。它回答"这个项目是什么类型、代码怎么组织、编码时新代码放哪、哪些目录不需要浏览"。
+
+架构概览是**包级元知识**，与业务领域知识（能力目录、概念知识等）分工不同：
+
+| 知识类型 | 回答的问题 |
+|---------|-----------|
+| **架构概览** | 项目整体是什么样的？技术栈是什么？分包模式是什么？新 Controller/Service 放哪？哪些目录要忽略？ |
+| **能力目录** | 这个项目有哪些业务领域？某个领域的代码在哪？核心类是什么？ |
+
+架构概览提供**全局技术视图和编码定位指南**，能力目录提供**业务领域导航**。Agent 先通过架构概览理解项目整体形态和代码组织方式，再通过能力目录定位具体业务代码。
+
+架构概览只生成一条知识，存储在知识包根目录的 `architecture.md` 文件中，与 `index.md` 平级。
+
+### 项目类型分类
+
+架构概览的生成需要先识别项目类型。项目类型决定了提取重点和输出格式：
+
+**主类型（按执行模型）**
+
+| 类型 | 定义 | 证据信号 |
+|------|------|---------|
+| backend-service | HTTP/RPC 服务，有业务逻辑 | Controller 注解、router 定义、数据库连接 |
+| frontend-app | SPA/MPA 前端应用 | components 目录、vite/webpack 配置、React/Vue 依赖 |
+| cli-tool | 命令行工具 | bin 目录、cli 入口、commander/yargs 依赖 |
+| library | 可导入的库/SDK | 无业务入口、有 package.json 导出配置 |
+| mobile-app | 移动应用 | android/ios 目录、React Native/Flutter 配置 |
+
+**复合类型（多类型共存）**
+
+| 类型 | 定义 | 证据信号 |
+|------|------|---------|
+| fullstack | 单仓库同时有前后端 | Next.js API routes + pages、前后端目录并存 |
+| monorepo | 多包仓库 | packages/ 或 apps/ 目录、workspaces 配置 |
+| microservices | 多服务仓库 | docker-compose.yml、多入口服务 |
+
+**特殊类型**
+
+| 类型 | 定义 | 证据信号 |
+|------|------|---------|
+| config-only | 纯配置项目 | Terraform/Ansible/K8s manifests、无源代码 |
+| api-definition | API 定义项目 | OpenAPI/GraphQL schema、无实现代码 |
+| static-site | 静态文档站点 | docs/ 或 content/ 目录、Markdown 内容 |
+| test-only | 测试/基准项目 | 只有测试 fixtures、无业务代码 |
+
+### 分包模式
+
+**分包模式是架构概览的核心信息**，它决定了 Agent 如何定位和添加新代码。
+
+**按层分包（Layer-based）**
+
+所有同类型代码放在同一包/目录下：
+```
+com.xxx.app/
+├── controller/      ← 所有 Controller
+├── service/         ← 所有 Service
+├── mapper/          ← 所有 Mapper
+├── entity/          ← 所有实体类
+    ├── DTO/
+    ├── VO/
+    ├── req/
+```
+
+编码指导：
+- 新 Controller → `com.xxx.app.controller/`
+- 新 Service → `com.xxx.app.service/`
+- 新 Mapper → `com.xxx.app.mapper/`
+
+**按领域分包（Domain-based）**
+
+每个业务领域独立一个包，包内包含该领域的所有分层：
+```
+com.xxx/
+├── user/
+│   ├── controller/
+│   ├── service/
+│   ├── mapper/
+│   ├── entity/
+├── order/
+│   ├── controller/
+│   ├── service/
+│   ├── mapper/
+│   ├── entity/
+```
+
+编码指导：
+- 新领域 → 创建 `com.xxx.<domain>/` 包
+- 新 Controller → `com.xxx.<domain>.controller/`
+- 新 Service → `com.xxx.<domain>.service/`
+
+**混合分包**
+
+部分领域独立分包，部分公共代码按层组织：
+```
+com.xxx/
+├── app/             ← 公共/跨领域代码（按层）
+│   ├── controller/
+│   ├── service/
+│   ├── common/
+├── user/            ← 用户领域（按领域）
+├── order/           ← 订单领域（按领域）
+```
+
+### 结构
+
+一条架构概览知识包含：
+
+- 架构概览名称：项目名称 + "架构概览"
+- 一句话定位：项目类型 + 核心技术栈 + 主要用途
+- 项目类型：backend-service / frontend-app / cli-tool / library 等
+- 技术栈：主要框架和依赖列表
+- 分包模式：按层分包 / 按领域分包 / 混合分包
+- 分层包路径：controller/service/mapper/entity 的具体包路径（表格形式）
+- 目录结构：顶层目录的用途和编码时指引（表格形式）
+- 忽略目录：不包含业务逻辑的目录列表（构建产物、生成产物、依赖目录等）
+- 编码约定：通用代码组织约定（命名约定、分层职责等）
+- 业务领域导航：链接到能力目录，Agent 通过能力目录获取具体业务模块信息
+- 调试入口：启动类和主要 API 入口
+- 证据：支撑架构判断的配置文件和目录结构
+
+### 产物示例
+
+**后端服务示例（按层分包）**
+
+```markdown
+# 音乐教育应用架构概览
+
+## 一句话定位
+
+Spring Boot 后端服务，提供课程管理、用户管理、学习记录等功能
+
+## 项目类型
+
+backend-service
+
+## 技术栈
+
+Spring Boot、MyBatis、MySQL、Lombok
+
+## 分包模式
+
+按层分包：所有同类型代码放在同一包下，不按业务领域拆分。
+
+## 分层包路径
+
+| 分层 | 包路径 | 编码时 |
+|------|--------|--------|
+| Controller | com.education.music.app.controller | 新 Controller 放在此包，如 CourseController.java |
+| Service | com.education.music.app.service | 新 Service 放在此包，如 CourseService.java |
+| Mapper | com.education.music.app.mapper | 新 Mapper 放在此包，如 CourseMapper.java |
+| Entity | com.education.music.app.entity | 新实体类放在此包，DTO/VO/req 子目录分类存放 |
+
+## 目录结构
+
+| 目录 | 用途 | 编码时 |
+|------|------|--------|
+| src/main/java/ | Java 源代码 | 分层包已在上方列出 |
+| src/main/resources/ | 配置文件 | application.yml 配置数据库、OSS；mappers/ 放 MyBatis XML |
+| src/test/java/ | 测试代码 | 单元测试、集成测试 |
+
+## 忽略目录
+
+以下目录不包含业务逻辑，浏览代码时跳过：
+
+- target/ — Maven 构建产物
+- ai-knowledge/ — 知识库生成产物
+- .codegraph/ — 代码索引文件
+- node_modules/ — npm 依赖（如有前端代码）
+
+## 编码约定
+
+- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Mapper 以 *Mapper 结尾
+- **分层职责**：Controller 处理 HTTP 请求和参数校验，Service 处理业务逻辑，Mapper 处理数据访问
+- **实体分类**：DTO 用于数据传输，VO 用于视图输出，req 用于请求参数
+
+## 业务领域导航
+
+参见能力目录 capabilities/_index.md 获取课程管理、用户管理、学习记录等业务领域的详细信息。
+
+## 调试入口
+
+| 类型 | 位置 | 说明 |
+|------|------|------|
+| 启动类 | MusicEducationApplication.java | Spring Boot 启动入口 |
+| HTTP | com.education.music.app.controller | 主要 API 入口参见能力目录 |
+
+## 证据
+
+- pom.xml
+- application.yml
+- src/main/java/com/education/music/app/ 目录结构
+```
+
+**后端服务示例（按领域分包）**
+
+```markdown
+# 订单管理系统架构概览
+
+## 一句话定位
+
+Spring Boot 后端服务，提供订单管理、商品管理、用户管理等功能
+
+## 项目类型
+
+backend-service
+
+## 技术栈
+
+Spring Boot、JPA、PostgreSQL
+
+## 分包模式
+
+按领域分包：每个业务领域独立包，包内包含 controller/service/repository/entity。
+
+## 分层包路径
+
+| 分层 | 包路径模板 | 编码时 |
+|------|-----------|--------|
+| Controller | com.ordermgr.<domain>.controller | 如 user/controller/UserController.java |
+| Service | com.ordermgr.<domain>.service | 如 user/service/UserService.java |
+| Repository | com.ordermgr.<domain>.repository | 如 user/repository/UserRepository.java |
+| Entity | com.ordermgr.<domain>.entity | 如 user/entity/User.java |
+
+## 目录结构
+
+| 目录 | 用途 | 编码时 |
+|------|------|--------|
+| src/main/java/com/ordermgr/ | 业务代码根目录 | 新领域创建 com.ordermgr.<domain> 包 |
+| src/main/java/com/ordermgr/common/ | 公共代码 | 跨领域共享的工具类、异常类 |
+| src/main/resources/ | 配置文件 | application.yml 配置数据库等 |
+
+## 忽略目录
+
+- target/ — Maven 构建产物
+- ai-knowledge/ — 知识库生成产物
+- .codegraph/ — 代码索引文件
+
+## 编码约定
+
+- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Repository 以 *Repository 结尾
+- **领域边界**：每个领域包内聚，领域间通过 Service 接口调用，不直接访问其他领域的 Repository
+
+## 业务领域导航
+
+参见能力目录 capabilities/_index.md 获取订单管理、商品管理、用户管理等业务领域的详细信息。
+
+## 调试入口
+
+| 类型 | 位置 | 说明 |
+|------|------|------|
+| 启动类 | OrderApplication.java | Spring Boot 启动入口 |
+| HTTP | 各领域 controller 子包 | 主要 API 入口参见能力目录 |
+
+## 证据
+
+- pom.xml
+- src/main/java/com/ordermgr/ 目录结构
+```
+
+**前端应用示例（feature-based）**
+
+```markdown
+# 管理后台架构概览
+
+## 一句话定位
+
+React SPA 管理后台，提供用户管理、订单管理等功能
+
+## 项目类型
+
+frontend-app
+
+## 技术栈
+
+React 18、Redux Toolkit、Vite、Ant Design
+
+## 分包模式
+
+feature-based：每个业务功能独立目录，包含组件、hooks、slice。
+
+## 分层包路径
+
+| 分层 | 目录路径 | 编码时 |
+|------|---------|--------|
+| Feature | src/features/<feature>/ | 新功能创建目录，如 src/features/order/ |
+| 组件 | src/features/<feature>/components/ | 功能内组件，如 OrderList.tsx |
+| Hooks | src/features/<feature>/hooks/ | 功能内 hooks，如 useOrderList.ts |
+| Slice | src/features/<feature>/slice.ts | Redux 状态定义 |
+| 通用组件 | src/components/ | 跨 feature 共享组件 |
+
+## 目录结构
+
+| 目录 | 用途 | 编码时 |
+|------|------|--------|
+| src/features/ | 业务功能模块 | 新功能在此创建 feature 目录 |
+| src/components/ | 通用 UI 组件 | 跨 feature 共享的组件 |
+| src/hooks/ | 通用 hooks | 跨 feature 共享的逻辑封装 |
+| src/store/ | Redux 配置 | 全局 store 配置 |
+
+## 忽略目录
+
+- node_modules/ — npm 依赖
+- dist/ — Vite 构建产物
+- ai-knowledge/ — 知识库生成产物
+- .codegraph/ — 代码索引文件
+
+## 编码约定
+
+- **命名约定**：组件文件使用 PascalCase，如 OrderList.tsx；hooks 使用 camelCase，如 useOrderList.ts
+- **Feature 边界**：feature 内组件不直接引用其他 feature 的组件，通过 Redux 全局状态通信
+
+## 业务领域导航
+
+参见能力目录 capabilities/_index.md 获取用户管理、订单管理等业务领域的详细信息。
+
+## 调试入口
+
+| 类型 | 位置 | 说明 |
+|------|------|------|
+| 应用入口 | src/main.tsx | Vite 启动入口 |
+| 路由入口 | src/App.tsx | React Router 配置 |
+
+## 证据
+
+- package.json
+- src/features/ 目录结构
+```
+
+### 提取方式
+
+1. **收集识别证据**
+   - 目录树：顶层 2~3 层目录结构
+   - 配置文件：package.json、pom.xml、go.mod 等依赖声明
+   - 入口文件：main、Application、cli、index 等入口类
+   - 已有文档：README.md、CLAUDE.md 的架构章节片段
+
+2. **LLM 识别项目类型**
+   - 输入：目录树 + 配置文件 + 入口文件列表
+   - 输出：项目类型 + 识别置信度 + 识别依据
+   - 项目类型识别结果存储在 `project-context.json`，供后续知识生成复用
+
+3. **收集架构证据（关键改进）**
+   - **完整目录树**：提供 src 目录 3~4 层深度的完整结构，包含所有子包
+   - **分层目录检测**：检测是否存在 controller/service/mapper/repository/entity 等分层目录
+   - **分包模式推断**：从目录结构推断是"按层分包"还是"按领域分包"
+     - 如果 src/ 下直接有 controller/service/mapper 目录 → 按层分包
+     - 如果 src/ 下有多个领域包（user/order/product），每个领域包内有 controller/service → 按领域分包
+   - **根包名提取**：提取 Java 源码的根包名（如 com.education.music.app）
+   - **构建产物目录**：target/、dist/、build/
+   - **生成产物目录**：ai-knowledge/、.codegraph/
+   - **依赖目录**：node_modules/
+
+4. **LLM 生成架构概览**
+   - 根据项目类型选择对应的提示词模板
+   - 输入：项目类型 + 完整目录树 + 分层目录信息 + 分包模式 + 忽略目录列表
+   - 输出：完整架构概览知识，必须包含分包模式和分层包路径表格
+
+### 生成约束
+
+**内容约束**
+
+- **分包模式必须填写**：从目录结构推断，不能省略或模糊描述
+- **分层包路径表格必须填写**：提供 controller/service/mapper/entity 的具体位置
+- 目录结构表格必须包含"编码时"列，指导 Agent 新代码放哪
+- 忽略目录列表必须包含 `ai-knowledge/` 和 `.codegraph/`
+- 不使用过于泛化的描述（如"Java 源代码目录，包含业务代码"）
+
+**分工约束**
+
+- 具体业务模块信息通过"业务领域导航"链接到能力目录
+- 架构概览不列出具体业务领域的包名（如"用户管理在 user 包"），但提供通用的包路径模板
+
+**格式约束**
+
+- 分层包路径采用表格形式，包含三列：分层、包路径、编码时
+- 目录结构采用表格形式，包含三列：目录、用途、编码时
+- 忽略目录采用列表形式，标注原因
+- 编码约定聚焦通用约定，不包含业务特定约定（业务约定属于约束知识）

@@ -17,6 +17,7 @@ export type JsonParseErrorType =
  * 知识类型的必须字段列表
  */
 export const REQUIRED_FIELDS_BY_TYPE: Record<KnowledgeType, string[]> = {
+  ARCHITECTURE: ['architecture_overview_name', 'summary_zh', 'project_type', 'tech_stack', 'structure_pattern'],
   CONCEPT: ['concept_name', 'summary_zh', 'aliases', 'business_meaning_zh', 'evidence'],
   CAPABILITY: ['capability_name', 'summary_zh', 'aliases', 'business_scenario', 'entry_points'],
   BOUNDARY: ['boundary_name', 'summary_zh', 'aliases', 'constraints', 'config_evidence'],
@@ -31,6 +32,18 @@ export const REQUIRED_FIELDS_BY_TYPE: Record<KnowledgeType, string[]> = {
  * 知识类型的字段结构示例（用于完整修复提示词）
  */
 export const FIELD_STRUCTURES_BY_TYPE: Record<KnowledgeType, string> = {
+  ARCHITECTURE: `{
+  "architecture_overview_name": "项目名称",
+  "summary_zh": "一句话定位：这是什么类型的项目",
+  "project_type": "项目类型（backend-service/frontend-app/cli-tool/library）",
+  "tech_stack": ["技术栈1", "技术栈2"],
+  "structure_pattern": "结构模式说明",
+  "key_directories": [{"path": "目录路径", "purpose": "用途说明"}],
+  "entry_points": [{"type": "入口类型", "location": "位置", "description": "说明"}],
+  "evidence": ["证据路径"],
+  "warnings": []
+}`,
+
   CONCEPT: `{
   "concept_name": "概念中文名（如：用户会员）",
   "summary_zh": "一句话定位：这是什么业务场景下的什么",

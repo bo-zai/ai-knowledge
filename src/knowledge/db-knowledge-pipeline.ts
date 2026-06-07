@@ -53,20 +53,31 @@ export interface RunDbKnowledgePipelineInput {
   graphStatus: GraphStatus;
   verbose?: boolean;
   modelConfig: ModelConfig;
+  /** 关联仓库路径（如核心库仓库），用于数据模型证据补充 */
+  companionRepoPath?: string;
 }
 
-async function resolveCompanionCoreRepoPath(repoPath: string): Promise<string | undefined> {
-  const fs = await import('fs/promises');
-  const repoName = path.basename(repoPath);
-  if (!repoName.startsWith('music-education-') || repoName === 'music-education-core') {
+/**
+ * 获取关联仓库路径
+ *
+ * 通用逻辑：优先使用传入的参数，否则返回 undefined
+ * 不做特定项目判断，确保通用性
+ */
+async function resolveCompanionRepoPath(
+  repoPath: string,
+  companionRepoPath?: string,
+): Promise<string | undefined> {
+  if (!companionRepoPath) {
     return undefined;
   }
 
-  const siblingCorePath = path.join(path.dirname(repoPath), 'music-education-core');
+  // 验证传入的路径是否存在
+  const fs = await import('fs/promises');
   try {
-    const stat = await fs.stat(siblingCorePath);
-    return stat.isDirectory() ? siblingCorePath : undefined;
+    const stat = await fs.stat(companionRepoPath);
+    return stat.isDirectory() ? companionRepoPath : undefined;
   } catch {
+    logger.warn(`Companion repo path "${companionRepoPath}" does not exist`);
     return undefined;
   }
 }
@@ -433,7 +444,7 @@ export function buildDbStageReport(input: {
 export async function runDbKnowledgePipeline(
   input: RunDbKnowledgePipelineInput,
 ): Promise<KnowledgePackageContribution> {
-  const { repoPath, target, graphStatus, verbose, modelConfig } = input;
+  const { repoPath, target, graphStatus, verbose, modelConfig, companionRepoPath } = input;
   const mockMode = isMockModel(modelConfig.model);
 
   // Build slice filter from target
@@ -446,9 +457,9 @@ export async function runDbKnowledgePipeline(
   logger.info(`Using graph status: ${graphStatus.status}`);
 
   // 2. Build DB evidence bundles
-  const companionCoreRepoPath = await resolveCompanionCoreRepoPath(repoPath);
+  const resolvedCompanionRepoPath = await resolveCompanionRepoPath(repoPath, companionRepoPath);
   logger.info('Building DB evidence bundles...');
-  const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter, companionCoreRepoPath);
+  const dbBundles = await buildDbBundlesForGeneration(repoPath, sliceFilter, resolvedCompanionRepoPath);
   logger.info(`Built ${dbBundles.length} DB evidence bundles`);
   const dbBundleMap = new Map(dbBundles.map((bundle) => [bundle.table.toLowerCase(), bundle]));
 

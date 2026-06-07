@@ -325,29 +325,82 @@ function yamlToMd(id: string, type: KnowledgeType | LegacyType, yamlContent: str
 
 /**
  * Parse yaml fields from string.
+ * Handles objectToYaml output format where values are JSON.stringify wrapped.
  */
 function parseYamlFields(yaml: string): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   const lines = yaml.split('\n');
+  let lastArrayKey: string | null = null;
 
   for (const line of lines) {
+    // Match array items in nested format: "  - {...}" (from objectToYaml for object arrays)
+    const arrayItemMatch = line.match(/^  - (.+)$/);
+    if (arrayItemMatch && lastArrayKey) {
+      const arr = fields[lastArrayKey] as Array<unknown>;
+      if (Array.isArray(arr)) {
+        try {
+          arr.push(JSON.parse(arrayItemMatch[1]));
+        } catch {
+          arr.push(arrayItemMatch[1]);
+        }
+      }
+      continue; // Skip further processing for this line
+    }
+
+    // Match key: value pattern (objectToYaml outputs values as JSON.stringify)
     const match = line.match(/^(\w+):\s*(.*)$/);
     if (match) {
       const key = match[1];
-      const value = match[2];
+      const valueStr = match[2];
+      lastArrayKey = null; // Reset for non-array lines
 
-      if (value.startsWith('[')) {
-        // 数组
+      // Handle different value formats from objectToYaml
+      if (valueStr === '' || valueStr === undefined) {
+        // Empty value - this indicates array items follow (key: followed by "  - ...")
+        fields[key] = [];
+        lastArrayKey = key;
+      } else if (valueStr === '[]') {
+        fields[key] = [];
+      } else if (valueStr.startsWith('[')) {
+        // JSON array format: [item1, item2, ...] or [{...}, {...}]
         try {
-          fields[key] = JSON.parse(value);
+          fields[key] = JSON.parse(valueStr);
         } catch {
           fields[key] = [];
         }
-      } else if (value.startsWith('"') || value.startsWith("'")) {
-        // 字符串
-        fields[key] = value.slice(1, -1);
+      } else if (valueStr.startsWith('"') && valueStr.endsWith('"')) {
+        // JSON.stringify string: "content" - parse to get actual content
+        try {
+          fields[key] = JSON.parse(valueStr);
+        } catch {
+          // Fallback: remove quotes directly
+          fields[key] = valueStr.slice(1, -1);
+        }
+      } else if (valueStr.startsWith("'") && valueStr.endsWith("'")) {
+        // Single quoted string
+        fields[key] = valueStr.slice(1, -1);
+      } else if (valueStr.startsWith('{')) {
+        // JSON object
+        try {
+          fields[key] = JSON.parse(valueStr);
+        } catch {
+          fields[key] = {};
+        }
+      } else if (valueStr === 'null') {
+        fields[key] = null;
       } else {
-        fields[key] = value;
+        // Plain value (boolean, number, or unquoted string)
+        if (valueStr === 'true') {
+          fields[key] = true;
+        } else if (valueStr === 'false') {
+          fields[key] = false;
+        } else if (/^\d+$/.test(valueStr)) {
+          fields[key] = parseInt(valueStr, 10);
+        } else if (/^\d+\.\d+$/.test(valueStr)) {
+          fields[key] = parseFloat(valueStr);
+        } else {
+          fields[key] = valueStr;
+        }
       }
     }
   }
@@ -416,9 +469,11 @@ function generateTypeIndex(dir: KnowledgeDir, objects: Array<{ id: string; type:
     for (const obj of objects) {
       const fields = parseYamlFieldsFromMd(obj.content);
       const fileName = toKebabCase(obj.id) + '.md';
-      const businessMeaning = getStringField(fields, 'business_meaning_zh') ?? '';
+      // 使用概念名称而不是英文 ID
+      const conceptName = getStringField(fields, 'concept_name') ?? obj.id;
+      const summaryZh = getStringField(fields, 'summary_zh') ?? getStringField(fields, 'business_meaning_zh') ?? '';
       const tags = getArrayField<string>(fields, 'tags');
-      lines.push(`| ${obj.id} | ${businessMeaning} | ${tags ? formatTags(tags) : ''} | [${fileName}](${fileName}) |`);
+      lines.push(`| ${conceptName} | ${summaryZh} | ${tags ? formatTags(tags) : ''} | [${fileName}](${fileName}) |`);
     }
   } else {
     lines.push('| 名称 | 类型 | 文件 |');
@@ -437,6 +492,12 @@ function generateTypeIndex(dir: KnowledgeDir, objects: Array<{ id: string; type:
  */
 function parseYamlFieldsFromMd(mdContent: string): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
+
+  // 提取概念名称（标题第一行 # xxx）
+  const titleMatch = mdContent.match(/^#\s+(.+)\n/);
+  if (titleMatch) {
+    fields.concept_name = titleMatch[1].trim();
+  }
 
   // 提取一句话定位（summary_zh）
   const summaryMatch = mdContent.match(/## 一句话定位\s*\n\s*(.*?)\n/);
@@ -480,6 +541,12 @@ function generateGlobalIndex(layout: PackageLayout, objectsByType: Record<Knowle
   lines.push(`> 生成时间：${new Date().toISOString()}`);
   lines.push('');
 
+  // 架构概览链接（在所有知识类型之前）
+  lines.push(`## 架构概览`);
+  lines.push('');
+  lines.push(`[查看项目架构概览](architecture.md) — 了解项目整体结构、技术栈和入口导航`);
+  lines.push('');
+
   // 概念知识
   if (objectsByType.concepts && objectsByType.concepts.length > 0) {
     lines.push(`## 概念知识`);
@@ -489,8 +556,11 @@ function generateGlobalIndex(layout: PackageLayout, objectsByType: Record<Knowle
     for (const obj of objectsByType.concepts) {
       const fields = parseYamlFieldsFromMd(obj.content);
       const fileName = toKebabCase(obj.id) + '.md';
-      const businessMeaning = getStringField(fields, 'business_meaning_zh') ?? '';
-      lines.push(`| ${obj.id} | ${businessMeaning} | [concepts/${fileName}](concepts/${fileName}) |`);
+      // 使用概念名称而不是英文 ID
+      const conceptName = getStringField(fields, 'concept_name') ?? obj.id;
+      // 使用一句话定位而不是业务含义（更简洁）
+      const summaryZh = getStringField(fields, 'summary_zh') ?? getStringField(fields, 'business_meaning_zh') ?? '';
+      lines.push(`| ${conceptName} | ${summaryZh} | [concepts/${fileName}](concepts/${fileName}) |`);
     }
     lines.push('');
   }
@@ -554,6 +624,9 @@ function generateGlossary(objects: Array<{ id: string; type: KnowledgeType | Leg
     const fields = parseYamlFieldsFromMd(obj.content);
     const fileName = toKebabCase(obj.id) + '.md';
 
+    // 使用概念名称作为术语显示，而不是英文 ID
+    const conceptName = getStringField(fields, 'concept_name') ?? obj.id;
+
     // 定义优先使用 summary_zh（一句话定位），其次使用 business_meaning_zh
     const definition = getStringField(fields, 'summary_zh')
       ?? getStringField(fields, 'business_meaning_zh')
@@ -565,7 +638,7 @@ function generateGlossary(objects: Array<{ id: string; type: KnowledgeType | Leg
       ? aliases.join(', ')
       : '';
 
-    lines.push(`| ${obj.id} | ${definition} | ${aliasesStr} | [${fileName}](${fileName}) |`);
+    lines.push(`| ${conceptName} | ${definition} | ${aliasesStr} | [${fileName}](${fileName}) |`);
   }
 
   return lines.join('\n');

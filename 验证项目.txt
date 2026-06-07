@@ -1,5 +1,7 @@
 真实的项目：
 
+必须：依次调用生成，不要并发的执行知识生成逻辑，防止大模型触发速率限制。
+
 1. D:\workspace\other_project\music-education-admin
 
 2. D:\workspace\other_project\music-education-app

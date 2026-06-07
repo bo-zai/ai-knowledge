@@ -1,0 +1,950 @@
+/**
+ * 架构概览生成模块
+ *
+ * 根据项目类型选择对应模板，调用 LLM 生成 architecture.md
+ */
+
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { logger } from '../shared/logger.js';
+import { PromptLoader } from '../shared/prompt-loader.js';
+import { LLM_DEFAULTS } from '../config/defaults.js';
+import { callLlmForJson } from '../generation/llm-json-client.js';
+import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
+import type { ProjectContext, ProjectType } from './project-context.js';
+import { getLanguageAdapter, detectProjectLanguage } from '../evidence/extractors/language-adapters/index.js';
+import type { LanguageAdapter } from '../evidence/extractors/language-adapters/index.js';
+
+/** 默认知识库目录名 */
+const DEFAULT_KNOWLEDGE_DIR = 'ai-knowledge';
+
+/** 架构概览生成结果 */
+export interface ArchitectureGenerationResult {
+  success: boolean;
+  content?: string;
+  filePath: string;
+}
+
+/** 目录结构条目 */
+export interface DirectoryStructureItem {
+  path: string;
+  purpose: string;
+  coding_guide: string;
+}
+
+/** 忽略目录条目 */
+export interface IgnoreDirectoryItem {
+  path: string;
+  reason: string;
+}
+
+/** 编码约定条目 */
+export interface CodingConventionItem {
+  convention: string;
+  description: string;
+}
+
+/** 调试入口条目 */
+export interface DebugEntrypointItem {
+  type: string;
+  location: string;
+  description: string;
+}
+
+/** 架构概览 JSON 结构（新版） */
+export interface ArchitectureOverview {
+  architecture_overview_name: string;
+  summary_zh: string;
+  project_type: ProjectType;
+  tech_stack: string[];
+  // 后端：分包模式
+  package_mode?: string;  // 按层分包 | 按领域分包 | 混合分包
+  layer_package_paths?: LayerPackagePathItem[];  // 分层包路径（后端）
+  // 前端：组件组织模式
+  component_mode?: string;  // feature-based | type-based | 混合模式
+  layer_directory_paths?: LayerDirectoryPathItem[];  // 分层目录路径（前端/CLI）
+  // CLI：命令组织模式
+  command_mode?: string;  // 独立文件模式 | 集中定义模式 | 模块化模式
+  directory_structure: DirectoryStructureItem[];
+  ignore_directories: IgnoreDirectoryItem[];
+  coding_conventions: CodingConventionItem[];
+  business_domains_navigation?: string;
+  export_structure?: string;
+  debug_entrypoints: DebugEntrypointItem[];
+  evidence: string[];
+}
+
+/** 分层包路径条目（后端） */
+export interface LayerPackagePathItem {
+  layer: string;
+  package_path: string;
+  coding_guide: string;
+}
+
+/** 分层目录路径条目（前端/CLI） */
+export interface LayerDirectoryPathItem {
+  layer: string;
+  directory_path: string;
+  coding_guide: string;
+}
+
+/** 必须忽略的目录 */
+const REQUIRED_IGNORE_DIRS: IgnoreDirectoryItem[] = [
+  { path: 'dist/', reason: '构建产物' },
+  { path: 'node_modules/', reason: 'npm 依赖' },
+  { path: 'ai-knowledge/', reason: '知识库生成产物' },
+  { path: '.codegraph/', reason: '代码索引文件' },
+];
+
+/**
+ * 收集类型特定证据
+ */
+export async function collectArchitectureEvidence(
+  repoPath: string,
+  projectType: ProjectType,
+  adapter: LanguageAdapter | null,
+): Promise<Record<string, unknown>> {
+  const baseEvidence = await collectBaseEvidence(repoPath);
+
+  // 根据项目类型收集特定证据（使用适配器配置）
+  switch (projectType) {
+    case 'backend-service':
+      return {
+        ...baseEvidence,
+        layer_dirs: await detectLayerDirectories(repoPath, adapter),
+        entry_types: await detectBackendEntries(repoPath, adapter),
+        coding_convention_evidence: await detectBackendCodingConventions(repoPath, adapter),
+      };
+
+    case 'frontend-app':
+      return {
+        ...baseEvidence,
+        component_dirs: await detectComponentDirs(repoPath, adapter),
+        routing_file: await detectRoutingFile(repoPath, adapter),
+        state_management: await detectStateManagement(repoPath, adapter),
+        coding_convention_evidence: await detectFrontendCodingConventions(repoPath),
+      };
+
+    case 'cli-tool':
+      return {
+        ...baseEvidence,
+        command_dir: await detectCommandDir(repoPath, adapter),
+        export_file: await detectExportFile(repoPath, adapter),
+        coding_convention_evidence: await detectCliCodingConventions(repoPath, adapter),
+      };
+
+    case 'library':
+      return {
+        ...baseEvidence,
+        api_dirs: await detectApiDirs(repoPath, adapter),
+        export_config: await detectExportConfig(repoPath),
+        coding_convention_evidence: await detectLibraryCodingConventions(repoPath),
+      };
+
+    default:
+      return baseEvidence;
+  }
+}
+
+/**
+ * 生成架构概览
+ */
+export async function generateArchitectureOverview(
+  repoPath: string,
+  context: ProjectContext,
+  claimsProvider: LlmClaimsProvider,
+  outputRoot: string,
+): Promise<ArchitectureGenerationResult> {
+  const knowledgeDir = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR);
+  const filePath = path.join(knowledgeDir, 'architecture.md');
+
+  // 根据项目类型选择模板
+  const templateName = getTemplateName(context.projectType);
+  logger.debug(`Using architecture template: ${templateName}`);
+
+  // 使用通用语言检测
+  const language = await detectProjectLanguage(repoPath);
+  const adapter = getLanguageAdapter(language);
+  if (!adapter) {
+    logger.warn(`Architecture: no adapter for language '${language}', using fallback`);
+  }
+
+  // 收集类型特定证据（使用适配器配置）
+  const evidence = await collectArchitectureEvidence(repoPath, context.projectType, adapter);
+
+  // 加载提示词模板
+  const systemPrompt = PromptLoader.load(templateName).raw;
+
+  // 构建用户提示词
+  const userPrompt = JSON.stringify({
+    project_name: path.basename(repoPath),
+    identified_type: context.projectType,
+    identified_tech_stack: context.techStack,
+    identified_framework: context.framework,
+    evidence,
+  }, null, 2);
+
+  logger.debug('Generating architecture overview with LLM...');
+
+  // 调用 LLM
+  const result = await callLlmForJson<ArchitectureOverview>({
+    systemPrompt,
+    userPrompt,
+    claimsProvider,
+    knowledgeType: 'ARCHITECTURE',
+    fallbackContext: { projectName: path.basename(repoPath) },
+    maxRetries: LLM_DEFAULTS.maxRetries,
+    logLabel: 'Architecture generation',
+  });
+
+  if (!result.success || !result.data) {
+    logger.warn('Architecture generation failed, using fallback template');
+    const fallbackContent = generateFallbackArchitecture(repoPath, context);
+    await writeArchitectureFile(filePath, fallbackContent);
+    return { success: true, content: fallbackContent, filePath };
+  }
+
+  // 确保忽略目录完整性
+  const completeData = ensureIgnoreDirectories(result.data);
+
+  // 转换为 Markdown
+  const mdContent = architectureToMarkdown(completeData, context);
+
+  // 写入文件
+  await writeArchitectureFile(filePath, mdContent);
+
+  logger.info(`Architecture overview generated: ${filePath}`);
+
+  return { success: true, content: mdContent, filePath };
+}
+
+/**
+ * 确保忽略目录列表完整
+ */
+function ensureIgnoreDirectories(data: ArchitectureOverview): ArchitectureOverview {
+  const existingDirs = data.ignore_directories || [];
+  const existingPaths = new Set(existingDirs.map(d => d.path));
+  const missingDirs = REQUIRED_IGNORE_DIRS.filter(d => !existingPaths.has(d.path));
+
+  return {
+    ...data,
+    ignore_directories: [...existingDirs, ...missingDirs],
+  };
+}
+
+/**
+ * 写入架构概览文件
+ */
+async function writeArchitectureFile(filePath: string, content: string): Promise<void> {
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(filePath, content, 'utf-8');
+}
+
+/**
+ * 根据项目类型获取模板名称
+ */
+function getTemplateName(projectType: ProjectType): string {
+  const templateMap: Record<string, string> = {
+    'backend-service': 'rules-architecture-backend',
+    'frontend-app': 'rules-architecture-frontend',
+    'cli-tool': 'rules-architecture-cli',
+    'library': 'rules-architecture-library',
+  };
+
+  // 复合类型和特殊类型默认使用 backend 模板
+  return templateMap[projectType] || 'rules-architecture-backend';
+}
+
+/**
+ * 架构概览 JSON 转 Markdown（新版）
+ */
+function architectureToMarkdown(data: ArchitectureOverview, context: ProjectContext): string {
+  const lines: string[] = [];
+  const timestamp = new Date().toISOString();
+
+  // 头部
+  lines.push(`# ${data.architecture_overview_name || '项目架构概览'}`);
+  lines.push('');
+  lines.push(`> 类型：ARCHITECTURE`);
+  lines.push(`> 生成时间：${timestamp}`);
+  lines.push('');
+
+  // 一句话定位
+  lines.push(`## 一句话定位`);
+  lines.push('');
+  lines.push(data.summary_zh || '项目架构概览（待人工补充）');
+  lines.push('');
+
+  // 项目类型
+  lines.push(`## 项目类型`);
+  lines.push('');
+  lines.push(data.project_type || 'unknown');
+  lines.push('');
+
+  // 技术栈
+  lines.push(`## 技术栈`);
+  lines.push('');
+  const techStack = data.tech_stack || [];
+  lines.push(techStack.length > 0 ? techStack.join('、') : '未识别');
+  lines.push('');
+
+  // 分包模式（后端服务核心字段）
+  if (data.package_mode) {
+    lines.push(`## 分包模式`);
+    lines.push('');
+    lines.push(data.package_mode);
+    lines.push('');
+  }
+
+  // 组件组织模式（前端应用核心字段）
+  if (data.component_mode) {
+    lines.push(`## 组件组织模式`);
+    lines.push('');
+    lines.push(data.component_mode);
+    lines.push('');
+  }
+
+  // 命令组织模式（CLI 工具核心字段）
+  if (data.command_mode) {
+    lines.push(`## 命令组织模式`);
+    lines.push('');
+    lines.push(data.command_mode);
+    lines.push('');
+  }
+
+  // 分层包路径（后端核心字段）
+  if (data.layer_package_paths && data.layer_package_paths.length > 0) {
+    lines.push(`## 分层包路径`);
+    lines.push('');
+    lines.push('| 分层 | 包路径 | 编码时 |');
+    lines.push('|------|--------|--------|');
+    for (const layer of data.layer_package_paths) {
+      lines.push(`| ${layer.layer} | ${layer.package_path} | ${layer.coding_guide} |`);
+    }
+    lines.push('');
+  }
+
+  // 分层目录路径（前端/CLI核心字段）
+  if (data.layer_directory_paths && data.layer_directory_paths.length > 0) {
+    lines.push(`## 分层目录路径`);
+    lines.push('');
+    lines.push('| 分层 | 目录路径 | 编码时 |');
+    lines.push('|------|----------|--------|');
+    for (const layer of data.layer_directory_paths) {
+      lines.push(`| ${layer.layer} | ${layer.directory_path} | ${layer.coding_guide} |`);
+    }
+    lines.push('');
+  }
+
+  // 目录结构（表格形式）
+  if (data.directory_structure && data.directory_structure.length > 0) {
+    lines.push(`## 目录结构`);
+    lines.push('');
+    lines.push('| 目录 | 用途 | 编码时 |');
+    lines.push('|------|------|--------|');
+    for (const dir of data.directory_structure) {
+      lines.push(`| ${dir.path} | ${dir.purpose} | ${dir.coding_guide} |`);
+    }
+    lines.push('');
+  }
+
+  // 忽略目录
+  if (data.ignore_directories && data.ignore_directories.length > 0) {
+    lines.push(`## 忽略目录`);
+    lines.push('');
+    lines.push('以下目录不包含业务逻辑，浏览代码时跳过：');
+    lines.push('');
+    for (const dir of data.ignore_directories) {
+      lines.push(`- ${dir.path} — ${dir.reason}`);
+    }
+    lines.push('');
+  }
+
+  // 编码约定
+  if (data.coding_conventions && data.coding_conventions.length > 0) {
+    lines.push(`## 编码约定`);
+    lines.push('');
+    for (const conv of data.coding_conventions) {
+      lines.push(`- **${conv.convention}**：${conv.description}`);
+    }
+    lines.push('');
+  }
+
+  // 导出结构（library/cli 时）
+  if (data.export_structure) {
+    lines.push(`## 导出结构`);
+    lines.push('');
+    lines.push(data.export_structure);
+    lines.push('');
+  }
+
+  // 业务领域导航（backend/frontend 时）
+  if (data.business_domains_navigation) {
+    lines.push(`## 业务领域导航`);
+    lines.push('');
+    lines.push(data.business_domains_navigation);
+    lines.push('');
+  }
+
+  // 调试入口
+  if (data.debug_entrypoints && data.debug_entrypoints.length > 0) {
+    lines.push(`## 调试入口`);
+    lines.push('');
+    lines.push('| 类型 | 位置 | 说明 |');
+    lines.push('|------|------|------|');
+    for (const entry of data.debug_entrypoints) {
+      lines.push(`| ${entry.type} | ${entry.location} | ${entry.description} |`);
+    }
+    lines.push('');
+  }
+
+  // 证据
+  if (data.evidence && data.evidence.length > 0) {
+    lines.push(`## 证据`);
+    lines.push('');
+    for (const ev of data.evidence) {
+      lines.push(`- ${ev}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * 生成降级架构概览（新版）
+ */
+function generateFallbackArchitecture(repoPath: string, context: ProjectContext): string {
+  const lines: string[] = [];
+  const timestamp = new Date().toISOString();
+  const projectName = path.basename(repoPath);
+  const techStack = context.techStack || [];
+
+  lines.push(`# ${projectName} 架构概览`);
+  lines.push('');
+  lines.push(`> 类型：ARCHITECTURE`);
+  lines.push(`> 生成时间：${timestamp}`);
+  lines.push('');
+
+  lines.push(`## 一句话定位`);
+  lines.push('');
+  lines.push(`${context.projectType || 'unknown'} 项目，技术栈：${techStack.length > 0 ? techStack.join('、') : '未识别'}`);
+  lines.push('');
+
+  lines.push(`## 项目类型`);
+  lines.push('');
+  lines.push(context.projectType || 'unknown');
+  lines.push('');
+
+  lines.push(`## 技术栈`);
+  lines.push('');
+  lines.push(techStack.length > 0 ? techStack.join('、') : '未识别');
+  lines.push('');
+
+  // 忽略目录（必须包含）
+  lines.push(`## 忽略目录`);
+  lines.push('');
+  lines.push('以下目录不包含业务逻辑，浏览代码时跳过：');
+  lines.push('');
+  for (const dir of REQUIRED_IGNORE_DIRS) {
+    lines.push(`- ${dir.path} — ${dir.reason}`);
+  }
+  lines.push('');
+
+  lines.push(`## 证据`);
+  lines.push('');
+  const evidence = context.identificationEvidence || [];
+  if (evidence.length > 0) {
+    for (const ev of evidence) {
+      lines.push(`- ${ev}`);
+    }
+  } else {
+    lines.push(`- 项目目录结构`);
+  }
+  lines.push('');
+
+  lines.push(`> 此架构概览为降级生成，详细信息请查看项目文档或代码结构。`);
+
+  return lines.join('\n');
+}
+
+// ========== 证据收集辅助函数 ==========
+
+async function collectBaseEvidence(repoPath: string): Promise<Record<string, unknown>> {
+  // 获取顶层目录树（3层深度）
+  const topDirTree = await getDirectoryTree(repoPath, 3);
+
+  // 获取 src 目录详细结构（如果存在）- 增加深度以获取完整包结构
+  const srcPath = path.join(repoPath, 'src');
+  let srcDirTree = '';
+  try {
+    srcDirTree = await getDirectoryTree(srcPath, 8); // 8层深度确保获取完整包结构
+  } catch {
+    // src 目录不存在
+  }
+
+  // 获取 Java 目录完整包结构（后端项目关键证据）
+  let javaDirTree = '';
+  try {
+    const javaPath = path.join(repoPath, 'src/main/java');
+    javaDirTree = await getDirectoryTree(javaPath, 10); // 完整包结构，不限深度
+  } catch {
+    // Java 目录不存在
+  }
+
+  return {
+    repo_name: path.basename(repoPath),
+    top_dir_tree: topDirTree,
+    src_dir_tree: srcDirTree,
+    java_dir_tree: javaDirTree,
+    ignore_dirs: await detectIgnoreDirectories(repoPath),
+  };
+}
+
+async function getTopDirectories(repoPath: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(repoPath, { withFileTypes: true });
+    return entries
+      .filter(e => e.isDirectory() && !shouldExcludeDir(e.name))
+      .map(e => e.name)
+      .slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
+function shouldExcludeDir(name: string): boolean {
+  const exclude = ['node_modules', '.git', '.idea', '.vscode', 'dist', 'build', 'target', 'out', '.knowledge', 'ai-knowledge', '.codegraph'];
+  return exclude.includes(name) || name.startsWith('.');
+}
+
+/**
+ * 检测需要忽略的目录
+ */
+async function detectIgnoreDirectories(repoPath: string): Promise<string[]> {
+  const ignoreCandidates = [
+    'dist', 'build', 'target', 'out', 'node_modules',
+    'ai-knowledge', '.codegraph', '.git', '.idea', '.vscode',
+    'coverage', 'logs', 'tmp', '.next',
+  ];
+
+  const found: string[] = [];
+  for (const name of ignoreCandidates) {
+    try {
+      await fs.access(path.join(repoPath, name));
+      found.push(name);
+    } catch {
+      // 目录不存在
+    }
+  }
+
+  return found;
+}
+
+/**
+ * 检测后端分层目录（使用适配器配置）
+ */
+async function detectLayerDirectories(repoPath: string, adapter: LanguageAdapter | null): Promise<string[]> {
+  // 使用适配器配置的分层目录名，或使用默认值
+  const layers = adapter?.namingPatterns.layerNames ?? ['controller', 'service', 'repository', 'dao', 'domain', 'application', 'infrastructure'];
+  const found: string[] = [];
+
+  for (const layer of layers) {
+    // 检查多种可能的路径（Java: src/main/java/../layer, 其他: src/layer）
+    const possiblePaths = [
+      path.join(repoPath, 'src', 'main', 'java', 'com', 'example', layer),  // Java Spring 结构
+      path.join(repoPath, 'src', layer),  // 通用结构
+    ];
+
+    for (const dirPath of possiblePaths) {
+      try {
+        await fs.access(dirPath);
+        found.push(layer);
+        break;  // 找到后不再检查其他路径
+      } catch {
+        // 目录不存在
+      }
+    }
+  }
+
+  return found;
+}
+
+/**
+ * 检测后端入口类型（使用适配器配置）
+ */
+async function detectBackendEntries(repoPath: string, adapter: LanguageAdapter | null): Promise<string[]> {
+  const entries: string[] = [];
+  const entrySuffixes = adapter?.namingPatterns.entryPointSuffixes ?? ['Controller', 'Handler', 'Api'];
+
+  // 检查入口类（使用适配器配置的后缀）
+  try {
+    const srcPath = path.join(repoPath, 'src');
+    const files = await fs.readdir(srcPath, { withFileTypes: true });
+    for (const f of files) {
+      // 检查是否匹配任一入口后缀
+      const lowerName = f.name.toLowerCase();
+      for (const suffix of entrySuffixes) {
+        if (lowerName.includes(suffix.toLowerCase())) {
+          entries.push('HTTP: src/' + f.name);
+          break;
+        }
+      }
+    }
+  } catch {
+    // src 目录不存在
+  }
+
+  return entries;
+}
+
+/**
+ * 检测后端编码约定证据（使用适配器配置）
+ */
+async function detectBackendCodingConventions(repoPath: string, adapter: LanguageAdapter | null): Promise<Record<string, unknown>> {
+  const conventions: Record<string, unknown> = {};
+  const entrySuffixes = adapter?.namingPatterns.entryPointSuffixes ?? ['Controller'];
+  const dataModelSuffixes = adapter?.namingPatterns.dataModelSuffixes ?? ['Entity', 'DO'];
+
+  // 检查类命名模式
+  try {
+    const srcPath = path.join(repoPath, 'src/main/java');
+    const javaFiles = await findJavaFiles(srcPath);
+
+    // 检查入口类后缀
+    for (const suffix of entrySuffixes) {
+      const matchingFiles = javaFiles.filter(f => f.includes(suffix));
+      if (matchingFiles.length > 0) {
+        conventions[`${suffix.toLowerCase()}_suffix`] = `${suffix} 类以 *${suffix} 结尾`;
+      }
+    }
+
+    // 检查数据模型类后缀
+    for (const suffix of dataModelSuffixes) {
+      const matchingFiles = javaFiles.filter(f => f.includes(suffix));
+      if (matchingFiles.length > 0) {
+        conventions[`${suffix.toLowerCase()}_suffix`] = `${suffix} 类以 *${suffix} 结尾`;
+      }
+    }
+  } catch {
+    // Java 目录不存在
+  }
+
+  return conventions;
+}
+
+/**
+ * 获取目录树字符串
+ */
+async function getDirectoryTree(dir: string, depth: number): Promise<string> {
+  const lines: string[] = [];
+  await walkDirTree(dir, '', depth, lines);
+  return lines.join('\n');
+}
+
+async function walkDirTree(dirPath: string, prefix: string, maxDepth: number, lines: string[]): Promise<void> {
+  if (maxDepth <= 0) return;
+
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const filtered = entries
+      .filter(e => !shouldExcludeForTree(e.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of filtered) {
+      const line = prefix + entry.name + (entry.isDirectory() ? '/' : '');
+      lines.push(line);
+
+      if (entry.isDirectory() && maxDepth > 1) {
+        await walkDirTree(path.join(dirPath, entry.name), prefix + '  ', maxDepth - 1, lines);
+      }
+    }
+  } catch {
+    // 目录读取失败
+  }
+}
+
+function shouldExcludeForTree(name: string): boolean {
+  const exclude = ['.git', '.idea', '.vscode', 'target', 'build', 'dist', 'node_modules'];
+  return exclude.includes(name) || name.startsWith('.');
+}
+
+async function findJavaFiles(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...await findJavaFiles(fullPath));
+      } else if (entry.name.endsWith('.java')) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // 目录不存在
+  }
+  return files;
+}
+
+/**
+ * 检测前端组件目录（使用适配器配置）
+ */
+async function detectComponentDirs(repoPath: string, adapter: LanguageAdapter | null): Promise<string[]> {
+  // 使用适配器配置的组件目录名，或使用默认值
+  const dirs = adapter?.namingPatterns.componentDirs ?? ['components', 'pages', 'features', 'views'];
+  const found: string[] = [];
+
+  for (const d of dirs) {
+    const srcDir = path.join(repoPath, 'src', d);
+    try {
+      await fs.access(srcDir);
+      found.push('src/' + d);
+    } catch {
+      // 目录不存在
+    }
+  }
+
+  return found;
+}
+
+/**
+ * 检测前端路由文件（使用适配器配置）
+ */
+async function detectRoutingFile(repoPath: string, adapter: LanguageAdapter | null): Promise<string | undefined> {
+  // 使用适配器配置的路由文件候选路径，或使用默认值
+  const candidates = adapter?.namingPatterns.routingFiles ?? ['src/App.tsx', 'src/App.ts', 'src/router.ts', 'src/routes.ts'];
+
+  for (const c of candidates) {
+    try {
+      await fs.access(path.join(repoPath, c));
+      return c;
+    } catch {
+      // 文件不存在
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 检测前端状态管理目录（使用适配器配置）
+ */
+async function detectStateManagement(repoPath: string, adapter: LanguageAdapter | null): Promise<string | undefined> {
+  // 使用适配器配置的状态管理目录候选路径，或使用默认值
+  const candidates = adapter?.namingPatterns.stateDirs ?? ['src/store', 'src/redux', 'src/state'];
+
+  for (const c of candidates) {
+    try {
+      await fs.access(path.join(repoPath, c));
+      return c;
+    } catch {
+      // 目录不存在
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 检测前端编码约定证据
+ */
+async function detectFrontendCodingConventions(repoPath: string): Promise<Record<string, unknown>> {
+  const conventions: Record<string, unknown> = {};
+
+  // 检查组件命名模式
+  try {
+    const srcPath = path.join(repoPath, 'src');
+    const tsxFiles = await findFilesByExt(srcPath, '.tsx');
+
+    // PascalCase 组件命名检测
+    const pascalCaseFiles = tsxFiles.filter(f => /^[A-Z]/.test(path.basename(f, '.tsx')));
+    if (pascalCaseFiles.length > 0) {
+      conventions.component_naming = '组件文件使用 PascalCase 命名';
+    }
+
+    // 检查是否有 features 目录（feature-based 组织）
+    try {
+      await fs.access(path.join(srcPath, 'features'));
+      conventions.organization_style = 'feature-based';
+    } catch {
+      // 没有 features 目录，可能是 type-based
+      try {
+        await fs.access(path.join(srcPath, 'components'));
+        conventions.organization_style = 'type-based';
+      } catch {
+        // 两者都不存在
+      }
+    }
+  } catch {
+    // src 目录不存在
+  }
+
+  return conventions;
+}
+
+async function findFilesByExt(dir: string, ext: string): Promise<string[]> {
+  const files: string[] = [];
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...await findFilesByExt(fullPath, ext));
+      } else if (entry.name.endsWith(ext)) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // 目录不存在
+  }
+  return files;
+}
+
+/**
+ * 检测 CLI 命令目录（使用适配器配置）
+ */
+async function detectCommandDir(repoPath: string, adapter: LanguageAdapter | null): Promise<string | undefined> {
+  // 使用适配器配置的命令目录候选路径，或使用默认值
+  const candidates = adapter?.namingPatterns.commandDirs ?? ['src/commands', 'src/cmd', 'commands', 'cmd'];
+
+  for (const c of candidates) {
+    try {
+      await fs.access(path.join(repoPath, c));
+      return c;
+    } catch {
+      // 目录不存在
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 检测导出文件（使用适配器配置）
+ */
+async function detectExportFile(repoPath: string, adapter: LanguageAdapter | null): Promise<string | undefined> {
+  // 使用适配器配置的导出文件候选路径，或使用默认值
+  const candidates = adapter?.namingPatterns.exportFiles ?? ['src/index.ts', 'src/index.js', 'index.ts', 'index.js'];
+
+  for (const c of candidates) {
+    try {
+      await fs.access(path.join(repoPath, c));
+      return c;
+    } catch {
+      // 文件不存在
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 检测 CLI 编码约定证据（使用适配器配置）
+ */
+async function detectCliCodingConventions(repoPath: string, adapter: LanguageAdapter | null): Promise<Record<string, unknown>> {
+  const conventions: Record<string, unknown> = {};
+
+  try {
+    const commandDir = await detectCommandDir(repoPath, adapter);
+    if (commandDir) {
+      conventions.command_organization = '每个命令独立文件';
+
+      // 检查命令文件命名
+      const commandFiles = await findFilesByExt(path.join(repoPath, commandDir), '.ts');
+      if (commandFiles.length > 0) {
+        conventions.command_files = commandFiles.map(f => path.basename(f, '.ts')).slice(0, 5);
+      }
+    }
+
+    // 检查是否有 execute 方法
+    const srcPath = path.join(repoPath, 'src');
+    const tsFiles = await findFilesByExt(srcPath, '.ts');
+    const filesWithExecute = tsFiles.filter(f => f.includes('execute') || f.includes('run'));
+    if (filesWithExecute.length > 0) {
+      conventions.command_interface = '命令实现 execute 方法';
+    }
+  } catch {
+    // 目录不存在
+  }
+
+  return conventions;
+}
+
+/**
+ * 检测库 API 目录（使用适配器配置）
+ */
+async function detectApiDirs(repoPath: string, adapter: LanguageAdapter | null): Promise<string[]> {
+  // 使用适配器配置的 API 目录名，或使用默认值
+  const dirs = adapter?.namingPatterns.apiDirs ?? ['src/core', 'src/api', 'src/lib'];
+  const found: string[] = [];
+
+  for (const d of dirs) {
+    try {
+      await fs.access(path.join(repoPath, d));
+      found.push(d);
+    } catch {
+      // 目录不存在
+    }
+  }
+
+  return found;
+}
+
+async function detectExportConfig(repoPath: string): Promise<string | undefined> {
+  const packageJsonPath = path.join(repoPath, 'package.json');
+  try {
+    const content = await fs.readFile(packageJsonPath, 'utf-8');
+    const pkg = JSON.parse(content);
+    if (pkg.exports || pkg.main) {
+      return JSON.stringify(pkg.exports || { main: pkg.main });
+    }
+  } catch {
+    // package.json 不存在
+  }
+  return undefined;
+}
+
+/**
+ * 检测库编码约定证据
+ */
+async function detectLibraryCodingConventions(repoPath: string): Promise<Record<string, unknown>> {
+  const conventions: Record<string, unknown> = {};
+
+  try {
+    // 检查类型定义目录
+    const typesDir = path.join(repoPath, 'src/types');
+    try {
+      await fs.access(typesDir);
+      conventions.type_organization = '类型定义在 src/types/ 目录';
+    } catch {
+      // 类型目录不存在
+    }
+
+    // 检查导出结构
+    const indexPath = path.join(repoPath, 'src/index.ts');
+    try {
+      await fs.access(indexPath);
+      conventions.export_file = 'src/index.ts';
+    } catch {
+      // index.ts 不存在
+    }
+
+    // 检查 package.json exports
+    const packageJsonPath = path.join(repoPath, 'package.json');
+    try {
+      const content = await fs.readFile(packageJsonPath, 'utf-8');
+      const pkg = JSON.parse(content);
+      if (pkg.exports) {
+        conventions.package_exports = pkg.exports;
+      }
+    } catch {
+      // package.json 不存在
+    }
+  } catch {
+    // 目录不存在
+  }
+
+  return conventions;
+}
