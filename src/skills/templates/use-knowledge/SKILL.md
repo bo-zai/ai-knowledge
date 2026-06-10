@@ -7,7 +7,7 @@ description: Use when starting any task that requires understanding the project 
 
 ## Overview
 
-本 Skill 指导 AI Agent 如何在 Harness 流程各阶段检索和引用 `ai-knowledge/` 知识库。
+本 Skill 指导 AI Agent 如何检索和引用 `ai-knowledge/` 知识库，帮助 Agent 在处理任何任务时获得仓库上下文。
 
 **核心原则**：知识库的第一个入口是 `index.md`，不是直接跳到某个知识文件。
 
@@ -85,26 +85,18 @@ Agent 使用场景：
 digraph when_to_use {
     "收到任务" [shape=doublecircle];
     "ai-knowledge 存在?" [shape=diamond];
-    "任务阶段?" [shape=diamond];
-    "需求澄清" [shape=box];
-    "Spec/Plan" [shape=box];
-    "代码理解" [shape=box];
+    "分析任务内容" [shape=box];
     "读 index.md" [shape=box];
-    "按需深入" [shape=box];
+    "按问题类型检索" [shape=box];
     "执行任务" [shape=box];
     "直接执行" [shape=box];
 
     "收到任务" -> "ai-knowledge 存在?";
-    "ai-knowledge 存在?" -> "读 index.md" [label="yes"];
+    "ai-knowledge 存在?" -> "分析任务内容" [label="yes"];
     "ai-knowledge 存在?" -> "直接执行" [label="no"];
-    "读 index.md" -> "任务阶段?";
-    "任务阶段?" -> "需求澄清" [label="澄清"];
-    "任务阶段?" -> "Spec/Plan" [label="规划"];
-    "任务阶段?" -> "代码理解" [label="实现"];
-    "需求澄清" -> "按需深入";
-    "Spec/Plan" -> "按需深入";
-    "代码理解" -> "按需深入";
-    "按需深入" -> "执行任务";
+    "分析任务内容" -> "读 index.md";
+    "读 index.md" -> "按问题类型检索";
+    "按问题类型检索" -> "执行任务";
     "直接执行" -> "执行任务";
 }
 ```
@@ -119,20 +111,26 @@ index.md 提供两个检索视角：
 - **业务域导航**：按业务域聚合跨类型知识，快速定位该域相关的所有文件
 - **按类型索引**：按知识类型列出所有条目概要
 
-Agent 根据任务类型选择检索入口：
-- 需求涉及某个业务域（如"订单相关"）→ 业务域导航表
-- 需求涉及某个知识类型（如"有哪些约束"）→ 按类型索引表
+Agent 根据任务内容选择检索入口：
+- 任务涉及某个业务域（如"订单相关"）→ 业务域导航表
+- 任务涉及某个知识类型（如"有哪些约束"）→ 按类型索引表
 
-### 第二步：按需深入
+### 第二步：按问题类型检索
 
-根据任务阶段选择需要深入的知识类型：
+Agent 在处理任务时会面临不同类型的问题，根据问题类型选择需要深入的知识：
 
-| Harness 阶段 | 需要的知识类型 | 检索方式 |
-|--------------|----------------|----------|
-| 需求澄清 | 概念知识、术语速查 | 业务域导航 → concepts/ |
-| Spec 生成 | 能力目录、约束知识 | 业务域导航 → capabilities/、constraints/ |
-| Plan 生成 | 能力关系、跨域流程 | 按类型索引 → relations/、workflows/ |
-| 代码理解 | 数据模型、架构概览 | 按类型索引 → data-model/、architecture.md |
+| 问题类型 | 需要的知识类型 | 检索方式 |
+|----------|----------------|----------|
+| "需求涉及哪些能力？" | 能力目录 | 业务域导航 → capabilities/ |
+| "这个术语/概念是什么意思？" | 概念知识、术语速查 | 业务域导航 → concepts/ |
+| "这个能力有什么约束/规则？" | 约束知识 | 业务域导航 → constraints/ |
+| "这些能力之间有什么关系？" | 能力关系、跨域流程 | 按类型索引 → relations/、workflows/ |
+| "修改这个数据会影响什么？" | 数据模型 | 按类型索引 → data-model/ |
+| "项目整体结构是怎样的？" | 架构概览 | architecture.md |
+| "这个能力能做到什么程度？" | 边界知识 | 业务域导航 → boundaries/ |
+| "涉及哪些外部系统？" | 外部系统交互 | 按类型索引 → external-systems/ |
+
+**注意**：Agent 不会明确知道自己在"Harness 阶段"，而是根据任务内容自动判断需要回答什么问题，然后检索对应知识。
 
 ### 第三步：验证知识适用性
 
@@ -156,34 +154,39 @@ Agent 根据任务类型选择检索入口：
 
 ## 典型使用流程
 
-### 场景 1：需求澄清
+### 场景 1：理解涉及陌生术语的需求
 
-**任务**：理解"优化学生绑定老师的流程"
+**任务**：收到需求"优化学生绑定老师的流程"
+
+**问题**："师徒关系"是什么意思？现有绑定有什么规则？
 
 **检索步骤**：
 1. 打开 `index.md`
 2. 在业务域导航表中找到"用户管理"域
-3. 记录相关文件链接：
-   - 能力：[用户管理](capabilities/user.md)
-   - 概念：[师徒关系](concepts/teacher-student-bind.md)
-   - 约束：[绑定限制](constraints/bind-limit.md)
-4. 读取概念知识 `concepts/teacher-student-bind.md` 理解术语定义
-5. 读取约束知识 `constraints/bind-limit.md` 了解现有规则
+3. 读取概念知识 `concepts/teacher-student-bind.md` 理解术语定义
+4. 读取约束知识 `constraints/bind-limit.md` 了解现有规则
+5. 读取能力目录 `capabilities/user.md` 知道绑定入口在哪里
 
-### 场景 2：Spec 生成
+### 场景 2：新功能开发
 
-**任务**：为"新增优惠券功能"生成 spec
+**任务**：收到需求"新增优惠券功能"
+
+**问题**：优惠券涉及哪些现有能力？有什么约束？
 
 **检索步骤**：
 1. 打开 `index.md`
 2. 在业务域导航表中找到"订单管理"域（优惠券属于订单）
 3. 读取能力目录 `capabilities/order.md` 了解现有订单能力
+4. 读取约束知识 `constraints/_index.md` 查找订单相关约束
+5. 读取数据模型 `data-model/order.md` 了解订单实体结构
 4. 读取约束知识目录 `constraints/_index.md` 查找订单相关约束
 5. 记录现有能力和约束，避免 spec 与现有行为冲突
 
-### 场景 3：代码理解
+### 场景 3：修改现有代码
 
-**任务**：修改"订单提交"逻辑
+**任务**：收到需求"修改订单提交逻辑"
+
+**问题**：订单提交入口在哪里？涉及哪些数据？
 
 **检索步骤**：
 1. 打开 `index.md`，查看架构概览链接
