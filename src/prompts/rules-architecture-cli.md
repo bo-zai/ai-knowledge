@@ -187,12 +187,29 @@
 
 ### ignore_directories（忽略目录）
 
-**必须包含以下目录**：
+**只写两类目录**：
 
+1. **项目特定的构建产物目录**（根据 evidence 判断）
+   - TypeScript CLI 通常是 `dist/`
+   - Go CLI 可能是 `bin/`
+
+2. **工具生成目录**（必须包含）
+   ```json
+   [
+     { "path": "ai-knowledge/", "reason": "知识库生成产物" },
+     { "path": ".codegraph/", "reason": "代码索引文件" }
+   ]
+   ```
+
+**不要写通用目录**（Agent 已知这些）：
+- `.git/`、`.svn/` — 版本控制目录（Agent 已知）
+- `.idea/`、`.vscode/` — IDE 配置（Agent 已知）
+- `node_modules/` — npm 依赖（Agent 已知）
+
+**示例**（TypeScript CLI）：
 ```json
 [
   { "path": "dist/", "reason": "构建产物" },
-  { "path": "node_modules/", "reason": "npm 依赖" },
   { "path": "ai-knowledge/", "reason": "知识库生成产物" },
   { "path": ".codegraph/", "reason": "代码索引文件" }
 ]

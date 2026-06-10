@@ -14,6 +14,7 @@ import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
 import type { ProjectContext, ProjectType } from './project-context.js';
 import { getLanguageAdapter, detectProjectLanguage } from '../evidence/extractors/language-adapters/index.js';
 import type { LanguageAdapter } from '../evidence/extractors/language-adapters/index.js';
+import { createDirectoryNameChecker, loadIgnoreRules, isHardcodedIgnoredDirectory } from '../config/ignore-service.js';
 
 /** 默认知识库目录名 */
 const DEFAULT_KNOWLEDGE_DIR = 'ai-knowledge';
@@ -88,10 +89,12 @@ export interface LayerDirectoryPathItem {
   coding_guide: string;
 }
 
-/** 必须忽略的目录 */
+/**
+ * 必须在 ARCHITECTURE 知识中列出的忽略目录
+ * 只包含项目特定的构建产物和工具生成目录
+ * 不包含通用目录（.git/、.idea/、node_modules/），Agent 已知这些
+ */
 const REQUIRED_IGNORE_DIRS: IgnoreDirectoryItem[] = [
-  { path: 'dist/', reason: '构建产物' },
-  { path: 'node_modules/', reason: 'npm 依赖' },
   { path: 'ai-knowledge/', reason: '知识库生成产物' },
   { path: '.codegraph/', reason: '代码索引文件' },
 ];
@@ -103,8 +106,9 @@ export async function collectArchitectureEvidence(
   repoPath: string,
   projectType: ProjectType,
   adapter: LanguageAdapter | null,
+  dirNameChecker: (name: string) => boolean,
 ): Promise<Record<string, unknown>> {
-  const baseEvidence = await collectBaseEvidence(repoPath);
+  const baseEvidence = await collectBaseEvidence(repoPath, dirNameChecker);
 
   // 根据项目类型收集特定证据（使用适配器配置）
   switch (projectType) {
@@ -169,8 +173,11 @@ export async function generateArchitectureOverview(
     logger.warn(`Architecture: no adapter for language '${language}', using fallback`);
   }
 
+  // 创建目录名检查器（基于 .gitignore + 硬编码规则）
+  const dirNameChecker = await createDirectoryNameChecker(repoPath);
+
   // 收集类型特定证据（使用适配器配置）
-  const evidence = await collectArchitectureEvidence(repoPath, context.projectType, adapter);
+  const evidence = await collectArchitectureEvidence(repoPath, context.projectType, adapter, dirNameChecker);
 
   // 加载提示词模板
   const systemPrompt = PromptLoader.load(templateName).raw;
@@ -219,16 +226,37 @@ export async function generateArchitectureOverview(
 }
 
 /**
- * 确保忽略目录列表完整
+ * 确保忽略目录列表完整，并过滤掉通用目录
+ *
+ * 通用目录（Agent 已知）不应该写入项目知识：
+ * - .git/、.svn/ — 版本控制
+ * - .idea/、.vscode/ — IDE 配置
+ * - node_modules/ — npm 依赖
+ *
+ * 只保留两类目录：
+ * 1. 项目特定的构建产物（target/、dist/、build/ 等）
+ * 2. 工具生成目录（ai-knowledge/、.codegraph/）
  */
 function ensureIgnoreDirectories(data: ArchitectureOverview): ArchitectureOverview {
+  // 通用目录（Agent 已知，不需要写入）
+  const COMMON_IGNORE_DIRS = new Set([
+    '.git/', '.svn/', '.hg/', '.bzr/',       // 版本控制
+    '.idea/', '.vscode/', '.vs/', '.eclipse/', // IDE 配置
+    'node_modules/', 'bower_components/',     // 依赖目录
+  ]);
+
   const existingDirs = data.ignore_directories || [];
-  const existingPaths = new Set(existingDirs.map(d => d.path));
+
+  // 过滤掉通用目录
+  const filteredDirs = existingDirs.filter(d => !COMMON_IGNORE_DIRS.has(d.path));
+
+  // 确保工具生成目录存在
+  const existingPaths = new Set(filteredDirs.map(d => d.path));
   const missingDirs = REQUIRED_IGNORE_DIRS.filter(d => !existingPaths.has(d.path));
 
   return {
     ...data,
-    ignore_directories: [...existingDirs, ...missingDirs],
+    ignore_directories: [...filteredDirs, ...missingDirs],
   };
 }
 
@@ -471,15 +499,15 @@ function generateFallbackArchitecture(repoPath: string, context: ProjectContext)
 
 // ========== 证据收集辅助函数 ==========
 
-async function collectBaseEvidence(repoPath: string): Promise<Record<string, unknown>> {
+async function collectBaseEvidence(repoPath: string, dirNameChecker: (name: string) => boolean): Promise<Record<string, unknown>> {
   // 获取顶层目录树（3层深度）
-  const topDirTree = await getDirectoryTree(repoPath, 3);
+  const topDirTree = await getDirectoryTree(repoPath, 3, dirNameChecker);
 
   // 获取 src 目录详细结构（如果存在）- 增加深度以获取完整包结构
   const srcPath = path.join(repoPath, 'src');
   let srcDirTree = '';
   try {
-    srcDirTree = await getDirectoryTree(srcPath, 8); // 8层深度确保获取完整包结构
+    srcDirTree = await getDirectoryTree(srcPath, 8, dirNameChecker); // 8层深度确保获取完整包结构
   } catch {
     // src 目录不存在
   }
@@ -488,58 +516,48 @@ async function collectBaseEvidence(repoPath: string): Promise<Record<string, unk
   let javaDirTree = '';
   try {
     const javaPath = path.join(repoPath, 'src/main/java');
-    javaDirTree = await getDirectoryTree(javaPath, 10); // 完整包结构，不限深度
+    javaDirTree = await getDirectoryTree(javaPath, 10, dirNameChecker); // 完整包结构，不限深度
   } catch {
     // Java 目录不存在
   }
+
+  // 获取项目实际的 gitignore 规则
+  const gitignorePatterns = await loadGitignorePatterns(repoPath);
 
   return {
     repo_name: path.basename(repoPath),
     top_dir_tree: topDirTree,
     src_dir_tree: srcDirTree,
     java_dir_tree: javaDirTree,
-    ignore_dirs: await detectIgnoreDirectories(repoPath),
+    gitignore_patterns: gitignorePatterns,
   };
 }
 
-async function getTopDirectories(repoPath: string): Promise<string[]> {
+/**
+ * 加载 .gitignore 规则（用于 evidence）
+ * 只返回项目特定的构建产物规则，不包含通用规则
+ */
+async function loadGitignorePatterns(repoPath: string): Promise<string[]> {
   try {
-    const entries = await fs.readdir(repoPath, { withFileTypes: true });
-    return entries
-      .filter(e => e.isDirectory() && !shouldExcludeDir(e.name))
-      .map(e => e.name)
-      .slice(0, 15);
+    const gitignorePath = path.join(repoPath, '.gitignore');
+    const content = await fs.readFile(gitignorePath, 'utf-8');
+    const lines = content.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#') && !line.startsWith('!'));
+
+    // 只保留构建产物相关的规则（项目特定的）
+    // 过滤掉通用规则（.git/、.idea/、node_modules/ 等）
+    const buildRelatedPatterns = lines.filter(line => {
+      // 保留构建产物目录规则
+      const buildPatterns = ['dist', 'build', 'target', 'out', 'bin', 'output', '*.class', '*.jar', '*.war'];
+      return buildPatterns.some(p => line.includes(p));
+    });
+
+    return buildRelatedPatterns.slice(0, 10); // 最多 10 个
   } catch {
+    // .gitignore 不存在
     return [];
   }
-}
-
-function shouldExcludeDir(name: string): boolean {
-  const exclude = ['node_modules', '.git', '.idea', '.vscode', 'dist', 'build', 'target', 'out', '.knowledge', 'ai-knowledge', '.codegraph'];
-  return exclude.includes(name) || name.startsWith('.');
-}
-
-/**
- * 检测需要忽略的目录
- */
-async function detectIgnoreDirectories(repoPath: string): Promise<string[]> {
-  const ignoreCandidates = [
-    'dist', 'build', 'target', 'out', 'node_modules',
-    'ai-knowledge', '.codegraph', '.git', '.idea', '.vscode',
-    'coverage', 'logs', 'tmp', '.next',
-  ];
-
-  const found: string[] = [];
-  for (const name of ignoreCandidates) {
-    try {
-      await fs.access(path.join(repoPath, name));
-      found.push(name);
-    } catch {
-      // 目录不存在
-    }
-  }
-
-  return found;
 }
 
 /**
@@ -636,20 +654,33 @@ async function detectBackendCodingConventions(repoPath: string, adapter: Languag
 
 /**
  * 获取目录树字符串
+ * @param dir 目录路径
+ * @param depth 遍历深度
+ * @param dirNameChecker 目录名检查器，返回 true 表示应该忽略
  */
-async function getDirectoryTree(dir: string, depth: number): Promise<string> {
+async function getDirectoryTree(
+  dir: string,
+  depth: number,
+  dirNameChecker: (name: string) => boolean,
+): Promise<string> {
   const lines: string[] = [];
-  await walkDirTree(dir, '', depth, lines);
+  await walkDirTree(dir, '', depth, lines, dirNameChecker);
   return lines.join('\n');
 }
 
-async function walkDirTree(dirPath: string, prefix: string, maxDepth: number, lines: string[]): Promise<void> {
+async function walkDirTree(
+  dirPath: string,
+  prefix: string,
+  maxDepth: number,
+  lines: string[],
+  dirNameChecker: (name: string) => boolean,
+): Promise<void> {
   if (maxDepth <= 0) return;
 
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const filtered = entries
-      .filter(e => !shouldExcludeForTree(e.name))
+      .filter(e => !dirNameChecker(e.name))
       .sort((a, b) => a.name.localeCompare(b.name));
 
     for (const entry of filtered) {
@@ -657,17 +688,12 @@ async function walkDirTree(dirPath: string, prefix: string, maxDepth: number, li
       lines.push(line);
 
       if (entry.isDirectory() && maxDepth > 1) {
-        await walkDirTree(path.join(dirPath, entry.name), prefix + '  ', maxDepth - 1, lines);
+        await walkDirTree(path.join(dirPath, entry.name), prefix + '  ', maxDepth - 1, lines, dirNameChecker);
       }
     }
   } catch {
     // 目录读取失败
   }
-}
-
-function shouldExcludeForTree(name: string): boolean {
-  const exclude = ['.git', '.idea', '.vscode', 'target', 'build', 'dist', 'node_modules'];
-  return exclude.includes(name) || name.startsWith('.');
 }
 
 async function findJavaFiles(dir: string): Promise<string[]> {

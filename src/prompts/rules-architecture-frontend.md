@@ -189,21 +189,43 @@
 
 ### ignore_directories（忽略目录）
 
-**必须包含以下目录**：
+**只写两类目录**：
 
+1. **项目特定的构建产物目录**（根据 evidence 判断）
+   - 前端项目通常是 `dist/`、`build/`
+   - Next.js 项目可能是 `.next/`
+
+2. **工具生成目录**（必须包含）
+   ```json
+   [
+     { "path": "ai-knowledge/", "reason": "知识库生成产物" },
+     { "path": ".codegraph/", "reason": "代码索引文件" }
+   ]
+   ```
+
+**不要写通用目录**（Agent 已知这些）：
+- `.git/`、`.svn/` — 版本控制目录（Agent 已知）
+- `.idea/`、`.vscode/` — IDE 配置（Agent 已知）
+- `node_modules/` — npm 依赖（Agent 已知）
+
+**示例**（Vue/React 项目）：
 ```json
 [
-  { "path": "node_modules/", "reason": "npm 依赖" },
   { "path": "dist/", "reason": "构建产物" },
   { "path": "ai-knowledge/", "reason": "知识库生成产物" },
   { "path": ".codegraph/", "reason": "代码索引文件" }
 ]
 ```
 
-如果有其他需要忽略的目录，追加到列表中：
-- build/、out/（构建产物）
-- .next/（Next.js 构建产物）
-- coverage/（测试覆盖率报告）
+**示例**（Next.js 项目）：
+```json
+[
+  { "path": ".next/", "reason": "Next.js 构建产物" },
+  { "path": "dist/", "reason": "构建产物" },
+  { "path": "ai-knowledge/", "reason": "知识库生成产物" },
+  { "path": ".codegraph/", "reason": "代码索引文件" }
+]
+```
 
 ### coding_conventions（编码约定）
 

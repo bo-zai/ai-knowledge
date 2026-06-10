@@ -192,8 +192,26 @@
 
 ### ignore_directories（忽略目录）
 
-**必须包含以下目录**：
+**只写两类目录**：
 
+1. **项目特定的构建产物目录**（根据 evidence 判断）
+   - Java 项目通常是 `target/`
+   - 其他项目可能是 `dist/`、`build/`、`out/`、`bin/`
+
+2. **工具生成目录**（必须包含）
+   ```json
+   [
+     { "path": "ai-knowledge/", "reason": "知识库生成产物" },
+     { "path": ".codegraph/", "reason": "代码索引文件" }
+   ]
+   ```
+
+**不要写通用目录**（Agent 已知这些）：
+- `.git/`、`.svn/` — 版本控制目录（Agent 已知）
+- `.idea/`、`.vscode/` — IDE 配置（Agent 已知）
+- `node_modules/` — npm 依赖（Agent 已知）
+
+**示例**（Java 后端项目）：
 ```json
 [
   { "path": "target/", "reason": "Maven 构建产物" },
@@ -202,11 +220,14 @@
 ]
 ```
 
-如果有其他需要忽略的目录，追加到列表中：
-- node_modules/（如果有前端代码）
-- dist/、build/（构建产物）
-- logs/、tmp/（临时文件）
-- .git/（版本控制）
+**示例**（Node.js 后端项目）：
+```json
+[
+  { "path": "dist/", "reason": "构建产物" },
+  { "path": "ai-knowledge/", "reason": "知识库生成产物" },
+  { "path": ".codegraph/", "reason": "代码索引文件" }
+]
+```
 
 ### coding_conventions（编码约定）
 

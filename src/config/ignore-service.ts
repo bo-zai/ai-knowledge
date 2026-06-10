@@ -476,3 +476,86 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
     },
   };
 };
+
+/**
+ * 创建路径忽略检查器（供非 glob 遍历使用）
+ * 返回一个简单的过滤函数，用于判断路径是否应该被忽略。
+ *
+ * 优先级：
+ * 1. .gitignore / .knowledge-ignore 规则（包括取反）
+ * 2. 硬编码 DEFAULT_IGNORE_LIST 兜底
+ *
+ * @param repoPath 仓库根路径
+ * @param options 可选配置
+ * @returns 过滤函数，返回 true 表示路径应被忽略
+ */
+export const createPathIgnoreChecker = async (
+  repoPath: string,
+  options?: IgnoreOptions,
+): Promise<(relativePath: string) => boolean> => {
+  const ig = await loadIgnoreRules(repoPath, options);
+
+  return (relativePath: string): boolean => {
+    // 空路径不忽略
+    if (!relativePath) return false;
+
+    // Normalize to POSIX path (ignore package expects forward slashes)
+    const normalizedPath = relativePath.replace(/\\/g, '/');
+
+    // 1. gitignore 规则优先（包括取反处理）
+    if (ig && hasExplicitUnignore(ig, normalizedPath) && !ig.ignores(normalizedPath)) {
+      return false;
+    }
+    if (ig && ig.ignores(normalizedPath)) {
+      return true;
+    }
+
+    // 2. 硬编码默认规则兜底
+    return shouldIgnorePath(normalizedPath);
+  };
+};
+
+/**
+ * 创建目录名忽略检查器（快速检查单个目录名）
+ * 用于目录遍历时的快速过滤，只检查目录名本身是否在忽略列表中。
+ *
+ * @param repoPath 仓库根路径
+ * @param options 可选配置
+ * @returns 过滤函数，返回 true 表示目录应被忽略
+ */
+export const createDirectoryNameChecker = async (
+  repoPath: string,
+  options?: IgnoreOptions,
+): Promise<(dirName: string) => boolean> => {
+  const ig = await loadIgnoreRules(repoPath, options);
+
+  return (dirName: string): boolean => {
+    // 空名称不忽略
+    if (!dirName) return false;
+
+    // 1. 硬编码列表快速检查（大多数情况）
+    if (DEFAULT_IGNORE_LIST.has(dirName)) {
+      // 但如果有取反规则，可能需要放行
+      if (ig && hasExplicitUnignore(ig, dirName) && !ig.ignores(dirName + '/')) {
+        return false;
+      }
+      return true;
+    }
+
+    // 2. gitignore 规则检查（作为目录）
+    if (ig && ig.ignores(dirName + '/')) {
+      return true;
+    }
+
+    // 3. 隐藏目录（以 . 开头）默认忽略
+    if (dirName.startsWith('.') && dirName !== '.') {
+      // 但如果有取反规则，放行
+      if (ig && hasExplicitUnignore(ig, dirName) && !ig.ignores(dirName + '/')) {
+        return false;
+      }
+      return true;
+    }
+
+    return false;
+  };
+};

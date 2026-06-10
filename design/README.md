@@ -4,11 +4,11 @@
 
 ## 阅读顺序
 
-1. [01-goals-and-principles.md](./01-goals-and-principles.md) — 为什么建这个知识系统，解决什么问题，不解决什么
-2. [02-knowledge-type-spec.md](./02-knowledge-type-spec.md) — 9 类知识的具体规格：定义、条目结构、提取方式和产物示例（含架构概览知识）
-3. [03-knowledge-directory-structure.md](./03-knowledge-directory-structure.md) — 知识库的目录结构、索引体系和文件引用机制
-4. [04-generation-flow-design.md](./04-generation-flow-design.md) — 生成流程的完整管线：仓库扫描、AST 构建、项目类型识别、分组策略、LLM 调用、校验和增量更新
-5. [05-system-architecture.md](./05-system-architecture.md) — 系统架构决策：管线编排模式、LLM 交互格式、大上下文处理策略和实现挑战
+1. [01-goals-and-principles.md](./01-goals-and-principles.md) — 为什么建这个知识系统，解决什么问题，不解决什么（含多模块项目知识组织问题）
+2. [02-knowledge-type-spec.md](./02-knowledge-type-spec.md) — 9 类知识的具体规格：定义、条目结构、提取方式和产物示例（含架构概览知识和多模块架构模板）
+3. [03-knowledge-directory-structure.md](./03-knowledge-directory-structure.md) — 知识库的目录结构、索引体系、模块拓扑和文件引用机制
+4. [04-generation-flow-design.md](./04-generation-flow-design.md) — 生成流程的完整管线：仓库扫描、AST 构建、项目类型识别、分析单元划分、分组策略、LLM 调用、校验和增量更新
+5. [05-system-architecture.md](./05-system-architecture.md) — 系统架构决策：管线编排模式、LLM 交互格式、大上下文处理策略、多模块处理模式（紧耦合/松耦合）和实现挑战
 
 ## 设计核心
 
