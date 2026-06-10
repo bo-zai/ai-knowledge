@@ -7,7 +7,12 @@
       "Bash(node dist/cli/index.js generate --repo D:/workspace/other_project/music-education-app --llm-config D:/workspace/other_project/music-education-app/llm.config.json --knowledge concept --verbose)",
       "Bash(rm -rf \"D:\\\\workspace\\\\other_project\\\\music-education-app\\\\ai-knowledge\"/*)",
       "Bash(node dist/cli/index.js generate --repo \"D:\\\\workspace\\\\other_project\\\\music-education-app\" --knowledge concept)",
-      "Bash(node dist/cli/index.js generate --repo \"D:\\\\workspace\\\\other_project\\\\music-education-app\" --knowledge concept --llm-config \"llm.config.json\" --log-file \"D:\\\\workspace\\\\other_project\\\\music-education-app\\\\ai-knowledge\\\\generation.log\" --verbose)"
+      "Bash(node dist/cli/index.js generate --repo \"D:\\\\workspace\\\\other_project\\\\music-education-app\" --knowledge concept --llm-config \"llm.config.json\" --log-file \"D:\\\\workspace\\\\other_project\\\\music-education-app\\\\ai-knowledge\\\\generation.log\" --verbose)",
+      "Bash(rm -f \"D:/workspace/mall/.claude/skills/use-knowledge/SKILL.md\")",
+      "Bash(node dist/cli/index.js init-skills --repo D:\\\\workspace\\\\mall --agents claude-code)",
+      "Bash(rm -rf \"D:/workspace/mall/.claude/skills/use-knowledge\")",
+      "Bash(node dist/cli/index.js init-skills --repo D:\\\\workspace\\\\mall --agents claude-code --force)",
+      "Read(//d/workspace/mall/.claude/skills/use-knowledge/**)"
     ]
   }
 }

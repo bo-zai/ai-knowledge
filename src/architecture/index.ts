@@ -1,7 +1,7 @@
 /**
  * 架构模块
  *
- * 项目类型识别和架构概览生成
+ * 项目类型识别、分析单元划分和架构概览生成
  */
 
 // 类型定义
@@ -26,6 +26,27 @@ export {
   loadProjectContext,
   buildProjectContext,
 } from './project-type-identifier.js';
+
+// 分析单元划分
+export {
+  analyzeAnalysisUnits,
+  discoverModules,
+  evaluateCouplingSignals,
+  decideCouplingMode,
+  saveModuleTopology,
+  loadModuleTopology,
+} from './analysis-unit.js';
+
+export type {
+  ModuleInfo,
+  ModuleTopology,
+  ModuleRole,
+  ModuleType,
+  CouplingMode,
+  AnalysisUnit,
+  AnalysisUnitResult,
+  SignalDetectionResult,
+} from '../schemas/module.js';
 
 // 架构概览生成
 export {

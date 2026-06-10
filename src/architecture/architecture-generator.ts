@@ -12,6 +12,7 @@ import { LLM_DEFAULTS } from '../config/defaults.js';
 import { callLlmForJson } from '../generation/llm-json-client.js';
 import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
 import type { ProjectContext, ProjectType } from './project-context.js';
+import type { ModuleTopology } from '../schemas/module.js';
 import { getLanguageAdapter, detectProjectLanguage } from '../evidence/extractors/language-adapters/index.js';
 import type { LanguageAdapter } from '../evidence/extractors/language-adapters/index.js';
 import { createDirectoryNameChecker, loadIgnoreRules, isHardcodedIgnoredDirectory } from '../config/ignore-service.js';
@@ -58,6 +59,13 @@ export interface ArchitectureOverview {
   summary_zh: string;
   project_type: ProjectType;
   tech_stack: string[];
+  // 多模块项目专用字段
+  coupling_mode?: string;  // 紧耦合 | 松耦合
+  module_topology?: ModuleTopologyItem[];
+  module_dependencies_description?: string;
+  service_architectures?: ServiceArchitectureItem[];
+  shared_modules_description?: string;
+  business_domain_panorama?: BusinessDomainPanorama;
   // 后端：分包模式
   package_mode?: string;  // 按层分包 | 按领域分包 | 混合分包
   layer_package_paths?: LayerPackagePathItem[];  // 分层包路径（后端）
@@ -73,6 +81,33 @@ export interface ArchitectureOverview {
   export_structure?: string;
   debug_entrypoints: DebugEntrypointItem[];
   evidence: string[];
+}
+
+/** 模块拓扑条目 */
+export interface ModuleTopologyItem {
+  name: string;
+  path: string;
+  type: string;
+  role: string;  // deployable | shared
+  description?: string;
+  dependencies?: string[];
+  used_by?: string[];
+  entry_point?: string;
+}
+
+/** 服务架构条目 */
+export interface ServiceArchitectureItem {
+  module_name: string;
+  package_mode: string;
+  layer_package_paths?: LayerPackagePathItem[];
+}
+
+/** 业务领域全景 */
+export interface BusinessDomainPanorama {
+  core_domains?: string[];
+  supporting_domains?: string[];
+  auxiliary_domains?: string[];
+  domain_interactions?: string;
 }
 
 /** 分层包路径条目（后端） */
@@ -158,12 +193,13 @@ export async function generateArchitectureOverview(
   context: ProjectContext,
   claimsProvider: LlmClaimsProvider,
   outputRoot: string,
+  moduleTopology?: ModuleTopology,
 ): Promise<ArchitectureGenerationResult> {
   const knowledgeDir = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR);
   const filePath = path.join(knowledgeDir, 'architecture.md');
 
-  // 根据项目类型选择模板
-  const templateName = getTemplateName(context.projectType);
+  // 根据项目类型和模块拓扑选择模板
+  const templateName = getTemplateName(context.projectType, moduleTopology);
   logger.debug(`Using architecture template: ${templateName}`);
 
   // 使用通用语言检测
@@ -183,13 +219,42 @@ export async function generateArchitectureOverview(
   const systemPrompt = PromptLoader.load(templateName).raw;
 
   // 构建用户提示词
-  const userPrompt = JSON.stringify({
+  const userPromptData: Record<string, unknown> = {
     project_name: path.basename(repoPath),
     identified_type: context.projectType,
     identified_tech_stack: context.techStack,
     identified_framework: context.framework,
     evidence,
-  }, null, 2);
+  };
+
+  // 多模块项目添加模块拓扑信息
+  if (moduleTopology && moduleTopology.moduleCount > 1) {
+    userPromptData.coupling_mode = moduleTopology.couplingMode === 'tightly-coupled' ? '紧耦合' : '松耦合';
+    userPromptData.module_topology = moduleTopology.modules;
+    userPromptData.module_count = moduleTopology.moduleCount;
+
+    // 收集各模块的目录结构
+    const moduleDirTrees: Record<string, string> = {};
+    for (const module of moduleTopology.modules) {
+      const modulePath = path.join(repoPath, module.path.slice(0, -1));
+      const moduleTree = await collectModuleDirectoryTree(modulePath, 3);
+      moduleDirTrees[module.name] = moduleTree;
+    }
+    userPromptData.module_dir_trees = moduleDirTrees;
+
+    // 收集根 pom.xml（Maven 多模块）
+    const rootPomPath = path.join(repoPath, 'pom.xml');
+    try {
+      const rootPomContent = await fs.readFile(rootPomPath, 'utf-8');
+      // 提取 modules 部分
+      const modulesMatch = rootPomContent.match(/<modules>([\s\S]*?)<\/modules>/);
+      userPromptData.root_pom_modules = modulesMatch?.[1] ?? '';
+    } catch {
+      // 根 pom.xml 不存在
+    }
+  }
+
+  const userPrompt = JSON.stringify(userPromptData, null, 2);
 
   logger.debug('Generating architecture overview with LLM...');
 
@@ -272,7 +337,12 @@ async function writeArchitectureFile(filePath: string, content: string): Promise
 /**
  * 根据项目类型获取模板名称
  */
-function getTemplateName(projectType: ProjectType): string {
+function getTemplateName(projectType: ProjectType, moduleTopology?: ModuleTopology): string {
+  // 多模块项目使用专用模板
+  if (moduleTopology && moduleTopology.moduleCount > 1) {
+    return 'rules-architecture-multi-module';
+  }
+
   const templateMap: Record<string, string> = {
     'backend-service': 'rules-architecture-backend',
     'frontend-app': 'rules-architecture-frontend',
@@ -316,6 +386,68 @@ function architectureToMarkdown(data: ArchitectureOverview, context: ProjectCont
   const techStack = data.tech_stack || [];
   lines.push(techStack.length > 0 ? techStack.join('、') : '未识别');
   lines.push('');
+
+  // 多模块项目专用章节
+  // 模块依赖关系描述
+  if (data.module_dependencies_description) {
+    lines.push(`## 模块依赖关系`);
+    lines.push('');
+    lines.push(data.module_dependencies_description);
+    lines.push('');
+  }
+
+  // 各服务架构
+  if (data.service_architectures && data.service_architectures.length > 0) {
+    lines.push(`## 各服务架构`);
+    lines.push('');
+    for (const service of data.service_architectures) {
+      lines.push(`### ${service.module_name}`);
+      lines.push('');
+      if (service.package_mode) {
+        lines.push(`**分包模式**：${service.package_mode}`);
+        lines.push('');
+      }
+      if (service.layer_package_paths && service.layer_package_paths.length > 0) {
+        lines.push('| 分层 | 包路径 | 编码时 |');
+        lines.push('|------|--------|--------|');
+        for (const layer of service.layer_package_paths) {
+          lines.push(`| ${layer.layer} | ${layer.package_path} | ${layer.coding_guide} |`);
+        }
+        lines.push('');
+      }
+    }
+  }
+
+  // 共享模块说明
+  if (data.shared_modules_description) {
+    lines.push(`## 共享模块说明`);
+    lines.push('');
+    lines.push(data.shared_modules_description);
+    lines.push('');
+  }
+
+  // 业务领域全景
+  if (data.business_domain_panorama) {
+    lines.push(`## 业务领域全景`);
+    lines.push('');
+    const panorama = data.business_domain_panorama;
+    if (panorama.core_domains && panorama.core_domains.length > 0) {
+      lines.push(`**核心域**：${panorama.core_domains.join('、')}`);
+      lines.push('');
+    }
+    if (panorama.supporting_domains && panorama.supporting_domains.length > 0) {
+      lines.push(`**支撑域**：${panorama.supporting_domains.join('、')}`);
+      lines.push('');
+    }
+    if (panorama.auxiliary_domains && panorama.auxiliary_domains.length > 0) {
+      lines.push(`**辅助域**：${panorama.auxiliary_domains.join('、')}`);
+      lines.push('');
+    }
+    if (panorama.domain_interactions) {
+      lines.push(`**域间交互**：${panorama.domain_interactions}`);
+      lines.push('');
+    }
+  }
 
   // 分包模式（后端服务核心字段）
   if (data.package_mode) {
@@ -966,11 +1098,67 @@ async function detectLibraryCodingConventions(repoPath: string): Promise<Record<
         conventions.package_exports = pkg.exports;
       }
     } catch {
-      // package.json 不存在
+    // package.json 不存在
     }
   } catch {
     // 目录不存在
   }
 
   return conventions;
+}
+
+/**
+ * 收集模块目录树
+ *
+ * 用于多模块架构概览生成
+ */
+async function collectModuleDirectoryTree(modulePath: string, depth: number): Promise<string> {
+  const lines: string[] = [];
+  await walkModuleDirectory(modulePath, '', depth, lines);
+  return lines.join('\n');
+}
+
+async function walkModuleDirectory(
+  dir: string,
+  prefix: string,
+  maxDepth: number,
+  lines: string[],
+): Promise<void> {
+  if (maxDepth <= 0) return;
+
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    // 过滤并排序
+    const filtered = entries
+      .filter(e => !shouldExcludeForModule(e.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of filtered) {
+      const line = prefix + entry.name + (entry.isDirectory() ? '/' : '');
+      lines.push(line);
+
+      if (entry.isDirectory() && maxDepth > 1) {
+        await walkModuleDirectory(
+          path.join(dir, entry.name),
+          prefix + '  ',
+          maxDepth - 1,
+          lines,
+        );
+      }
+    }
+  } catch {
+    // 目录读取失败，忽略
+  }
+}
+
+/**
+ * 判断是否应排除的目录（模块目录扫描）
+ */
+function shouldExcludeForModule(name: string): boolean {
+  const excludePatterns = [
+    'node_modules', '.git', '.idea', '.vscode', 'dist', 'build', 'target',
+    'out', '.knowledge', 'ai-knowledge', '.codegraph', '.claude', 'test',
+  ];
+  return excludePatterns.includes(name) || name.startsWith('.');
 }

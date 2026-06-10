@@ -54,7 +54,13 @@ import {
   saveGenerationMeta,
   getCurrentCommitHash,
   shouldReidentifyProjectType,
+  analyzeAnalysisUnits,
+  saveModuleTopology,
+  loadModuleTopology,
+  type ModuleTopology,
+  type AnalysisUnitResult,
 } from '../architecture/index.js';
+import { needsSkillInitialization, initializeSkills } from '../skills/index.js';
 
 function isMockModel(model: string): boolean {
   return model.startsWith('test-');
@@ -588,6 +594,7 @@ interface GenerateOptions {
   out?: string;
   llmConfig?: string;
   forceAnalyze?: boolean;
+  initSkills?: boolean;  // 是否自动初始化 skills（默认 true，可通过 --no-init-skills 禁用）
   verbose?: boolean;
   logFile?: string;
 }
@@ -611,6 +618,27 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
   const repoPath = resolved.repoPath;
   logger.debug(`Resolved repo path from ${resolved.source}: ${repoPath}`);
+
+  // ========== Skill 自动初始化检查 ==========
+  // 默认启用，除非用户指定 --no-init-skills
+  const shouldInitSkills = options.initSkills !== false;
+
+  if (shouldInitSkills) {
+    const needsInit = await needsSkillInitialization(repoPath);
+    if (needsInit) {
+      logger.info('Skills not initialized, initializing automatically...');
+      const summary = await initializeSkills({
+        repoPath,
+        updateAgentsMd: true,
+        verbose: options.verbose,
+      });
+      if (summary.succeeded > 0) {
+        logger.info(`Skills initialized for ${summary.succeeded} agents`);
+      }
+    } else {
+      logger.debug('Skills already initialized, skipping');
+    }
+  }
 
   // Resolve generation scope
   const scope = resolveGenerateScope({
@@ -659,6 +687,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   // ========== 项目类型识别和架构概览生成（阶段 0） ==========
 
+  // 尝试加载已有的模块拓扑（无论是否生成 ARCHITECTURE）
+  let moduleTopology = await loadModuleTopology(outputRoot);
+
   // 只在需要生成 ARCHITECTURE 时执行
   if (scope.types.includes('ARCHITECTURE')) {
     // 创建 LLM claims provider
@@ -672,6 +703,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       };
     };
 
+    // ========== 项目类型识别 ==========
     // 检查是否已有项目上下文
     let projectContext = await loadProjectContext(outputRoot);
     const existingMeta = await loadGenerationMeta(outputRoot);
@@ -698,9 +730,29 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       logger.info(`Using existing project context: ${projectContext.projectType}`);
     }
 
-    // 生成架构概览
+    // ========== 分析单元划分 ==========
+    // 如果没有模块拓扑或项目类型重新识别了，执行分析单元划分
+    if (!moduleTopology || needsReidentification) {
+      logger.info('Analyzing analysis units...');
+
+      // 执行分析单元划分
+      const analysisResult = await analyzeAnalysisUnits(repoPath, projectContext);
+
+      // 保存模块拓扑
+      moduleTopology = analysisResult.moduleTopology;
+      await saveModuleTopology(moduleTopology, outputRoot);
+
+      logger.info(`Analysis units: ${analysisResult.couplingMode}, ${moduleTopology.moduleCount} modules`);
+      for (const module of moduleTopology.modules) {
+        logger.debug(`  - ${module.name} (${module.role}): ${module.path}`);
+      }
+    } else {
+      logger.info(`Using existing module topology: ${moduleTopology.moduleCount} modules, ${moduleTopology.couplingMode}`);
+    }
+
+    // ========== 架构概览生成 ==========
     logger.info('Generating architecture overview...');
-    await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot);
+    await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot, moduleTopology);
 
     // 保存生成元信息
     await saveGenerationMeta(outputRoot, commitHash, projectContext.identifiedAt);
@@ -831,6 +883,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     llm: {
       llmConfig: options.llmConfig,
     },
+    moduleTopology,
   };
 
   await runGenerateOrchestration({

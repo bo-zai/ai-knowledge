@@ -7,6 +7,7 @@ import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
 import { toKebabCase, getTypeFromDir } from '../knowledge/type-directory-map.js';
 import type { KnowledgeType, LegacyType } from '../schemas/knowledge-type.js';
 import { getTypeDir } from '../schemas/knowledge-type.js';
+import type { ModuleTopology } from '../schemas/module.js';
 
 /**
  * Write knowledge package to output directory.
@@ -78,7 +79,17 @@ export async function writeKnowledgePackage(input: {
   }
 
   // 生成全局 index.md
-  const indexMdContent = generateGlobalIndex(layout, objectsByType);
+  // 尝试读取 modules.json（多模块项目）
+  let moduleTopology: ModuleTopology | undefined;
+  try {
+    const modulesJsonPath = path.join(layout.packageRoot, 'modules.json');
+    const modulesJsonContent = await fs.readFile(modulesJsonPath, 'utf-8');
+    moduleTopology = JSON.parse(modulesJsonContent) as ModuleTopology;
+  } catch {
+    // modules.json 不存在，单模块项目
+  }
+
+  const indexMdContent = generateGlobalIndex(layout, objectsByType, moduleTopology);
   await fs.writeFile(layout.indexMdPath, indexMdContent, 'utf-8');
 
   // 写入生成报告
@@ -531,21 +542,48 @@ function parseYamlFieldsFromMd(mdContent: string): Record<string, unknown> {
 
 /**
  * Generate global index.md per design/03-knowledge-directory-structure.md.
+ * 包含业务域导航表（多模块项目标注模块归属）。
  */
-function generateGlobalIndex(layout: PackageLayout, objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>): string {
+function generateGlobalIndex(
+  layout: PackageLayout,
+  objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>,
+  moduleTopology?: ModuleTopology,
+): string {
   const lines: string[] = [];
   const repoName = path.basename(layout.packageRoot.replace(`/${DEFAULT_KNOWLEDGE_DIR}`, '').replace(`\\${DEFAULT_KNOWLEDGE_DIR}`, ''));
 
   lines.push(`# ${repoName} - 知识库索引`);
   lines.push('');
   lines.push(`> 生成时间：${new Date().toISOString()}`);
+  if (moduleTopology && moduleTopology.moduleCount > 1) {
+    lines.push(`> 耦合模式：${moduleTopology.couplingMode === 'tightly-coupled' ? '紧耦合' : '松耦合'}`);
+    lines.push(`> 模块数量：${moduleTopology.moduleCount}`);
+  }
   lines.push('');
 
   // 架构概览链接（在所有知识类型之前）
   lines.push(`## 架构概览`);
   lines.push('');
   lines.push(`[查看项目架构概览](architecture.md) — 了解项目整体结构、技术栈和入口导航`);
+  if (moduleTopology && moduleTopology.moduleCount > 1) {
+    lines.push(`[查看模块拓扑](modules.json) — 了解模块结构、依赖关系和角色分配`);
+  }
   lines.push('');
+
+  // 业务域导航表（设计文档 03 新增）
+  const domainNavigation = buildDomainNavigation(objectsByType, moduleTopology);
+  if (domainNavigation.length > 0) {
+    lines.push(`## 业务域导航`);
+    lines.push('');
+    lines.push('按业务域聚合跨类型知识，帮助 Agent 按域检索而非按类型检索。');
+    lines.push('');
+    lines.push('| 业务域 | 涉及模块 | 能力 | 概念 | 约束 | 数据聚合 |');
+    lines.push('|--------|----------|------|------|------|----------|');
+    for (const row of domainNavigation) {
+      lines.push(`| ${row.domain} | ${row.modules} | ${row.capabilities} | ${row.concepts} | ${row.constraints} | ${row.dataModels} |`);
+    }
+    lines.push('');
+  }
 
   // 概念知识
   if (objectsByType.concepts && objectsByType.concepts.length > 0) {
@@ -606,6 +644,158 @@ function generateGlobalIndex(layout: PackageLayout, objectsByType: Record<Knowle
   }
 
   return lines.join('\n');
+}
+
+/**
+ * 构建业务域导航表
+ *
+ * 从已生成的知识中提取业务域，按域聚合跨类型引用。
+ */
+function buildDomainNavigation(
+  objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>,
+  moduleTopology?: ModuleTopology,
+): Array<{ domain: string; modules: string; capabilities: string; concepts: string; constraints: string; dataModels: string }> {
+  // 从 tags 中提取业务域
+  const domainMap: Map<string, {
+    capabilities: string[];
+    concepts: string[];
+    constraints: string[];
+    dataModels: string[];
+    modules: Set<string>;
+  }> = new Map();
+
+  // 从概念知识中提取业务域（通过 tags）
+  if (objectsByType.concepts) {
+    for (const obj of objectsByType.concepts) {
+      const fields = parseYamlFieldsFromMd(obj.content);
+      const tags = getArrayField<string>(fields, 'tags') ?? [];
+
+      // 使用第一个 tag 作为业务域（或使用概念名称）
+      const domain = tags[0] ?? getStringField(fields, 'concept_name') ?? obj.id;
+      const conceptName = getStringField(fields, 'concept_name') ?? obj.id;
+      const fileName = toKebabCase(obj.id) + '.md';
+
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, {
+          capabilities: [],
+          concepts: [],
+          constraints: [],
+          dataModels: [],
+          modules: new Set(),
+        });
+      }
+
+      const entry = domainMap.get(domain)!;
+      entry.concepts.push(`[${conceptName}](concepts/${fileName})`);
+    }
+  }
+
+  // 从能力目录中提取业务域
+  if (objectsByType.capabilities) {
+    for (const obj of objectsByType.capabilities) {
+      // 能力目录的 ID 通常就是业务域名
+      const domain = obj.id;
+      const fileName = toKebabCase(obj.id) + '.md';
+
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, {
+          capabilities: [],
+          concepts: [],
+          constraints: [],
+          dataModels: [],
+          modules: new Set(),
+        });
+      }
+
+      const entry = domainMap.get(domain)!;
+      entry.capabilities.push(`[${obj.id}](capabilities/${fileName})`);
+    }
+  }
+
+  // 从约束知识中提取业务域（通过 tags）
+  if (objectsByType.constraints) {
+    for (const obj of objectsByType.constraints) {
+      const domain = obj.id.split('-')[0] ?? obj.id; // 简化：从 ID 中提取域
+      const fileName = toKebabCase(obj.id) + '.md';
+
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, {
+          capabilities: [],
+          concepts: [],
+          constraints: [],
+          dataModels: [],
+          modules: new Set(),
+        });
+      }
+
+      const entry = domainMap.get(domain)!;
+      entry.constraints.push(`[${obj.id}](constraints/${fileName})`);
+    }
+  }
+
+  // 从数据模型中提取业务域
+  if (objectsByType['data-model']) {
+    for (const obj of objectsByType['data-model']) {
+      const domain = obj.id.split('-')[0] ?? obj.id; // 简化：从 ID 中提取域
+      const fileName = toKebabCase(obj.id) + '.md';
+
+      if (!domainMap.has(domain)) {
+        domainMap.set(domain, {
+          capabilities: [],
+          concepts: [],
+          constraints: [],
+          dataModels: [],
+          modules: new Set(),
+        });
+      }
+
+      const entry = domainMap.get(domain)!;
+      entry.dataModels.push(`[${obj.id}](data-model/${fileName})`);
+    }
+  }
+
+  // 如果是多模块项目，尝试从模块名推断业务域归属
+  if (moduleTopology && moduleTopology.moduleCount > 1) {
+    for (const module of moduleTopology.modules) {
+      // 尝试匹配模块名与业务域
+      for (const [domain, entry] of domainMap.entries()) {
+        if (domain.toLowerCase().includes(module.name.toLowerCase()) ||
+            module.name.toLowerCase().includes(domain.toLowerCase())) {
+          entry.modules.add(module.name);
+        }
+      }
+    }
+  }
+
+  // 转换为表格行
+  const rows: Array<{ domain: string; modules: string; capabilities: string; concepts: string; constraints: string; dataModels: string }> = [];
+
+  for (const [domain, entry] of domainMap.entries()) {
+    // 每个域最多显示 3 个引用
+    const capLinks = entry.capabilities.slice(0, 3).join(', ') || '-';
+    const conLinks = entry.concepts.slice(0, 3).join(', ') || '-';
+    const constLinks = entry.constraints.slice(0, 3).join(', ') || '-';
+    const dmLinks = entry.dataModels.slice(0, 3).join(', ') || '-';
+    const modules = entry.modules.size > 0 ? Array.from(entry.modules).join(', ') : '-';
+
+    rows.push({
+      domain,
+      modules,
+      capabilities: capLinks,
+      concepts: conLinks,
+      constraints: constLinks,
+      dataModels: dmLinks,
+    });
+  }
+
+  // 按引用数量排序（优先显示有多个类型的域）
+  rows.sort((a, b) => {
+    const aCount = (a.capabilities !== '-' ? 1 : 0) + (a.concepts !== '-' ? 1 : 0) + (a.constraints !== '-' ? 1 : 0) + (a.dataModels !== '-' ? 1 : 0);
+    const bCount = (b.capabilities !== '-' ? 1 : 0) + (b.concepts !== '-' ? 1 : 0) + (b.constraints !== '-' ? 1 : 0) + (b.dataModels !== '-' ? 1 : 0);
+    return bCount - aCount;
+  });
+
+  return rows.slice(0, 10); // 最多显示 10 个业务域
 }
 
 /**

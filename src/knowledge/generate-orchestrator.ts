@@ -7,6 +7,7 @@ import type { PackageLayout } from './init-directory.js';
 import type { KnowledgeType } from '../schemas/knowledge-type.js';
 import type { EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
+import type { ModuleTopology } from '../schemas/module.js';
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
@@ -22,6 +23,8 @@ export interface GenerateOrchestrationInput {
     apiKeyEnv?: string;
     llmConfig?: string;
   };
+  /** 模块拓扑信息（多模块项目） */
+  moduleTopology?: ModuleTopology;
 }
 
 /**
@@ -59,6 +62,8 @@ export interface GenerateTypeInput {
   };
   /** Pre-built evidence groups to skip database access (for parallel LLM generation) */
   preparedEvidenceGroups?: EvidenceGroup[];
+  /** 模块拓扑信息（多模块项目） */
+  moduleTopology?: ModuleTopology;
 }
 
 /**
@@ -71,7 +76,7 @@ export async function runGenerateOrchestration(input: {
   input: GenerateOrchestrationInput;
   deps: GenerateOrchestrationDeps;
 }): Promise<{ contributions: KnowledgePackageContribution[] }> {
-  const { scope, repoPath, layout, graphStatus, verbose, llm } = input.input;
+  const { scope, repoPath, layout, graphStatus, verbose, llm, moduleTopology } = input.input;
   const contributions: KnowledgePackageContribution[] = [];
 
   const types = scope.types;
@@ -118,6 +123,7 @@ export async function runGenerateOrchestration(input: {
             verbose,
             llm,
             dependencies,
+            moduleTopology,
           });
 
           // Merge all contributions from this type
@@ -193,6 +199,7 @@ export async function runGenerateOrchestration(input: {
             dependencies,
             // Pass prepared evidence groups to avoid database access
             preparedEvidenceGroups: groups,
+            moduleTopology,
           });
         }),
       );
