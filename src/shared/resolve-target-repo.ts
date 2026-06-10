@@ -5,6 +5,7 @@
  * Priority: --repo > positional path > cwd git root > cwd fallback
  */
 
+import path from 'node:path';
 import { getGitRoot, hasGitDir } from '../engine/storage/git.js';
 
 export interface ResolveRepoInput {
@@ -26,16 +27,19 @@ export function resolveTargetRepo(input: ResolveRepoInput): ResolveRepoResult {
 
   // Priority 1: explicit --repo option
   if (input.repoOption) {
+    // 规范化路径：确保使用正确的分隔符
+    const normalizedPath = path.resolve(input.repoOption);
     return {
-      repoPath: input.repoOption,
+      repoPath: normalizedPath,
       source: 'repo_option',
     };
   }
 
   // Priority 2: positional path argument
   if (input.positionalPath) {
+    const normalizedPath = path.resolve(input.positionalPath);
     return {
-      repoPath: input.positionalPath,
+      repoPath: normalizedPath,
       source: 'positional_path',
     };
   }

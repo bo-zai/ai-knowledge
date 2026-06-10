@@ -40,7 +40,29 @@ const copyAssets = async (): Promise<void> => {
     }
     console.log('Copied scripts to dist');
   }
+
+  // Copy skills/templates (skill 模板文件)
+  const skillsTemplatesSrc = path.resolve('src/skills/templates');
+  const skillsTemplatesDest = path.resolve('dist/skills/templates');
+  if (fs.existsSync(skillsTemplatesSrc)) {
+    copyDirectoryRecursive(skillsTemplatesSrc, skillsTemplatesDest);
+    console.log('Copied skills/templates to dist');
+  }
 };
+
+// 递归复制目录
+function copyDirectoryRecursive(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirectoryRecursive(srcPath, destPath);
+    } else if (entry.isFile()) {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
 
 export default defineConfig({
   entry: {
