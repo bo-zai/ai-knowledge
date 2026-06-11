@@ -14,8 +14,9 @@ ai-knowledge/
 ├── modules.json                    # [可选] 模块拓扑（仅紧耦合多模块项目）
 ├── .meta                           # 生成元信息（commit hash、时间戳、版本号）
 │
-├── reports/                        # 生成报告目录
-│   └── generation.json             # 最后一次生成的详细报告
+├── .internal/                      # 内部元信息目录（隐藏，不作为知识内容）
+│   └── reports/                    # 生成报告目录
+│       └── generation.json         # 最后一次生成的详细报告
 │
 ├── capabilities/                   # 能力目录知识
 │   ├── _index.md
@@ -51,7 +52,7 @@ ai-knowledge/
     └── {workflow}.md               # 每条跨域流程一个文件
 ```
 
-共 8 个知识类型目录，加上根目录的 `index.md`、`architecture.md`、`project-context.json`、`.meta` 和 `reports/` 目录。紧耦合多模块项目额外包含 `modules.json`。每个知识类型目录包含一个 `_index.md`，`concepts/` 额外有一个 `_glossary.md`。
+共 8 个知识类型目录，加上根目录的 `index.md`、`architecture.md`、`project-context.json`、`.meta` 和 `.internal/` 目录。紧耦合多模块项目额外包含 `modules.json`。每个知识类型目录包含一个 `_index.md`，`concepts/` 额外有一个 `_glossary.md`。
 
 对于松耦合多模块项目，每个可部署服务目录下各自包含一份完整的 `ai-knowledge/`（结构同上，不含 `modules.json`）。
 
@@ -71,7 +72,7 @@ ai-knowledge/
 - `project-context.json`：项目类型上下文，位于 `ai-knowledge/` 根目录，存储项目类型、技术栈等元信息
 - `modules.json`：模块拓扑（仅紧耦合多模块项目），位于 `ai-knowledge/` 根目录，记录各模块的路径、角色和依赖关系
 - `.meta`：生成元信息，位于 `ai-knowledge/` 根目录，存储上次生成的 commit hash、时间戳、版本号和项目类型识别时间，供增量更新作为基线
-- `reports/generation.json`：生成报告，位于 `reports/` 目录，记录最后一次生成的详细统计和失败信息
+- `reports/generation.json`：生成报告，位于 `.internal/reports/` 目录，记录最后一次生成的详细统计和失败信息
 - `_index.md`：各知识类型目录的内部索引，以 `_` 前缀区分
 - `_glossary.md`：概念知识的术语速查表，仅位于 `concepts/` 目录
 

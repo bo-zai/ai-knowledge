@@ -97,5 +97,6 @@ export async function createOpenAiClient(config: ModelConfig): Promise<OpenAI> {
   return new OpenAI({
     baseURL: config.baseUrl,
     apiKey: config.apiKey,
+    timeout: config.timeoutMs,
   });
 }

@@ -92,15 +92,19 @@ export async function writeKnowledgePackage(input: {
   const indexMdContent = generateGlobalIndex(layout, objectsByType, moduleTopology);
   await fs.writeFile(layout.indexMdPath, indexMdContent, 'utf-8');
 
-  // 写入生成报告
+  // 写入生成报告（放在 .internal/reports 目录下）
   const report = {
     knowledge: input.knowledge,
     target: input.target ?? null,
     stages: Object.fromEntries(contributions.map(c => [c.stage, c.report])),
     warnings: contributions.flatMap(c => c.warnings),
   };
+  const internalDir = path.join(layout.packageRoot, '.internal');
+  const reportsDir = path.join(internalDir, 'reports');
+  await fs.mkdir(internalDir, { recursive: true });
+  await fs.mkdir(reportsDir, { recursive: true });
   await fs.writeFile(
-    path.join(layout.reportsDir, 'generation.json'),
+    path.join(reportsDir, 'generation.json'),
     JSON.stringify(report, null, 2) + '\n',
     'utf-8',
   );

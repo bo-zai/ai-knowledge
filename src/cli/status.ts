@@ -18,7 +18,7 @@ export async function runStatus(options: StatusOptions): Promise<void> {
   const knowledgeDir = DEFAULT_KNOWLEDGE_DIR;
   const manifestPath = `${repoPath}/${knowledgeDir}/manifest.yaml`;
   const catalogPath = `${repoPath}/${knowledgeDir}/catalog.yaml`;
-  const coveragePath = `${repoPath}/${knowledgeDir}/reports/coverage-report.yaml`;
+  const coveragePath = `${repoPath}/${knowledgeDir}/.internal/reports/coverage-report.yaml`;
 
   const exists = await fileExists(manifestPath);
 

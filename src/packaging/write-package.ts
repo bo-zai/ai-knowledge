@@ -22,7 +22,7 @@ export async function writePackage(input: {
   // 创建目录结构
   await ensureDir(basePath);
   await ensureDir(`${basePath}/objects`);
-  await ensureDir(`${basePath}/reports`);
+  await ensureDir(`${basePath}/.internal/reports`);
 
   // 创建对象类型子目录
   const typeDirs = ['terms', 'contracts', 'flows', 'modules', 'open', 'ownership', 'validation', 'db'];

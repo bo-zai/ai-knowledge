@@ -28,7 +28,7 @@ export async function writeReports(input: {
   bootstrapDir: string;
   report: GenerationReport;
 }): Promise<void> {
-  const reportsPath = `${input.repoPath}/${input.bootstrapDir}/reports`;
+  const reportsPath = `${input.repoPath}/${input.bootstrapDir}/.internal/reports`;
 
   await ensureDir(reportsPath);
 

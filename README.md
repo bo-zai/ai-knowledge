@@ -34,7 +34,8 @@ bootstrap-knowledge/
 ├── objects/              # 权威知识对象
 ├── views/                # 面向任务的组合页
 ├── evidence/             # 证据索引
-├── reports/              # 生成报告
+├── .internal/            # 内部元信息（隐藏目录）
+│   └── reports/          # 生成报告
 └── debug/                # 调试材料，可选
 ```
 
@@ -44,7 +45,7 @@ bootstrap-knowledge/
 - `views/` 只编排对象，不新增权威事实。
 - `catalog.yaml` 告诉 Agent 该按什么顺序读取哪些对象。
 - `maps/` 帮助 Agent 快速定位代码结构、模块边界和入口点。
-- `evidence/` 和 `reports/` 用于追溯生成质量与失败原因。
+- `evidence/` 和 `.internal/reports/` 用于追溯生成质量与失败原因。
 
 ## 设计文档
 

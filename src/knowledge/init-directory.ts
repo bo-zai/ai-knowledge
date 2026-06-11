@@ -53,7 +53,7 @@ export interface PackageLayout {
   packageRoot: string;       // {outputRoot}/ai-knowledge
   indexMdPath: string;       // {packageRoot}/index.md
   knowledgeDirs: Record<KnowledgeDir, string>;  // 各知识类型目录路径
-  reportsDir: string;        // {packageRoot}/reports (生成报告)
+  reportsDir: string;        // {packageRoot}/.internal/reports (生成报告)
 }
 
 /**
@@ -85,9 +85,9 @@ export async function initDirectoryStructure(outputRoot: string): Promise<Packag
         // 忽略子目录删除失败
       }
     }
-    // 清理 reports 目录
+    // 清理 .internal 目录
     try {
-      await fs.rm(path.join(packageRoot, 'reports'), { recursive: true, force: true });
+      await fs.rm(path.join(packageRoot, '.internal'), { recursive: true, force: true });
     } catch {
       // 忽略
     }
@@ -104,8 +104,10 @@ export async function initDirectoryStructure(outputRoot: string): Promise<Packag
     knowledgeDirs[dirName] = dirPath;
   }
 
-  // 创建报告目录（用于存储生成报告）
-  const reportsDir = path.join(packageRoot, 'reports');
+  // 创建报告目录（用于存储生成报告，放在 .internal 下）
+  const internalDir = path.join(packageRoot, '.internal');
+  await fs.mkdir(internalDir, { recursive: true });
+  const reportsDir = path.join(internalDir, 'reports');
   await fs.mkdir(reportsDir, { recursive: true });
 
   const indexMdPath = path.join(packageRoot, 'index.md');

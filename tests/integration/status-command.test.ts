@@ -17,7 +17,7 @@ describe('status command', () => {
   it('reports structured status when package exists', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'ai-knowledge-status-'));
     const bootstrapDir = join(repo, 'ai-knowledge');
-    const reportsDir = join(bootstrapDir, 'reports');
+    const reportsDir = join(bootstrapDir, '.internal', 'reports');
 
     await mkdir(bootstrapDir, { recursive: true });
     await mkdir(reportsDir, { recursive: true });
@@ -78,7 +78,7 @@ is_empty: false
   it('reports partial status when failures exist', async () => {
     const repo = await mkdtemp(join(tmpdir(), 'ai-knowledge-partial-'));
     const bootstrapDir = join(repo, 'ai-knowledge');
-    const reportsDir = join(bootstrapDir, 'reports');
+    const reportsDir = join(bootstrapDir, '.internal', 'reports');
 
     await mkdir(bootstrapDir, { recursive: true });
     await mkdir(reportsDir, { recursive: true });

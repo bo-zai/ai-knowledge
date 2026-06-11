@@ -19,7 +19,7 @@ describe('writeKnowledgePackage', () => {
     await mkdir(join(packageRoot, 'relations'), { recursive: true });
     await mkdir(join(packageRoot, 'data-model'), { recursive: true });
     await mkdir(join(packageRoot, 'workflows'), { recursive: true });
-    await mkdir(join(packageRoot, 'reports'), { recursive: true });
+    await mkdir(join(packageRoot, '.internal', 'reports'), { recursive: true });
 
     const knowledgeDirs: Record<KnowledgeDir, string> = {
       capabilities: join(packageRoot, 'capabilities'),
@@ -36,7 +36,7 @@ describe('writeKnowledgePackage', () => {
       packageRoot,
       indexMdPath: join(packageRoot, 'index.md'),
       knowledgeDirs,
-      reportsDir: join(packageRoot, 'reports'),
+      reportsDir: join(packageRoot, '.internal', 'reports'),
     };
 
     await writeKnowledgePackage({
@@ -61,7 +61,7 @@ describe('writeKnowledgePackage', () => {
       ],
     });
 
-    const report = await readFile(join(outputRoot, 'ai-knowledge', 'reports', 'generation.json'), 'utf-8');
+    const report = await readFile(join(outputRoot, 'ai-knowledge', '.internal', 'reports', 'generation.json'), 'utf-8');
     expect(report).toContain('"knowledge": "all"');
     expect(report).toContain('"db"');
     expect(report).toContain('"capability"');

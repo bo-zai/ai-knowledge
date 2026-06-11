@@ -3,14 +3,11 @@ import type { ModelConfig } from '../config/model-config.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { logger } from '../shared/logger.js';
 
-/** LLM request timeout in milliseconds (2 minutes for complex prompts) */
-const LLM_TIMEOUT_MS = 120_000;
-
 export function createOpenAiClient(config: ModelConfig): OpenAI {
   return new OpenAI({
     baseURL: config.baseUrl,
     apiKey: config.apiKey,
-    timeout: LLM_TIMEOUT_MS,
+    timeout: config.timeoutMs,
   });
 }
 
