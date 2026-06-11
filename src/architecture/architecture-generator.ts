@@ -63,7 +63,7 @@ export interface ArchitectureOverview {
   coupling_mode?: string;  // 紧耦合 | 松耦合
   module_topology?: ModuleTopologyItem[];
   module_dependencies_description?: string;
-  service_architectures?: ServiceArchitectureItem[];
+  module_architectures?: ModuleArchitectureItem[];
   shared_modules_description?: string;
   business_domain_panorama?: BusinessDomainPanorama;
   // 后端：分包模式
@@ -95,11 +95,12 @@ export interface ModuleTopologyItem {
   entry_point?: string;
 }
 
-/** 服务架构条目 */
-export interface ServiceArchitectureItem {
+/** 模块架构条目 */
+export interface ModuleArchitectureItem {
   module_name: string;
   package_mode: string;
   layer_package_paths?: LayerPackagePathItem[];
+  note?: string;  // 用于简单模块的备注说明
 }
 
 /** 业务领域全景 */
@@ -234,10 +235,11 @@ export async function generateArchitectureOverview(
     userPromptData.module_count = moduleTopology.moduleCount;
 
     // 收集各模块的目录结构
+    // 深度设置为 10 层，确保能获取完整的包结构（如 src/main/java/io/joyrpc/controller/）
     const moduleDirTrees: Record<string, string> = {};
     for (const module of moduleTopology.modules) {
       const modulePath = path.join(repoPath, module.path.slice(0, -1));
-      const moduleTree = await collectModuleDirectoryTree(modulePath, 3);
+      const moduleTree = await collectModuleDirectoryTree(modulePath, 10);
       moduleDirTrees[module.name] = moduleTree;
     }
     userPromptData.module_dir_trees = moduleDirTrees;
@@ -396,21 +398,25 @@ function architectureToMarkdown(data: ArchitectureOverview, context: ProjectCont
     lines.push('');
   }
 
-  // 各服务架构
-  if (data.service_architectures && data.service_architectures.length > 0) {
-    lines.push(`## 各服务架构`);
+  // 各模块架构
+  if (data.module_architectures && data.module_architectures.length > 0) {
+    lines.push(`## 各模块架构`);
     lines.push('');
-    for (const service of data.service_architectures) {
-      lines.push(`### ${service.module_name}`);
+    for (const module of data.module_architectures) {
+      lines.push(`### ${module.module_name}`);
       lines.push('');
-      if (service.package_mode) {
-        lines.push(`**分包模式**：${service.package_mode}`);
+      if (module.package_mode) {
+        lines.push(`**分包模式**：${module.package_mode}`);
         lines.push('');
       }
-      if (service.layer_package_paths && service.layer_package_paths.length > 0) {
+      if (module.note) {
+        lines.push(module.note);
+        lines.push('');
+      }
+      if (module.layer_package_paths && module.layer_package_paths.length > 0) {
         lines.push('| 分层 | 包路径 | 编码时 |');
         lines.push('|------|--------|--------|');
-        for (const layer of service.layer_package_paths) {
+        for (const layer of module.layer_package_paths) {
           lines.push(`| ${layer.layer} | ${layer.package_path} | ${layer.coding_guide} |`);
         }
         lines.push('');

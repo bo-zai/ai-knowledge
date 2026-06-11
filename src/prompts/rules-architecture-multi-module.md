@@ -38,17 +38,18 @@
     }
   ],
   "module_dependencies_description": "模块依赖关系描述",
-  "service_architectures": [
+  "module_architectures": [
     {
-      "module_name": "服务模块名",
-      "package_mode": "按层分包 | 按领域分包",
+      "module_name": "模块名",
+      "package_mode": "按层分包 | 按领域分包 | 按功能分包 | 简单结构",
       "layer_package_paths": [
         {
-          "layer": "分层名称",
+          "layer": "包名称",
           "package_path": "包路径",
           "coding_guide": "编码时指导"
         }
-      ]
+      ],
+      "note": "备注（用于简单模块，可选）"
     }
   ],
   "shared_modules_description": "共享模块说明",
@@ -158,26 +159,37 @@
 可部署服务之间无直接依赖，各自独立运行。
 ```
 
-### service_architectures（各服务架构）
+### module_architectures（各模块架构）
 
-为每个 **可部署模块** 描述其内部架构。
+为 **每个模块** 描述其内部包结构。
 
 包含以下信息：
 
 | 字段 | 说明 |
 |------|------|
-| module_name | 服务模块名 |
-| package_mode | 分包模式：按层分包、按领域分包、混合分包 |
-| layer_package_paths | 该服务的分层包路径 |
+| module_name | 模块名 |
+| package_mode | 分包模式：按层分包、按领域分包、按功能分包、简单结构 |
+| layer_package_paths | 该模块的包路径（如有分层结构） |
+| note | 备注（用于简单模块，说明其特点） |
 
 **分包模式判断方法**：
-查看该模块的 src_dir_tree 证据，参照单模块模板的判断方法。
+查看该模块的 module_dir_trees 证据，根据包结构特征判断：
+- 有 controller/service/dao 等分层 → "按层分包"
+- 有 cluster/protocol/transport 等功能域 → "按领域分包"
+- 有 serialization/protocol/registry 等功能组 → "按功能分包"
+- 只有少量包（annotation/constants） → "简单结构"
 
 **layer_package_paths 要求**：
-- **必须完整列出所有分层包**，不能只列出核心三层
+- **必须完整列出所有包**，不限于传统分层
 - 包含但不限于：Controller、Service、Dao/Mapper、DTO/VO/Domain、Config、Component、Repository、Util/Constant、Exception/Handler
+- 以及功能域包：Cluster、Protocol、Transport、Codec、Filter 等
 - 根据实际目录结构填写，不存在则不写
 - coding_guide 必须说明该包存放什么类型的类
+
+**简单模块处理**：
+- 只有注解/常量定义的模块：使用 `note` 字段说明，如 "此模块仅包含注解定义，无复杂包结构"
+- 聚合模块（无源代码）：使用 `note` 说明，如 "此模块无源代码，仅通过 pom.xml 聚合依赖"
+- 示例模块：列出主要示例场景包，简要说明用途
 
 **layer_package_paths 完整示例**：
 ```json
@@ -314,7 +326,7 @@
     { "name": "mall-demo", "path": "mall-demo/", "type": "java-maven-module", "role": "shared", "description": "演示模块", "dependencies": ["mall-mbg", "mall-common"], "used_by": [], "entry_point": null }
   ],
   "module_dependencies_description": "项目包含 7 个模块：3 个可部署服务（mall-admin、mall-portal、mall-search）和 4 个共享模块。\n\n依赖关系：\n- mall-mbg 被所有服务依赖，提供 MyBatis Generator 生成的实体类和 Mapper\n- mall-common 被所有服务依赖，提供通用工具类\n- mall-security 被 mall-admin 和 mall-portal 依赖，提供 JWT 认证\n\n可部署服务之间无直接依赖。",
-  "service_architectures": [
+  "module_architectures": [
     {
       "module_name": "mall-admin",
       "package_mode": "按层分包",
@@ -398,7 +410,7 @@
 1. **禁止遗漏模块**：module_topology 必须包含所有模块
 2. **禁止虚构模块依赖**：依赖关系必须从 pom.xml 证据中提取
 3. **禁止遗漏业务领域全景**：business_domain_panorama 是核心字段，必须填写
-4. **禁止遗漏服务架构**：每个 deployable 模块必须有 service_architectures 条目
+4. **禁止遗漏模块架构**：每个模块必须有 module_architectures 条目
 5. **禁止遗漏共享模块说明**：shared_modules_description 必须填写
 6. **禁止占位符包路径**：layer_package_paths 必须使用实际包名
 7. **禁止只列出三层核心包**：layer_package_paths 必须完整列出所有存在的分层包（Controller、Service、Dao 只是基础三层，还需列出 DTO/Domain、Config、Component、Repository、Util 等所有实际存在的包）

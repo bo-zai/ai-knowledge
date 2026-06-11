@@ -25,7 +25,7 @@ export interface LlmConfigFile {
 export interface ModelConfig {
   baseUrl: string;
   apiKey: string;
-  apiKeyEnv: string;
+  apiKeyEnv?: string;  // 环境变量名（可选）
   model: string;
   /** 全局并发数 */
   concurrency: number;
@@ -83,7 +83,7 @@ export function resolveModelConfig(input: {
   return {
     baseUrl: fileConfig?.baseUrl ?? LLM_DEFAULTS.baseUrl,
     apiKey: fileConfig?.apiKey ?? LLM_DEFAULTS.apiKey,
-    apiKeyEnv: fileConfig?.apiKeyEnv ?? LLM_DEFAULTS.apiKeyEnv,
+    apiKeyEnv: fileConfig?.apiKeyEnv,  // 可选，无默认值
     model: fileConfig?.model ?? LLM_DEFAULTS.model,
     concurrency,
     timeoutMs,

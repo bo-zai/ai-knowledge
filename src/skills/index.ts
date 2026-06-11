@@ -24,5 +24,5 @@ export {
 
 export {
   USE_KNOWLEDGE_SKILL,
-  getAllSkillTemplates,
+  getAvailableSkillTemplates,
 } from './skill-templates.js';

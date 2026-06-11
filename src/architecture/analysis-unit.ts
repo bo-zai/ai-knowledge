@@ -4,7 +4,7 @@
  * 设计文档 04 步骤 3.5：分析单元划分
  *
  * 功能：
- * 1. 模块发现：检测 Maven 多模块、Gradle 多项目、npm workspaces 等
+ * 1. 模块发现：使用 ModuleDiscoveryCoordinator（Layer 1 + Layer 2）
  * 2. 耦合度评估：6 信号检测
  * 3. 划分策略：紧耦合/松耦合决策树
  * 4. 模块拓扑分析：生成 modules.json 内容
@@ -17,7 +17,6 @@ import {
   type ModuleInfo,
   type ModuleTopology,
   type ModuleRole,
-  type ModuleType,
   type CouplingMode,
   type AnalysisUnit,
   type AnalysisUnitResult,
@@ -25,14 +24,15 @@ import {
   type CouplingSignalId,
   COUPLING_SIGNALS,
   ModuleTopologySchema,
-  CouplingModeSchema,
 } from '../schemas/module.js';
 import type { ProjectContext, ProjectType } from './project-context.js';
+import { ModuleDiscoveryCoordinator } from './module-discovery/index.js';
 
 /**
  * 执行分析单元划分
  *
- * 从项目证据中检测模块结构、评估耦合度、确定划分策略
+ * 使用新的 ModuleDiscoveryCoordinator 进行模块发现，
+ * 然后进行耦合度评估和划分策略决策
  */
 export async function analyzeAnalysisUnits(
   repoPath: string,
@@ -40,8 +40,11 @@ export async function analyzeAnalysisUnits(
 ): Promise<AnalysisUnitResult> {
   logger.info('Starting analysis unit division...');
 
-  // 1. 模块发现
-  const modules = await discoverModules(repoPath, projectContext);
+  // 1. 模块发现（使用新的 Coordinator）
+  const coordinator = new ModuleDiscoveryCoordinator();
+  const discoveryResult = await coordinator.discover(repoPath, 3);
+
+  const modules = discoveryResult.modules;
 
   if (modules.length === 0) {
     // 单模块项目：无需划分
@@ -49,23 +52,29 @@ export async function analyzeAnalysisUnits(
     return createSingleModuleResult(repoPath);
   }
 
-  logger.info(`Discovered ${modules.length} modules`);
+  logger.info(`Discovered ${modules.length} modules, repoType=${discoveryResult.repoType}`);
 
-  // 2. 耦合度评估
+  // 2. 耦合度评估（增强版：结合 Coordinator 的初步评估）
   const couplingSignals = await evaluateCouplingSignals(repoPath, modules);
-  const tightCouplingScore = calculateCouplingScore(couplingSignals);
 
-  logger.debug(`Coupling score: ${tightCouplingScore} (signals: ${couplingSignals.filter(s => s.detected).length}/6)`);
-
-  // 3. 划分策略
-  const couplingMode = decideCouplingMode(couplingSignals, modules);
+  // 如果 Coordinator 已经判定紧耦合（有共享实体），直接使用
+  const couplingMode = discoveryResult.couplingMode === 'tightly-coupled'
+    ? 'tightly-coupled'
+    : decideCouplingMode(couplingSignals, modules);
 
   logger.info(`Coupling mode determined: ${couplingMode}`);
 
-  // 4. 构建模块拓扑
-  const moduleTopology = await buildModuleTopology(repoPath, modules, couplingMode, couplingSignals);
+  // 3. 构建模块拓扑（使用 Coordinator 的结果）
+  const moduleTopology = coordinator.buildTopology(discoveryResult);
 
-  // 5. 确定分析单元
+  // 补充耦合信号详情
+  moduleTopology.couplingSignals = couplingSignals.map(s => ({
+    signal: s.signal,
+    detected: s.detected,
+    evidence: s.evidence,
+  }));
+
+  // 4. 确定分析单元
   const analysisUnits = createAnalysisUnits(repoPath, moduleTopology);
 
   return {
@@ -73,432 +82,6 @@ export async function analyzeAnalysisUnits(
     moduleTopology,
     analysisUnits,
   };
-}
-
-/**
- * 模块发现
- *
- * 根据项目类型和构建配置检测模块结构
- */
-export async function discoverModules(
-  repoPath: string,
-  projectContext: ProjectContext,
-): Promise<ModuleInfo[]> {
-  const modules: ModuleInfo[] = [];
-
-  // Maven 多模块检测
-  const mavenModules = await detectMavenModules(repoPath);
-  if (mavenModules.length > 0) {
-    modules.push(...mavenModules);
-    return modules;
-  }
-
-  // Gradle 多项目检测
-  const gradleModules = await detectGradleModules(repoPath);
-  if (gradleModules.length > 0) {
-    modules.push(...gradleModules);
-    return modules;
-  }
-
-  // npm workspaces 检测
-  const npmModules = await detectNpmWorkspaces(repoPath);
-  if (npmModules.length > 0) {
-    modules.push(...npmModules);
-    return modules;
-  }
-
-  // Go modules 检测（简化：只检测 cmd/ 目录下的可部署模块）
-  const goModules = await detectGoModules(repoPath);
-  if (goModules.length > 0) {
-    modules.push(...goModules);
-    return modules;
-  }
-
-  // 从 projectContext.packages 获取（monorepo 已识别）
-  if (projectContext.packages && projectContext.packages.length > 0) {
-    for (const pkg of projectContext.packages) {
-      modules.push({
-        name: pkg.name,
-        path: pkg.path,
-        type: inferModuleType(pkg.type, projectContext.primaryLanguage),
-        role: inferModuleRole(pkg.type),
-        description: undefined,
-        dependencies: [],
-        usedBy: [],
-      });
-    }
-    return modules;
-  }
-
-  return modules;
-}
-
-/**
- * Maven 多模块检测
- *
- * 解析根 pom.xml 的 <modules> 部分
- */
-async function detectMavenModules(repoPath: string): Promise<ModuleInfo[]> {
-  const pomPath = path.join(repoPath, 'pom.xml');
-
-  try {
-    const content = await fs.readFile(pomPath, 'utf-8');
-
-    // 检查是否是多模块项目
-    const modulesMatch = content.match(/<modules>([\s\S]*?)<\/modules>/);
-    if (!modulesMatch) {
-      return [];
-    }
-
-    // 提取模块名
-    const moduleNames = modulesMatch[1]
-      .match(/<module>([^<]+)<\/module>/g)
-      ?.map(m => m.replace('<module>', '').replace('</module>', ''))
-      ?? [];
-
-    if (moduleNames.length === 0) {
-      return [];
-    }
-
-    const modules: ModuleInfo[] = [];
-
-    for (const moduleName of moduleNames) {
-      const modulePath = path.join(repoPath, moduleName);
-      const moduleInfo = await analyzeMavenModule(repoPath, moduleName, modulePath);
-      if (moduleInfo) {
-        modules.push(moduleInfo);
-      }
-    }
-
-    // 构建依赖关系
-    await buildMavenModuleDependencies(modules, repoPath);
-
-    return modules;
-  } catch {
-    return [];
-  }
-}
-
-/**
- * 分析单个 Maven 模块
- */
-async function analyzeMavenModule(
-  rootPath: string,
-  moduleName: string,
-  modulePath: string,
-): Promise<ModuleInfo | null> {
-  try {
-    // 检查目录是否存在
-    await fs.access(modulePath);
-
-    // 解析模块 pom.xml
-    const modulePomPath = path.join(modulePath, 'pom.xml');
-    const content = await fs.readFile(modulePomPath, 'utf-8');
-
-    // 判断是否可部署（有 Spring Boot 打包配置或主类）
-    const isDeployable = await detectMavenDeployable(content, modulePath);
-
-    // 提取包根路径
-    const packageRoot = extractPackageRoot(content, modulePath);
-
-    // 提取描述
-    const descriptionMatch = content.match(/<description>([^<]*)<\/description>/);
-    const description = descriptionMatch?.[1]?.trim();
-
-    return {
-      name: moduleName,
-      path: moduleName + '/',
-      type: 'java-maven-module',
-      role: isDeployable ? 'deployable' : 'shared',
-      description,
-      dependencies: [],
-      usedBy: [],
-      entryPoint: isDeployable ? await findJavaEntryPoint(modulePath, packageRoot) : undefined,
-      packageRoot,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 检测 Maven 模块是否可部署
- */
-async function detectMavenDeployable(pomContent: string, modulePath: string): Promise<boolean> {
-  // 检查 Spring Boot Maven Plugin
-  if (pomContent.includes('spring-boot-maven-plugin')) {
-    return true;
-  }
-
-  // 检查打包类型为 jar（非 pom）
-  const packagingMatch = pomContent.match(/<packaging>([^<]+)<\/packaging>/);
-  if (packagingMatch && packagingMatch[1] !== 'pom') {
-    // 检查是否有主类
-    const mainClassMatch = pomContent.match(/<mainClass>([^<]+)<\/mainClass>/);
-    if (mainClassMatch) {
-      return true;
-    }
-
-    // 检查是否有 Application.java
-    try {
-      const srcPath = path.join(modulePath, 'src/main/java');
-      const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
-      const hasApplicationClass = entries.some(
-        e => e.isFile() && e.name.endsWith('Application.java')
-      );
-      if (hasApplicationClass) {
-        return true;
-      }
-    } catch {
-      // 忽略
-    }
-  }
-
-  return false;
-}
-
-/**
- * 提取包根路径
- */
-function extractPackageRoot(pomContent: string, modulePath: string): string | undefined {
-  // 从 pom.xml 提取 groupId 作为基础
-  const groupIdMatch = pomContent.match(/<groupId>([^<]+)<\/groupId>/);
-  if (!groupIdMatch) {
-    return undefined;
-  }
-
-  // 尝试从源码目录推断
-  // 简化处理：直接使用 groupId 转换为包路径
-  return groupIdMatch[1].replace(/\./g, '/');
-}
-
-/**
- * 查找 Java 入口文件
- */
-async function findJavaEntryPoint(modulePath: string, packageRoot?: string): Promise<string | undefined> {
-  try {
-    const srcPath = path.join(modulePath, 'src/main/java');
-    if (!packageRoot) {
-      // 扫查找 Application.java
-      const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
-      const appFile = entries.find(
-        e => e.isFile() && e.name.endsWith('Application.java')
-      );
-      if (appFile) {
-        return path.join('src/main/java', appFile.path.replace(srcPath, '').slice(1), appFile.name);
-      }
-    } else {
-      // 在包根目录下查找
-      const packagePath = path.join(srcPath, packageRoot);
-      const entries = await fs.readdir(packagePath, { withFileTypes: true });
-      const appFile = entries.find(
-        e => e.isFile() && e.name.endsWith('Application.java')
-      );
-      if (appFile) {
-        return path.join('src/main/java', packageRoot, appFile.name);
-      }
-    }
-  } catch {
-    // 忽略
-  }
-
-  return undefined;
-}
-
-/**
- * 构建 Maven 模块依赖关系
- */
-async function buildMavenModuleDependencies(modules: ModuleInfo[], repoPath: string): Promise<void> {
-  // 获取所有模块名集合
-  const moduleNames = new Set(modules.map(m => m.name));
-
-  for (const module of modules) {
-    const modulePomPath = path.join(repoPath, module.path.slice(0, -1), 'pom.xml');
-
-    try {
-      const content = await fs.readFile(modulePomPath, 'utf-8');
-
-      // 提取 dependencies 块
-      const depsMatch = content.match(/<dependencies>([\s\S]*?)<\/dependencies>/);
-      if (!depsMatch) {
-        continue;
-      }
-
-      // 在 dependencies 块内提取 artifactId
-      const artifactIdMatches = depsMatch[1].match(/<artifactId>([^<]+)<\/artifactId>/g) ?? [];
-      const deps = artifactIdMatches
-        .map(m => m.replace('<artifactId>', '').replace('</artifactId>', ''))
-        .filter(dep => moduleNames.has(dep) && dep !== module.name);
-
-      module.dependencies = deps;
-
-      // 更新被依赖关系
-      for (const dep of deps) {
-        const depModule = modules.find(m => m.name === dep);
-        if (depModule && !depModule.usedBy.includes(module.name)) {
-          depModule.usedBy.push(module.name);
-        }
-      }
-    } catch {
-      // 忽略
-    }
-  }
-
-  // 更新 description 字段：根据角色和依赖信息生成更有意义的描述
-  for (const module of modules) {
-    if (module.role === 'shared') {
-      // 共享模块：说明被哪些服务使用
-      if (module.usedBy.length > 0) {
-        module.description = `${module.name} 模块，被 ${module.usedBy.join('、')} 依赖`;
-      }
-    } else if (module.role === 'deployable') {
-      // 可部署模块：说明依赖哪些共享模块
-      if (module.dependencies.length > 0) {
-        module.description = `${module.name} 服务，依赖共享模块 ${module.dependencies.join('、')}`;
-      }
-    }
-  }
-}
-
-/**
- * Gradle 多项目检测
- */
-async function detectGradleModules(repoPath: string): Promise<ModuleInfo[]> {
-  // 尝试 settings.gradle 或 settings.gradle.kts
-  const settingsPaths = [
-    path.join(repoPath, 'settings.gradle'),
-    path.join(repoPath, 'settings.gradle.kts'),
-  ];
-
-  for (const settingsPath of settingsPaths) {
-    try {
-      const content = await fs.readFile(settingsPath, 'utf-8');
-
-      // 提取 include 语句
-      const includeMatches = content.match(/include\s*['"]([^'"]+)['"]/g) ?? [];
-      const projectNames = includeMatches.map(m => {
-        const match = m.match(/['"]([^'"]+)['"]/);
-        return match?.[1] ?? '';
-      }).filter(name => name.length > 0);
-
-      if (projectNames.length === 0) {
-        continue;
-      }
-
-      const modules: ModuleInfo[] = [];
-
-      for (const projectName of projectNames) {
-        const modulePath = projectName.replace(':', '/');
-        const moduleInfo: ModuleInfo = {
-          name: projectName,
-          path: modulePath + '/',
-          type: 'java-gradle-module',
-          role: 'shared', // 默认为 shared，后续可检测是否可部署
-          description: undefined,
-          dependencies: [],
-          usedBy: [],
-        };
-        modules.push(moduleInfo);
-      }
-
-      return modules;
-    } catch {
-      continue;
-    }
-  }
-
-  return [];
-}
-
-/**
- * npm workspaces 检测
- */
-async function detectNpmWorkspaces(repoPath: string): Promise<ModuleInfo[]> {
-  const packageJsonPath = path.join(repoPath, 'package.json');
-
-  try {
-    const content = await fs.readFile(packageJsonPath, 'utf-8');
-    const pkg = JSON.parse(content);
-
-    if (!pkg.workspaces) {
-      return [];
-    }
-
-    // workspaces 可以是数组或对象
-    const workspacePatterns = Array.isArray(pkg.workspaces)
-      ? pkg.workspaces
-      : pkg.workspaces.packages ?? [];
-
-    const modules: ModuleInfo[] = [];
-
-    for (const pattern of workspacePatterns) {
-      // 简化处理：假设 pattern 是具体目录
-      const workspacePath = path.join(repoPath, pattern);
-      try {
-        const wsPkgJsonPath = path.join(workspacePath, 'package.json');
-        const wsContent = await fs.readFile(wsPkgJsonPath, 'utf-8');
-        const wsPkg = JSON.parse(wsContent);
-
-        modules.push({
-          name: wsPkg.name ?? pattern,
-          path: pattern + '/',
-          type: 'npm-package',
-          role: wsPkg.main || wsPkg.bin ? 'deployable' : 'shared',
-          description: wsPkg.description,
-          dependencies: Object.keys(wsPkg.dependencies ?? {}),
-          usedBy: [],
-        });
-      } catch {
-        // workspace 目录不存在或无 package.json
-      }
-    }
-
-    return modules;
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Go modules 检测
- */
-async function detectGoModules(repoPath: string): Promise<ModuleInfo[]> {
-  const goModPath = path.join(repoPath, 'go.mod');
-
-  try {
-    await fs.access(goModPath);
-
-    // 检查 cmd/ 目录下的可部署模块
-    const cmdPath = path.join(repoPath, 'cmd');
-    const entries = await fs.readdir(cmdPath, { withFileTypes: true });
-
-    const modules: ModuleInfo[] = [];
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const mainGoPath = path.join(cmdPath, entry.name, 'main.go');
-        try {
-          await fs.access(mainGoPath);
-          modules.push({
-            name: entry.name,
-            path: `cmd/${entry.name}/`,
-            type: 'go-module',
-            role: 'deployable',
-            description: undefined,
-            dependencies: [],
-            usedBy: [],
-            entryPoint: `cmd/${entry.name}/main.go`,
-          });
-        } catch {
-          // 无 main.go
-        }
-      }
-    }
-
-    return modules;
-  } catch {
-    return [];
-  }
 }
 
 /**
@@ -585,7 +168,7 @@ async function detectSharedEntities(
       const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
 
       const hasEntityPackage = entries.some(
-        e => entityPatterns.some(p => e.path.toLowerCase().includes(p))
+        e => entityPatterns.some(p => path.join(e.parentPath || '', e.name).toLowerCase().includes(p))
       );
 
       if (hasEntityPackage && shared.usedBy.length >= 1) {
@@ -785,24 +368,6 @@ async function detectSameTechStack(modules: ModuleInfo[]): Promise<SignalDetecti
 }
 
 /**
- * 计算耦合度分数
- *
- * 检测到的信号越多，紧耦合的可能性越大
- */
-function calculateCouplingScore(signals: SignalDetectionResult[]): number {
-  const detectedCount = signals.filter(s => s.detected).length;
-
-  // 权重：共享实体类和跨模块调用是强信号
-  const strongSignals = ['shared-entities', 'cross-module-calls'];
-  const strongDetected = signals.filter(
-    s => s.detected && strongSignals.includes(s.signal)
-  ).length;
-
-  // 强信号权重 0.3，弱信号权重 0.1
-  return strongDetected * 0.3 + (detectedCount - strongDetected) * 0.1;
-}
-
-/**
  * 划分策略决策
  *
  * 根据耦合信号和模块特征决定耦合模式
@@ -842,29 +407,6 @@ export function decideCouplingMode(
 
   // 默认：紧耦合（保守策略）
   return 'tightly-coupled';
-}
-
-/**
- * 构建模块拓扑
- */
-async function buildModuleTopology(
-  repoPath: string,
-  modules: ModuleInfo[],
-  couplingMode: CouplingMode,
-  couplingSignals: SignalDetectionResult[],
-): Promise<ModuleTopology> {
-  return {
-    schemaVersion: 1,
-    couplingMode,
-    moduleCount: modules.length,
-    modules,
-    analyzedAt: new Date().toISOString(),
-    couplingSignals: couplingSignals.map(s => ({
-      signal: s.signal,
-      detected: s.detected,
-      evidence: s.evidence,
-    })),
-  };
 }
 
 /**
@@ -942,36 +484,6 @@ function createSingleModuleResult(repoPath: string): AnalysisUnitResult {
 }
 
 /**
- * 推断模块类型
- */
-function inferModuleType(projectType: ProjectType, language: string): ModuleType {
-  if (language === 'java') {
-    return 'java-maven-module';
-  }
-  if (language === 'typescript' || language === 'javascript') {
-    return 'npm-package';
-  }
-  if (language === 'go') {
-    return 'go-module';
-  }
-  if (language === 'rust') {
-    return 'rust-crate';
-  }
-  if (language === 'python') {
-    return 'python-package';
-  }
-  return 'other';
-}
-
-/**
- * 推断模块角色
- */
-function inferModuleRole(projectType: ProjectType): ModuleRole {
-  const deployableTypes: ProjectType[] = ['backend-service', 'frontend-app', 'cli-tool', 'mobile-app'];
-  return deployableTypes.includes(projectType) ? 'deployable' : 'shared';
-}
-
-/**
  * 保存 modules.json
  */
 export async function saveModuleTopology(
@@ -999,3 +511,7 @@ export async function loadModuleTopology(outputRoot: string): Promise<ModuleTopo
     return null;
   }
 }
+
+// 导出新的模块发现功能（供外部使用）
+export { ModuleDiscoveryCoordinator } from './module-discovery/index.js';
+export type { ModuleDiscoveryResult, RepoType } from './module-discovery/types.js';

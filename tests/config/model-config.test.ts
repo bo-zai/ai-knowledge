@@ -7,7 +7,7 @@ describe('resolveModelConfig', () => {
     const result = resolveModelConfig({});
     expect(result.model).toBe(LLM_DEFAULTS.model);
     expect(result.baseUrl).toBe(LLM_DEFAULTS.baseUrl);
-    expect(result.apiKeyEnv).toBe(LLM_DEFAULTS.apiKeyEnv);
+    expect(result.apiKeyEnv).toBeUndefined();  // apiKeyEnv is optional, no default
     expect(result.concurrency).toBe(LLM_DEFAULTS.concurrency);
     expect(result.timeoutMs).toBe(LLM_DEFAULTS.timeoutSeconds * 1000);
     expect(result.maxRetries).toBe(LLM_DEFAULTS.maxRetries);

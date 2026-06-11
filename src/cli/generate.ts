@@ -657,7 +657,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   const modelConfig = resolveModelConfig({ fileConfig });
 
-  const apiKey = modelConfig.apiKey || getEnvVarOptional(modelConfig.apiKeyEnv) || '';
+  const apiKey = modelConfig.apiKey || (modelConfig.apiKeyEnv ? getEnvVarOptional(modelConfig.apiKeyEnv) : undefined) || '';
   const finalConfig: ModelConfig = {
     ...modelConfig,
     apiKey,
@@ -688,7 +688,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // ========== 项目类型识别和架构概览生成（阶段 0） ==========
 
   // 尝试加载已有的模块拓扑（无论是否生成 ARCHITECTURE）
-  let moduleTopology = await loadModuleTopology(outputRoot);
+  let moduleTopology: ModuleTopology | undefined = await loadModuleTopology(outputRoot) ?? undefined;
 
   // 只在需要生成 ARCHITECTURE 时执行
   if (scope.types.includes('ARCHITECTURE')) {

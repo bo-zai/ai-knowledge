@@ -30,12 +30,17 @@ export {
 // 分析单元划分
 export {
   analyzeAnalysisUnits,
-  discoverModules,
   evaluateCouplingSignals,
   decideCouplingMode,
   saveModuleTopology,
   loadModuleTopology,
+  ModuleDiscoveryCoordinator,
 } from './analysis-unit.js';
+
+export type {
+  ModuleDiscoveryResult,
+  RepoType,
+} from './module-discovery/types.js';
 
 export type {
   ModuleInfo,

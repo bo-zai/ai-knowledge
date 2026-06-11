@@ -74,7 +74,6 @@ describe('model-config', () => {
     expect(resolved).toEqual({
       model: LLM_DEFAULTS.model,
       baseUrl: LLM_DEFAULTS.baseUrl,
-      apiKeyEnv: LLM_DEFAULTS.apiKeyEnv,
       apiKey: LLM_DEFAULTS.apiKey,
       concurrency: LLM_DEFAULTS.concurrency,
       timeoutMs: LLM_DEFAULTS.timeoutSeconds * 1000,
