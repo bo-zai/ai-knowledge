@@ -195,6 +195,7 @@ export async function generateArchitectureOverview(
   claimsProvider: LlmClaimsProvider,
   outputRoot: string,
   moduleTopology?: ModuleTopology,
+  timeout?: number,
 ): Promise<ArchitectureGenerationResult> {
   const knowledgeDir = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR);
   const filePath = path.join(knowledgeDir, 'architecture.md');
@@ -260,7 +261,7 @@ export async function generateArchitectureOverview(
 
   logger.debug('Generating architecture overview with LLM...');
 
-  // 调用 LLM
+  // 调用 LLM（传递 timeout 和完整证据作为 repairContext）
   const result = await callLlmForJson<ArchitectureOverview>({
     systemPrompt,
     userPrompt,
@@ -268,6 +269,13 @@ export async function generateArchitectureOverview(
     knowledgeType: 'ARCHITECTURE',
     fallbackContext: { projectName: path.basename(repoPath) },
     maxRetries: LLM_DEFAULTS.maxRetries,
+    timeout,
+    repairContext: {
+      projectName: path.basename(repoPath),
+      projectType: context.projectType,
+      techStack: context.techStack,
+      evidence,
+    },
     logLabel: 'Architecture generation',
   });
 

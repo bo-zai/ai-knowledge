@@ -23,7 +23,7 @@ import { buildEvidenceBundlesByPackage, type EvidenceGroup } from '../evidence/t
 import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
 import { initGraphData } from '../query/prepare-generation.js';
-import { initDirectoryStructure } from '../knowledge/init-directory.js';
+import { cleanupKnowledgeDirs, ensureDirectoryStructure } from '../knowledge/init-directory.js';
 import { createOpenAiClient, generateWithClient } from '../generation/llm-client.js';
 import {
   groupBoundaryConfigs,
@@ -682,8 +682,14 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   });
   logger.info(`Graph status: ${graphStatus.status}, nodes: ${graphStatus.nodeCount}`);
 
-  // Initialize directory structure
-  const layout = await initDirectoryStructure(outputRoot);
+  // Prepare package root path
+  const packageRoot = path.resolve(outputRoot, DEFAULT_KNOWLEDGE_DIR);
+
+  // Clean up old knowledge for specified types
+  await cleanupKnowledgeDirs(packageRoot, scope.types);
+
+  // Ensure directory structure exists
+  const layout = await ensureDirectoryStructure(packageRoot, scope.types);
 
   // ========== 项目类型识别和架构概览生成（阶段 0） ==========
 
@@ -719,7 +725,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       const evidence = await collectProjectTypeEvidence(repoPath);
 
       // LLM 识别项目类型
-      const identificationResult = await identifyProjectType(evidence, archClaimsProvider);
+      const identificationResult = await identifyProjectType(evidence, archClaimsProvider, finalConfig.timeoutMs);
 
       // 构建并保存项目上下文
       projectContext = buildProjectContext(identificationResult);
@@ -752,7 +758,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
     // ========== 架构概览生成 ==========
     logger.info('Generating architecture overview...');
-    await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot, moduleTopology);
+    await generateArchitectureOverview(repoPath, projectContext, archClaimsProvider, outputRoot, moduleTopology, finalConfig.timeoutMs);
 
     // 保存生成元信息
     await saveGenerationMeta(outputRoot, commitHash, projectContext.identifiedAt);

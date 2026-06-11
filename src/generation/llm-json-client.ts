@@ -359,8 +359,20 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     logger.warn(`${logLabel}: 第1次解析失败，类型=${errorType}`);
 
   } catch (error) {
+    // 详细记录错误信息
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const isTimeout = errorMsg.includes('timeout');
+    const errorName = error instanceof Error ? error.constructor.name : 'UnknownError';
+    const isTimeout = errorMsg.includes('timeout') || errorName.includes('Timeout');
+
+    // 构建详细日志信息
+    let detailedMsg = errorMsg;
+    if (isTimeout) {
+      detailedMsg = `超时 (${timeout}ms): ${errorMsg}`;
+    } else if (error instanceof Error && error.stack) {
+      // 非 timeout 错误，记录堆栈前 3 行帮助定位问题
+      const stackLines = error.stack.split('\n').slice(0, 3).join('\n');
+      detailedMsg = `${errorMsg}\n堆栈摘要:\n${stackLines}`;
+    }
 
     errors.push({
       attempt: 1,
@@ -368,7 +380,7 @@ export async function callLlmForJson<T = Record<string, unknown>>(
       message: errorMsg,
       durationMs: timeout,
     });
-    logger.error(`${logLabel}: 第1次调用异常: ${errorMsg}`);
+    logger.error(`${logLabel}: 第1次调用异常 (${errorName}): ${detailedMsg}`);
   }
 
   // ========== 重试循环 ==========
@@ -380,20 +392,29 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     logger.debug(`${logLabel}: 退避等待 ${backoffMs}ms 后重试`);
     await sleep(backoffMs);
 
-    // 选择修复提示词和 systemPrompt
-    const repairPrompt = getRepairPrompt(
-      attempt,
-      maxRetries,
-      knowledgeType,
-      lastRawOutput,
-      repairContext,
-    );
+    // 选择重试提示词：
+    // - attempt=2: 使用原始 userPrompt（保留完整证据）
+    // - attempt>=3: 使用 repairPrompt（尝试修复格式）
+    let retryUserPrompt: string;
+    if (attempt === 2) {
+      retryUserPrompt = userPrompt;
+      logger.debug(`${logLabel}: 第2次重试使用原始提示词（保留完整证据）`);
+    } else {
+      retryUserPrompt = getRepairPrompt(
+        attempt,
+        maxRetries,
+        knowledgeType,
+        lastRawOutput,
+        repairContext,
+      );
+      logger.debug(`${logLabel}: 第${attempt}次重试使用修复提示词`);
+    }
     const retrySystem = getRetrySystemPrompt(attempt, systemPrompt);
 
-    logger.debug(`${logLabel}: 第${attempt}次重试开始，提示词=${attempt <= 2 ? '完整' : '简化'}`);
+    logger.debug(`${logLabel}: 第${attempt}次重试开始`);
 
     try {
-      const callResult = await callWithTimeoutAndInterval(claimsProvider, retrySystem, repairPrompt, timeout);
+      const callResult = await callWithTimeoutAndInterval(claimsProvider, retrySystem, retryUserPrompt, timeout);
       lastRawOutput = callResult.rawText;
       stats.totalCalls++;
       stats.totalDurationMs += callResult.durationMs;
@@ -429,8 +450,19 @@ export async function callLlmForJson<T = Record<string, unknown>>(
       logger.warn(`${logLabel}: 第${attempt}次重试解析失败，类型=${errorType}`);
 
     } catch (error) {
+      // 详细记录错误信息
       const errorMsg = error instanceof Error ? error.message : String(error);
-      const isTimeout = errorMsg.includes('timeout');
+      const errorName = error instanceof Error ? error.constructor.name : 'UnknownError';
+      const isTimeout = errorMsg.includes('timeout') || errorName.includes('Timeout');
+
+      // 构建详细日志信息
+      let detailedMsg = errorMsg;
+      if (isTimeout) {
+        detailedMsg = `超时 (${timeout}ms): ${errorMsg}`;
+      } else if (error instanceof Error && error.stack) {
+        const stackLines = error.stack.split('\n').slice(0, 3).join('\n');
+        detailedMsg = `${errorMsg}\n堆栈摘要:\n${stackLines}`;
+      }
 
       errors.push({
         attempt,
@@ -438,7 +470,7 @@ export async function callLlmForJson<T = Record<string, unknown>>(
         message: errorMsg,
         durationMs: timeout,
       });
-      logger.error(`${logLabel}: 第${attempt}次重试异常: ${errorMsg}`);
+      logger.error(`${logLabel}: 第${attempt}次重试异常 (${errorName}): ${detailedMsg}`);
     }
   }
 

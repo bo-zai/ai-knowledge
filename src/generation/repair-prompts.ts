@@ -130,7 +130,8 @@ export function getFullRepairPrompt(
   context: Record<string, unknown>,
 ): string {
   const fieldStructure = FIELD_STRUCTURES_BY_TYPE[type] || FIELD_STRUCTURES_BY_TYPE.CONCEPT;
-  const contextSnippet = JSON.stringify(context).slice(0, 200);
+  // 增加截断长度到 2000 字符，保留更多上下文信息帮助修复
+  const contextSnippet = JSON.stringify(context).slice(0, 2000);
 
   return `
 你之前的输出不是有效的 JSON 格式，无法解析。请修复并重新输出。
@@ -204,13 +205,17 @@ export function getRepairPrompt(
  *
  * @param attempt 当前重试次数
  * @param originalSystem 原始 systemPrompt
+ *
+ * 策略：
+ * - attempt=2: 使用原始 systemPrompt（配合原始 userPrompt，保留完整证据）
+ * - attempt>=3: 使用简化 systemPrompt（配合 repairPrompt，尝试修复格式）
  */
 export function getRetrySystemPrompt(attempt: number, originalSystem: string): string {
-  // 前两次保持原始 systemPrompt（不缩减）
+  // 第2次重试保持原始 systemPrompt
   if (attempt <= 2) {
     return originalSystem;
   }
-  // 后续使用简化 systemPrompt
+  // 第3次及以后使用简化 systemPrompt
   return '你是 JSON 格式修复专家。请输出有效的 JSON 格式。';
 }
 

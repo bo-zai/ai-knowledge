@@ -54,6 +54,7 @@ export async function collectProjectTypeEvidence(repoPath: string): Promise<Proj
 export async function identifyProjectType(
   evidence: ProjectTypeEvidence,
   claimsProvider: LlmClaimsProvider,
+  timeout?: number,
 ): Promise<ProjectTypeIdentificationResult> {
   // 加载识别提示词
   const promptTemplate = PromptLoader.load('project-type-identifier');
@@ -69,12 +70,18 @@ export async function identifyProjectType(
 
   logger.debug('Identifying project type with LLM...');
 
-  // 调用 LLM
+  // 调用 LLM（传递 timeout 和完整证据作为 repairContext）
   const result = await callLlmForJson<ProjectTypeIdentificationResult>({
     systemPrompt: promptTemplate.raw,
     userPrompt,
     claimsProvider,
     maxRetries: LLM_DEFAULTS.maxRetries,
+    timeout,
+    repairContext: {
+      directoryTree: evidence.directoryTree,
+      configFiles: evidence.configFiles,
+      dependencies: evidence.dependencies.slice(0, 30),
+    },
     logLabel: 'Project type identification',
   });
 
