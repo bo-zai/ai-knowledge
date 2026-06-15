@@ -696,18 +696,21 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   // 尝试加载已有的模块拓扑（无论是否生成 ARCHITECTURE）
   let moduleTopology: ModuleTopology | undefined = await loadModuleTopology(outputRoot) ?? undefined;
 
+  // ========== 创建共享 LLM 资源 ==========
+  const sharedClient = createOpenAiClient(finalConfig);
+  const sharedClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
+    const result = await generateWithClient(sharedClient, finalConfig.model, systemPrompt, userPrompt);
+    return {
+      rawText: result.text,
+      model: finalConfig.model,
+      usage: { promptTokens: 0, completionTokens: result.chunks },
+    };
+  };
+
   // 只在需要生成 ARCHITECTURE 时执行
   if (scope.types.includes('ARCHITECTURE')) {
-    // 创建 LLM claims provider
-    const archClient = createOpenAiClient(finalConfig);
-    const archClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
-      const result = await generateWithClient(archClient, finalConfig.model, systemPrompt, userPrompt);
-      return {
-        rawText: result.text,
-        model: finalConfig.model,
-        usage: { promptTokens: 0, completionTokens: result.chunks },
-      };
-    };
+    // 使用共享 claims provider
+    const archClaimsProvider = sharedClaimsProvider;
 
     // ========== 项目类型识别 ==========
     // 检查是否已有项目上下文
@@ -771,30 +774,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     runGeneratorForType: async (input: GenerateTypeInput): Promise<KnowledgePackageContribution[]> => {
       const { type, target, verbose, preparedEvidenceGroups } = input;
 
-      // Create LLM client using OpenAI-compatible format
-      const clientConfig: ModelConfig = {
-        baseUrl: input.llm.baseUrl || finalConfig.baseUrl,
-        apiKey: apiKey,
-        model: input.llm.model || finalConfig.model,
-        apiKeyEnv: input.llm.apiKeyEnv || finalConfig.apiKeyEnv,
-        concurrency: finalConfig.concurrency,
-        timeoutMs: finalConfig.timeoutMs,
-        maxRetries: finalConfig.maxRetries,
-      };
-      const client = createOpenAiClient(clientConfig);
-
-      // Create claims provider using llm-client
-      const claimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
-        const result = await generateWithClient(client, clientConfig.model, systemPrompt, userPrompt);
-        return {
-          rawText: result.text,
-          model: clientConfig.model,
-          usage: {
-            promptTokens: 0,
-            completionTokens: result.chunks,
-          },
-        };
-      };
+      // Use shared claims provider
+      const claimsProvider = sharedClaimsProvider;
 
       // BOUNDARY 类型：两阶段生成（分组 + 每组生成）
       if (type === 'BOUNDARY') {
@@ -811,6 +792,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
             type,
             target,
             graphStatus: input.graphStatus,
+            claimsProvider,
           });
         }
 
@@ -844,6 +826,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
           type,
           target,
           graphStatus: input.graphStatus,
+          claimsProvider,
         });
       }
 
@@ -890,6 +873,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
       llmConfig: options.llmConfig,
     },
     moduleTopology,
+    claimsProvider: sharedClaimsProvider,
   };
 
   await runGenerateOrchestration({

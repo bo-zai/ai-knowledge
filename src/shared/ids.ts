@@ -9,6 +9,12 @@ const ID_PREFIXES = {
   OWN: 'OWN-',
   VER: 'VER-',
   DB: 'DB-',
+  DATA_MODEL: 'DATA_MODEL-',
+  BOUNDARY: 'BOUNDARY-',
+  EXTERNAL: 'EXTERNAL-',
+  CONSTRAINT: 'CONSTRAINT-',
+  RELATION: 'RELATION-',
+  WORKFLOW: 'WORKFLOW-',
 } as const;
 
 export type ObjectType = keyof typeof ID_PREFIXES;

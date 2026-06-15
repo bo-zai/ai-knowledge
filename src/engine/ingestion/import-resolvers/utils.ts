@@ -3,7 +3,9 @@
  * Extracted from import-processor.ts to reduce file size.
  */
 
-/** All file extensions to try during resolution */
+import { SupportedLanguages } from '../../shared/index.js';
+
+/** All file extensions to try during resolution (legacy, for cross-language fallback) */
 export const EXTENSIONS = [
   '',
   // TypeScript/JavaScript
@@ -49,12 +51,37 @@ export const EXTENSIONS = [
   '.rb',
 ];
 
+/** Language-specific extensions for import resolution.
+ *  Prevents cross-language resolution (e.g., Java → TypeScript). */
+export const LANGUAGE_EXTENSIONS: ReadonlyMap<SupportedLanguages, readonly string[]> = new Map([
+  [SupportedLanguages.TypeScript, ['.tsx', '.ts', '/index.tsx', '/index.ts', '.d.ts']],
+  [SupportedLanguages.JavaScript, ['.jsx', '.js', '/index.jsx', '/index.js', '.mjs', '.cjs']],
+  [SupportedLanguages.Java, ['.java']],
+  [SupportedLanguages.Kotlin, ['.kt', '.kts']],
+  [SupportedLanguages.Python, ['.py', '/__init__.py']],
+  [SupportedLanguages.CSharp, ['.cs']],
+  [SupportedLanguages.Go, ['.go']],
+  [SupportedLanguages.Rust, ['.rs', '/mod.rs']],
+  [SupportedLanguages.C, ['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.hh']],
+  [SupportedLanguages.CPlusPlus, ['.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.hh', '.c', '.h']],
+  [SupportedLanguages.PHP, ['.php', '.phtml']],
+  [SupportedLanguages.Swift, ['.swift']],
+  [SupportedLanguages.Ruby, ['.rb']],
+  [SupportedLanguages.Vue, ['.vue', '.ts', '.js']],
+]);
+
 /**
  * Try to match a path (with extensions) against the known file set.
  * Returns the matched file path or null.
+ * @param extensions Optional list of extensions to try (defaults to all extensions)
  */
-export function tryResolveWithExtensions(basePath: string, allFiles: Set<string>): string | null {
-  for (const ext of EXTENSIONS) {
+export function tryResolveWithExtensions(
+  basePath: string,
+  allFiles: Set<string>,
+  extensions?: readonly string[],
+): string | null {
+  const exts = extensions ?? EXTENSIONS;
+  for (const ext of exts) {
     const candidate = basePath + ext;
     if (allFiles.has(candidate)) return candidate;
   }
@@ -146,17 +173,20 @@ export function buildSuffixIndex(normalizedFileList: string[], allFileList: stri
 
 /**
  * Suffix-based resolution using index. O(1) per lookup instead of O(files).
+ * @param extensions Optional list of extensions to try (defaults to all extensions)
  */
 export function suffixResolve(
   pathParts: string[],
   normalizedFileList: string[],
   allFileList: string[],
   index?: SuffixIndex,
+  extensions?: readonly string[],
 ): string | null {
+  const exts = extensions ?? EXTENSIONS;
   if (index) {
     for (let i = 0; i < pathParts.length; i++) {
       const suffix = pathParts.slice(i).join('/');
-      for (const ext of EXTENSIONS) {
+      for (const ext of exts) {
         const suffixWithExt = suffix + ext;
         const result = index.get(suffixWithExt) || index.getInsensitive(suffixWithExt);
         if (result) return result;
@@ -168,7 +198,7 @@ export function suffixResolve(
   // Fallback: linear scan (for backward compatibility)
   for (let i = 0; i < pathParts.length; i++) {
     const suffix = pathParts.slice(i).join('/');
-    for (const ext of EXTENSIONS) {
+    for (const ext of exts) {
       const suffixWithExt = suffix + ext;
       const suffixPattern = '/' + suffixWithExt;
       const matchIdx = normalizedFileList.findIndex(

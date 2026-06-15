@@ -8,6 +8,7 @@ import type { KnowledgeType } from '../schemas/knowledge-type.js';
 import type { EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
 import type { ModuleTopology } from '../schemas/module.js';
+import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
@@ -25,6 +26,8 @@ export interface GenerateOrchestrationInput {
   };
   /** 模块拓扑信息（多模块项目） */
   moduleTopology?: ModuleTopology;
+  /** LLM claims provider for hybrid extraction */
+  claimsProvider?: LlmClaimsProvider;
 }
 
 /**
@@ -76,7 +79,7 @@ export async function runGenerateOrchestration(input: {
   input: GenerateOrchestrationInput;
   deps: GenerateOrchestrationDeps;
 }): Promise<{ contributions: KnowledgePackageContribution[] }> {
-  const { scope, repoPath, layout, graphStatus, verbose, llm, moduleTopology } = input.input;
+  const { scope, repoPath, layout, graphStatus, verbose, llm, moduleTopology, claimsProvider } = input.input;
   const contributions: KnowledgePackageContribution[] = [];
 
   const types = scope.types;
@@ -157,6 +160,7 @@ export async function runGenerateOrchestration(input: {
             type,
             target: scope.target?.kind === type ? scope.target : undefined,
             graphStatus,
+            claimsProvider,
           });
           evidenceResults.push({ type, groups: evidenceGroups });
           logger.info(`${type}: ${evidenceGroups.length} evidence groups prepared`);

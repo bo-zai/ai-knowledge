@@ -227,13 +227,22 @@ export class ModuleDiscoveryCoordinator {
     const finalModules = Array.from(seenPaths.values());
     const moduleNames = new Set(finalModules.map(m => m.name));
 
+    // 重新过滤 dependencies：只保留项目内部模块依赖
     for (const module of finalModules) {
+      module.dependencies = module.dependencies.filter(dep => moduleNames.has(dep));
+
+      // 更新反向引用：基于过滤后的 dependencies
       for (const dep of module.dependencies) {
         const depModule = finalModules.find(m => m.name === dep);
         if (depModule && !depModule.usedBy.includes(module.name)) {
           depModule.usedBy.push(module.name);
         }
       }
+    }
+
+    // 清理 usedBy：只保留项目内部模块
+    for (const module of finalModules) {
+      module.usedBy = module.usedBy.filter(name => moduleNames.has(name));
     }
 
     return finalModules;

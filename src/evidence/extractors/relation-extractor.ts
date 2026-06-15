@@ -16,13 +16,14 @@ export async function queryRelationEvidenceByPackage(
 
   const callCypher = `
     MATCH (s1:Class) WHERE s1.name =~ '(?i).*Service$'
+    AND NOT s1.filePath =~ '(?i).*(test|spec|node_modules).*'
     MATCH (s2:Class) WHERE s2.name =~ '(?i).*Service$' AND s1 <> s2
-    MATCH (s1)-[r1:CodeRelation {type: 'CONTAINS'}]->(f1:Function)
-    MATCH (f1)-[r2:CodeRelation {type: 'CALLS'}]->(f2:Function)
-    MATCH (s2)-[r3:CodeRelation {type: 'CONTAINS'}]->(f2)
+    MATCH (s1)-[r1:CodeRelation {type: 'HAS_METHOD'}]->(m1:Method)
+    MATCH (m1)-[r2:CodeRelation {type: 'CALLS'}]->(m2)
+    MATCH (s2)-[r3:CodeRelation {type: 'HAS_METHOD'}]->(m2)
     RETURN s1.name as fromService, s2.name as toService,
-           f1.name as fromMethod, f2.name as toMethod,
-           f1.filePath as filePath
+           m1.name as fromMethod, m2.name as toMethod,
+           m1.filePath as filePath
     LIMIT 40
   `;
   const callResults = await executeQuery(callCypher);

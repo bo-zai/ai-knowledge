@@ -19,11 +19,11 @@ export const LLM_DEFAULTS = {
   // baseUrl: 'https://qianfan.baidubce.com/v2/coding',
   // apiKey: 'bce-v3/ALTAKSP-5CKAa1C5W0x1YL18PB6Qv/0716b4539325613116575694d9f83468d230103a',
   // apiKeyEnv: 'BAIDU_API_KEY',  // 环境变量名（可选）
-  model: 'mimo-v2.5',
-  baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-  apiKey: 'tp-cgnn8bh4xkra2btutt9o2t87kirwm3pvax940g7f10o3ruao',
+  model: 'MiniMax-M2.7',
+  baseUrl: 'https://api.minimaxi.com/v1',
+  apiKey: 'sk-cp-hfw7ZO-Bj4MU3zyry-FqPvy2djwjb5UBkKI6gAE_XQO_5aFhQLd0XczpNgZQtE84emIORXehqkNDcRUF_qoO1SrJ8UCxD5YDhE__zIcxBJ4ymFTCC16bKDI',
 
   concurrency: 1,  // 降低并发数避免速率限制
-  timeoutSeconds: 120,
+  timeoutSeconds: 300,  // 5分钟，支持大型实体的知识生成
   maxRetries: 3,
 };

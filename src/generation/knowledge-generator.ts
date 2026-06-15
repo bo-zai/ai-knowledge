@@ -6,6 +6,7 @@ import type { KnowledgePackageContribution } from '../packaging/knowledge-packag
 import type { PackageLayout } from '../knowledge/init-directory.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { GenerateTarget } from '../knowledge/generate-scope.js';
+import { TYPE_TO_DIR } from '../knowledge/type-directory-map.js';
 import pLimit from 'p-limit';
 import { logger } from '../shared/logger.js';
 
@@ -117,9 +118,10 @@ export async function runKnowledgeGenerator(
   });
 
   const files: Array<{ path: string; content: string }> = [];
+  const dirName = TYPE_TO_DIR[type] || type.toLowerCase();
   for (const obj of objects) {
-    const filePath = `objects/${type.toLowerCase()}/${obj.id}.yaml`;
-    const content = objectToYaml(obj);
+    const filePath = `${dirName}/${obj.id}.md`;
+    const content = objectToMarkdown(obj);
     files.push({ path: filePath, content });
   }
 
@@ -129,7 +131,7 @@ export async function runKnowledgeGenerator(
     objects: objects.map(o => ({
       id: o.id,
       type: o.type,
-      path: `objects/${stageName}/${o.id}.yaml`,
+      path: `${dirName}/${o.id}.md`,
     })),
     files,
     report: {
@@ -346,4 +348,84 @@ function objectToYaml(obj: KnowledgeObject): string {
   }
 
   return lines.join('\n') + '\n';
+}
+
+function objectToMarkdown(obj: KnowledgeObject): string {
+  const lines: string[] = [];
+  const timestamp = new Date().toISOString();
+
+  // 标题行
+  const nameZh = (obj as any).name_zh || (obj as any).summary_zh || obj.id;
+  lines.push(`# ${nameZh}`);
+  lines.push('');
+  lines.push(`> 类型：${obj.type}`);
+  lines.push(`> 生成时间：${timestamp}`);
+  lines.push('');
+
+  // 一句话定位
+  if ((obj as any).summary_zh) {
+    lines.push(`## 一句话定位`);
+    lines.push('');
+    lines.push((obj as any).summary_zh);
+    lines.push('');
+  }
+
+  // 别名
+  const aliases = (obj as any).aliases;
+  if (aliases && (Array.isArray(aliases) ? aliases.length > 0 : aliases)) {
+    lines.push(`## 别名`);
+    lines.push('');
+    lines.push('代码中的英文命名和业务术语中的其他叫法：');
+    lines.push('');
+    const aliasList = Array.isArray(aliases) ? aliases : [aliases];
+    for (const alias of aliasList) {
+      lines.push(`- ${alias}`);
+    }
+    lines.push('');
+  }
+
+  // 详细描述
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'id' || key === 'type' || key === 'name_zh' || key === 'summary_zh' || key === 'aliases' || key === 'tags') continue;
+
+    if (key.endsWith('_zh') && typeof value === 'string') {
+      const sectionName = key.replace(/_zh$/, '').replace(/_/g, ' ');
+      lines.push(`## ${sectionName}`);
+      lines.push('');
+      lines.push(value);
+      lines.push('');
+    } else if (Array.isArray(value) && value.length > 0) {
+      const sectionName = key.replace(/_/g, ' ');
+      lines.push(`## ${sectionName}`);
+      lines.push('');
+      if (typeof value[0] === 'object') {
+        lines.push('| 字段 | 值 |');
+        lines.push('|------|------|');
+        for (const item of value) {
+          if (typeof item === 'object') {
+            const itemEntries = Object.entries(item).slice(0, 4);
+            for (const [k, v] of itemEntries) {
+              lines.push(`| ${k} | ${typeof v === 'string' ? v : JSON.stringify(v)} |`);
+            }
+            lines.push('');
+          }
+        }
+      } else {
+        for (const item of value) {
+          lines.push(`- ${item}`);
+        }
+        lines.push('');
+      }
+    }
+  }
+
+  // 标签
+  const tags = (obj as any).tags;
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    lines.push(`## 标签`);
+    lines.push('');
+    lines.push(tags.join('、'));
+  }
+
+  return lines.join('\n');
 }

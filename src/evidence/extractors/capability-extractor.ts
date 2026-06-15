@@ -18,7 +18,8 @@ export async function queryCapabilityEvidenceByPackage(
 
   const controllerCypher = `
     MATCH (c:Class) WHERE c.name =~ '(?i).*Controller$'
-    MATCH (c)-[r:CodeRelation {type: 'CONTAINS'}]->(m:Method)
+    AND NOT c.filePath =~ '(?i).*(test|spec|node_modules).*'
+    MATCH (c)-[r:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
     WHERE true ${targetFilter}
     RETURN c.name as className, m.name as methodName, c.filePath as filePath,
            m.returnType as returnType, m.parameterCount as parameterCount, m.startLine as startLine

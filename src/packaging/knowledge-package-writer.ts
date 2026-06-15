@@ -114,17 +114,34 @@ export async function writeKnowledgePackage(input: {
  * Parse file data to extract id, type and convert yaml to md content.
  */
 function parseFileData(file: { path: string; content: string }, generatedConceptIds?: Set<string>): { id: string; type: KnowledgeType | LegacyType; content: string } {
-  // 文件路径格式: objects/{dir}/{id}.yaml
+  // 文件路径格式: {dir}/{id}.md 或 objects/{dir}/{id}.yaml
   const parts = file.path.split('/');
-  const dirName = parts[1]?.toLowerCase() || 'concepts';
-  const fileName = parts[2] || '';
-  const id = fileName.replace('.yaml', '');
+
+  // 判断是新格式还是旧格式
+  const isNewFormat = parts[0] !== 'objects';
+
+  let dirName: string;
+  let fileName: string;
+
+  if (isNewFormat) {
+    // 新格式: {dir}/{id}.md
+    dirName = parts[0]?.toLowerCase() || 'concepts';
+    fileName = parts[1] || '';
+  } else {
+    // 旧格式: objects/{dir}/{id}.yaml
+    dirName = parts[1]?.toLowerCase() || 'concepts';
+    fileName = parts[2] || '';
+  }
+
+  // 移除扩展名（.md 或 .yaml）
+  const id = fileName.replace(/\.(md|yaml)$/, '');
 
   // 从目录名获取类型
   const type = getTypeFromDir(dirName) ?? 'CONCEPT';
 
-  // 将 yaml 内容转换为 md 格式
-  const mdContent = yamlToMd(id, type, file.content, generatedConceptIds);
+  // 如果是 markdown 格式，直接使用；否则转换 yaml
+  const isMarkdown = file.content.startsWith('#') || fileName.endsWith('.md');
+  const mdContent = isMarkdown ? file.content : yamlToMd(id, type, file.content, generatedConceptIds);
 
   return { id, type, content: mdContent };
 }

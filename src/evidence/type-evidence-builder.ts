@@ -3,6 +3,7 @@ import type { EvidenceBundle } from './evidence-bundle-schema.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { GenerateTarget } from '../knowledge/generate-scope.js';
 import type { ReadOnlyQueryExecutor } from '../engine/lbug/read-only-session.js';
+import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { logger } from '../shared/logger.js';
@@ -16,12 +17,14 @@ import {
   queryRelationEvidenceByPackage,
   queryWorkflowEvidenceByPackage,
 } from './extractors/index.js';
+import { assessGap, executeLlmSupplement, mergeEvidenceGroups } from './extractors/hybrid/index.js';
 
 export interface BuildEvidenceInput {
   repoPath: string;
   type: KnowledgeType;
   target?: GenerateTarget;
   graphStatus: GraphStatus;
+  claimsProvider?: LlmClaimsProvider;
 }
 
 /**
@@ -59,11 +62,13 @@ function isDbBusyError(err: unknown): boolean {
  * Build evidence bundles grouped by package path for a knowledge type.
  * Returns multiple groups for parallel LLM generation.
  * Includes retry logic for database lock conflicts on Windows.
+ *
+ * Supports hybrid extraction: static Cypher + LLM supplement when gaps detected.
  */
 export async function buildEvidenceBundlesByPackage(
   input: BuildEvidenceInput,
 ): Promise<EvidenceGroup[]> {
-  const { type, target, repoPath } = input;
+  const { type, target, repoPath, claimsProvider } = input;
   const { lbugPath } = getStoragePaths(repoPath);
 
   let lastError: Error | null = null;
@@ -71,7 +76,7 @@ export async function buildEvidenceBundlesByPackage(
   for (let attempt = 1; attempt <= LOCK_RETRY_ATTEMPTS; attempt++) {
     try {
       logger.info(`Opening graph for ${type} evidence: ${lbugPath} (attempt ${attempt})`);
-      const groups = await withReadOnlyLbug(lbugPath, async query => {
+      const staticGroups = await withReadOnlyLbug(lbugPath, async query => {
         switch (type) {
           case 'CONCEPT':
             return queryConceptEvidenceByPackage(repoPath, lbugPath, target, query);
@@ -94,8 +99,27 @@ export async function buildEvidenceBundlesByPackage(
         }
       });
 
-      logger.info(`Built ${groups.length} evidence groups for ${type}`);
-      return groups;
+      logger.info(`Static extraction: ${staticGroups.length} evidence groups for ${type}`);
+
+      // Hybrid extraction: check gaps and supplement with LLM if needed
+      if (claimsProvider) {
+        const gapAssessment = assessGap(type, staticGroups);
+        logger.info(`Gap assessment: ${gapAssessment.reason}`);
+
+        if (gapAssessment.needsLlmSupplement) {
+          logger.info(`Triggering LLM supplement for ${type}`);
+          const supplementResult = await executeLlmSupplement(
+            { type, repoPath, staticGroups, gapReason: gapAssessment.reason },
+            claimsProvider,
+          );
+
+          const mergedGroups = mergeEvidenceGroups(staticGroups, supplementResult.groups);
+          logger.info(`Hybrid result: ${mergedGroups.length} groups (${staticGroups.length} static + ${supplementResult.groups.length} LLM)`);
+          return mergedGroups;
+        }
+      }
+
+      return staticGroups;
     } catch (error: any) {
       lastError = error instanceof Error ? error : new Error(String(error));
 

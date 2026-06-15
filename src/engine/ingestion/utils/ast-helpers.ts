@@ -598,3 +598,14 @@ export function findNodeAtRange(
   }
   return null;
 }
+
+/**
+ * Type check helper: returns the node if its type matches, null otherwise.
+ * Used by scope-capture paths to avoid re-walking when the node is already known.
+ */
+export function nodeIfType<T extends SyntaxNode>(
+  node: T | undefined,
+  ...types: readonly string[]
+): T | null {
+  return node !== undefined && types.includes(node.type) ? node : null;
+}

@@ -16,12 +16,13 @@ export async function queryWorkflowEvidenceByPackage(
 
   const workflowCypher = `
     MATCH (c:Class) WHERE c.name =~ '(?i).*Controller$'
-    MATCH (c)-[r1:CodeRelation {type: 'CONTAINS'}]->(cf:Function)
-    MATCH (cf)-[r2:CodeRelation {type: 'CALLS'}]->(sf:Function)
-    MATCH (s:Class)-[r3:CodeRelation {type: 'CONTAINS'}]->(sf) WHERE s.name =~ '(?i).*Service$'
+    AND NOT c.filePath =~ '(?i).*(test|spec|node_modules).*'
+    MATCH (c)-[r1:CodeRelation {type: 'HAS_METHOD'}]->(cm:Method)
+    MATCH (cm)-[r2:CodeRelation {type: 'CALLS'}]->(sm)
+    MATCH (s:Class)-[r3:CodeRelation {type: 'HAS_METHOD'}]->(sm) WHERE s.name =~ '(?i).*Service$'
     RETURN c.name as controller, s.name as service,
-           cf.name as controllerMethod, sf.name as serviceMethod,
-           cf.filePath as filePath
+           cm.name as controllerMethod, sm.name as serviceMethod,
+           cm.filePath as filePath
     LIMIT 40
   `;
   const workflowResults = await executeQuery(workflowCypher);

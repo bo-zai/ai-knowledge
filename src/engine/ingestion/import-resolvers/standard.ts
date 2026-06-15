@@ -5,7 +5,7 @@
  */
 
 import type { SuffixIndex } from './utils.js';
-import { tryResolveWithExtensions, suffixResolve } from './utils.js';
+import { tryResolveWithExtensions, suffixResolve, LANGUAGE_EXTENSIONS } from './utils.js';
 import { resolveRustImportInternal } from './rust.js';
 import { SupportedLanguages } from '../../shared/index.js';
 import type { ImportResult, ImportResolverStrategy, ResolveCtx } from './types.js';
@@ -53,6 +53,9 @@ export const resolveImportPath = (
     return result;
   };
 
+  // Get language-specific extensions to prevent cross-language resolution
+  const languageExtensions = LANGUAGE_EXTENSIONS.get(language);
+
   // ---- TypeScript/JavaScript: rewrite path aliases ----
   if (
     (language === SupportedLanguages.TypeScript || language === SupportedLanguages.JavaScript) &&
@@ -68,13 +71,13 @@ export const resolveImportPath = (
             ? targetPrefix + remainder
             : tsconfigPaths.baseUrl + '/' + targetPrefix + remainder;
 
-        // Try direct resolution from repo root
-        const resolved = tryResolveWithExtensions(rewritten, allFiles);
+        // Try direct resolution from repo root (with language-specific extensions)
+        const resolved = tryResolveWithExtensions(rewritten, allFiles, languageExtensions);
         if (resolved) return cache(resolved);
 
         // Try suffix matching as fallback
         const parts = rewritten.split('/').filter(Boolean);
-        const suffixResult = suffixResolve(parts, normalizedFileList, allFileList, index);
+        const suffixResult = suffixResolve(parts, normalizedFileList, allFileList, index, languageExtensions);
         if (suffixResult) return cache(suffixResult);
       }
     }
@@ -127,7 +130,7 @@ export const resolveImportPath = (
   const basePath = currentDir.join('/');
 
   if (importPath.startsWith('.')) {
-    const resolved = tryResolveWithExtensions(basePath, allFiles);
+    const resolved = tryResolveWithExtensions(basePath, allFiles, languageExtensions);
     return cache(resolved);
   }
 
@@ -142,7 +145,7 @@ export const resolveImportPath = (
   const pathLike = importPath.includes('/') || isCpp ? importPath : importPath.replace(/\./g, '/');
   const pathParts = pathLike.split('/').filter(Boolean);
 
-  const resolved = suffixResolve(pathParts, normalizedFileList, allFileList, index);
+  const resolved = suffixResolve(pathParts, normalizedFileList, allFileList, index, languageExtensions);
   return cache(resolved);
 };
 

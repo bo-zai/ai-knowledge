@@ -3,23 +3,19 @@
  *
  * Generic registry-primary resolution phase (RFC #909 Ring 3).
  *
- * For every language in `MIGRATED_LANGUAGES` (per-language flag set)
- * whose provider is registered in `SCOPE_RESOLVERS`:
+ * For every language registered in `SCOPE_RESOLVERS`:
  *   1. Filter scanned files by language extension.
  *   2. Read file contents.
  *   3. Drive the scope-based pipeline end-to-end via the generic
  *      `runScopeResolution(input, provider)` orchestrator.
  *   4. Emit IMPORTS / CALLS / ACCESSES / INHERITS / USES edges.
  *
- * Pairs with the per-language gates in `import-processor.ts` and
- * `call-processor.ts` that skip files when their language is registry-
- * primary, so we don't double-emit edges from both code paths.
+ * Standalone providers (COBOL, JCL) are skipped — they use dedicated
+ * phases for import resolution.
  *
- * Adding a language is two changes:
+ * Adding a language is one change:
  *   - Implement `ScopeResolver` in `languages/<lang>/scope-resolver.ts`
  *     and register it in `scope-resolution/pipeline/registry.ts`.
- *   - Add the language to `MIGRATED_LANGUAGES` in
- *     `registry-primary-flag.ts`.
  *
  * @deps    parse  (needs Symbol nodes already in the graph so emit-references
  *                  can attach edges to existing Function/Method/Class nodes)
@@ -31,7 +27,6 @@ import type { PipelinePhase, PipelineContext, PhaseResult } from '../../pipeline
 import { getPhaseOutput } from '../../pipeline-phases/types.js';
 import type { StructureOutput } from '../../pipeline-phases/structure.js';
 import type { ParseOutput } from '../../pipeline-phases/parse.js';
-import { isRegistryPrimary } from '../../registry-primary-flag.js';
 import { SupportedLanguages, getLanguageFromFilename } from '../../../shared/index.js';
 import { readFileContents } from '../../filesystem-walker.js';
 import { runScopeResolution } from './run.js';
@@ -113,7 +108,13 @@ export const scopeResolutionPhase: PipelinePhase<ScopeResolutionOutput> = {
     >();
 
     for (const [lang, provider] of SCOPE_RESOLVERS) {
-      if (!isRegistryPrimary(lang)) continue;
+      // Standalone providers (COBOL, JCL) don't emit graph edges yet
+      // through the scope-resolution path. This is the canonical guard:
+      // runScopeResolution is never called for standalone providers, which
+      // keeps cobolPhase as the sole IMPORTS edge producer. Keep this guard
+      // in sync with any additional standalone providers added to
+      // SCOPE_RESOLVERS.
+      if (provider.languageProvider.parseStrategy === 'standalone') continue;
 
       const langFiles = scannedFiles.filter((f) => getLanguageFromFilename(f.path) === lang);
       if (langFiles.length === 0) continue;
