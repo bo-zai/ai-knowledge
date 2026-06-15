@@ -1,0 +1,52 @@
+{
+  "models": [
+    {
+      "id": "minimax-default",
+      "name": "MiniMax M2.7",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "model": "MiniMax-M2.7",
+      "apiKey": "${MINIMAX_API_KEY}",
+      "maxTokens": 128000,
+      "tier": "premium",
+      "capabilities": ["generation", "analysis", "refinement"]
+    },
+    {
+      "id": "deepseek-economy",
+      "name": "DeepSeek V3",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "apiKey": "${DEEPSEEK_API_KEY}",
+      "maxTokens": 64000,
+      "tier": "economy",
+      "capabilities": ["generation", "analysis"]
+    },
+    {
+      "id": "qwen-local",
+      "name": "Qwen Local",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "qwen2.5:32b",
+      "apiKey": "local",
+      "maxTokens": 32000,
+      "tier": "local",
+      "capabilities": ["generation"]
+    }
+  ],
+  "routing": {
+    "defaultModel": "minimax-default",
+    "fallbackModel": "deepseek-economy",
+    "rules": [
+      {
+        "taskType": "generation",
+        "preferredTier": "premium"
+      },
+      {
+        "taskType": "analysis",
+        "preferredTier": "economy"
+      },
+      {
+        "taskType": "refinement",
+        "preferredTier": "premium"
+      }
+    ]
+  }
+}

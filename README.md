@@ -127,3 +127,7 @@ $env:OPENAI_API_KEY="your-key"
 rkg generate --llm-config ./llm.config.json
 rkg generate --model gpt-4o --base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY
 ```
+
+## 文档
+
+- [Agent Runtime 使用指南](./docs/agent-runtime-guide.md) - 知识生成过程中的 LLM 交互与工具调用机制

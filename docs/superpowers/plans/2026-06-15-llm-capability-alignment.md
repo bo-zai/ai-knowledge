@@ -131,7 +131,7 @@ export interface MultiModelsFile {
 }
 
 export interface RoutingContext {
-  taskSource: 'chat' | 'heartbeat' | 'scheduler' | 'optimizer';
+  taskSource: 'chat' | 'scheduler' | 'optimizer';
   message?: string;
   threadId?: string;
   requestedModelId?: string;

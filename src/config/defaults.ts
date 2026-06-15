@@ -27,3 +27,27 @@ export const LLM_DEFAULTS = {
   timeoutSeconds: 300,  // 5分钟，支持大型实体的知识生成
   maxRetries: 3,
 };
+
+/** Agent Runtime 配置默认值 */
+export const AGENT_RUNTIME_DEFAULTS = {
+  /** 默认上下文窗口大小 */
+  defaultContextWindow: 128_000,
+  /** 默认最大重试次数 */
+  maxRetryAttempts: 3,
+  /** 默认超时（秒） */
+  timeoutSeconds: 300,
+  /** 默认是否启用摘要 */
+  enableSummarization: true,
+  /** 默认是否启用文件工具 */
+  enableFileTools: true,
+  /** 默认是否启用写入操作 */
+  enableWrite: true,
+  /** 默认是否启用 todo list */
+  enableTodoList: true,
+  /** 默认是否启用 prompt caching */
+  enablePromptCaching: true,
+  /** 默认路由模式 */
+  routingMode: 'auto' as const,
+  /** 默认任务来源 */
+  taskSource: 'knowledge_generate' as const,
+};
