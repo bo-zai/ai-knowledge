@@ -32,6 +32,16 @@
       "coding_guide": "编码时指导"
     }
   ],
+  "middleware_capabilities": [
+    {
+      "middleware_type": "AOP | Config | Filter | Interceptor | Listener | Advice | Component",
+      "class_name": "类名",
+      "annotations": ["@Aspect", "@Configuration"],
+      "scope": "切点表达式或作用范围",
+      "description": "简要描述",
+      "source_file": "源文件路径"
+    }
+  ],
   "directory_structure": [
     {
       "path": "目录路径",
@@ -173,6 +183,56 @@
 ```
 
 **必须从 src_dir_tree 证据中提取实际路径，不能使用 com.xxx.<domain> 这样的占位符**。
+
+### middleware_capabilities（中间件能力）
+
+**可选字段**。如果 evidence 中提供了 middleware_evidence，则必须填写。
+
+中间件能力描述项目中的横切关注点处理组件，包括：
+
+| 类型 | 说明 | 标识注解 |
+|------|------|----------|
+| AOP | 切面类，处理横切关注点 | @Aspect |
+| Config | 配置类，定义 Bean | @Configuration, @Bean |
+| Filter | 过滤器，处理请求预处理 | @Filter, @WebFilter |
+| Interceptor | 拦截器，拦截方法调用 | @Interceptor |
+| Listener | 监听器，响应事件 | @EventListener, @WebListener |
+| Advice | 控制器增强 | @ControllerAdvice, @RestControllerAdvice |
+| Component | 通用组件 | @Component（在特定目录下） |
+
+**字段说明**：
+- `middleware_type`：中间件类型，从上表选择
+- `class_name`：类名（不含包路径）
+- `annotations`：类上的注解列表（如 ["@Aspect", "@Component"]）
+- `scope`：作用范围——对于 AOP 填写切点表达式（如 execution(* com.xxx.controller.*.*(..))），对于其他类型可省略
+- `description`：简要描述该中间件的作用
+- `source_file`：源文件相对路径
+
+**示例**：
+```json
+[
+  {
+    "middleware_type": "AOP",
+    "class_name": "RoleAop",
+    "annotations": ["@Aspect", "@Component"],
+    "scope": "execution(* com.education.music.app.controller.*.*(..))",
+    "description": "角色权限校验切面，拦截 Controller 方法进行权限检查",
+    "source_file": "src/main/java/com/education/music/app/aop/RoleAop.java"
+  },
+  {
+    "middleware_type": "Config",
+    "class_name": "RedisConfig",
+    "annotations": ["@Configuration"],
+    "scope": null,
+    "description": "Redis 连接配置，定义 RedisTemplate Bean",
+    "source_file": "src/main/java/com/education/music/app/config/RedisConfig.java"
+  }
+]
+```
+
+**注意事项**：
+- 只填写提供横切能力的类，不填写普通业务类
+- 如果 evidence 中没有 middleware_evidence，则省略此字段
 
 ### directory_structure（目录结构）
 

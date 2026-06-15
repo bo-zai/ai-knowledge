@@ -5,6 +5,7 @@
  */
 
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { logger } from '../shared/logger.js';
 import { PromptLoader } from '../shared/prompt-loader.js';
@@ -53,6 +54,16 @@ export interface DebugEntrypointItem {
   description: string;
 }
 
+/** 中间件能力条目 */
+export interface MiddlewareCapabilityItem {
+  middleware_type: string;  // AOP | Config | Filter | Interceptor | Listener
+  class_name: string;
+  annotations: string[];  // @Aspect, @Configuration, @Component 等
+  scope?: string;  // 切点表达式或作用范围
+  description: string;
+  source_file: string;
+}
+
 /** 架构概览 JSON 结构（新版） */
 export interface ArchitectureOverview {
   architecture_overview_name: string;
@@ -69,6 +80,8 @@ export interface ArchitectureOverview {
   // 后端：分包模式
   package_mode?: string;  // 按层分包 | 按领域分包 | 混合分包
   layer_package_paths?: LayerPackagePathItem[];  // 分层包路径（后端）
+  // 后端：中间件能力（AOP切面、配置类、过滤器等）
+  middleware_capabilities?: MiddlewareCapabilityItem[];
   // 前端：组件组织模式
   component_mode?: string;  // feature-based | type-based | 混合模式
   layer_directory_paths?: LayerDirectoryPathItem[];  // 分层目录路径（前端/CLI）
@@ -154,6 +167,7 @@ export async function collectArchitectureEvidence(
         layer_dirs: await detectLayerDirectories(repoPath, adapter),
         entry_types: await detectBackendEntries(repoPath, adapter),
         coding_convention_evidence: await detectBackendCodingConventions(repoPath, adapter),
+        middleware_evidence: await detectMiddlewareCapabilities(repoPath, adapter),
       };
 
     case 'frontend-app':
@@ -495,6 +509,21 @@ function architectureToMarkdown(data: ArchitectureOverview, context: ProjectCont
     lines.push('|------|--------|--------|');
     for (const layer of data.layer_package_paths) {
       lines.push(`| ${layer.layer} | ${layer.package_path} | ${layer.coding_guide} |`);
+    }
+    lines.push('');
+  }
+
+  // 中间件能力（后端核心字段）
+  if (data.middleware_capabilities && data.middleware_capabilities.length > 0) {
+    lines.push(`## 中间件能力`);
+    lines.push('');
+    lines.push('以下类提供横切关注点处理能力（AOP切面、配置类、过滤器等）：');
+    lines.push('');
+    lines.push('| 类型 | 类名 | 注解 | 作用范围 | 说明 |');
+    lines.push('|------|------|------|----------|------|');
+    for (const mw of data.middleware_capabilities) {
+      const scope = mw.scope ? mw.scope.slice(0, 50) : '—';
+      lines.push(`| ${mw.middleware_type} | ${mw.class_name} | ${mw.annotations.join(', ')} | ${scope} | ${mw.description} |`);
     }
     lines.push('');
   }
@@ -1175,4 +1204,252 @@ function shouldExcludeForModule(name: string): boolean {
     'out', '.knowledge', 'ai-knowledge', '.codegraph', '.claude', 'test',
   ];
   return excludePatterns.includes(name) || name.startsWith('.');
+}
+
+// ========== 中间件检测辅助函数 ==========
+
+/** 中间件目录命名模式 */
+const MIDDLEWARE_DIR_PATTERNS = [
+  'aop', 'aspect', 'config', 'configuration',
+  'filter', 'interceptor', 'listener', 'common',
+  'handler', 'advisor', 'bootstrap',
+];
+
+/** 中间件类注解模式 */
+const MIDDLEWARE_ANNOTATION_PATTERNS = [
+  '@Aspect', '@Configuration', '@Component', '@Service',
+  '@Filter', '@Interceptor', '@WebFilter', '@WebListener',
+  '@EventListener', '@ControllerAdvice', '@RestControllerAdvice',
+  '@Bean', '@Primary', '@Conditional',
+];
+
+/** 切点表达式正则 */
+const POINTCUT_PATTERN = /execution\s*\(\s*[\s\S]*?\s*\)/g;
+
+/**
+ * 检测中间件能力（AOP切面、配置类、过滤器等）
+ *
+ * 通用策略：按命名模式扫描目录，然后 AST 解析提取注解
+ */
+async function detectMiddlewareCapabilities(
+  repoPath: string,
+  adapter: LanguageAdapter | null,
+): Promise<MiddlewareCapabilityItem[]> {
+  const capabilities: MiddlewareCapabilityItem[] = [];
+
+  // 只处理 Java 项目
+  if (adapter?.language !== 'java') {
+    return capabilities;
+  }
+
+  // 扫描中间件目录
+  const srcPath = path.join(repoPath, 'src/main/java');
+  if (!existsSync(srcPath)) {
+    return capabilities;
+  }
+
+  const middlewareFiles = await scanMiddlewareDirs(srcPath);
+
+  // 解析每个中间件文件，提取注解和切点表达式
+  for (const file of middlewareFiles) {
+    try {
+      const content = await fs.readFile(file, 'utf-8');
+      const relativePath = path.relative(repoPath, file).replace(/\\/g, '/');
+
+      // 提取类名
+      const classMatch = content.match(/class\s+([A-Za-z0-9_]+)/);
+      const className = classMatch?.[1] ?? path.basename(file, '.java');
+
+      // 提取注解
+      const annotations = extractAnnotations(content);
+
+      // 提取切点表达式（仅 AOP）
+      const scope = extractPointcutExpressions(content);
+
+      // 判断中间件类型
+      const middlewareType = determineMiddlewareType(annotations);
+
+      if (middlewareType && annotations.length > 0) {
+        // 提取简要描述（从类注释或注解推断）
+        const description = extractClassDescription(content, middlewareType);
+
+        capabilities.push({
+          middleware_type: middlewareType,
+          class_name: className,
+          annotations,
+          scope: scope || undefined,
+          description,
+          source_file: relativePath,
+        });
+      }
+    } catch {
+      // 文件读取失败，跳过
+    }
+  }
+
+  return capabilities;
+}
+
+/**
+ * 扫描中间件目录，返回所有 Java 文件路径
+ */
+async function scanMiddlewareDirs(srcPath: string): Promise<string[]> {
+  const files: string[] = [];
+
+  // 递归扫描目录，按命名模式匹配
+  async function scanDir(dir: string): Promise<void> {
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+          // 检查目录名是否匹配中间件模式
+          const lowerName = entry.name.toLowerCase();
+          if (MIDDLEWARE_DIR_PATTERNS.some(p => lowerName.includes(p))) {
+            // 匹配到中间件目录，收集所有 Java 文件
+            await collectJavaFiles(fullPath, files);
+          } else {
+            // 继续递归扫描
+            await scanDir(fullPath);
+          }
+        }
+      }
+    } catch {
+      // 目录读取失败
+    }
+  }
+
+  await scanDir(srcPath);
+  return files;
+}
+
+/**
+ * 收集目录下所有 Java 文件
+ */
+async function collectJavaFiles(dir: string, files: string[]): Promise<void> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await collectJavaFiles(fullPath, files);
+      } else if (entry.name.endsWith('.java')) {
+        files.push(fullPath);
+      }
+    }
+  } catch {
+    // 目录读取失败
+  }
+}
+
+/**
+ * 从 Java 文件提取注解
+ */
+function extractAnnotations(content: string): string[] {
+  const annotations: string[] = [];
+
+  for (const pattern of MIDDLEWARE_ANNOTATION_PATTERNS) {
+    if (content.includes(pattern)) {
+      annotations.push(pattern);
+    }
+  }
+
+  // 检查其他常见注解
+  const otherAnnotations = content.match(/@[A-Za-z]+(?:\s*\([^)]*\))?/g) ?? [];
+  for (const ann of otherAnnotations) {
+    const cleanAnn = ann.split('(')[0];  // 移除参数部分
+    if (!annotations.includes(cleanAnn) && !['@Override', '@Deprecated', '@SuppressWarnings'].includes(cleanAnn)) {
+      annotations.push(cleanAnn);
+    }
+  }
+
+  return annotations;
+}
+
+/**
+ * 从 AOP 类提取切点表达式
+ */
+function extractPointcutExpressions(content: string): string | undefined {
+  const matches = content.match(POINTCUT_PATTERN);
+  if (matches && matches.length > 0) {
+    // 合并多个切点表达式
+    return matches.map(m => m.trim()).join('; ');
+  }
+
+  // 尝试提取 @Pointcut 注解中的表达式
+  const pointcutMatch = content.match(/@Pointcut\s*\(\s*["']([^"']+)["']\s*\)/);
+  if (pointcutMatch) {
+    return pointcutMatch[1];
+  }
+
+  // 尝试提取 @Before/@After/@Around 注解中的表达式
+  const adviceMatch = content.match(/@(?:Before|After|Around|AfterReturning|AfterThrowing)\s*\(\s*["']([^"']+)["']\s*\)/);
+  if (adviceMatch) {
+    return adviceMatch[1];
+  }
+
+  return undefined;
+}
+
+/**
+ * 根据注解判断中间件类型
+ */
+function determineMiddlewareType(annotations: string[]): string | undefined {
+  if (annotations.includes('@Aspect')) {
+    return 'AOP';
+  }
+  if (annotations.includes('@Configuration') || annotations.includes('@Bean')) {
+    return 'Config';
+  }
+  if (annotations.includes('@Filter') || annotations.includes('@WebFilter')) {
+    return 'Filter';
+  }
+  if (annotations.includes('@Interceptor')) {
+    return 'Interceptor';
+  }
+  if (annotations.includes('@EventListener') || annotations.includes('@WebListener')) {
+    return 'Listener';
+  }
+  if (annotations.includes('@ControllerAdvice') || annotations.includes('@RestControllerAdvice')) {
+    return 'Advice';
+  }
+  if (annotations.includes('@Component') || annotations.includes('@Service')) {
+    // 检查是否是通用组件
+    return 'Component';
+  }
+  return undefined;
+}
+
+/**
+ * 提取类描述（从类注释或根据类型推断）
+ */
+function extractClassDescription(content: string, middlewareType: string): string {
+  // 尝试从类注释提取
+  const classCommentMatch = content.match(/\/\*\*[\s\S]*?\*\/\s*(?:public\s+)?class/);
+  if (classCommentMatch) {
+    const comment = classCommentMatch[0];
+    // 提取注释内容（移除 /** 和 */ 和 * 前缀）
+    const lines = comment
+      .replace(/\/\*\*|\*\//g, '')
+      .split('\n')
+      .map(l => l.replace(/^\s*\*\s?/, '').trim())
+      .filter(l => l && !l.startsWith('@'));
+    if (lines.length > 0) {
+      return lines.slice(0, 2).join(' ').slice(0, 100);
+    }
+  }
+
+  // 根据类型推断描述
+  const typeDescriptions: Record<string, string> = {
+    AOP: '切面类，处理横切关注点',
+    Config: '配置类，定义 Bean 和配置项',
+    Filter: '过滤器，处理请求预处理和后处理',
+    Interceptor: '拦截器，拦截方法调用',
+    Listener: '监听器，响应事件',
+    Advice: '控制器增强，处理异常和绑定数据',
+    Component: '通用组件类',
+  };
+
+  return typeDescriptions[middlewareType] ?? '中间件组件';
 }

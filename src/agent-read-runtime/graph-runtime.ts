@@ -117,24 +117,147 @@ export function validateFinalOutput(state: { finalText?: string; repairAttempts:
 }
 
 export function parseKnowledgeReadAgentOutput(text: string): Omit<KnowledgeReadResult, 'toolCallsUsed' | 'trace'> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error('Agent output is not valid JSON');
+  // 参考 CmbCoworkAgent 的多层 JSON 提取策略
+  const candidates = extractJsonCandidates(text);
+
+  for (const candidate of candidates) {
+    const repaired = repairJson(candidate);
+    try {
+      const parsed = JSON.parse(repaired);
+      const output = KnowledgeReadAgentOutputSchema.parse(parsed);
+      return {
+        answer: output.answer,
+        evidenceRefs: output.evidence_refs.map((ref) => ({
+          file: ref.file,
+          startLine: ref.start_line,
+          endLine: ref.end_line,
+          note: ref.note,
+        })),
+        insufficientEvidence: output.insufficient_evidence,
+      };
+    } catch {
+      // 继续尝试下一个候选
+      continue;
+    }
   }
 
-  const output = KnowledgeReadAgentOutputSchema.parse(parsed);
-  return {
-    answer: output.answer,
-    evidenceRefs: output.evidence_refs.map((ref) => ({
-      file: ref.file,
-      startLine: ref.start_line,
-      endLine: ref.end_line,
-      note: ref.note,
-    })),
-    insufficientEvidence: output.insufficient_evidence,
-  };
+  throw new Error('Agent output is not valid JSON after all extraction attempts');
+}
+
+/**
+ * 从文本中提取所有可能的 JSON 候选（参考 CmbCoworkAgent）
+ *
+ * 提取策略：
+ * 1. 直接尝试原始文本
+ * 2. 从 markdown 代码块提取
+ * 3. 使用平衡括号提取完整 JSON 对象
+ */
+function extractJsonCandidates(text: string): string[] {
+  const results: string[] = [];
+  const cleaned = stripThinkTags(text);
+
+  // 1. 直接尝试原始文本
+  if (cleaned.trim()) {
+    results.push(cleaned.trim());
+  }
+
+  // 2. 从 markdown 代码块提取
+  for (const match of cleaned.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)) {
+    if (match[1]?.trim()) {
+      results.push(match[1].trim());
+    }
+  }
+
+  // 3. 使用平衡括号提取完整 JSON 对象
+  results.push(...extractBalancedJsonObjects(cleaned));
+
+  // 去重
+  return Array.from(new Set(results.filter(Boolean)));
+}
+
+/**
+ * 移除 <think>...</think> 标签（参考 CmbCoworkAgent）
+ */
+function stripThinkTags(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
+    .replace(/^[\s\S]*?<\/think>\s*/i, '')
+    .trim();
+}
+
+/**
+ * 从文本中提取所有平衡的 JSON 对象（参考 CmbCoworkAgent）
+ *
+ * 这个函数会跟踪花括号的深度，正确处理字符串内的转义字符，
+ * 提取所有完整的 JSON 对象。
+ */
+function extractBalancedJsonObjects(text: string): string[] {
+  const results: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaping = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      if (depth === 0) continue;
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        results.push(text.slice(start, index + 1).trim());
+        start = -1;
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * JSON 修复函数（参考 CmbCoworkAgent 和 parse-output.ts）
+ */
+function repairJson(text: string): string {
+  let repaired = text;
+
+  // 移除尾部逗号
+  repaired = repaired.replace(/,\s*}/g, '}');
+  repaired = repaired.replace(/,\s*]/g, ']');
+
+  // 移除控制字符（保留换行和制表符）
+  repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+
+  // 修复未加引号的键名（简单情况）
+  // 例如：{name: "value"} → {"name": "value"}
+  repaired = repaired.replace(/(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+
+  return repaired;
 }
 
 function buildRepairPrompt(finalText: string | undefined, validationError: string | undefined): string {
@@ -293,7 +416,13 @@ export async function runKnowledgeReadRuntime(
     .addNode('force_insufficient_output', async () => ({
       finalText: buildForcedInsufficientOutput(),
     }))
-    .addNode('output_validate', async (state) => validateFinalOutput(state))
+    .addNode('output_validate', async (state) => {
+      // 调试：打印 LLM 返回的原始内容
+      if (state.finalText) {
+        console.debug('[graph-runtime] LLM output (first 500 chars):', state.finalText.slice(0, 500));
+      }
+      return validateFinalOutput(state);
+    })
     .addNode('repair_output', async (state) => {
       const response = await model.invoke([
         new HumanMessage(buildRepairPrompt(state.finalText, state.validationError)),

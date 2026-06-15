@@ -334,14 +334,29 @@ async function collectDependencies(repoPath: string): Promise<string[]> {
     // package.json 不存在或解析失败
   }
 
-  // 从 pom.xml 提取（简化：只提取 groupId）
+  // 从 pom.xml 提取依赖的 artifactId（真正的依赖名称）
   const pomPath = path.join(repoPath, 'pom.xml');
   try {
     const content = await fs.readFile(pomPath, 'utf-8');
-    // 简化提取：匹配 <groupId>
-    const matches = content.match(/<groupId>([^<]+)</g);
-    if (matches) {
-      deps.push(...matches.map(m => m.replace('<groupId>', '').replace('</', '')));
+
+    // 提取 dependencies 中的 artifactId
+    const depsMatch = content.match(/<dependencies>([\s\S]*?)<\/dependencies>/);
+    if (depsMatch) {
+      // 匹配所有 <artifactId>...</artifactId>
+      const artifactMatches = depsMatch[1].match(/<artifactId>([^<]+)<\/artifactId>/g);
+      if (artifactMatches) {
+        deps.push(...artifactMatches.map(m =>
+          m.replace('<artifactId>', '').replace('</artifactId>', '').trim()
+        ));
+      }
+    }
+
+    // 如果没有 dependencies 块，尝试从根 artifactId 推断项目名称
+    if (deps.length === 0) {
+      const rootArtifactId = content.match(/<artifactId>([^<]+)<\/artifactId>/);
+      if (rootArtifactId) {
+        deps.push(rootArtifactId[1].trim());
+      }
     }
   } catch {
     // pom.xml 不存在
