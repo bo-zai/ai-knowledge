@@ -24,6 +24,8 @@ import {
   type MultiModelsFile,
 } from '../config/multi-model-config.js';
 import { resolveModelConfig } from '../config/model-config.js';
+import type { LlmMessage } from './llm-types.js';
+import { toOpenAiMessages } from './llm-types.js';
 
 export function createOpenAiClient(config: ModelConfig): OpenAI {
   return new OpenAI({
@@ -50,18 +52,67 @@ export interface LlmGenerationResult {
 /**
  * Generate completion with streaming-first approach.
  * Falls back to non-streaming if streaming fails.
+ *
+ * 支持两种调用模式：
+ * - Legacy: (client, model, systemPrompt, userPrompt)
+ * - Messages: (client, model, messages[])
  */
 export async function generateWithClient(
   client: OpenAI,
   model: string,
-  systemPrompt: string,
-  userPrompt: string,
+  systemPromptOrMessages: string | LlmMessage[],
+  userPrompt?: string,
 ): Promise<LlmGenerationResult> {
   const startedAt = new Date().toISOString();
-  const messages: ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ];
+
+  // 归一化消息列表
+  let messages: ChatCompletionMessageParam[];
+
+  if (typeof systemPromptOrMessages === 'string' && userPrompt !== undefined) {
+    // Legacy 模式：system + user
+    messages = [
+      { role: 'system', content: systemPromptOrMessages },
+      { role: 'user', content: userPrompt },
+    ];
+  } else if (Array.isArray(systemPromptOrMessages)) {
+    // Message 数组模式
+    messages = toOpenAiMessages(systemPromptOrMessages);
+  } else {
+    throw new Error(
+      'Invalid arguments: provide (systemPrompt, userPrompt) or messages[]'
+    );
+  }
+
+  return generateWithMessagesInternal(client, model, messages, startedAt);
+}
+
+/**
+ * 使用消息数组生成内容
+ *
+ * @param client - OpenAI 客户端
+ * @param model - 模型名称
+ * @param messages - 消息数组
+ * @returns 生成结果
+ */
+export async function generateWithMessages(
+  client: OpenAI,
+  model: string,
+  messages: LlmMessage[],
+): Promise<LlmGenerationResult> {
+  const startedAt = new Date().toISOString();
+  const openAiMessages = toOpenAiMessages(messages);
+  return generateWithMessagesInternal(client, model, openAiMessages, startedAt);
+}
+
+/**
+ * 内部实现：使用 OpenAI 消息数组生成
+ */
+async function generateWithMessagesInternal(
+  client: OpenAI,
+  model: string,
+  messages: ChatCompletionMessageParam[],
+  startedAt: string,
+): Promise<LlmGenerationResult> {
 
   // Try streaming first
   try {

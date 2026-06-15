@@ -12,15 +12,24 @@ import {
   generateFallbackObject,
   getDefaultContextNameField,
 } from './fallback-templates.js';
+import type { LlmMessage, LlmCallInput, LlmCallResult } from './llm-types.js';
+import { legacyToMessages, extractSystemPrompt, extractLastUserPrompt } from './llm-types.js';
 
 /**
  * LLM JSON 调用选项
+ *
+ * 支持两种模式：
+ * - Legacy: systemPrompt + userPrompt
+ * - Messages: messages 数组（多轮对话）
  */
 export interface LlmJsonCallOptions {
-  /** 系统提示词 */
-  systemPrompt: string;
-  /** 用户提示词 */
-  userPrompt: string;
+  /** Legacy: 系统提示词（与 userPrompt 配合） */
+  systemPrompt?: string;
+  /** Legacy: 用户提示词（与 systemPrompt 配合） */
+  userPrompt?: string;
+  /** Message 数组模式：多轮对话消息列表 */
+  messages?: LlmMessage[];
+
   /** LLM 调用提供者 */
   claimsProvider: LlmClaimsProvider;
 
@@ -148,38 +157,33 @@ function calculateBackoffMs(attempt: number): number {
 /**
  * 带超时和全局间隔的 LLM 调用
  */
-async function callWithTimeoutAndInterval(
+async function callWithTimeoutAndIntervalV2(
   claimsProvider: LlmClaimsProvider,
-  systemPrompt: string,
-  userPrompt: string,
+  input: LlmCallInput,
   timeoutMs: number,
 ): Promise<{ rawText: string; durationMs: number }> {
-  // 等待全局调用间隔
   await waitForGlobalInterval();
-
-  return callWithTimeout(claimsProvider, systemPrompt, userPrompt, timeoutMs);
+  return callWithTimeoutV2(claimsProvider, input, timeoutMs);
 }
 
 /**
- * 带超时的 LLM 调用
+ * 带超时的 LLM 调用（统一接口）
  */
-async function callWithTimeout(
+async function callWithTimeoutV2(
   claimsProvider: LlmClaimsProvider,
-  systemPrompt: string,
-  userPrompt: string,
+  input: LlmCallInput,
   timeoutMs: number,
 ): Promise<{ rawText: string; durationMs: number }> {
   const startTime = Date.now();
 
-  // 使用 Promise + setTimeout 实现超时
   return new Promise(async (resolve, reject) => {
-    // 设置超时定时器
     const timeoutId = setTimeout(() => {
       reject(new Error(`LLM call timeout after ${timeoutMs}ms`));
     }, timeoutMs);
 
     try {
-      const result = await claimsProvider(systemPrompt, userPrompt);
+      // 直接调用 Provider（统一接口自动处理两种调用方式）
+      const result = await claimsProvider(input);
       clearTimeout(timeoutId);
       resolve({
         rawText: result.rawText,
@@ -285,18 +289,21 @@ function tryParseJson(cleanedText: string): { success: boolean; data?: unknown; 
  * 通用 LLM JSON 调用工具
  *
  * 特性：
+ * - 支持两种调用模式：Legacy (system/user) 和 Messages 数组
  * - 自动 JSON 预处理（去除 markdown 包裹、提取边界）
- * - 可配置重试次数，前2次使用完整提示词
+ * - 可配置重试次数，支持多轮对话重试
  * - 超时控制（默认 120秒）
  * - 重试失败后使用降级模板
  * - 详细日志记录和统计
+ *
+ * 重试机制改进：
+ * - 第二次调用时，使用 message 数组传入第一次的结果和修复提示词
+ * - 保持对话上下文，让模型看到之前的输出并修复
  */
 export async function callLlmForJson<T = Record<string, unknown>>(
   options: LlmJsonCallOptions,
 ): Promise<LlmJsonCallResult<T>> {
   const {
-    systemPrompt,
-    userPrompt,
     claimsProvider,
     knowledgeType = 'CONCEPT',
     repairContext = {},
@@ -308,6 +315,9 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     verbose = false,
   } = options;
 
+  // 归一化输入
+  const normalized = normalizeLlmCallOptions(options);
+
   const errors: CallErrorRecord[] = [];
   const stats: LlmStats = {
     totalCalls: 0,
@@ -316,18 +326,30 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     totalDurationMs: 0,
   };
 
+  // 用于多轮对话的消息历史
+  let messageHistory: LlmMessage[] = normalized.mode === 'messages'
+    ? [...normalized.messages!]
+    : legacyToMessages(normalized.systemPrompt!, normalized.userPrompt!);
+
   let lastRawOutput = '';
   let attempt = 0;
 
   // ========== 第1次调用（原始提示词） ==========
   attempt = 1;
-  logger.debug(`${logLabel}: 第1次调用开始`);
+  logger.debug(`${logLabel}: 第1次调用开始，模式=${normalized.mode}`);
 
   try {
-    const callResult = await callWithTimeoutAndInterval(claimsProvider, systemPrompt, userPrompt, timeout);
+    const input: LlmCallInput = normalized.mode === 'messages'
+      ? { messages: normalized.messages }
+      : { systemPrompt: normalized.systemPrompt, userPrompt: normalized.userPrompt };
+
+    const callResult = await callWithTimeoutAndIntervalV2(claimsProvider, input, timeout);
     lastRawOutput = callResult.rawText;
     stats.totalCalls++;
     stats.totalDurationMs += callResult.durationMs;
+
+    // 添加 assistant 响应到消息历史
+    messageHistory.push({ role: 'assistant', content: lastRawOutput });
 
     logger.debug(`${logLabel}: 第1次调用完成，耗时 ${callResult.durationMs}ms`);
 
@@ -359,17 +381,14 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     logger.warn(`${logLabel}: 第1次解析失败，类型=${errorType}`);
 
   } catch (error) {
-    // 详细记录错误信息
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorName = error instanceof Error ? error.constructor.name : 'UnknownError';
     const isTimeout = errorMsg.includes('timeout') || errorName.includes('Timeout');
 
-    // 构建详细日志信息
     let detailedMsg = errorMsg;
     if (isTimeout) {
       detailedMsg = `超时 (${timeout}ms): ${errorMsg}`;
     } else if (error instanceof Error && error.stack) {
-      // 非 timeout 错误，记录堆栈前 3 行帮助定位问题
       const stackLines = error.stack.split('\n').slice(0, 3).join('\n');
       detailedMsg = `${errorMsg}\n堆栈摘要:\n${stackLines}`;
     }
@@ -383,41 +402,45 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     logger.error(`${logLabel}: 第1次调用异常 (${errorName}): ${detailedMsg}`);
   }
 
-  // ========== 重试循环 ==========
+  // ========== 重试循环（使用 Message 数组） ==========
   while (attempt < maxRetries) {
     attempt++;
 
-    // 退避等待（指数退避）
+    // 退避等待
     const backoffMs = calculateBackoffMs(attempt);
     logger.debug(`${logLabel}: 退避等待 ${backoffMs}ms 后重试`);
     await sleep(backoffMs);
 
-    // 选择重试提示词：
-    // - attempt=2: 使用原始 userPrompt（保留完整证据）
-    // - attempt>=3: 使用 repairPrompt（尝试修复格式）
-    let retryUserPrompt: string;
-    if (attempt === 2) {
-      retryUserPrompt = userPrompt;
-      logger.debug(`${logLabel}: 第2次重试使用原始提示词（保留完整证据）`);
-    } else {
-      retryUserPrompt = getRepairPrompt(
-        attempt,
-        maxRetries,
-        knowledgeType,
-        lastRawOutput,
-        repairContext,
-      );
-      logger.debug(`${logLabel}: 第${attempt}次重试使用修复提示词`);
-    }
-    const retrySystem = getRetrySystemPrompt(attempt, systemPrompt);
+    // 构建重试提示词（使用 message 数组模式）
+    const retrySystemPrompt = getRetrySystemPrompt(attempt, normalized.systemPrompt ?? '');
+    const retryUserPrompt = getRepairPrompt(
+      attempt,
+      maxRetries,
+      knowledgeType,
+      lastRawOutput,
+      repairContext,
+    );
 
-    logger.debug(`${logLabel}: 第${attempt}次重试开始`);
+    // 使用 message 数组模式：包含之前的对话历史 + 新的修复请求
+    const retryMessages: LlmMessage[] = [
+      ...messageHistory,
+      { role: 'user', content: retryUserPrompt },
+    ];
+
+    logger.debug(`${logLabel}: 第${attempt}次重试开始，使用 message 数组模式`);
 
     try {
-      const callResult = await callWithTimeoutAndInterval(claimsProvider, retrySystem, retryUserPrompt, timeout);
+      const callResult = await callWithTimeoutAndIntervalV2(
+        claimsProvider,
+        { messages: retryMessages },
+        timeout
+      );
       lastRawOutput = callResult.rawText;
       stats.totalCalls++;
       stats.totalDurationMs += callResult.durationMs;
+
+      // 更新消息历史
+      messageHistory.push({ role: 'assistant', content: lastRawOutput });
 
       logger.debug(`${logLabel}: 第${attempt}次重试完成，耗时 ${callResult.durationMs}ms`);
 
@@ -450,12 +473,10 @@ export async function callLlmForJson<T = Record<string, unknown>>(
       logger.warn(`${logLabel}: 第${attempt}次重试解析失败，类型=${errorType}`);
 
     } catch (error) {
-      // 详细记录错误信息
       const errorMsg = error instanceof Error ? error.message : String(error);
       const errorName = error instanceof Error ? error.constructor.name : 'UnknownError';
       const isTimeout = errorMsg.includes('timeout') || errorName.includes('Timeout');
 
-      // 构建详细日志信息
       let detailedMsg = errorMsg;
       if (isTimeout) {
         detailedMsg = `超时 (${timeout}ms): ${errorMsg}`;
@@ -493,6 +514,37 @@ export async function callLlmForJson<T = Record<string, unknown>>(
     llmStats: stats,
     fallbackUsed: true,
   };
+}
+
+/**
+ * 归一化 LlmJsonCallOptions
+ */
+function normalizeLlmCallOptions(options: LlmJsonCallOptions): {
+  mode: 'legacy' | 'messages';
+  systemPrompt?: string;
+  userPrompt?: string;
+  messages?: LlmMessage[];
+} {
+  if (options.messages && options.messages.length > 0) {
+    return {
+      mode: 'messages',
+      messages: options.messages,
+      systemPrompt: extractSystemPrompt(options.messages),
+      userPrompt: extractLastUserPrompt(options.messages),
+    };
+  }
+
+  if (options.systemPrompt !== undefined && options.userPrompt !== undefined) {
+    return {
+      mode: 'legacy',
+      systemPrompt: options.systemPrompt,
+      userPrompt: options.userPrompt,
+    };
+  }
+
+  throw new Error(
+    'Invalid LlmJsonCallOptions: must provide either messages array or both systemPrompt and userPrompt'
+  );
 }
 
 /**

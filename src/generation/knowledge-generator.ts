@@ -3,22 +3,33 @@ import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
 import type { EvidenceGroup } from '../evidence/type-evidence-builder.js';
 import { buildPromptFramework, type PromptConfig } from './prompt-framework.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
+import { deriveDomainKey } from '../packaging/domain-registry.js';
 import type { PackageLayout } from '../knowledge/init-directory.js';
 import type { GraphStatus } from '../query/prepare-generation.js';
 import type { GenerateTarget } from '../knowledge/generate-scope.js';
 import { TYPE_TO_DIR } from '../knowledge/type-directory-map.js';
 import pLimit from 'p-limit';
 import { logger } from '../shared/logger.js';
+import type { LlmCallInput, LlmCallResult } from './llm-types.js';
 
 /**
  * LLM Claims Provider Interface
+ *
+ * 统一接口，支持两种调用方式：
+ * - Legacy: (systemPrompt, userPrompt) - 现有代码继续使用
+ * - Messages: ({ messages }) - 多轮对话场景
+ *
+ * Provider 实现时内部根据参数类型自动处理
  */
 export interface LlmClaimsProvider {
+  /** Legacy 调用 */
   (systemPrompt: string, userPrompt: string): Promise<{
     rawText: string;
     model: string;
     usage?: { promptTokens: number; completionTokens: number };
   }>;
+  /** Message 数组调用（可选） */
+  (input: LlmCallInput): Promise<LlmCallResult>;
 }
 
 /**
@@ -58,6 +69,51 @@ export interface KnowledgeObject {
   id: string;
   type: KnowledgeType;
   [key: string]: unknown;
+}
+
+function enrichObjectForType(type: KnowledgeType, obj: Record<string, unknown>, id: string): Record<string, unknown> {
+  if (type === 'CONCEPT') {
+    const aliases = Array.isArray(obj.aliases)
+      ? obj.aliases.filter((item): item is string => typeof item === 'string')
+      : [];
+    const kebabAlias = aliases.find(alias => /^[a-z][a-z0-9-]*$/.test(alias));
+    const domainName = typeof obj.concept_name === 'string'
+      ? obj.concept_name
+      : typeof obj.name_zh === 'string'
+        ? obj.name_zh
+        : id;
+
+    return {
+      ...obj,
+      domain_key: deriveDomainKey({
+        domainKey: kebabAlias,
+        domainName,
+        conceptId: id,
+      }),
+      domain_name: domainName,
+      capability_refs: Array.isArray(obj.capability_refs) ? obj.capability_refs : [],
+    };
+  }
+
+  if (type === 'CAPABILITY') {
+    const domainName = typeof obj.domain_name === 'string'
+      ? obj.domain_name
+      : typeof obj.capability_name === 'string'
+        ? obj.capability_name
+        : id;
+
+    return {
+      ...obj,
+      domain_key: deriveDomainKey({
+        domainKey: typeof obj.domain_key === 'string' ? obj.domain_key : undefined,
+        domainName,
+        capabilityId: id,
+      }),
+      domain_name: domainName,
+    };
+  }
+
+  return obj;
 }
 
 /**
@@ -114,7 +170,11 @@ export async function runKnowledgeGenerator(
                extractEnglishId(obj[getNameField(type)] as string) ||
                `obj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-    return { id, type, ...obj };
+    return {
+      id,
+      type,
+      ...enrichObjectForType(type, obj, id),
+    };
   });
 
   const files: Array<{ path: string; content: string }> = [];
