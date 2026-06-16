@@ -1,0 +1,347 @@
+/**
+ * Scheduled 路径发现
+ *
+ * 实现 Scheduled 入口点的完整追溯链路：
+ * @Scheduled -> Service -> Mapper -> Table -> Entity
+ */
+
+import type {
+  LanguageAdapter,
+  EntryPointInfo,
+  DiscoveryPathResult,
+  ConceptTracePath,
+  ServiceChainNode,
+  MapperInfo,
+  TableInfo,
+  EntityInfo,
+} from '../types.js';
+
+/**
+ * Scheduled 路径发现配置
+ */
+export interface ScheduledPathDiscoveryConfig {
+  /** 最大追溯深度（Service 链层数） */
+  maxServiceDepth?: number;
+  /** 是否收集所有 Mapper（true）还是只收集第一个（false） */
+  collectAllMappers?: boolean;
+  /** 是否收集所有表（true）还是只收集第一个（false） */
+  collectAllTables?: boolean;
+}
+
+/**
+ * Scheduled 路径发现
+ *
+ * 从 @Scheduled 入口点追溯完整的调用链路，最终到达数据表和实体类。
+ */
+export class ScheduledPathDiscovery {
+  private readonly adapter: LanguageAdapter;
+  private readonly modulePath: string;
+  private readonly config: Required<ScheduledPathDiscoveryConfig>;
+
+  /**
+   * 创建 ScheduledPathDiscovery 实例
+   *
+   * @param adapter - 语言适配器
+   * @param modulePath - 模块路径
+   * @param config - 配置选项
+   */
+  constructor(
+    adapter: LanguageAdapter,
+    modulePath: string,
+    config?: ScheduledPathDiscoveryConfig,
+  ) {
+    this.adapter = adapter;
+    this.modulePath = modulePath;
+    this.config = {
+      maxServiceDepth: config?.maxServiceDepth ?? 3,
+      collectAllMappers: config?.collectAllMappers ?? true,
+      collectAllTables: config?.collectAllTables ?? true,
+    };
+  }
+
+  /**
+   * 执行 Scheduled 路径发现
+   *
+   * @returns 发现结果，包含入口点、追溯路径和错误信息
+   */
+  async discover(): Promise<DiscoveryPathResult> {
+    const errors: string[] = [];
+    const tracePaths: ConceptTracePath[] = [];
+    const scheduledEntryPoints: EntryPointInfo[] = [];
+
+    try {
+      // 1. 检测所有入口点
+      const allEntryPoints = await this.adapter.detectEntryPoints(this.modulePath);
+
+      // 2. 过滤只保留 Scheduled 入口点
+      for (const ep of allEntryPoints) {
+        if (ep.kind === 'scheduled') {
+          scheduledEntryPoints.push(ep);
+        }
+      }
+
+      // 3. 为每个 Scheduled 入口点追溯完整链路
+      for (const entryPoint of scheduledEntryPoints) {
+        try {
+          const tracePath = await this.traceScheduledPath(entryPoint, errors);
+          if (tracePath) {
+            tracePaths.push(tracePath);
+          }
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          const methodInfo = entryPoint.methodName ? `.${entryPoint.methodName}` : '';
+          errors.push(`追溯 Scheduled ${entryPoint.className}${methodInfo} 失败: ${errorMsg}`);
+        }
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      errors.push(`检测入口点失败: ${errorMsg}`);
+    }
+
+    return {
+      pathway: 'scheduled',
+      entryPoints: scheduledEntryPoints,
+      tracePaths,
+      errors,
+    };
+  }
+
+  /**
+   * 追溯单个 Scheduled 的完整路径
+   */
+  private async traceScheduledPath(
+    entryPoint: EntryPointInfo,
+    errors: string[],
+  ): Promise<ConceptTracePath | null> {
+    // 1. 追溯 Service 链
+    const serviceChain = await this.traceServiceChain(entryPoint, errors);
+
+    // 2. 收集所有 Mapper
+    const mappers = await this.collectMappers(serviceChain, errors);
+
+    // 3. 从 Mapper 提取表信息
+    const tables = await this.collectTables(mappers, errors);
+
+    // 4. 查找 Entity
+    const entities = await this.collectEntities(tables, errors);
+
+    return {
+      entryPoints: [entryPoint],
+      serviceChain: serviceChain.length > 0 ? serviceChain : undefined,
+      mappers,
+      tables,
+      entities,
+    };
+  }
+
+  /**
+   * 追溯 Service 调用链
+   *
+   * 从 Scheduled 方法追溯到 Service 层，支持多级 Service 调用
+   */
+  private async traceServiceChain(
+    entryPoint: EntryPointInfo,
+    errors: string[],
+  ): Promise<ServiceChainNode[]> {
+    const serviceChain: ServiceChainNode[] = [];
+    const visited = new Set<string>();
+
+    // 从入口点追溯第一层 Service
+    let currentServices = await this.adapter.traceToService(entryPoint);
+
+    // 添加到结果集
+    for (const svc of currentServices) {
+      const key = `${svc.className}:${svc.filePath}`;
+      if (!visited.has(key)) {
+        visited.add(key);
+        serviceChain.push(svc);
+      }
+    }
+
+    // 递归追溯 Service 调用的 Service（最多 maxServiceDepth 层）
+    let depth = 1;
+    while (depth < this.config.maxServiceDepth && currentServices.length > 0) {
+      const nextServices: ServiceChainNode[] = [];
+
+      for (const svc of currentServices) {
+        try {
+          const deeperServices = await this.traceDeeperServices(svc, visited);
+          nextServices.push(...deeperServices);
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          errors.push(`追溯 Service ${svc.className} 的深层调用失败: ${errorMsg}`);
+        }
+      }
+
+      // 添加新发现的 Service 到结果集
+      for (const svc of nextServices) {
+        const key = `${svc.className}:${svc.filePath}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          serviceChain.push(svc);
+        }
+      }
+
+      currentServices = nextServices;
+      depth++;
+    }
+
+    return serviceChain;
+  }
+
+  /**
+   * 追溯 Service 调用的更深层 Service
+   */
+  private async traceDeeperServices(
+    serviceNode: ServiceChainNode,
+    visited: Set<string>,
+  ): Promise<ServiceChainNode[]> {
+    const { lbugPath } = await import('../../../../engine/storage/repo-manager.js').then(m => m.getStoragePaths(serviceNode.modulePath));
+
+    try {
+      const fs = await import('fs/promises');
+      await fs.access(lbugPath);
+    } catch {
+      return [];
+    }
+
+    // 查找该 Service 调用的其他 Service
+    const deeperServices = await this.adapter.traceToService({
+      kind: 'scheduled', // 使用 scheduled 类型，但实际上只是复用追溯逻辑
+      className: serviceNode.className,
+      filePath: serviceNode.filePath,
+      moduleName: serviceNode.moduleName,
+      modulePath: serviceNode.modulePath,
+      startLine: serviceNode.startLine,
+    });
+
+    // 过滤掉已访问的
+    return deeperServices.filter(svc => {
+      const key = `${svc.className}:${svc.filePath}`;
+      return !visited.has(key);
+    });
+  }
+
+  /**
+   * 收集所有 Service 节点的 Mapper
+   */
+  private async collectMappers(
+    serviceChain: ServiceChainNode[],
+    errors: string[],
+  ): Promise<MapperInfo[]> {
+    const mappers: MapperInfo[] = [];
+    const visited = new Set<string>();
+
+    for (const serviceNode of serviceChain) {
+      try {
+        const serviceMappers = await this.adapter.traceToMapper(serviceNode);
+
+        for (const mapper of serviceMappers) {
+          const key = `${mapper.className}:${mapper.filePath}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            mappers.push(mapper);
+          }
+
+          // 如果不收集所有 Mapper，只保留第一个
+          if (!this.config.collectAllMappers && mappers.length >= 1) {
+            break;
+          }
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`追溯 Service ${serviceNode.className} 的 Mapper 失败: ${errorMsg}`);
+      }
+
+      if (!this.config.collectAllMappers && mappers.length >= 1) {
+        break;
+      }
+    }
+
+    return mappers;
+  }
+
+  /**
+   * 从 Mapper 提取表信息
+   */
+  private async collectTables(
+    mappers: MapperInfo[],
+    errors: string[],
+  ): Promise<TableInfo[]> {
+    const tables: TableInfo[] = [];
+    const visited = new Set<string>();
+
+    for (const mapper of mappers) {
+      try {
+        const mapperTables = await this.adapter.extractTableFromMapper(mapper);
+
+        for (const table of mapperTables) {
+          if (!visited.has(table.tableName)) {
+            visited.add(table.tableName);
+            tables.push(table);
+          }
+
+          // 如果不收集所有表，只保留第一个
+          if (!this.config.collectAllTables && tables.length >= 1) {
+            break;
+          }
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`从 Mapper ${mapper.className} 提取表失败: ${errorMsg}`);
+      }
+
+      if (!this.config.collectAllTables && tables.length >= 1) {
+        break;
+      }
+    }
+
+    return tables;
+  }
+
+  /**
+   * 根据表信息查找 Entity
+   */
+  private async collectEntities(
+    tables: TableInfo[],
+    errors: string[],
+  ): Promise<EntityInfo[]> {
+    const entities: EntityInfo[] = [];
+    const visited = new Set<string>();
+
+    for (const table of tables) {
+      try {
+        const entity = await this.adapter.findEntityForTable(table, this.modulePath);
+
+        if (entity) {
+          const key = `${entity.className}:${entity.filePath}`;
+          if (!visited.has(key)) {
+            visited.add(key);
+            entities.push(entity);
+          }
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push(`查找表 ${table.tableName} 的 Entity 失败: ${errorMsg}`);
+      }
+    }
+
+    return entities;
+  }
+}
+
+/**
+ * 创建 ScheduledPathDiscovery 实例的便捷函数
+ *
+ * @param adapter - 语言适配器
+ * @param modulePath - 模块路径
+ * @param config - 配置选项
+ * @returns ScheduledPathDiscovery 实例
+ */
+export function createScheduledPathDiscovery(
+  adapter: LanguageAdapter,
+  modulePath: string,
+  config?: ScheduledPathDiscoveryConfig,
+): ScheduledPathDiscovery {
+  return new ScheduledPathDiscovery(adapter, modulePath, config);
+}
