@@ -5,6 +5,13 @@
  */
 
 export {
+  BasePathDiscovery,
+  type BasePathDiscoveryConfig,
+  type EntryPointKind,
+  type DiscoveryPathway,
+} from './base-path-discovery.js';
+
+export {
   ControllerPathDiscovery,
   createControllerPathDiscovery,
   type ControllerPathDiscoveryConfig,
