@@ -205,10 +205,10 @@ export class ParallelDiscoveryRunner {
   private readonly config: Required<ParallelDiscoveryConfig>;
   private readonly adapter: LanguageAdapter;
   private readonly aggregator: TableAnchorAggregator;
-  private readonly tableRelationSupplement: TableRelationSupplement;
-  private readonly serviceCallCluster: ServiceCallCluster;
-  private readonly gitCommitEnhancer: GitCommitEnhancer;
-  private readonly businessDomainDefiner: BusinessDomainDefiner;
+  private tableRelationSupplement: TableRelationSupplement;
+  private serviceCallCluster: ServiceCallCluster;
+  private gitCommitEnhancer: GitCommitEnhancer;
+  private businessDomainDefiner: BusinessDomainDefiner;
 
   /**
    * 创建 ParallelDiscoveryRunner 实例
@@ -573,6 +573,42 @@ export class ParallelDiscoveryRunner {
   }
 
   /**
+   * 设置表关联补充器
+   *
+   * 用于 Task 7 实现后替换 Stub
+   */
+  setTableRelationSupplement(supplement: TableRelationSupplement): void {
+    this.tableRelationSupplement = supplement;
+  }
+
+  /**
+   * 设置 Service 调用链聚类器
+   *
+   * 用于 Task 7 实现后替换 Stub
+   */
+  setServiceCallCluster(cluster: ServiceCallCluster): void {
+    this.serviceCallCluster = cluster;
+  }
+
+  /**
+   * 设置 Git Commit 增强器
+   *
+   * 用于 Task 8 实现后替换 Stub
+   */
+  setGitCommitEnhancer(enhancer: GitCommitEnhancer): void {
+    this.gitCommitEnhancer = enhancer;
+  }
+
+  /**
+   * 设置业务域定义器
+   *
+   * 用于 Task 8 实现后替换 Stub
+   */
+  setBusinessDomainDefiner(definer: BusinessDomainDefiner): void {
+    this.businessDomainDefiner = definer;
+  }
+
+  /**
    * 构建追溯路径
    */
   private buildTracePath(anchor: TableAnchor, pathResults: DiscoveryPathResult[]): ConceptTracePath {
@@ -690,8 +726,19 @@ export function createParallelDiscoveryRunnerWithOptions(
 ): ParallelDiscoveryRunner {
   const runner = new ParallelDiscoveryRunner(config);
 
-  // 如果提供了自定义组件，替换 Stub（需要通过 setter 或重新构造）
-  // 当前实现使用 Stub，Task 7 和 Task 8 实现后可扩展
+  // 注入外部组件（替换 Stub 实现）
+  if (options.tableRelationSupplement) {
+    runner.setTableRelationSupplement(options.tableRelationSupplement);
+  }
+  if (options.serviceCallCluster) {
+    runner.setServiceCallCluster(options.serviceCallCluster);
+  }
+  if (options.gitCommitEnhancer) {
+    runner.setGitCommitEnhancer(options.gitCommitEnhancer);
+  }
+  if (options.businessDomainDefiner) {
+    runner.setBusinessDomainDefiner(options.businessDomainDefiner);
+  }
 
   return runner;
 }
