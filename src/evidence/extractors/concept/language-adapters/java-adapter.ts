@@ -379,16 +379,16 @@ export class JavaAdapter implements LanguageAdapter {
     modulePath: string,
     annotations: string[],
   ): Promise<Array<{ name: string; filePath: string; startLine: number; signature?: string }>> {
-    // 图数据库中 annotations 字段存储注解列表
-    // 使用正则匹配包含特定注解的类
+    // 图数据库中没有 annotations 属性，从 content 中搜索注解
+    // 同时支持从 name 搜索（如 Controller 结尾的类）
     const annotationPattern = annotations.map(a => a.replace('@', '').replace(/'/g, "''")).join('|');
-    const escapedPath = escapeCypherString(modulePath);
+    // filePath 是相对路径，不使用 STARTS WITH 绝对路径限制
 
+    // 方案: 从 name 搜索包含注解名或结尾的类
     const cypher = `
       MATCH (c:Class)
-      WHERE c.filePath STARTS WITH '${escapedPath}'
-      AND c.annotations IS NOT NULL
-      AND c.annotations =~ '(?i).*(${annotationPattern}).*'
+      WHERE c.name =~ '(?i).*(${annotationPattern}).*'
+      OR c.content =~ '(?i).*(${annotationPattern}).*'
       AND NOT c.filePath =~ '(?i).*(test|spec).*'
       RETURN c.name AS name, c.filePath AS filePath, c.startLine AS startLine, c.content AS content
       LIMIT 50
@@ -436,15 +436,12 @@ export class JavaAdapter implements LanguageAdapter {
     query: ReadOnlyQueryExecutor,
     modulePath: string,
   ): Promise<Array<{ className: string; filePath: string; methodName: string; startLine: number }>> {
-    const escapedPath = escapeCypherString(modulePath);
-
+    // 从 Class 的 content 搜索 @Scheduled 注解，不限制路径
     const cypher = `
-      MATCH (c:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
-      WHERE c.filePath STARTS WITH '${escapedPath}'
-      AND m.annotations IS NOT NULL
-      AND m.annotations =~ '(?i).*Scheduled.*'
+      MATCH (c:Class)
+      WHERE c.content =~ '(?i).*Scheduled.*'
       AND NOT c.filePath =~ '(?i).*(test|spec).*'
-      RETURN c.name AS className, c.filePath AS filePath, m.name AS methodName, m.startLine AS startLine
+      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine
       LIMIT 30
     `;
 
