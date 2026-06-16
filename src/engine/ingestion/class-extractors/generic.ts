@@ -154,10 +154,13 @@ export function createClassExtractor(config: ClassExtractionConfig): ClassExtrac
 
     if (!name || !type) return null;
 
+    const annotations = config.extractAnnotations?.(node);
+
     return {
       name,
       type,
       qualifiedName: buildQualifiedName(node, name) || name,
+      annotations,
     };
   };
 

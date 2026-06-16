@@ -10,6 +10,7 @@ export interface ExtractedClassSymbol {
   name: string;
   type: ClassLikeNodeLabel;
   qualifiedName: string;
+  annotations?: string[];
 }
 
 /**
@@ -41,4 +42,5 @@ export interface ClassExtractionConfig {
   extractName?: (node: SyntaxNode) => string | undefined;
   extractType?: (node: SyntaxNode) => ClassLikeNodeLabel | undefined;
   extractScopeSegments?: (node: SyntaxNode) => string[] | null | undefined;
+  extractAnnotations?: (node: SyntaxNode) => string[] | undefined;
 }

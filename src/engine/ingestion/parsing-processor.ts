@@ -614,6 +614,9 @@ const processParsingSequential = async (
                 astFrameworkReason: frameworkHint.reason,
               }
             : {}),
+          ...(extractedClassSymbol?.annotations !== undefined && extractedClassSymbol.annotations.length > 0
+            ? { annotations: extractedClassSymbol.annotations }
+            : {}),
           ...methodProps,
         },
       };

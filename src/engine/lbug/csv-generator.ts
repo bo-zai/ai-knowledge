@@ -234,7 +234,7 @@ export const streamAllCSVsToDisk = async (
     'id,name,filePath,content',
   );
   const folderWriter = new BufferedCSVWriter(path.join(csvDir, 'folder.csv'), 'id,name,filePath');
-  const codeElementHeader = 'id,name,filePath,startLine,endLine,isExported,content,description';
+  const codeElementHeader = 'id,name,filePath,startLine,endLine,isExported,content,description,annotations';
   const functionWriter = new BufferedCSVWriter(
     path.join(csvDir, 'function.csv'),
     codeElementHeader,
@@ -245,7 +245,7 @@ export const streamAllCSVsToDisk = async (
     codeElementHeader,
   );
   const methodHeader =
-    'id,name,filePath,startLine,endLine,isExported,content,description,parameterCount,returnType';
+    'id,name,filePath,startLine,endLine,isExported,content,description,parameterCount,returnType,annotations';
   const methodWriter = new BufferedCSVWriter(path.join(csvDir, 'method.csv'), methodHeader);
   const codeElemWriter = new BufferedCSVWriter(
     path.join(csvDir, 'codeelement.csv'),
@@ -384,6 +384,8 @@ export const streamAllCSVsToDisk = async (
       }
       case 'Method': {
         const content = await extractContent(node, contentCache);
+        const methodAnnotations = node.properties.annotations || [];
+        const methodAnnotationsStr = `[${methodAnnotations.map((a: string) => `'${a.replace(/'/g, "''")}'`).join(',')}]`;
         await methodWriter.addRow(
           [
             escapeCSVField(node.id),
@@ -396,6 +398,7 @@ export const streamAllCSVsToDisk = async (
             escapeCSVField(node.properties.description || ''),
             escapeCSVNumber(node.properties.parameterCount, 0),
             escapeCSVField(node.properties.returnType || ''),
+            escapeCSVField(methodAnnotationsStr),
           ].join(','),
         );
         break;
@@ -452,6 +455,8 @@ export const streamAllCSVsToDisk = async (
         const writer = codeWriterMap[node.label];
         if (writer) {
           const content = await extractContent(node, contentCache);
+          const annotations = node.properties.annotations || [];
+          const annotationsStr = `[${annotations.map((a: string) => `'${a.replace(/'/g, "''")}'`).join(',')}]`;
           await writer.addRow(
             [
               escapeCSVField(node.id),
@@ -462,6 +467,7 @@ export const streamAllCSVsToDisk = async (
               node.properties.isExported ? 'true' : 'false',
               escapeCSVField(content),
               escapeCSVField(node.properties.description || ''),
+              escapeCSVField(annotationsStr),
             ].join(','),
           );
         } else {

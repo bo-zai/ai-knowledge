@@ -36,19 +36,6 @@ CREATE NODE TABLE Folder (
   PRIMARY KEY (id)
 )`;
 
-export const FUNCTION_SCHEMA = `
-CREATE NODE TABLE Function (
-  id STRING,
-  name STRING,
-  filePath STRING,
-  startLine INT64,
-  endLine INT64,
-  isExported BOOLEAN,
-  content STRING,
-  description STRING,
-  PRIMARY KEY (id)
-)`;
-
 export const CLASS_SCHEMA = `
 CREATE NODE TABLE Class (
   id STRING,
@@ -59,6 +46,7 @@ CREATE NODE TABLE Class (
   isExported BOOLEAN,
   content STRING,
   description STRING,
+  annotations STRING[],
   PRIMARY KEY (id)
 )`;
 
@@ -72,6 +60,7 @@ CREATE NODE TABLE Interface (
   isExported BOOLEAN,
   content STRING,
   description STRING,
+  annotations STRING[],
   PRIMARY KEY (id)
 )`;
 
@@ -87,6 +76,21 @@ CREATE NODE TABLE Method (
   description STRING,
   parameterCount INT32,
   returnType STRING,
+  annotations STRING[],
+  PRIMARY KEY (id)
+)`;
+
+export const FUNCTION_SCHEMA = `
+CREATE NODE TABLE Function (
+  id STRING,
+  name STRING,
+  filePath STRING,
+  startLine INT64,
+  endLine INT64,
+  isExported BOOLEAN,
+  content STRING,
+  description STRING,
+  annotations STRING[],
   PRIMARY KEY (id)
 )`;
 
@@ -100,6 +104,7 @@ CREATE NODE TABLE CodeElement (
   isExported BOOLEAN,
   content STRING,
   description STRING,
+  annotations STRING[],
   PRIMARY KEY (id)
 )`;
 
