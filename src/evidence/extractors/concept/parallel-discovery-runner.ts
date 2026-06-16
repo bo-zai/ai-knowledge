@@ -43,6 +43,16 @@ import {
   createServiceCallCluster,
   type ServiceCallClusterConfig,
 } from './service-call-cluster.js';
+import {
+  GitCommitEnhancerImpl,
+  createGitCommitEnhancer,
+  type GitCommitEnhancerConfig,
+} from './git-commit-enhancer.js';
+import {
+  BusinessDomainDefinerImpl,
+  createBusinessDomainDefiner,
+  type BusinessDomainDefinerConfig,
+} from './business-domain-definer.js';
 
 /**
  * 并行发现配置
@@ -266,9 +276,9 @@ export class ParallelDiscoveryRunner {
     // Task 7: 使用真实实现（而非 Stub）
     this.tableRelationSupplement = createTableRelationSupplement();
     this.serviceCallCluster = createServiceCallCluster();
-    // Task 8: 继续使用 Stub（待后续实现）
-    this.gitCommitEnhancer = new StubGitCommitEnhancer();
-    this.businessDomainDefiner = new StubBusinessDomainDefiner();
+    // Task 8: 使用真实实现（而非 Stub）
+    this.gitCommitEnhancer = createGitCommitEnhancer();
+    this.businessDomainDefiner = createBusinessDomainDefiner();
   }
 
   /**

@@ -92,3 +92,16 @@ export {
   createServiceCallCluster,
   type ServiceCallClusterConfig,
 } from './service-call-cluster.js';
+
+// Task 8: Git Commit 增强器和业务域定义器
+export {
+  GitCommitEnhancerImpl,
+  createGitCommitEnhancer,
+  type GitCommitEnhancerConfig,
+} from './git-commit-enhancer.js';
+
+export {
+  BusinessDomainDefinerImpl,
+  createBusinessDomainDefiner,
+  type BusinessDomainDefinerConfig,
+} from './business-domain-definer.js';
