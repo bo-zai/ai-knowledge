@@ -131,7 +131,7 @@ export class JavaAdapter implements LanguageAdapter {
   /**
    * 从入口点追溯到 Service 层
    *
-   * 通过 CALLS 边追溯调用链，直到找到 Service 类
+   * 通过 Property 的类型推断找到 Service 类
    */
   async traceToService(entryPoint: EntryPointInfo): Promise<ServiceChainNode[]> {
     const { lbugPath } = getStoragePaths(entryPoint.modulePath);
@@ -139,53 +139,70 @@ export class JavaAdapter implements LanguageAdapter {
     try {
       await fs.access(lbugPath);
     } catch {
-      // 图数据库不存在，返回空
       return [];
     }
 
     return withReadOnlyLbug(lbugPath, async (query) => {
       const serviceChain: ServiceChainNode[] = [];
 
-      // 从入口类的方法追溯调用链
+      // 从 Class 的 content 中提取 Service Property 类型
+      // LadybugDB 的 =~ 正则操作符不工作，改用 CONTAINS
       const escapedClass = escapeCypherString(entryPoint.className);
-      const escapedPath = escapeCypherString(entryPoint.filePath);
 
-      // 查找入口类的方法调用的 Service 类
       const cypher = `
-        MATCH (entryClass:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(entryMethod:Method)
-        WHERE entryClass.name = '${escapedClass}' AND entryClass.filePath = '${escapedPath}'
-        MATCH (entryMethod)-[call:CodeRelation {type: 'CALLS'}]->(targetMethod:Method)
-        MATCH (targetClass:Class)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(targetMethod)
-        WHERE targetClass.name =~ '(?i).*Service$'
-        AND NOT targetClass.filePath =~ '(?i).*(test|spec).*'
-        RETURN DISTINCT
-          targetClass.name AS className,
-          targetClass.filePath AS filePath,
-          entryMethod.name AS callingMethod,
-          targetMethod.name AS calledMethod,
-          targetMethod.startLine AS startLine
-        LIMIT 20
+        MATCH (c:Class)
+        WHERE c.name = '${escapedClass}'
+        AND c.content CONTAINS 'Service'
+        RETURN c.content AS content, c.filePath AS filePath
+        LIMIT 1
       `;
 
       const rows = await query(cypher);
 
       for (const row of rows) {
-        const className = row.className as string;
+        const content = row.content as string;
         const filePath = row.filePath as string;
-        const startLine = row.startLine as number | undefined;
 
-        if (!filePath || !className) continue;
+        // 从 content 中用 JavaScript 正则提取 Service 类型名
+        const serviceTypeMatch = content.match(/private\s+(\w+Service)\s+\w+;/gi);
+        if (serviceTypeMatch) {
+          for (const match of serviceTypeMatch) {
+            const typeNameMatch = match.match(/private\s+(\w+Service)/i);
+            if (typeNameMatch) {
+              const serviceTypeName = typeNameMatch[1];
 
-        // 避免重复
-        if (serviceChain.some(s => s.className === className && s.filePath === filePath)) continue;
+              // 查找 Service 类（可能是 Impl）
+              // 使用 CONTAINS 替代 =~
+              const serviceClassQuery = `
+                MATCH (s:Class)
+                WHERE s.name CONTAINS '${serviceTypeName}'
+                AND s.name CONTAINS 'Service'
+                AND NOT s.filePath CONTAINS 'test'
+                AND NOT s.filePath CONTAINS 'spec'
+                RETURN s.name AS name, s.filePath AS filePath, s.startLine AS startLine
+                LIMIT 5
+              `;
 
-        serviceChain.push({
-          className,
-          filePath,
-          moduleName: extractModuleName(filePath),
-          modulePath: entryPoint.modulePath,
-          startLine: startLine ?? 0,
-        });
+              const serviceRows = await query(serviceClassQuery);
+              for (const svc of serviceRows) {
+                const className = svc.name as string;
+                const svcFilePath = svc.filePath as string;
+                const startLine = svc.startLine as number | undefined;
+
+                if (!svcFilePath || !className) continue;
+                if (serviceChain.some(s => s.className === className)) continue;
+
+                serviceChain.push({
+                  className,
+                  filePath: svcFilePath,
+                  moduleName: extractModuleName(svcFilePath),
+                  modulePath: entryPoint.modulePath,
+                  startLine: startLine ?? 0,
+                });
+              }
+            }
+          }
+        }
       }
 
       return serviceChain;
@@ -213,23 +230,27 @@ export class JavaAdapter implements LanguageAdapter {
       const escapedPath = escapeCypherString(serviceNode.filePath);
 
       // 查找 Service 调用的 Mapper 类（Mapper 或 Dao 后缀）
+      // LadybugDB 的 =~ 不工作，使用 CONTAINS + JavaScript 后过滤
+      // Mapper 在知识图谱中是 Interface 节点，不是 Class 节点
       const cypher = `
         MATCH (serviceClass:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(serviceMethod:Method)
         WHERE serviceClass.name = '${escapedClass}' AND serviceClass.filePath = '${escapedPath}'
         MATCH (serviceMethod)-[call:CodeRelation {type: 'CALLS'}]->(mapperMethod:Method)
-        MATCH (mapperClass:Class)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(mapperMethod)
-        WHERE mapperClass.name =~ '(?i).*(Mapper|Dao|Repository)$'
-        AND NOT mapperClass.filePath =~ '(?i).*(test|spec).*'
+        MATCH (mapperNode)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(mapperMethod)
+        WHERE (mapperNode.name CONTAINS 'Mapper' OR mapperNode.name CONTAINS 'Dao' OR mapperNode.name CONTAINS 'Repository')
+        AND NOT mapperNode.filePath CONTAINS 'test'
+        AND NOT mapperNode.filePath CONTAINS 'spec'
         RETURN DISTINCT
-          mapperClass.name AS className,
-          mapperClass.filePath AS filePath,
-          mapperMethod.name AS methodName
+          mapperNode.name AS className,
+          mapperNode.filePath AS filePath,
+          mapperMethod.name AS methodName,
+          labels(mapperNode) AS nodeLabels
         LIMIT 30
       `;
 
       const rows = await query(cypher);
 
-      // 收集 Mapper 类和对应的方法
+      // 收集 Mapper 类和对应的方法，并用 JavaScript 正则过滤后缀
       const mapperClassMap = new Map<string, { filePath: string; sqlIds: string[] }>();
 
       for (const row of rows) {
@@ -238,6 +259,9 @@ export class JavaAdapter implements LanguageAdapter {
         const methodName = row.methodName as string;
 
         if (!filePath || !className) continue;
+
+        // JavaScript 正则检查：名称以 Mapper/Dao/Repository 结尾
+        if (!/(Mapper|Dao|Repository)$/i.test(className)) continue;
 
         const key = `${className}:${filePath}`;
         if (!mapperClassMap.has(key)) {
@@ -250,10 +274,11 @@ export class JavaAdapter implements LanguageAdapter {
 
       // 查找对应的 Mapper XML 文件
       for (const [className, info] of mapperClassMap.entries()) {
-        const xmlPath = await this.findMapperXml(info.filePath, className);
+        const actualClassName = className.split(':')[0];  // 从 key 中提取纯类名
+        const xmlPath = await this.findMapperXml(info.filePath, actualClassName, serviceNode.modulePath);
 
         mappers.push({
-          className: className.split(':')[0],
+          className: actualClassName,
           filePath: info.filePath,
           moduleName: extractModuleName(info.filePath),
           modulePath: serviceNode.modulePath,
@@ -337,7 +362,8 @@ export class JavaAdapter implements LanguageAdapter {
         const cypher = `
           MATCH (entity:Class)
           WHERE entity.name = '${escapedName}'
-          AND NOT entity.filePath =~ '(?i).*(test|spec).*'
+          AND NOT entity.filePath CONTAINS 'test'
+          AND NOT entity.filePath CONTAINS 'spec'
           RETURN entity.name AS name, entity.filePath AS filePath, entity.startLine AS startLine
           LIMIT 1
         `;
@@ -380,18 +406,21 @@ export class JavaAdapter implements LanguageAdapter {
     annotations: string[],
   ): Promise<Array<{ name: string; filePath: string; startLine: number; signature?: string }>> {
     // 图数据库中没有 annotations 属性，从 content 中搜索注解
-    // 同时支持从 name 搜索（如 Controller 结尾的类）
-    const annotationPattern = annotations.map(a => a.replace('@', '').replace(/'/g, "''")).join('|');
-    // filePath 是相对路径，不使用 STARTS WITH 绝对路径限制
+    // LadybugDB 的 =~ 不工作，使用 CONTAINS + JavaScript 后过滤
+    const annotationNames = annotations.map(a => a.replace('@', '').replace(/'/g, "''"));
 
-    // 方案: 从 name 搜索包含注解名或结尾的类
+    // 构建 OR 条件：name CONTAINS 'Controller' OR name CONTAINS 'RestController' ...
+    const nameConditions = annotationNames.map(n => `c.name CONTAINS '${n}'`).join(' OR ');
+    const contentConditions = annotationNames.map(n => `c.content CONTAINS '${n}'`).join(' OR ');
+
     const cypher = `
       MATCH (c:Class)
-      WHERE c.name =~ '(?i).*(${annotationPattern}).*'
-      OR c.content =~ '(?i).*(${annotationPattern}).*'
-      AND NOT c.filePath =~ '(?i).*(test|spec).*'
+      WHERE (${nameConditions})
+      OR (${contentConditions})
+      AND NOT c.filePath CONTAINS 'test'
+      AND NOT c.filePath CONTAINS 'spec'
       RETURN c.name AS name, c.filePath AS filePath, c.startLine AS startLine, c.content AS content
-      LIMIT 50
+      LIMIT 100
     `;
 
     const rows = await query(cypher);
@@ -404,6 +433,13 @@ export class JavaAdapter implements LanguageAdapter {
       const content = row.content as string | undefined;
 
       if (!filePath || !name) continue;
+
+      // JavaScript 过滤：验证 name 或 content 真正包含注解名
+      const hasAnnotation = annotationNames.some(ann =>
+        name.toLowerCase().includes(ann.toLowerCase()) ||
+        (content && content.toLowerCase().includes(ann.toLowerCase()))
+      );
+      if (!hasAnnotation) continue;
 
       // 提取路由签名（对于 Controller）
       let signature: string | undefined;
@@ -436,12 +472,14 @@ export class JavaAdapter implements LanguageAdapter {
     query: ReadOnlyQueryExecutor,
     modulePath: string,
   ): Promise<Array<{ className: string; filePath: string; methodName: string; startLine: number }>> {
-    // 从 Class 的 content 搜索 @Scheduled 注解，不限制路径
+    // 从 Class 的 content 搜索 @Scheduled 注解
+    // LadybugDB 的 =~ 不工作，使用 CONTAINS
     const cypher = `
       MATCH (c:Class)
-      WHERE c.content =~ '(?i).*Scheduled.*'
-      AND NOT c.filePath =~ '(?i).*(test|spec).*'
-      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine
+      WHERE c.content CONTAINS 'Scheduled'
+      AND NOT c.filePath CONTAINS 'test'
+      AND NOT c.filePath CONTAINS 'spec'
+      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine, c.content AS content
       LIMIT 30
     `;
 
@@ -451,17 +489,23 @@ export class JavaAdapter implements LanguageAdapter {
     for (const row of rows) {
       const className = row.className as string;
       const filePath = row.filePath as string;
-      const methodName = row.methodName as string;
+      const content = row.content as string | undefined;
       const startLine = row.startLine as number | undefined;
 
-      if (!filePath || !className || !methodName) continue;
+      if (!filePath || !className) continue;
 
-      results.push({
-        className,
-        filePath,
-        methodName,
-        startLine: startLine ?? 0,
-      });
+      // 从 content 提取 @Scheduled 方法名
+      if (content) {
+        const methodMatch = content.match(/@Scheduled[^\n]*\n[^\n]*public\s+\w+\s+(\w+)\s*\(/i);
+        if (methodMatch) {
+          results.push({
+            className,
+            filePath,
+            methodName: methodMatch[1],
+            startLine: startLine ?? 0,
+          });
+        }
+      }
     }
 
     return results;
@@ -492,16 +536,35 @@ export class JavaAdapter implements LanguageAdapter {
   /**
    * 查找 Mapper XML 文件
    */
-  private async findMapperXml(javaFilePath: string, mapperClassName: string): Promise<string | undefined> {
+  private async findMapperXml(javaFilePath: string, mapperClassName: string, modulePath: string): Promise<string | undefined> {
     // 从 Java 文件路径推断 XML 文件位置
     // 通常在 resources/mapper 或 resources/mybatis 目录下
+    // 也可能按包名路径放置（如 resources/com/macro/mall/mapper/）
     const baseName = mapperClassName.replace(/Mapper$|Dao$|Repository$/i, '');
     const possibleXmlPaths: string[] = [];
 
     // 标准路径推断
-    const srcIdx = javaFilePath.split(path.sep).findIndex(p => p === 'src');
+    // 注意：知识图谱中的 filePath 使用 '/' 作为分隔符（相对路径）
+    const parts = javaFilePath.split('/');  // 使用 '/' 而不是 path.sep
+    const srcIdx = parts.findIndex(p => p === 'src');
+
     if (srcIdx >= 0) {
-      const projectRoot = javaFilePath.split(path.sep).slice(0, srcIdx).join(path.sep);
+      // 项目根相对于 modulePath（知识图谱中的 filePath 是相对于仓库根的）
+      // modulePath 是绝对路径如 D:/workspace/mall-group
+      // parts 使用 '/' 分割，所以 join 也用 '/'
+      const projectRoot = path.join(modulePath, parts.slice(0, srcIdx).join('/'));
+
+      // 尝试从 Java 文件路径提取包名路径
+      // 如 mall/mall-mbg/src/main/java/com/macro/mall/mapper/UmsRoleMapper.java
+      // 包名路径为 com/macro/mall/mapper
+      const javaIdx = parts.findIndex(p => p === 'java');
+
+      if (javaIdx >= 0 && javaIdx + 1 < parts.length - 1) {
+        const packagePath = parts.slice(javaIdx + 1, parts.length - 1).join('/');
+        possibleXmlPaths.push(
+          path.join(projectRoot, 'src', 'main', 'resources', packagePath, `${mapperClassName}.xml`),
+        );
+      }
 
       // 常见的 Mapper XML 位置
       possibleXmlPaths.push(
@@ -511,6 +574,31 @@ export class JavaAdapter implements LanguageAdapter {
         path.join(projectRoot, 'src', 'main', 'resources', 'mybatis', `${baseName}Mapper.xml`),
         path.join(projectRoot, 'src', 'main', 'resources', `${mapperClassName}.xml`),
       );
+
+      // 多模块项目：检查并列的其他模块目录
+      // 如 mall/ 和 mall-swarm/ 都在 mall-group/ 下
+      // moduleIdx 是顶层模块索引（通常是 index 0）
+      const moduleIdx = 0;  // 顶层模块总是第一个目录
+      if (moduleIdx >= 0) {
+        const moduleName = parts[moduleIdx];
+        // parentRoot 应该是仓库根目录
+        const parentRoot = modulePath;
+
+        // 检查并列的其他模块目录
+        const siblingModules = await this.findSiblingModules(parentRoot, moduleName);
+        for (const sibling of siblingModules) {
+          // 为每个并列模块添加可能的 XML 路径
+          if (javaIdx >= 0 && javaIdx + 1 < parts.length - 1) {
+            const packagePath = parts.slice(javaIdx + 1, parts.length - 1).join('/');
+            // 构建并列模块的路径：sibling + parts[moduleIdx+1:srcIdx]
+            // 如 mall/mall-mbg -> sibling=mall-swarm, parts[1:2]=mall-mbg
+            const siblingProjectRoot = path.join(parentRoot, sibling, parts.slice(moduleIdx + 1, srcIdx).join('/'));
+            possibleXmlPaths.push(
+              path.join(siblingProjectRoot, 'src', 'main', 'resources', packagePath, `${mapperClassName}.xml`),
+            );
+          }
+        }
+      }
     }
 
     // 尝试每个可能的路径
@@ -524,6 +612,20 @@ export class JavaAdapter implements LanguageAdapter {
     }
 
     return undefined;
+  }
+
+  /**
+   * 查找并列的模块目录
+   */
+  private async findSiblingModules(parentRoot: string, currentModule: string): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(parentRoot, { withFileTypes: true });
+      return entries
+        .filter(e => e.isDirectory() && e.name !== currentModule)
+        .map(e => e.name);
+    } catch {
+      return [];
+    }
   }
 
   /**
