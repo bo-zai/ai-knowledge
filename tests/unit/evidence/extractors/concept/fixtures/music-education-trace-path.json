@@ -1,0 +1,148 @@
+{
+  "project": "music-education",
+  "tableName": "edu_course",
+  "description": "课程表追溯路径 - 跨模块场景 (music-course + music-sync)",
+  "tracePaths": [
+    {
+      "source": "music-course",
+      "pathway": "controller",
+      "tracePath": {
+        "entryPoints": [
+          {
+            "kind": "controller",
+            "className": "CourseController",
+            "filePath": "music-course/src/main/java/com/music/course/controller/CourseController.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "methodName": "getCourseDetail",
+            "startLine": 45,
+            "signature": "@GetMapping(\"/course/detail\")"
+          },
+          {
+            "kind": "controller",
+            "className": "CourseController",
+            "filePath": "music-course/src/main/java/com/music/course/controller/CourseController.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "methodName": "listCourses",
+            "startLine": 25,
+            "signature": "@GetMapping(\"/course/list\")"
+          }
+        ],
+        "serviceChain": [
+          {
+            "className": "CourseService",
+            "filePath": "music-course/src/main/java/com/music/course/service/CourseService.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "methodName": "getCourseDetail",
+            "startLine": 50
+          },
+          {
+            "className": "CourseService",
+            "filePath": "music-course/src/main/java/com/music/course/service/CourseService.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "methodName": "listCourses",
+            "startLine": 30
+          }
+        ],
+        "mappers": [
+          {
+            "className": "CourseMapper",
+            "filePath": "music-course/src/main/java/com/music/course/mapper/CourseMapper.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "xmlPath": "music-course/src/main/resources/mapper/CourseMapper.xml",
+            "sqlIds": ["selectCourseById", "selectCourseList"]
+          }
+        ],
+        "tables": [
+          {
+            "tableName": "edu_course",
+            "schema": "education",
+            "columns": ["id", "title", "teacher_id", "price", "status", "create_time", "update_time"]
+          }
+        ],
+        "entities": [
+          {
+            "className": "Course",
+            "filePath": "music-course/src/main/java/com/music/course/entity/Course.java",
+            "moduleName": "music-course",
+            "modulePath": "music-course",
+            "fields": ["id", "title", "teacherId", "price", "status", "createTime", "updateTime"],
+            "startLine": 15
+          }
+        ]
+      }
+    },
+    {
+      "source": "music-sync",
+      "pathway": "scheduled",
+      "tracePath": {
+        "entryPoints": [
+          {
+            "kind": "scheduled",
+            "className": "CourseSyncScheduler",
+            "filePath": "music-sync/src/main/java/com/music/sync/scheduler/CourseSyncScheduler.java",
+            "moduleName": "music-sync",
+            "modulePath": "music-sync",
+            "methodName": "syncCourses",
+            "startLine": 20,
+            "signature": "@Scheduled(cron=\"0 0 2 * * ?\")"
+          }
+        ],
+        "serviceChain": [
+          {
+            "className": "CourseSyncService",
+            "filePath": "music-sync/src/main/java/com/music/sync/service/CourseSyncService.java",
+            "moduleName": "music-sync",
+            "modulePath": "music-sync",
+            "methodName": "syncCourses",
+            "startLine": 25
+          }
+        ],
+        "mappers": [
+          {
+            "className": "CourseMapper",
+            "filePath": "music-sync/src/main/java/com/music/sync/mapper/CourseMapper.java",
+            "moduleName": "music-sync",
+            "modulePath": "music-sync",
+            "xmlPath": "music-sync/src/main/resources/mapper/CourseMapper.xml",
+            "sqlIds": ["selectAllCourses", "updateCourseStatus"]
+          }
+        ],
+        "tables": [
+          {
+            "tableName": "edu_course",
+            "schema": "education",
+            "columns": ["id", "title", "teacher_id", "price", "status", "create_time", "update_time"]
+          }
+        ],
+        "entities": [
+          {
+            "className": "Course",
+            "filePath": "music-sync/src/main/java/com/music/sync/entity/Course.java",
+            "moduleName": "music-sync",
+            "modulePath": "music-sync",
+            "fields": ["id", "title", "teacherId", "price", "status", "createTime", "updateTime"],
+            "startLine": 10
+          }
+        ]
+      }
+    }
+  ],
+  "expectedResult": {
+    "isCrossModule": true,
+    "moduleCount": 2,
+    "moduleNames": ["music-course", "music-sync"],
+    "expectedConfidence": 0.9,
+    "crossModuleBonus": 0.2,
+    "entryPointCount": 3,
+    "pathways": {
+      "controller": 1,
+      "scheduled": 1,
+      "mqConsumer": 0
+    }
+  }
+}

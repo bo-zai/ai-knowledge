@@ -1,0 +1,91 @@
+{
+  "project": "mall-group",
+  "tableName": "pms_product",
+  "description": "商品表追溯路径 - 单模块 Controller 入口",
+  "tracePath": {
+    "entryPoints": [
+      {
+        "kind": "controller",
+        "className": "ProductController",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/controller/ProductController.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "methodName": "list",
+        "startLine": 25,
+        "signature": "@GetMapping(\"/product/list\")"
+      },
+      {
+        "kind": "controller",
+        "className": "ProductController",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/controller/ProductController.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "methodName": "detail",
+        "startLine": 45,
+        "signature": "@GetMapping(\"/product/{id}\")"
+      },
+      {
+        "kind": "controller",
+        "className": "ProductController",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/controller/ProductController.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "methodName": "create",
+        "startLine": 65,
+        "signature": "@PostMapping(\"/product\")"
+      }
+    ],
+    "serviceChain": [
+      {
+        "className": "ProductService",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/service/ProductService.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "methodName": "listProducts",
+        "startLine": 30
+      },
+      {
+        "className": "ProductService",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/service/ProductService.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "methodName": "getProductDetail",
+        "startLine": 50
+      }
+    ],
+    "mappers": [
+      {
+        "className": "ProductMapper",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/mapper/ProductMapper.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "xmlPath": "mall-admin/src/main/resources/mapper/ProductMapper.xml",
+        "sqlIds": ["selectProductList", "selectProductById", "insertProduct", "updateProduct"]
+      }
+    ],
+    "tables": [
+      {
+        "tableName": "pms_product",
+        "schema": "mall",
+        "columns": ["id", "name", "category_id", "price", "stock", "status", "create_time", "update_time"]
+      }
+    ],
+    "entities": [
+      {
+        "className": "Product",
+        "filePath": "mall-admin/src/main/java/com/mall/admin/entity/Product.java",
+        "moduleName": "mall-admin",
+        "modulePath": "mall-admin",
+        "fields": ["id", "name", "categoryId", "price", "stock", "status", "createTime", "updateTime"],
+        "startLine": 10
+      }
+    ]
+  },
+  "expectedResult": {
+    "isCrossModule": false,
+    "moduleCount": 1,
+    "moduleNames": ["mall-admin"],
+    "expectedConfidence": 0.8,
+    "entryPointCount": 3
+  }
+}
