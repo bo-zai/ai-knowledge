@@ -399,27 +399,22 @@ export class JavaAdapter implements LanguageAdapter {
 
   /**
    * 查询带有特定注解的类
+   *
+   * 使用图节点的 annotations 属性直接过滤
    */
   private async queryAnnotatedClasses(
     query: ReadOnlyQueryExecutor,
     modulePath: string,
     annotations: string[],
   ): Promise<Array<{ name: string; filePath: string; startLine: number; signature?: string }>> {
-    // 图数据库中没有 annotations 属性，从 content 中搜索注解
-    // LadybugDB 的 =~ 不工作，使用 CONTAINS + JavaScript 后过滤
-    const annotationNames = annotations.map(a => a.replace('@', '').replace(/'/g, "''"));
-
-    // 构建 OR 条件：name CONTAINS 'Controller' OR name CONTAINS 'RestController' ...
-    const nameConditions = annotationNames.map(n => `c.name CONTAINS '${n}'`).join(' OR ');
-    const contentConditions = annotationNames.map(n => `c.content CONTAINS '${n}'`).join(' OR ');
+    const annotationNames = annotations.map(a => a.replace('@', ''));
 
     const cypher = `
       MATCH (c:Class)
-      WHERE (${nameConditions})
-      OR (${contentConditions})
+      WHERE c.annotations IS NOT NULL
       AND NOT c.filePath CONTAINS 'test'
       AND NOT c.filePath CONTAINS 'spec'
-      RETURN c.name AS name, c.filePath AS filePath, c.startLine AS startLine, c.content AS content
+      RETURN c.name AS name, c.filePath AS filePath, c.startLine AS startLine, c.annotations AS annotations, c.content AS content
       LIMIT 100
     `;
 
@@ -430,21 +425,22 @@ export class JavaAdapter implements LanguageAdapter {
       const name = row.name as string;
       const filePath = row.filePath as string;
       const startLine = row.startLine as number | undefined;
+      const nodeAnnotations = row.annotations as string[] | undefined;
       const content = row.content as string | undefined;
 
       if (!filePath || !name) continue;
 
-      // JavaScript 过滤：验证 name 或 content 真正包含注解名
-      const hasAnnotation = annotationNames.some(ann =>
-        name.toLowerCase().includes(ann.toLowerCase()) ||
-        (content && content.toLowerCase().includes(ann.toLowerCase()))
-      );
-      if (!hasAnnotation) continue;
+      // 检查 annotations 数组是否包含目标注解
+      const hasAnnotation = nodeAnnotations?.some(ann =>
+        annotationNames.some(target => ann.includes(target))
+      ) ?? false;
+
+      // 如果 annotations 为空或不存在，回退到 name 匹配（如 XxxController 命名模式）
+      if (!hasAnnotation && !annotationNames.some(ann => name.includes(ann))) continue;
 
       // 提取路由签名（对于 Controller）
       let signature: string | undefined;
       if (content && annotations.some(a => a.includes('Controller'))) {
-        // 尝试提取 HTTP 方法注解
         for (const httpMethod of ['@GetMapping', '@PostMapping', '@PutMapping', '@DeleteMapping', '@RequestMapping']) {
           const sig = extractAnnotationSignature(content, httpMethod);
           if (sig) {
@@ -467,19 +463,19 @@ export class JavaAdapter implements LanguageAdapter {
 
   /**
    * 查询带有 @Scheduled 注解的方法
+   *
+   * 使用 Method 节点的 annotations 属性直接过滤
    */
   private async queryScheduledMethods(
     query: ReadOnlyQueryExecutor,
     modulePath: string,
   ): Promise<Array<{ className: string; filePath: string; methodName: string; startLine: number }>> {
-    // 从 Class 的 content 搜索 @Scheduled 注解
-    // LadybugDB 的 =~ 不工作，使用 CONTAINS
     const cypher = `
-      MATCH (c:Class)
-      WHERE c.content CONTAINS 'Scheduled'
-      AND NOT c.filePath CONTAINS 'test'
-      AND NOT c.filePath CONTAINS 'spec'
-      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine, c.content AS content
+      MATCH (m:Method)
+      WHERE m.annotations IS NOT NULL
+      AND NOT m.filePath CONTAINS 'test'
+      AND NOT m.filePath CONTAINS 'spec'
+      RETURN m.name AS methodName, m.filePath AS filePath, m.startLine AS startLine
       LIMIT 30
     `;
 
@@ -487,25 +483,20 @@ export class JavaAdapter implements LanguageAdapter {
     const results: Array<{ className: string; filePath: string; methodName: string; startLine: number }> = [];
 
     for (const row of rows) {
-      const className = row.className as string;
+      const methodName = row.methodName as string;
       const filePath = row.filePath as string;
-      const content = row.content as string | undefined;
       const startLine = row.startLine as number | undefined;
 
-      if (!filePath || !className) continue;
+      if (!filePath || !methodName) continue;
 
-      // 从 content 提取 @Scheduled 方法名
-      if (content) {
-        const methodMatch = content.match(/@Scheduled[^\n]*\n[^\n]*public\s+\w+\s+(\w+)\s*\(/i);
-        if (methodMatch) {
-          results.push({
-            className,
-            filePath,
-            methodName: methodMatch[1],
-            startLine: startLine ?? 0,
-          });
-        }
-      }
+      // 从 filePath 推断类名（最后一个路径段是文件名，去掉 .java）
+      const fileName = filePath.split('/').pop()?.replace('.java', '') ?? '';
+      results.push({
+        className: fileName,
+        filePath,
+        methodName,
+        startLine: startLine ?? 0,
+      });
     }
 
     return results;
@@ -545,18 +536,14 @@ export class JavaAdapter implements LanguageAdapter {
 
     // 标准路径推断
     // 注意：知识图谱中的 filePath 使用 '/' 作为分隔符（相对路径）
-    const parts = javaFilePath.split('/');  // 使用 '/' 而不是 path.sep
+    const parts = javaFilePath.split('/');
     const srcIdx = parts.findIndex(p => p === 'src');
 
     if (srcIdx >= 0) {
       // 项目根相对于 modulePath（知识图谱中的 filePath 是相对于仓库根的）
-      // modulePath 是绝对路径如 D:/workspace/mall-group
-      // parts 使用 '/' 分割，所以 join 也用 '/'
       const projectRoot = path.join(modulePath, parts.slice(0, srcIdx).join('/'));
 
       // 尝试从 Java 文件路径提取包名路径
-      // 如 mall/mall-mbg/src/main/java/com/macro/mall/mapper/UmsRoleMapper.java
-      // 包名路径为 com/macro/mall/mapper
       const javaIdx = parts.findIndex(p => p === 'java');
 
       if (javaIdx >= 0 && javaIdx + 1 < parts.length - 1) {
@@ -575,28 +562,17 @@ export class JavaAdapter implements LanguageAdapter {
         path.join(projectRoot, 'src', 'main', 'resources', `${mapperClassName}.xml`),
       );
 
-      // 多模块项目：检查并列的其他模块目录
-      // 如 mall/ 和 mall-swarm/ 都在 mall-group/ 下
-      // moduleIdx 是顶层模块索引（通常是 index 0）
-      const moduleIdx = 0;  // 顶层模块总是第一个目录
-      if (moduleIdx >= 0) {
-        const moduleName = parts[moduleIdx];
-        // parentRoot 应该是仓库根目录
-        const parentRoot = modulePath;
-
-        // 检查并列的其他模块目录
-        const siblingModules = await this.findSiblingModules(parentRoot, moduleName);
-        for (const sibling of siblingModules) {
-          // 为每个并列模块添加可能的 XML 路径
-          if (javaIdx >= 0 && javaIdx + 1 < parts.length - 1) {
-            const packagePath = parts.slice(javaIdx + 1, parts.length - 1).join('/');
-            // 构建并列模块的路径：sibling + parts[moduleIdx+1:srcIdx]
-            // 如 mall/mall-mbg -> sibling=mall-swarm, parts[1:2]=mall-mbg
-            const siblingProjectRoot = path.join(parentRoot, sibling, parts.slice(moduleIdx + 1, srcIdx).join('/'));
-            possibleXmlPaths.push(
-              path.join(siblingProjectRoot, 'src', 'main', 'resources', packagePath, `${mapperClassName}.xml`),
-            );
-          }
+      // 多模块项目：当当前模块找不到时，尝试在仓库根目录下搜索
+      // 使用 glob 模式在整个仓库中查找同名 Mapper XML
+      // 这适用于 Maven 多模块项目（如 mall/mall-mbg 和 mall-swarm/mall-mbg）
+      const currentPathNotFound = await this.checkPathsExist(possibleXmlPaths);
+      if (!currentPathNotFound && javaIdx >= 0 && javaIdx + 1 < parts.length - 1) {
+        const packagePath = parts.slice(javaIdx + 1, parts.length - 1).join('/');
+        // 在整个仓库中搜索匹配的 XML 文件
+        const globPattern = `**/src/main/resources/${packagePath}/${mapperClassName}.xml`;
+        const foundXmlPath = await this.searchXmlInRepo(modulePath, globPattern);
+        if (foundXmlPath) {
+          possibleXmlPaths.unshift(foundXmlPath);  // 优先尝试找到的路径
         }
       }
     }
@@ -615,16 +591,34 @@ export class JavaAdapter implements LanguageAdapter {
   }
 
   /**
-   * 查找并列的模块目录
+   * 检查路径列表中是否有存在的路径
    */
-  private async findSiblingModules(parentRoot: string, currentModule: string): Promise<string[]> {
+  private async checkPathsExist(paths: string[]): Promise<boolean> {
+    for (const p of paths) {
+      try {
+        await fs.access(p);
+        return true;
+      } catch {
+        continue;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 在仓库中搜索匹配的 XML 文件
+   */
+  private async searchXmlInRepo(repoPath: string, globPattern: string): Promise<string | undefined> {
     try {
-      const entries = await fs.readdir(parentRoot, { withFileTypes: true });
-      return entries
-        .filter(e => e.isDirectory() && e.name !== currentModule)
-        .map(e => e.name);
+      const { glob } = await import('glob');
+      const files = await glob(globPattern, {
+        cwd: repoPath,
+        absolute: true,
+        ignore: ['**/test/**', '**/spec/**', '**/target/**'],
+      });
+      return files.length > 0 ? files[0] : undefined;
     } catch {
-      return [];
+      return undefined;
     }
   }
 
