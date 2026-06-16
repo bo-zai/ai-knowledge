@@ -5,7 +5,8 @@
  * 支持：
  * - 并行执行 Controller、Scheduled、MQ Consumer 路径发现
  * - 聚合 TableAnchor（跨模块识别）
- * - 补充表关联关系（Stub，Task 7）
+ * - 补充表关联关系（Task 7 已实现）
+ * - 聚类 Service 调用链（Task 7 已实现）
  * - 增强 Git Commit 信息（Stub，Task 8）
  * - 定义业务域（Stub，Task 8）
  */
@@ -23,6 +24,7 @@ import type {
   MapperInfo,
   TableInfo,
   EntityInfo,
+  ServiceCluster,
 } from './types.js';
 import { createLanguageAdapter, isLanguageSupported } from './language-adapters/index.js';
 import {
@@ -31,6 +33,16 @@ import {
   MqConsumerPathDiscovery,
 } from './discovery-paths/index.js';
 import { TableAnchorAggregator, createTableAnchorAggregator } from './table-anchor-aggregator.js';
+import {
+  TableRelationSupplementImpl,
+  createTableRelationSupplement,
+  type TableRelationSupplementConfig,
+} from './table-relation-supplement.js';
+import {
+  ServiceCallClusterImpl,
+  createServiceCallCluster,
+  type ServiceCallClusterConfig,
+} from './service-call-cluster.js';
 
 /**
  * 并行发现配置
@@ -88,23 +100,26 @@ export interface ParallelDiscoveryResult {
 }
 
 /**
- * 表关联补充器（Stub，Task 7 实现）
+ * 表关联补充器接口（Task 7 已实现）
  *
  * 分析表之间的关联关系，补充外键、关联密度等信息
  */
 export interface TableRelationSupplement {
   /** 补充表关联信息 */
-  supplement(tableAnchors: TableAnchor[]): Promise<TableAnchor[]>;
+  supplement(
+    tableAnchors: TableAnchor[],
+    pathResults?: DiscoveryPathResult[],
+  ): Promise<TableAnchor[]>;
 }
 
 /**
- * Service 调用链聚类（Stub，Task 7 实现）
+ * Service 调用链聚类接口（Task 7 已实现）
  *
  * 分析 Service 调用链，聚类相关服务
  */
 export interface ServiceCallCluster {
   /** 聚类 Service 调用链 */
-  cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, string[]>>;
+  cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, ServiceCluster>>;
 }
 
 /**
@@ -128,20 +143,23 @@ export interface BusinessDomainDefiner {
 }
 
 /**
- * Stub 实现：表关联补充器
+ * Stub 实现：表关联补充器（仅用于测试或禁用）
  */
 class StubTableRelationSupplement implements TableRelationSupplement {
-  async supplement(tableAnchors: TableAnchor[]): Promise<TableAnchor[]> {
+  async supplement(
+    tableAnchors: TableAnchor[],
+    pathResults?: DiscoveryPathResult[],
+  ): Promise<TableAnchor[]> {
     // Stub: 直接返回原始锚点，不做额外补充
     return tableAnchors;
   }
 }
 
 /**
- * Stub 实现：Service 调用链聚类
+ * Stub 实现：Service 调用链聚类（仅用于测试或禁用）
  */
 class StubServiceCallCluster implements ServiceCallCluster {
-  async cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, string[]>> {
+  async cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, ServiceCluster>> {
     // Stub: 返回空聚类
     return new Map();
   }
@@ -245,9 +263,10 @@ export class ParallelDiscoveryRunner {
     // 创建聚合器
     this.aggregator = createTableAnchorAggregator();
 
-    // 创建 Stub 组件（Task 7 和 Task 8 将替换为真实实现）
-    this.tableRelationSupplement = new StubTableRelationSupplement();
-    this.serviceCallCluster = new StubServiceCallCluster();
+    // Task 7: 使用真实实现（而非 Stub）
+    this.tableRelationSupplement = createTableRelationSupplement();
+    this.serviceCallCluster = createServiceCallCluster();
+    // Task 8: 继续使用 Stub（待后续实现）
     this.gitCommitEnhancer = new StubGitCommitEnhancer();
     this.businessDomainDefiner = new StubBusinessDomainDefiner();
   }
@@ -283,7 +302,7 @@ export class ParallelDiscoveryRunner {
     let tableAnchors = rawTableAnchors;
     if (this.config.enableTableRelation) {
       try {
-        tableAnchors = await this.tableRelationSupplement.supplement(rawTableAnchors);
+        tableAnchors = await this.tableRelationSupplement.supplement(rawTableAnchors, pathResults);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         errors.push(`表关联补充失败: ${errorMsg}`);
@@ -467,7 +486,7 @@ export class ParallelDiscoveryRunner {
           traceDepth: this.calculateTraceDepth(anchor),
           crossModule: anchor.isCrossModule ? 0.2 : 0,
           multiEntryPoint: this.calculateMultiEntryPointBonus(anchor),
-          tableRelation: 0, // Task 7 将补充
+          tableRelation: anchor.tableRelationBonus ?? 0, // Task 7 补充
         },
         modulePath: primarySource?.modulePath || '',
         moduleName: primarySource?.moduleName || '',

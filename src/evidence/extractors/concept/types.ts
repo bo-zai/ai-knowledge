@@ -47,6 +47,32 @@ export interface TableAnchor {
   moduleNames: string[];
 
   aggregatedConfidence: number;
+
+  // Task 7 添加：关联表信息
+  relatedTables?: RelatedTableInfo[];  // 通过外键关联的表
+  tableRelationBonus?: number;          // 表关联密度加成 0-0.1
+}
+
+/**
+ * 关联表信息 - Task 7 添加
+ */
+export interface RelatedTableInfo {
+  tableName: string;                     // 关联表名
+  relationType: 'foreign_key' | 'join';  // 关联类型
+  sourceField?: string;                  // 当前表的关联字段
+  targetField?: string;                  // 目标表的关联字段
+  confidence: number;                    // 关联置信度 0-1
+}
+
+/**
+ * Service 聚类 - Task 7 添加
+ */
+export interface ServiceCluster {
+  serviceName: string;                   // Service 类名（唯一标识）
+  entryPointCallers: string[];           // 调用该 Service 的入口点列表
+  callerServices: string[];              // 调用该 Service 的其他 Service
+  isDomainCore: boolean;                 // 是否为业务域核心
+  domainHint?: string;                   // 业务域提示（从表名推断）
 }
 
 /**
