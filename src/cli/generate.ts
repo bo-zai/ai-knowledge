@@ -28,6 +28,7 @@ import { buildCapabilityClaimPrompt } from '../generation/capability-claim-gener
 import { parseCapabilityClaimJson } from '../generation/capability-llm-claims-provider.js';
 import { initGraphData } from '../query/prepare-generation.js';
 import { cleanupKnowledgeDirs, ensureDirectoryStructure } from '../knowledge/init-directory.js';
+import { closeAllLbugResources } from '../engine/lbug/pool-adapter.js';
 import { createOpenAiClient, generateWithClient } from '../generation/llm-client.js';
 import { createOpenAiClaimsProvider } from '../generation/llm-provider-factory.js';
 import {
@@ -959,4 +960,6 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   logger.info(`ai-knowledge generated at ${path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR)}`);
   closeLogFile();
+  await closeAllLbugResources();
+  process.exit(0);
 }

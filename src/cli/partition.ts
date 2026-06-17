@@ -7,6 +7,7 @@
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 import { runDomainPartitioning } from '../partitioning/index.js';
 import { logger, setLogLevel } from '../shared/logger.js';
+import { closeAllLbugResources } from '../engine/lbug/pool-adapter.js';
 import type { PartitionConfig } from '../partitioning/types.js';
 
 export interface PartitionCliOptions {
@@ -65,9 +66,12 @@ export async function runPartition(options: PartitionCliOptions): Promise<void> 
     }
 
     console.log('\n✓ Partition completed successfully');
+    await closeAllLbugResources();
+    process.exit(0);
   } catch (err) {
     logger.error(`Partition failed: ${err}`);
     console.error(`\n✗ Partition failed: ${err}`);
-    throw err;
+    await closeAllLbugResources();
+    process.exit(1);
   }
 }

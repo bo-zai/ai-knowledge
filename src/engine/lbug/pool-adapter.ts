@@ -18,7 +18,7 @@
 import fs from 'fs/promises';
 import lbug from '@ladybugdb/core';
 import { type Database, Connection } from '@ladybugdb/core';
-import { loadFTSExtension } from './lbug-adapter.js';
+import { loadFTSExtension, closeLbug as closeWritableLbug } from './lbug-adapter.js';
 import { createLbugDatabase } from './lbug-config.js';
 
 /** Per-repo pool: one Database, many Connections */
@@ -611,4 +611,13 @@ export const CYPHER_WRITE_RE =
 /** Check if a Cypher query contains write operations */
 export function isWriteQuery(query: string): boolean {
   return CYPHER_WRITE_RE.test(query);
+}
+
+/**
+ * 关闭所有 LadybugDB 资源（read-only 连接池 + writable 单例连接）。
+ * 用于 CLI 命令退出前清理资源。
+ */
+export async function closeAllLbugResources(): Promise<void> {
+  await closeLbug();          // 关闭 read-only 连接池
+  await closeWritableLbug();  // 关闭 writable 单例连接
 }

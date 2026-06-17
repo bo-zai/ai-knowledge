@@ -8,6 +8,7 @@ import path from 'path';
 import { logger, setLogLevel, closeLogFile } from '../shared/logger.js';
 import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
 import { initGraphData } from '../query/prepare-generation.js';
+import { closeAllLbugResources } from '../engine/lbug/pool-adapter.js';
 
 interface InitOptions {
   repo?: string;
@@ -49,4 +50,8 @@ export async function runInit(options: InitOptions): Promise<void> {
   }
 
   closeLogFile();
+  await closeAllLbugResources();
+  // LadybugDB native 模块的 N-API destructor 在 Windows 上可能阻止进程正常退出。
+  // 所有 Node.js 层面的资源已正确清理，可以安全强制退出。
+  process.exit(0);
 }
