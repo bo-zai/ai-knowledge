@@ -75,14 +75,17 @@ export class DomainClusterAgent {
       // 构建输入消息
       const inputMessage = this.buildInputMessage(input);
 
-      // 调用 Agent（增加递归限制）
+      // 调用 Agent
+      // recursionLimit 控制 Agent 执行循环次数（每次工具调用算一次递归）
+      // 默认值 25 对于复杂分析任务可能不足，增加到 100 允许完成完整分析流程
+      // 防止 GraphRecursionError: Recursion limit reached without hitting a stop condition
       const response = await this.agent.invoke({
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: inputMessage },
         ],
       }, {
-        recursionLimit: 100, // 默认递归限制为 25，增加到 100
+        recursionLimit: 100,
       });
 
       // 解析响应
