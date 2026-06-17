@@ -15,8 +15,8 @@
  *     legacy behavior.
  */
 
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
-import { pythonMethodConfig } from '../../method-extractors/configs/python.js';
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
+import { pythonMethodConfig } from "../../method-extractors/configs/python.js";
 
 interface PythonArityMetadata {
   readonly parameterCount: number | undefined;
@@ -24,7 +24,9 @@ interface PythonArityMetadata {
   readonly parameterTypes: readonly string[] | undefined;
 }
 
-export function computePythonArityMetadata(fnNode: SyntaxNode): PythonArityMetadata {
+export function computePythonArityMetadata(
+  fnNode: SyntaxNode,
+): PythonArityMetadata {
   const params = pythonMethodConfig.extractParameters?.(fnNode) ?? [];
 
   let hasVariadic = false;
@@ -44,7 +46,9 @@ export function computePythonArityMetadata(fnNode: SyntaxNode): PythonArityMetad
   // to rule out under-application (e.g. picking `write_audit(x, y)` for
   // a 1-arg call). Legacy could get away with leaving it undefined
   // because its call-graph builder had a separate arity pre-filter.
-  const requiredParameterCount = hasVariadic ? undefined : total - optionalCount;
+  const requiredParameterCount = hasVariadic
+    ? undefined
+    : total - optionalCount;
 
   return {
     parameterCount,

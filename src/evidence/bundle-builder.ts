@@ -1,5 +1,5 @@
-import type { SliceEvidenceBundle, EvidenceFact } from './types.js';
-import { getRepoBasename } from '../shared/path-utils.js';
+import type { SliceEvidenceBundle, EvidenceFact } from "./types.js";
+import { getRepoBasename } from "../shared/path-utils.js";
 
 // 仓库级证据构建
 export function buildRepoEvidenceBundle(input: {
@@ -11,27 +11,27 @@ export function buildRepoEvidenceBundle(input: {
 }): SliceEvidenceBundle {
   const facts: EvidenceFact[] = [
     {
-      id: 'F-REPO-001',
+      id: "F-REPO-001",
       claim: `仓库 ${input.repoName} 位于 ${input.repoPath}`,
-      source_kind: 'filesystem',
+      source_kind: "filesystem",
       refs: [{ file: input.repoPath }],
     },
   ];
 
   if (input.techStack && input.techStack.length > 0) {
     facts.push({
-      id: 'F-REPO-002',
-      claim: `技术栈包含: ${input.techStack.join(', ')}`,
-      source_kind: 'filesystem',
+      id: "F-REPO-002",
+      claim: `技术栈包含: ${input.techStack.join(", ")}`,
+      source_kind: "filesystem",
       refs: [{ file: `${input.repoPath}/package.json` }],
     });
   }
 
   if (input.entryPoints && input.entryPoints.length > 0) {
     facts.push({
-      id: 'F-REPO-003',
-      claim: `入口文件: ${input.entryPoints.join(', ')}`,
-      source_kind: 'analysis-runtime',
+      id: "F-REPO-003",
+      claim: `入口文件: ${input.entryPoints.join(", ")}`,
+      source_kind: "analysis-runtime",
       refs: input.entryPoints.map((f) => ({ file: f })),
     });
   }
@@ -39,7 +39,7 @@ export function buildRepoEvidenceBundle(input: {
   return {
     slice: {
       id: `repo:${input.repoName}`,
-      kind: 'community',
+      kind: "community",
       title: input.repoName,
       scope: input.repoPath,
       seed: input.repoName,
@@ -67,37 +67,42 @@ export function buildRouteSliceEvidence(input: {
 }): SliceEvidenceBundle {
   const facts: EvidenceFact[] = [
     {
-      id: 'F-ROUTE-001',
+      id: "F-ROUTE-001",
       claim: `路由 ${input.method} ${input.path} 由 ${input.handlerFile} 处理`,
-      source_kind: 'analysis-runtime',
+      source_kind: "analysis-runtime",
       refs: [{ file: input.handlerFile }],
     },
   ];
 
   if (input.middleware && input.middleware.length > 0) {
     facts.push({
-      id: 'F-ROUTE-002',
-      claim: `中间件链: ${input.middleware.join(' -> ')}`,
-      source_kind: 'analysis-runtime',
+      id: "F-ROUTE-002",
+      claim: `中间件链: ${input.middleware.join(" -> ")}`,
+      source_kind: "analysis-runtime",
       refs: [{ file: input.handlerFile }],
     });
   }
 
-  const gaps: Array<{ id: string; kind: string; question: string; reason: string }> = [];
+  const gaps: Array<{
+    id: string;
+    kind: string;
+    question: string;
+    reason: string;
+  }> = [];
 
   if (!input.responseShape || input.responseShape.length === 0) {
     gaps.push({
-      id: 'G-ROUTE-001',
-      kind: 'missing-shape',
+      id: "G-ROUTE-001",
+      kind: "missing-shape",
       question: `路由 ${input.route} 的响应结构是什么？`,
-      reason: '无法从代码中提取响应结构',
+      reason: "无法从代码中提取响应结构",
     });
   }
 
   return {
     slice: {
       id: `route:${input.route}`,
-      kind: 'route',
+      kind: "route",
       title: input.route,
       scope: input.handlerFile,
       seed: input.route,
@@ -107,9 +112,9 @@ export function buildRouteSliceEvidence(input: {
       {
         id: `S-${input.route}-handler`,
         name: getRepoBasename(input.handlerFile),
-        kind: 'function',
+        kind: "function",
         file: input.handlerFile,
-        role: 'handler',
+        role: "handler",
       },
     ],
     relations: [],
@@ -130,15 +135,26 @@ export function buildProcessSliceEvidence(input: {
 }): SliceEvidenceBundle {
   const facts: EvidenceFact[] = [
     {
-      id: 'F-PROCESS-001',
+      id: "F-PROCESS-001",
       claim: `进程 ${input.processName} 从 ${input.entryFile} 开始`,
-      source_kind: 'analysis-runtime',
+      source_kind: "analysis-runtime",
       refs: [{ file: input.entryFile }],
     },
   ];
 
-  const symbols: Array<{ id: string; name: string; kind: string; file: string; role?: string }> = [];
-  const relations: Array<{ type: string; from: string; to: string; reason?: string }> = [];
+  const symbols: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    file: string;
+    role?: string;
+  }> = [];
+  const relations: Array<{
+    type: string;
+    from: string;
+    to: string;
+    reason?: string;
+  }> = [];
 
   // 构建步骤符号和关系
   for (const step of input.steps) {
@@ -146,7 +162,7 @@ export function buildProcessSliceEvidence(input: {
       symbols.push({
         id: `S-${input.processName}-STEP-${step.order}`,
         name: step.action,
-        kind: 'function',
+        kind: "function",
         file: step.file,
         role: `step-${step.order}`,
       });
@@ -155,31 +171,36 @@ export function buildProcessSliceEvidence(input: {
         const prevStep = input.steps.find((s) => s.order === step.order - 1);
         if (prevStep) {
           relations.push({
-            type: 'CALLS',
+            type: "CALLS",
             from: `S-${input.processName}-STEP-${prevStep.order}`,
             to: `S-${input.processName}-STEP-${step.order}`,
-            reason: '进程步骤顺序',
+            reason: "进程步骤顺序",
           });
         }
       }
     }
   }
 
-  const gaps: Array<{ id: string; kind: string; question: string; reason: string }> = [];
+  const gaps: Array<{
+    id: string;
+    kind: string;
+    question: string;
+    reason: string;
+  }> = [];
 
   if (!input.errorHandling || input.errorHandling.length === 0) {
     gaps.push({
-      id: 'G-PROCESS-001',
-      kind: 'missing-error-handling',
+      id: "G-PROCESS-001",
+      kind: "missing-error-handling",
       question: `进程 ${input.processName} 如何处理错误？`,
-      reason: '未发现错误处理代码',
+      reason: "未发现错误处理代码",
     });
   }
 
   return {
     slice: {
       id: `process:${input.processName}`,
-      kind: 'process',
+      kind: "process",
       title: input.processName,
       scope: input.entryFile,
       seed: input.processName,
@@ -205,15 +226,15 @@ export function buildModuleSliceEvidence(input: {
 }): SliceEvidenceBundle {
   const facts: EvidenceFact[] = [
     {
-      id: 'F-MOD-001',
+      id: "F-MOD-001",
       claim: `模块 ${input.moduleName} 定义在 ${input.filePath}`,
-      source_kind: 'analysis-runtime',
+      source_kind: "analysis-runtime",
       refs: [{ file: input.filePath }],
     },
     {
-      id: 'F-MOD-002',
-      claim: `导出: ${input.exports.map((e) => e.name).join(', ')}`,
-      source_kind: 'analysis-runtime',
+      id: "F-MOD-002",
+      claim: `导出: ${input.exports.map((e) => e.name).join(", ")}`,
+      source_kind: "analysis-runtime",
       refs: [{ file: input.filePath }],
     },
   ];
@@ -223,24 +244,29 @@ export function buildModuleSliceEvidence(input: {
     name: exp.name,
     kind: exp.kind,
     file: input.filePath,
-    role: 'export',
+    role: "export",
   }));
 
-  const relations: Array<{ type: string; from: string; to: string; reason?: string }> = [];
+  const relations: Array<{
+    type: string;
+    from: string;
+    to: string;
+    reason?: string;
+  }> = [];
 
   for (const dep of input.imports) {
     relations.push({
-      type: 'IMPORTS',
+      type: "IMPORTS",
       from: input.moduleName,
       to: dep,
-      reason: '模块依赖',
+      reason: "模块依赖",
     });
   }
 
   return {
     slice: {
       id: `module:${input.moduleName}`,
-      kind: 'tool',
+      kind: "tool",
       title: input.moduleName,
       scope: input.filePath,
       seed: input.moduleName,
@@ -260,8 +286,13 @@ export function buildDatabaseSliceEvidence(input: {
   tableName: string;
   schemaName: string;
   sourceFile: string;
-  sourceKind: 'ddl' | 'migration' | 'orm' | 'sql' | 'inferred';
-  fields: Array<{ name: string; type: string; description?: string; source: 'comment' | 'inferred' }>;
+  sourceKind: "ddl" | "migration" | "orm" | "sql" | "inferred";
+  fields: Array<{
+    name: string;
+    type: string;
+    description?: string;
+    source: "comment" | "inferred";
+  }>;
   primaryKey?: string[];
   foreignKeys?: Array<{ field: string; targetTable: string }>;
   readBy?: string[];
@@ -269,7 +300,7 @@ export function buildDatabaseSliceEvidence(input: {
 }): SliceEvidenceBundle {
   const facts: EvidenceFact[] = [
     {
-      id: 'F-DB-001',
+      id: "F-DB-001",
       claim: `表 ${input.schemaName}.${input.tableName} 存在于 ${input.sourceFile}`,
       source_kind: input.sourceKind,
       refs: [{ file: input.sourceFile }],
@@ -278,42 +309,48 @@ export function buildDatabaseSliceEvidence(input: {
 
   if (input.primaryKey && input.primaryKey.length > 0) {
     facts.push({
-      id: 'F-DB-002',
-      claim: `主键: ${input.primaryKey.join(', ')}`,
+      id: "F-DB-002",
+      claim: `主键: ${input.primaryKey.join(", ")}`,
       source_kind: input.sourceKind,
       refs: [{ file: input.sourceFile }],
     });
   }
 
-  const gaps: Array<{ id: string; kind: string; question: string; reason: string }> = [];
+  const gaps: Array<{
+    id: string;
+    kind: string;
+    question: string;
+    reason: string;
+  }> = [];
 
   // 检查是否有 inferred 字段描述
-  const inferredFields = input.fields.filter((f) => f.source === 'inferred');
+  const inferredFields = input.fields.filter((f) => f.source === "inferred");
   if (inferredFields.length > 0) {
     gaps.push({
-      id: 'G-DB-001',
-      kind: 'inferred-description',
-      question: `字段 ${inferredFields.map((f) => f.name).join(', ')} 的描述来自推断，需要验证`,
-      reason: '缺少源注释',
+      id: "G-DB-001",
+      kind: "inferred-description",
+      question: `字段 ${inferredFields.map((f) => f.name).join(", ")} 的描述来自推断，需要验证`,
+      reason: "缺少源注释",
     });
   }
 
   return {
     slice: {
       id: `database:${input.tableName}`,
-      kind: 'database',
+      kind: "database",
       title: input.tableName,
       scope: `${input.schemaName}.${input.tableName}`,
       seed: input.tableName,
     },
     facts,
     symbols: [],
-    relations: input.foreignKeys?.map((fk) => ({
-      type: 'FK',
-      from: `${input.tableName}.${fk.field}`,
-      to: fk.targetTable,
-      reason: '外键关系',
-    })) ?? [],
+    relations:
+      input.foreignKeys?.map((fk) => ({
+        type: "FK",
+        from: `${input.tableName}.${fk.field}`,
+        to: fk.targetTable,
+        reason: "外键关系",
+      })) ?? [],
     snippets: [],
     tables: [input.tableName],
     tests: [],

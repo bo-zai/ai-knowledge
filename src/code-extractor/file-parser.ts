@@ -5,16 +5,19 @@
  * 使用 Tree-sitter 解析，复用现有的语言提取配置。
  */
 
-import * as fs from 'node:fs/promises';
-import { SupportedLanguages, getLanguageFromFilename } from '../engine/shared/index.js';
-import { createParserForLanguage } from '../engine/tree-sitter/parser-loader.js';
-import type { SyntaxNode } from '../engine/ingestion/utils/ast-helpers.js';
+import * as fs from "node:fs/promises";
+import {
+  SupportedLanguages,
+  getLanguageFromFilename,
+} from "../engine/shared/index.js";
+import { createParserForLanguage } from "../engine/tree-sitter/parser-loader.js";
+import type { SyntaxNode } from "../engine/ingestion/utils/ast-helpers.js";
 import type {
   ExtractedClassCode,
   ExtractedField,
   ExtractedMethod,
   GraphClassNode,
-} from './types.js';
+} from "./types.js";
 
 /**
  * 解析文件并提取类结构
@@ -39,7 +42,7 @@ export async function parseFileAndExtractClass(
 
   try {
     // 读取文件内容
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await fs.readFile(filePath, "utf-8");
 
     // 获取 Tree-sitter 解析器
     const parser = await createParserForLanguage(language, filePath);
@@ -63,8 +66,8 @@ export async function parseFileAndExtractClass(
 function findClassNode(root: any, className: string): any | null {
   // 递归查找 class_declaration 节点
   const findNode = (node: any): any | null => {
-    if (node.type === 'class_declaration') {
-      const nameNode = node.childForFieldName?.('name');
+    if (node.type === "class_declaration") {
+      const nameNode = node.childForFieldName?.("name");
       if (nameNode?.text === className) {
         return node;
       }
@@ -92,8 +95,8 @@ function extractClassFromAst(
   filePath: string,
   language: SupportedLanguages,
 ): ExtractedClassCode | null {
-  const nameNode = classNode.childForFieldName?.('name');
-  const className = nameNode?.text || '';
+  const nameNode = classNode.childForFieldName?.("name");
+  const className = nameNode?.text || "";
   if (!className) return null;
 
   const startLine = classNode.startPosition?.row + 1 || 1;
@@ -107,17 +110,17 @@ function extractClassFromAst(
   const fields: ExtractedField[] = [];
   const methods: ExtractedMethod[] = [];
 
-  const bodyNode = classNode.childForFieldName?.('body');
+  const bodyNode = classNode.childForFieldName?.("body");
   if (bodyNode) {
     for (let i = 0; i < bodyNode.namedChildCount; i++) {
       const child = bodyNode.namedChild(i);
 
-      if (child.type === 'field_declaration') {
+      if (child.type === "field_declaration") {
         const field = extractFieldFromAst(child, sourceCode);
         if (field) fields.push(field);
       }
 
-      if (child.type === 'method_declaration') {
+      if (child.type === "method_declaration") {
         const method = extractMethodFromAst(child, sourceCode);
         if (method) methods.push(method);
       }
@@ -125,10 +128,10 @@ function extractClassFromAst(
   }
 
   // 构建完整片段和精简片段
-  const lines = sourceCode.split('\n');
+  const lines = sourceCode.split("\n");
   const startIdx = Math.max(0, startLine - 3);
   const endIdx = Math.min(lines.length, endLine + 2);
-  const fullSnippet = lines.slice(startIdx, endIdx).join('\n');
+  const fullSnippet = lines.slice(startIdx, endIdx).join("\n");
 
   const compactSnippet = buildCompactSnippet(classDeclaration, fields, methods);
 
@@ -151,19 +154,19 @@ function extractClassFromAst(
  */
 function extractClassDeclaration(classNode: any, sourceCode: string): string {
   const startLine = classNode.startPosition?.row || 0;
-  const lines = sourceCode.split('\n');
+  const lines = sourceCode.split("\n");
 
   // 找到类声明的结束位置（第一个 {）
   const declarationLines: string[] = [];
   for (let i = startLine; i < lines.length; i++) {
     const line = lines[i];
     declarationLines.push(line);
-    if (line.includes('{')) {
+    if (line.includes("{")) {
       break;
     }
   }
 
-  return declarationLines.join('\n').trim();
+  return declarationLines.join("\n").trim();
 }
 
 /**
@@ -171,7 +174,7 @@ function extractClassDeclaration(classNode: any, sourceCode: string): string {
  */
 function findDeclarationEndLine(classNode: any): number {
   const startLine = classNode.startPosition?.row + 1 || 1;
-  const bodyNode = classNode.childForFieldName?.('body');
+  const bodyNode = classNode.childForFieldName?.("body");
   if (bodyNode) {
     return bodyNode.startPosition?.row + 1 || startLine;
   }
@@ -181,13 +184,16 @@ function findDeclarationEndLine(classNode: any): number {
 /**
  * 从 AST 提取字段信息
  */
-function extractFieldFromAst(node: any, sourceCode: string): ExtractedField | null {
-  const declarator = node.childForFieldName?.('declarator');
-  const nameNode = declarator?.childForFieldName?.('name');
+function extractFieldFromAst(
+  node: any,
+  sourceCode: string,
+): ExtractedField | null {
+  const declarator = node.childForFieldName?.("declarator");
+  const nameNode = declarator?.childForFieldName?.("name");
   const name = nameNode?.text;
   if (!name) return null;
 
-  const typeNode = node.childForFieldName?.('type');
+  const typeNode = node.childForFieldName?.("type");
   const type = typeNode?.text;
 
   const line = node.startPosition?.row + 1 || 1;
@@ -197,10 +203,10 @@ function extractFieldFromAst(node: any, sourceCode: string): ExtractedField | nu
 
   // 提取修饰符
   const modifiers: string[] = [];
-  const modifiersNode = node.children?.find((c: any) => c.type === 'modifiers');
+  const modifiersNode = node.children?.find((c: any) => c.type === "modifiers");
   if (modifiersNode) {
     for (const child of modifiersNode.children || []) {
-      if (child.type === 'modifier') {
+      if (child.type === "modifier") {
         modifiers.push(child.text);
       }
     }
@@ -218,15 +224,18 @@ function extractFieldFromAst(node: any, sourceCode: string): ExtractedField | nu
 /**
  * 从 AST 提取方法信息
  */
-function extractMethodFromAst(node: any, sourceCode: string): ExtractedMethod | null {
-  const nameNode = node.childForFieldName?.('name');
+function extractMethodFromAst(
+  node: any,
+  sourceCode: string,
+): ExtractedMethod | null {
+  const nameNode = node.childForFieldName?.("name");
   const name = nameNode?.text;
   if (!name) return null;
 
-  const returnTypeNode = node.childForFieldName?.('type');
+  const returnTypeNode = node.childForFieldName?.("type");
   const returnType = returnTypeNode?.text;
 
-  const paramsNode = node.childForFieldName?.('parameters');
+  const paramsNode = node.childForFieldName?.("parameters");
   const parameters = paramsNode?.namedChildCount || 0;
 
   const startLine = node.startPosition?.row + 1 || 1;
@@ -237,10 +246,10 @@ function extractMethodFromAst(node: any, sourceCode: string): ExtractedMethod | 
 
   // 提取修饰符
   const modifiers: string[] = [];
-  const modifiersNode = node.children?.find((c: any) => c.type === 'modifiers');
+  const modifiersNode = node.children?.find((c: any) => c.type === "modifiers");
   if (modifiersNode) {
     for (const child of modifiersNode.children || []) {
-      if (child.type === 'modifier') {
+      if (child.type === "modifier") {
         modifiers.push(child.text);
       }
     }
@@ -262,11 +271,11 @@ function extractMethodFromAst(node: any, sourceCode: string): ExtractedMethod | 
  */
 function extractMethodSignatureFromAst(node: any, sourceCode: string): string {
   const startIdx = node.startIndex;
-  const bodyNode = node.childForFieldName?.('body');
+  const bodyNode = node.childForFieldName?.("body");
   const bodyStartIdx = bodyNode?.startIndex || node.endIndex;
 
   const signatureContent = sourceCode.slice(startIdx, bodyStartIdx).trim();
-  return signatureContent + ';';
+  return signatureContent + ";";
 }
 
 /**
@@ -281,14 +290,14 @@ function buildCompactSnippet(
 
   // 类声明
   lines.push(classDeclaration);
-  lines.push('');
+  lines.push("");
 
   // 字段声明
   if (fields.length > 0) {
     for (const field of fields) {
       lines.push(`  ${field.content.trim()}`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   // 方法签名
@@ -299,9 +308,9 @@ function buildCompactSnippet(
   }
 
   // 类结尾
-  lines.push('}');
+  lines.push("}");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -319,13 +328,13 @@ export async function extractFromFileWithGraphLines(
   }
 
   try {
-    const content = await fs.readFile(filePath, 'utf-8');
-    const lines = content.split('\n');
+    const content = await fs.readFile(filePath, "utf-8");
+    const lines = content.split("\n");
 
     // 使用图中的行号范围
     const startIdx = Math.max(0, classNode.startLine - 3);
     const endIdx = Math.min(lines.length, classNode.endLine + 2);
-    const fullSnippet = lines.slice(startIdx, endIdx).join('\n');
+    const fullSnippet = lines.slice(startIdx, endIdx).join("\n");
 
     // 使用 Tree-sitter 解析提取结构
     const parser = await createParserForLanguage(language, filePath);
@@ -338,8 +347,11 @@ export async function extractFromFileWithGraphLines(
         filePath: classNode.filePath,
         startLine: classNode.startLine,
         endLine: classNode.endLine,
-        classDeclaration: lines.slice(startIdx, startIdx + 5).join('\n'),
-        declarationLines: { start: classNode.startLine, end: classNode.startLine + 5 },
+        classDeclaration: lines.slice(startIdx, startIdx + 5).join("\n"),
+        declarationLines: {
+          start: classNode.startLine,
+          end: classNode.startLine + 5,
+        },
         fields: [],
         methods: [],
         fullSnippet,

@@ -1,14 +1,14 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/php.ts
 // Verified against tree-sitter-php 0.23.12
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // PHP helpers
@@ -18,7 +18,10 @@ import type { SyntaxNode } from '../../utils/ast-helpers.js';
 const PHPDOC_RETURN_RE = /@return\s+(\S+)/;
 
 /** Node types to skip when walking backwards through siblings for PHPDoc. */
-const PHPDOC_SKIP_NODE_TYPES: ReadonlySet<string> = new Set(['attribute_list', 'attribute']);
+const PHPDOC_SKIP_NODE_TYPES: ReadonlySet<string> = new Set([
+  "attribute_list",
+  "attribute",
+]);
 
 /**
  * Normalize a PHPDoc return type for the MethodExtractor.
@@ -26,21 +29,23 @@ const PHPDOC_SKIP_NODE_TYPES: ReadonlySet<string> = new Set(['attribute_list', '
  * rejects uninformative types (mixed, void, self, static, object, array).
  */
 function normalizePhpReturnType(raw: string): string | undefined {
-  let type = raw.startsWith('?') ? raw.slice(1) : raw;
+  let type = raw.startsWith("?") ? raw.slice(1) : raw;
   const parts = type
-    .split('|')
-    .filter((p) => p !== 'null' && p !== 'false' && p !== 'void' && p !== 'mixed');
+    .split("|")
+    .filter(
+      (p) => p !== "null" && p !== "false" && p !== "void" && p !== "mixed",
+    );
   if (parts.length !== 1) return undefined;
   type = parts[0];
-  const segments = type.split('\\');
+  const segments = type.split("\\");
   type = segments[segments.length - 1];
   if (
-    type === 'mixed' ||
-    type === 'void' ||
-    type === 'self' ||
-    type === 'static' ||
-    type === 'object' ||
-    type === 'array'
+    type === "mixed" ||
+    type === "void" ||
+    type === "self" ||
+    type === "static" ||
+    type === "object" ||
+    type === "array"
   )
     return undefined;
   if (/^\w+(\[\])?$/.test(type) || /^\w+\s*</.test(type)) return type;
@@ -54,7 +59,7 @@ function normalizePhpReturnType(raw: string): string | undefined {
 function extractPhpDocReturnType(node: SyntaxNode): string | undefined {
   let sibling = node.previousSibling;
   while (sibling) {
-    if (sibling.type === 'comment') {
+    if (sibling.type === "comment") {
       const match = PHPDOC_RETURN_RE.exec(sibling.text);
       if (match) return normalizePhpReturnType(match[1]);
     } else if (sibling.isNamed && !PHPDOC_SKIP_NODE_TYPES.has(sibling.type)) {
@@ -65,7 +70,7 @@ function extractPhpDocReturnType(node: SyntaxNode): string | undefined {
   return undefined;
 }
 
-const PHP_VIS = new Set<MethodVisibility>(['public', 'private', 'protected']);
+const PHP_VIS = new Set<MethodVisibility>(["public", "private", "protected"]);
 
 /**
  * Find the visibility keyword from a visibility_modifier named child.
@@ -75,12 +80,12 @@ const PHP_VIS = new Set<MethodVisibility>(['public', 'private', 'protected']);
 function findPhpVisibility(node: SyntaxNode): MethodVisibility {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child?.type === 'visibility_modifier') {
+    if (child?.type === "visibility_modifier") {
       const text = child.text.trim() as MethodVisibility;
       if (PHP_VIS.has(text)) return text;
     }
   }
-  return 'public'; // PHP methods are public by default
+  return "public"; // PHP methods are public by default
 }
 
 /**
@@ -109,12 +114,12 @@ function hasModifierNode(node: SyntaxNode, modifierType: string): boolean {
  */
 function extractPhpReturnType(node: SyntaxNode): string | undefined {
   const TYPE_NODE_TYPES = new Set([
-    'primitive_type',
-    'named_type',
-    'union_type',
-    'optional_type',
-    'nullable_type',
-    'intersection_type',
+    "primitive_type",
+    "named_type",
+    "union_type",
+    "optional_type",
+    "nullable_type",
+    "intersection_type",
   ]);
 
   let astType: string | undefined;
@@ -122,7 +127,7 @@ function extractPhpReturnType(node: SyntaxNode): string | undefined {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
-    if (child.type === 'formal_parameters') {
+    if (child.type === "formal_parameters") {
       seenParams = true;
       continue;
     }
@@ -132,13 +137,16 @@ function extractPhpReturnType(node: SyntaxNode): string | undefined {
       break;
     }
     // Stop at body or semicolon
-    if (child.type === 'compound_statement' || (!child.isNamed && child.text === ';')) {
+    if (
+      child.type === "compound_statement" ||
+      (!child.isNamed && child.text === ";")
+    ) {
       break;
     }
   }
 
   // If AST type is missing or uninformative, try PHPDoc @return fallback
-  if (!astType || astType === 'array' || astType === 'iterable') {
+  if (!astType || astType === "array" || astType === "iterable") {
     const docType = extractPhpDocReturnType(node);
     if (docType) return docType;
   }
@@ -156,7 +164,7 @@ function extractPhpReturnType(node: SyntaxNode): string | undefined {
  *   (may also be variadic via an ERROR node containing `...`)
  */
 function extractPhpParameters(node: SyntaxNode): ParameterInfo[] {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return [];
 
   const params: ParameterInfo[] = [];
@@ -165,17 +173,19 @@ function extractPhpParameters(node: SyntaxNode): ParameterInfo[] {
     const param = paramList.namedChild(i);
     if (!param) continue;
 
-    if (param.type === 'simple_parameter') {
-      const nameNode = param.childForFieldName('name');
+    if (param.type === "simple_parameter") {
+      const nameNode = param.childForFieldName("name");
       if (!nameNode) continue;
-      const typeNode = param.childForFieldName('type');
-      const typeName = typeNode ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim()) : null;
+      const typeNode = param.childForFieldName("type");
+      const typeName = typeNode
+        ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim())
+        : null;
 
       // Detect optional: '=' token among children indicates a default value
       let isOptional = false;
       for (let j = 0; j < param.childCount; j++) {
         const c = param.child(j);
-        if (c && !c.isNamed && c.text === '=') {
+        if (c && !c.isNamed && c.text === "=") {
           isOptional = true;
           break;
         }
@@ -188,11 +198,13 @@ function extractPhpParameters(node: SyntaxNode): ParameterInfo[] {
         isOptional,
         isVariadic: false,
       });
-    } else if (param.type === 'variadic_parameter') {
-      const nameNode = param.childForFieldName('name');
+    } else if (param.type === "variadic_parameter") {
+      const nameNode = param.childForFieldName("name");
       if (!nameNode) continue;
-      const typeNode = param.childForFieldName('type');
-      const typeName = typeNode ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim()) : null;
+      const typeNode = param.childForFieldName("type");
+      const typeName = typeNode
+        ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim())
+        : null;
 
       params.push({
         name: stripDollar(nameNode.text),
@@ -201,17 +213,22 @@ function extractPhpParameters(node: SyntaxNode): ParameterInfo[] {
         isOptional: false,
         isVariadic: true,
       });
-    } else if (param.type === 'property_promotion_parameter') {
-      const nameNode = param.childForFieldName('name');
+    } else if (param.type === "property_promotion_parameter") {
+      const nameNode = param.childForFieldName("name");
       if (!nameNode) continue;
-      const typeNode = param.childForFieldName('type');
-      const typeName = typeNode ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim()) : null;
+      const typeNode = param.childForFieldName("type");
+      const typeName = typeNode
+        ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim())
+        : null;
 
       // Detect variadic: an ERROR child containing "..." indicates variadic promotion
       let isVariadic = false;
       for (let j = 0; j < param.childCount; j++) {
         const c = param.child(j);
-        if (c && (c.text === '...' || (c.type === 'ERROR' && c.text === '...'))) {
+        if (
+          c &&
+          (c.text === "..." || (c.type === "ERROR" && c.text === "..."))
+        ) {
           isVariadic = true;
           break;
         }
@@ -232,7 +249,7 @@ function extractPhpParameters(node: SyntaxNode): ParameterInfo[] {
 
 /** Strip leading $ from PHP variable names. */
 function stripDollar(name: string): string {
-  return name.startsWith('$') ? name.slice(1) : name;
+  return name.startsWith("$") ? name.slice(1) : name;
 }
 
 /**
@@ -245,16 +262,16 @@ function extractPhpAnnotations(node: SyntaxNode): string[] {
   const annotations: string[] = [];
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (!child || child.type !== 'attribute_list') continue;
+    if (!child || child.type !== "attribute_list") continue;
     for (let j = 0; j < child.namedChildCount; j++) {
       const group = child.namedChild(j);
-      if (!group || group.type !== 'attribute_group') continue;
+      if (!group || group.type !== "attribute_group") continue;
       for (let k = 0; k < group.namedChildCount; k++) {
         const attr = group.namedChild(k);
-        if (!attr || attr.type !== 'attribute') continue;
+        if (!attr || attr.type !== "attribute") continue;
         const nameNode = attr.firstNamedChild;
-        if (nameNode && nameNode.type === 'name') {
-          annotations.push('#' + nameNode.text);
+        if (nameNode && nameNode.type === "name") {
+          annotations.push("#" + nameNode.text);
         }
       }
     }
@@ -269,16 +286,16 @@ function extractPhpAnnotations(node: SyntaxNode): string[] {
 export const phpMethodConfig: MethodExtractionConfig = {
   language: SupportedLanguages.PHP,
   typeDeclarationNodes: [
-    'class_declaration',
-    'interface_declaration',
-    'trait_declaration',
-    'enum_declaration',
+    "class_declaration",
+    "interface_declaration",
+    "trait_declaration",
+    "enum_declaration",
   ],
-  methodNodeTypes: ['method_declaration', 'function_definition'],
-  bodyNodeTypes: ['declaration_list'],
+  methodNodeTypes: ["method_declaration", "function_definition"],
+  bodyNodeTypes: ["declaration_list"],
 
   extractName(node) {
-    return node.childForFieldName('name')?.text;
+    return node.childForFieldName("name")?.text;
   },
 
   extractReturnType: extractPhpReturnType,
@@ -288,19 +305,19 @@ export const phpMethodConfig: MethodExtractionConfig = {
   extractVisibility: findPhpVisibility,
 
   isStatic(node) {
-    return hasModifierNode(node, 'static_modifier');
+    return hasModifierNode(node, "static_modifier");
   },
 
   isAbstract(node, ownerNode) {
-    if (hasModifierNode(node, 'abstract_modifier')) return true;
+    if (hasModifierNode(node, "abstract_modifier")) return true;
     // Interface methods are implicitly abstract when they have no body.
     // Check ownerNode first, then fall back to walking the parent chain
     // (needed when called from extractFromNode where ownerNode === node).
-    let isInterface = ownerNode.type === 'interface_declaration';
+    let isInterface = ownerNode.type === "interface_declaration";
     if (!isInterface) {
       let p = node.parent;
       while (p) {
-        if (p.type === 'interface_declaration') {
+        if (p.type === "interface_declaration") {
           isInterface = true;
           break;
         }
@@ -308,10 +325,10 @@ export const phpMethodConfig: MethodExtractionConfig = {
       }
     }
     if (isInterface) {
-      const body = node.childForFieldName('body');
+      const body = node.childForFieldName("body");
       if (body) return false;
       for (let i = 0; i < node.namedChildCount; i++) {
-        if (node.namedChild(i)?.type === 'compound_statement') return false;
+        if (node.namedChild(i)?.type === "compound_statement") return false;
       }
       return true;
     }
@@ -319,7 +336,7 @@ export const phpMethodConfig: MethodExtractionConfig = {
   },
 
   isFinal(node) {
-    return hasModifierNode(node, 'final_modifier');
+    return hasModifierNode(node, "final_modifier");
   },
 
   extractAnnotations: extractPhpAnnotations,

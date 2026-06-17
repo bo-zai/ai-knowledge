@@ -9,9 +9,9 @@
  * 第五层：LLM 生成
  */
 
-import { execSync } from 'child_process';
-import type { KnowledgeType } from '../schemas/knowledge-type.js';
-import { PromptLoader } from '../shared/prompt-loader.js';
+import { execSync } from "child_process";
+import type { KnowledgeType } from "../schemas/knowledge-type.js";
+import { PromptLoader } from "../shared/prompt-loader.js";
 
 /**
  * 原始候选（从 AST 图谱查询得到）
@@ -27,7 +27,11 @@ export interface ConceptCandidate {
 /**
  * 软标记类型
  */
-export type SuspiciousMark = 'transmission_class' | 'config_class' | 'simple_enum' | 'external_enum_usage';
+export type SuspiciousMark =
+  | "transmission_class"
+  | "config_class"
+  | "simple_enum"
+  | "external_enum_usage";
 
 /**
  * 经过第一、二层过滤的候选
@@ -95,18 +99,10 @@ export const HARD_FILTER_RULES = {
   ],
 
   // 启动/入口类模式
-  entryPatterns: [
-    /Application$/i,
-    /Main$/i,
-    /Bootstrap$/i,
-    /Launcher$/i,
-  ],
+  entryPatterns: [/Application$/i, /Main$/i, /Bootstrap$/i, /Launcher$/i],
 
   // 简单异常类模式（无业务错误码）
-  simpleExceptionPatterns: [
-    /Exception$/i,
-    /Error$/i,
-  ],
+  simpleExceptionPatterns: [/Exception$/i, /Error$/i],
 };
 
 /**
@@ -114,10 +110,10 @@ export const HARD_FILTER_RULES = {
  */
 export function isGitIgnored(filePath: string, repoPath: string): boolean {
   try {
-    execSync(
-      `git -C "${repoPath}" check-ignore --quiet "${filePath}"`,
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-    );
+    execSync(`git -C "${repoPath}" check-ignore --quiet "${filePath}"`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
     return true; // 文件被 ignore，命令成功返回
   } catch {
     return false; // 文件未被 ignore 或 git 命令失败
@@ -128,7 +124,7 @@ export function isGitIgnored(filePath: string, repoPath: string): boolean {
  * 检查是否匹配任意模式
  */
 function matchesAnyPattern(text: string, patterns: RegExp[]): boolean {
-  return patterns.some(pattern => pattern.test(text));
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 /**
@@ -136,12 +132,15 @@ function matchesAnyPattern(text: string, patterns: RegExp[]): boolean {
  *
  * 返回 true 表示应该过滤掉（排除）
  */
-export function hardFilter(candidate: ConceptCandidate, repoPath: string): boolean {
+export function hardFilter(
+  candidate: ConceptCandidate,
+  repoPath: string,
+): boolean {
   const { className, filePath, suspiciousMark } = candidate;
 
   // 外部引用候选（已在发现阶段进行业务判断）跳过硬过滤
-  if (suspiciousMark === 'external_enum_usage') {
-    return false;  // 保留外部引用候选
+  if (suspiciousMark === "external_enum_usage") {
+    return false; // 保留外部引用候选
   }
 
   // gitignore 检查
@@ -184,9 +183,9 @@ export function hardFilter(candidate: ConceptCandidate, repoPath: string): boole
  */
 export function hardFilterBatch(
   candidates: ConceptCandidate[],
-  repoPath: string
+  repoPath: string,
 ): ConceptCandidate[] {
-  return candidates.filter(c => !hardFilter(c, repoPath));
+  return candidates.filter((c) => !hardFilter(c, repoPath));
 }
 
 // ============================================================================
@@ -210,12 +209,7 @@ export const SOFT_MARK_RULES = {
   ],
 
   // 配置类模式
-  configPatterns: [
-    /Config$/i,
-    /Configuration$/i,
-    /Properties$/i,
-    /Settings$/i,
-  ],
+  configPatterns: [/Config$/i, /Configuration$/i, /Properties$/i, /Settings$/i],
 };
 
 /**
@@ -227,17 +221,17 @@ export function softMark(candidate: ConceptCandidate): SuspiciousMark | null {
   // 简单枚举标记（值数量 < 3）
   // 注意：命名自解释判断是语言特定的，在语言适配器中实现
   if (enumValues && enumValues.length < 3) {
-    return 'simple_enum';
+    return "simple_enum";
   }
 
   // 传输类标记
   if (matchesAnyPattern(className, SOFT_MARK_RULES.transmissionPatterns)) {
-    return 'transmission_class';
+    return "transmission_class";
   }
 
   // 配置类标记
   if (matchesAnyPattern(className, SOFT_MARK_RULES.configPatterns)) {
-    return 'config_class';
+    return "config_class";
   }
 
   return null; // 不需要标记，直接进入下一层
@@ -246,8 +240,10 @@ export function softMark(candidate: ConceptCandidate): SuspiciousMark | null {
 /**
  * 批量软标记
  */
-export function softMarkBatch(candidates: ConceptCandidate[]): FilteredCandidate[] {
-  return candidates.map(c => ({
+export function softMarkBatch(
+  candidates: ConceptCandidate[],
+): FilteredCandidate[] {
+  return candidates.map((c) => ({
     ...c,
     suspiciousMark: softMark(c) ?? undefined,
   }));
@@ -263,17 +259,18 @@ export function softMarkBatch(candidates: ConceptCandidate[]): FilteredCandidate
  * 使用 src/prompts/concept-filter.md 模板文件
  */
 export function buildLlmFilterPrompt(candidate: FilteredCandidate): string {
-  const { className, filePath, suspiciousMark, codeSnippet, enumValues } = candidate;
+  const { className, filePath, suspiciousMark, codeSnippet, enumValues } =
+    candidate;
 
   // 加载提示词模板并填充参数
-  const template = PromptLoader.load('concept-filter');
+  const template = PromptLoader.load("concept-filter");
 
   return template.fill({
     className,
     filePath,
     suspiciousMark: suspiciousMark || undefined,
     codeSnippet: codeSnippet || undefined,
-    enumValues: enumValues ? enumValues.join(', ') : undefined,
+    enumValues: enumValues ? enumValues.join(", ") : undefined,
   });
 }
 
@@ -287,10 +284,10 @@ export function buildLlmFilterPrompt(candidate: FilteredCandidate): string {
 export function stringSimilarity(s1: string, s2: string): number {
   if (!s1 || !s2) return 0;
 
-  const set1 = new Set(s1.toLowerCase().split(''));
-  const set2 = new Set(s2.toLowerCase().split(''));
+  const set1 = new Set(s1.toLowerCase().split(""));
+  const set2 = new Set(s2.toLowerCase().split(""));
 
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const intersection = new Set([...set1].filter((x) => set2.has(x)));
   const union = new Set([...set1, ...set2]);
 
   return intersection.size / union.size;
@@ -300,12 +297,15 @@ export function stringSimilarity(s1: string, s2: string): number {
  * 提取文件路径的包路径部分
  */
 function extractPackagePath(filePath: string): string {
-  const parts = filePath.split('/');
+  const parts = filePath.split("/");
   // 排除常见的非业务路径前缀
-  const significantParts = parts.filter(p =>
-    !['src', 'main', 'java', 'kotlin', 'com', 'org', 'app'].includes(p.toLowerCase())
+  const significantParts = parts.filter(
+    (p) =>
+      !["src", "main", "java", "kotlin", "com", "org", "app"].includes(
+        p.toLowerCase(),
+      ),
   );
-  return significantParts.slice(-2).join('/');
+  return significantParts.slice(-2).join("/");
 }
 
 /**
@@ -319,10 +319,10 @@ function extractPackagePath(filePath: string): string {
  */
 export function groupCandidates(
   candidates: FilteredCandidate[],
-  llmResults: Map<string, LlmFilterResult>
+  llmResults: Map<string, LlmFilterResult>,
 ): ConceptGroup[] {
   // 只处理 keep=true 的候选
-  const keptCandidates = candidates.filter(c => {
+  const keptCandidates = candidates.filter((c) => {
     const result = llmResults.get(c.className);
     return result?.keep === true;
   });
@@ -348,13 +348,15 @@ export function groupCandidates(
   for (const [filePath, fileCandidates] of fileGroups) {
     if (fileCandidates.length > 1) {
       // 同一文件多个候选 → 合并为一个概念
-      const conceptNames = fileCandidates.map(c => {
+      const conceptNames = fileCandidates.map((c) => {
         const result = llmResults.get(c.className);
         return result?.businessConcept || c.className;
       });
 
       // 选择最短的概念名称作为最终名称
-      const finalConceptName = conceptNames.sort((a, b) => a.length - b.length)[0];
+      const finalConceptName = conceptNames.sort(
+        (a, b) => a.length - b.length,
+      )[0];
 
       groups.push({
         conceptName: finalConceptName,
@@ -362,12 +364,14 @@ export function groupCandidates(
         shouldMerge: true,
       });
 
-      fileCandidates.forEach(c => processedCandidates.add(c.className));
+      fileCandidates.forEach((c) => processedCandidates.add(c.className));
     }
   }
 
   // 处理单文件候选（按包路径 + 名称相似度分组）
-  const remainingCandidates = keptCandidates.filter(c => !processedCandidates.has(c.className));
+  const remainingCandidates = keptCandidates.filter(
+    (c) => !processedCandidates.has(c.className),
+  );
 
   // 按包路径分组
   const packageGroups = new Map<string, FilteredCandidate[]>();
@@ -394,7 +398,7 @@ export function groupCandidates(
 function groupBySimilarity(
   candidates: FilteredCandidate[],
   llmResults: Map<string, LlmFilterResult>,
-  threshold: number
+  threshold: number,
 ): ConceptGroup[] {
   const groups: ConceptGroup[] = [];
   const processed = new Set<string>();
@@ -422,11 +426,13 @@ function groupBySimilarity(
     }
 
     // 选择最短的概念名称
-    const conceptNames = groupCandidates.map(c => {
+    const conceptNames = groupCandidates.map((c) => {
       const result = llmResults.get(c.className);
       return result?.businessConcept || c.className;
     });
-    const finalConceptName = conceptNames.sort((a, b) => a.length - b.length)[0];
+    const finalConceptName = conceptNames.sort(
+      (a, b) => a.length - b.length,
+    )[0];
 
     groups.push({
       conceptName: finalConceptName,
@@ -442,10 +448,12 @@ function groupBySimilarity(
  * 构建 LLM 分组确认提示词（用于跨包路径 + 名称相似的候选）
  */
 export function buildLlmGroupPrompt(group: ConceptGroup): string {
-  const candidatesList = group.candidates.map(c => {
-    const result = c.suspiciousMark ? `[标记:${c.suspiciousMark}]` : '';
-    return `- ${c.className}（${c.filePath}）${result}`;
-  }).join('\n');
+  const candidatesList = group.candidates
+    .map((c) => {
+      const result = c.suspiciousMark ? `[标记:${c.suspiciousMark}]` : "";
+      return `- ${c.className}（${c.filePath}）${result}`;
+    })
+    .join("\n");
 
   const prompt = `以下多个代码元素被识别为可能属于同一业务概念，请判断是否应该合并：
 
@@ -474,7 +482,7 @@ ${candidatesList}
  */
 export function executeLayer1And2(
   candidates: ConceptCandidate[],
-  repoPath: string
+  repoPath: string,
 ): FilteredCandidate[] {
   // 第一层：硬过滤
   const afterHardFilter = hardFilterBatch(candidates, repoPath);

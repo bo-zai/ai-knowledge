@@ -1,8 +1,8 @@
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { extractPackagePath, groupByPackagePath } from './shared.js';
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { extractPackagePath, groupByPackagePath } from "./shared.js";
 
 /** 实体继承关系信息 */
 interface EntityInheritance {
@@ -19,8 +19,8 @@ export async function queryDataModelEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : '';
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : "";
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   const entityCypher = `
     MATCH (c:Class)-[r:CodeRelation {type: 'HAS_PROPERTY'}]->(p:Property)
@@ -39,37 +39,54 @@ export async function queryDataModelEvidenceByPackage(
   const entityResults = await executeQuery(entityCypher);
 
   // 收集所有实体名称用于查询继承关系
-  const entityNames = (entityResults as Array<{ entityName: string; filePath: string; fields: string[] }>)
-    .map(r => r.entityName);
+  const entityNames = (
+    entityResults as Array<{
+      entityName: string;
+      filePath: string;
+      fields: string[];
+    }>
+  ).map((r) => r.entityName);
 
   // 查询继承关系
-  const inheritanceMap = await queryEntityInheritance(entityNames, executeQuery);
+  const inheritanceMap = await queryEntityInheritance(
+    entityNames,
+    executeQuery,
+  );
 
   const packageGroups = groupByPackagePath(
-    entityResults as Array<{ entityName: string; filePath: string; fields: string[] }>,
+    entityResults as Array<{
+      entityName: string;
+      filePath: string;
+      fields: string[];
+    }>,
     6,
   );
 
   const groups: EvidenceGroup[] = [];
 
   for (const [packagePath, rows] of packageGroups.entries()) {
-    const groupId = `DATA_MODEL-${packagePath.replace(/[\/]/g, '-')}`;
-    const bundleId = `BUNDLE-DATA_MODEL-${packagePath.replace(/[\/]/g, '-')}`.toUpperCase();
+    const groupId = `DATA_MODEL-${packagePath.replace(/[\/]/g, "-")}`;
+    const bundleId =
+      `BUNDLE-DATA_MODEL-${packagePath.replace(/[\/]/g, "-")}`.toUpperCase();
 
-    const dataContracts: EvidenceBundle['dataContracts'] = rows.map((row, idx) => {
-      const inheritance = inheritanceMap.get(row.entityName);
-      return {
-        ref: `evidence://contract/CON-${String(idx + 1).padStart(3, '0')}`,
-        kind: 'schema',
-        location: row.filePath,
-        name: row.entityName,
-        fields: row.fields || [],
-        customData: inheritance ? {
-          extendsClass: inheritance.extendsClass,
-          implementsInterfaces: inheritance.implementsInterfaces,
-        } : undefined,
-      };
-    });
+    const dataContracts: EvidenceBundle["dataContracts"] = rows.map(
+      (row, idx) => {
+        const inheritance = inheritanceMap.get(row.entityName);
+        return {
+          ref: `evidence://contract/CON-${String(idx + 1).padStart(3, "0")}`,
+          kind: "schema",
+          location: row.filePath,
+          name: row.entityName,
+          fields: row.fields || [],
+          customData: inheritance
+            ? {
+                extendsClass: inheritance.extendsClass,
+                implementsInterfaces: inheritance.implementsInterfaces,
+              }
+            : undefined,
+        };
+      },
+    );
 
     groups.push({
       groupId,
@@ -81,7 +98,7 @@ export async function queryDataModelEvidenceByPackage(
         confidence: 0.75,
         risks: [],
         capabilityHints: {
-          nameCandidates: rows.map(r => r.entityName),
+          nameCandidates: rows.map((r) => r.entityName),
           relatedTerms: [],
         },
         entryPoints: [],
@@ -124,7 +141,10 @@ async function queryEntityInheritance(
   `;
   try {
     const extendsResults = await executeQuery(extendsCypher);
-    for (const row of extendsResults as Array<{ entityName: string; parentName: string }>) {
+    for (const row of extendsResults as Array<{
+      entityName: string;
+      parentName: string;
+    }>) {
       const existing = inheritanceMap.get(row.entityName) || {};
       inheritanceMap.set(row.entityName, {
         ...existing,
@@ -143,7 +163,10 @@ async function queryEntityInheritance(
   `;
   try {
     const implResults = await executeQuery(implementsCypher);
-    for (const row of implResults as Array<{ entityName: string; interfaces: string[] }>) {
+    for (const row of implResults as Array<{
+      entityName: string;
+      interfaces: string[];
+    }>) {
       const existing = inheritanceMap.get(row.entityName) || {};
       if (row.interfaces && row.interfaces.length > 0) {
         inheritanceMap.set(row.entityName, {

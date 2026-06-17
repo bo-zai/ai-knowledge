@@ -1,6 +1,6 @@
-import type { ParsedFile, SymbolDefinition } from '../../../shared/index.js';
-import type { SemanticModel } from '../../model/semantic-model.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
+import type { ParsedFile, SymbolDefinition } from "../../../shared/index.js";
+import type { SemanticModel } from "../../model/semantic-model.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
 
 export function detectGoInterfaceImplementations(
   parsedFiles: readonly ParsedFile[],
@@ -17,21 +17,26 @@ export function detectGoInterfaceImplementations(
   for (const parsed of parsedFiles) {
     // Collect interface defs and their owned methods
     for (const scope of parsed.scopes) {
-      if (scope.kind !== 'Class') continue;
+      if (scope.kind !== "Class") continue;
 
       // Find the type def for this scope
-      const typeDef = scope.ownedDefs.find((d) => d.type === 'Interface' || d.type === 'Struct');
+      const typeDef = scope.ownedDefs.find(
+        (d) => d.type === "Interface" || d.type === "Struct",
+      );
       if (typeDef === undefined) continue;
 
-      if (typeDef.type === 'Interface') {
+      if (typeDef.type === "Interface") {
         interfaceDefsById.set(typeDef.nodeId, typeDef);
         const methodNames = new Set<string>();
         // Methods are in child scopes (Function kind) or ownedDefs
         for (const childScope of parsed.scopes) {
-          if (childScope.parent === scope.id && childScope.kind === 'Function') {
+          if (
+            childScope.parent === scope.id &&
+            childScope.kind === "Function"
+          ) {
             for (const def of childScope.ownedDefs) {
-              if (def.type === 'Method' || def.type === 'Function') {
-                methodNames.add(def.qualifiedName?.split('.').pop() ?? '');
+              if (def.type === "Method" || def.type === "Function") {
+                methodNames.add(def.qualifiedName?.split(".").pop() ?? "");
               }
             }
           }
@@ -40,22 +45,22 @@ export function detectGoInterfaceImplementations(
         for (const def of parsed.localDefs) {
           if (
             (def as { ownerId?: string }).ownerId === typeDef.nodeId &&
-            (def.type === 'Method' || def.type === 'Function')
+            (def.type === "Method" || def.type === "Function")
           ) {
-            methodNames.add(def.qualifiedName?.split('.').pop() ?? '');
+            methodNames.add(def.qualifiedName?.split(".").pop() ?? "");
           }
         }
         interfaceMethods.set(typeDef.nodeId, methodNames);
       }
 
-      if (typeDef.type === 'Struct') {
+      if (typeDef.type === "Struct") {
         const methodNames = new Set<string>();
         for (const def of parsed.localDefs) {
           if (
             (def as { ownerId?: string }).ownerId === typeDef.nodeId &&
-            (def.type === 'Method' || def.type === 'Function')
+            (def.type === "Method" || def.type === "Function")
           ) {
-            methodNames.add(def.qualifiedName?.split('.').pop() ?? '');
+            methodNames.add(def.qualifiedName?.split(".").pop() ?? "");
           }
         }
         structMethods.set(typeDef.nodeId, methodNames);

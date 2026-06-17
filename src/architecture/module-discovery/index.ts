@@ -4,7 +4,7 @@
  * 统一导出模块发现功能
  */
 
-export { ModuleDiscoveryCoordinator } from './coordinator.js';
+export { ModuleDiscoveryCoordinator } from "./coordinator.js";
 export type {
   ModuleDiscoveryResult,
   RepoType,
@@ -13,7 +13,7 @@ export type {
   BuildConfigInfo,
   SubProjectScanResult,
   RoleSignal,
-} from './types.js';
+} from "./types.js";
 export {
   ROOT_DETECTORS,
   SUB_PROJECT_DETECTORS,
@@ -22,4 +22,4 @@ export {
   NpmRootDetector,
   GoRootDetector,
   SubProjectScanner,
-} from './detectors/index.js';
+} from "./detectors/index.js";

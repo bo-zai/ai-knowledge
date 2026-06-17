@@ -17,13 +17,13 @@ import {
   findResultMap,
   resolveEntityEvidence,
   resolveCallerEvidence,
-} from '../mybatis/index.js';
+} from "../mybatis/index.js";
 import {
   buildSqlLineage,
   getTableLineage,
   type SqlLineageEdge,
   type MapperMethodBinding,
-} from '../mybatis/sql-lineage.js';
+} from "../mybatis/sql-lineage.js";
 
 export interface DbTableEvidenceBundle {
   table: string;
@@ -46,11 +46,11 @@ export interface DbTableEvidenceBundle {
 export interface MapperBinding {
   namespace: string;
   methodId: string;
-  statementType: 'select' | 'insert' | 'update' | 'delete';
+  statementType: "select" | "insert" | "update" | "delete";
   mapperFile: string;
   resultType?: string;
   resultMap?: string;
-  accessType: 'direct' | 'joined';
+  accessType: "direct" | "joined";
 }
 
 export interface SqlStatementInfo {
@@ -59,33 +59,38 @@ export interface SqlStatementInfo {
   statementType: string;
   tables: string[];
   fragmentRefs: string[];
-  accessType: 'direct' | 'joined';
+  accessType: "direct" | "joined";
 }
 
 export interface RelatedCodeInfo {
   symbol: string;
   file: string;
-  kind: 'caller' | 'class' | 'service';
+  kind: "caller" | "class" | "service";
   line?: number;
 }
 
 export interface FieldCandidate {
   name: string;
   type?: string;
-  source: 'mapper' | 'code' | 'entity' | 'inferred';
-  clauseType?: 'select' | 'insert' | 'update' | 'where' | 'join' | 'order_by';
+  source: "mapper" | "code" | "entity" | "inferred";
+  clauseType?: "select" | "insert" | "update" | "where" | "join" | "order_by";
   sqlAlias?: string;
   tablePrefix?: string;
   mappedJavaProperty?: string;
   javaFieldComment?: string;
   javaType?: string;
-  typeSource?: 'resultMap' | 'resultType' | 'insertParam' | 'updateParam' | 'sqlInferred';
+  typeSource?:
+    | "resultMap"
+    | "resultType"
+    | "insertParam"
+    | "updateParam"
+    | "sqlInferred";
   sourceStatementId?: string;
   sourceMapper?: string;
 }
 
 export interface GapInfo {
-  type: 'missing_mapper' | 'unmapped_field' | 'ambiguous_binding';
+  type: "missing_mapper" | "unmapped_field" | "ambiguous_binding";
   description: string;
   evidence?: string;
 }
@@ -118,7 +123,7 @@ export async function buildDbTableBundle(
     mapperBindings.push({
       namespace: mapper.namespace,
       methodId: resolved.id,
-      statementType: resolved.type as 'select' | 'insert' | 'update' | 'delete',
+      statementType: resolved.type as "select" | "insert" | "update" | "delete",
       mapperFile: mapper.filePath,
       resultType: resolved.resultType,
       resultMap: resolved.resultMap,
@@ -140,7 +145,7 @@ export async function buildDbTableBundle(
       accessType,
     };
     sqlStatements.push(stmtInfo);
-    if (accessType === 'direct') {
+    if (accessType === "direct") {
       directStatements.push(stmtInfo);
     } else {
       joinedStatements.push(stmtInfo);
@@ -150,11 +155,11 @@ export async function buildDbTableBundle(
   // Build related code (callers)
   const relatedCode: RelatedCodeInfo[] = [];
   for (const method of tableLineage.methods) {
-    const parts = method.split('.');
+    const parts = method.split(".");
     relatedCode.push({
       symbol: method,
-      file: '', // Would need code search to find actual file
-      kind: 'caller',
+      file: "", // Would need code search to find actual file
+      kind: "caller",
     });
   }
 
@@ -162,7 +167,9 @@ export async function buildDbTableBundle(
   const entityEvidence: EntityEvidence[] = [];
   for (const { mapper, resolved } of tableMappers) {
     if (resolved.resultType || resolved.resultMap) {
-      const resultMapDef = resolved.resultMap ? findResultMap(mapper, resolved.resultMap) : null;
+      const resultMapDef = resolved.resultMap
+        ? findResultMap(mapper, resolved.resultMap)
+        : null;
       const evidence = await resolveEntityEvidence({
         repoPath,
         coreRepoPath,
@@ -181,20 +188,16 @@ export async function buildDbTableBundle(
   const fieldCandidates: FieldCandidate[] = [];
 
   // Define strong clause types (should be in main field list)
-  const strongClauseTypes = ['select', 'insert', 'update'];
+  const strongClauseTypes = ["select", "insert", "update"];
 
   // First, extract from SQL
   for (const stmtInfo of directStatements) {
     // Parse statement ID to get mapper namespace
-    const statementId = stmtInfo.id.split('.').pop() || stmtInfo.id;
-    const mapperNamespace = stmtInfo.id.split('.').slice(0, -1).join('.') || '';
+    const statementId = stmtInfo.id.split(".").pop() || stmtInfo.id;
+    const mapperNamespace = stmtInfo.id.split(".").slice(0, -1).join(".") || "";
 
     const detailedFields = filterFieldsForTargetTable(
-      extractDetailedFieldsFromSql(
-        stmtInfo.sql,
-        statementId,
-        mapperNamespace
-      ),
+      extractDetailedFieldsFromSql(stmtInfo.sql, statementId, mapperNamespace),
       stmtInfo,
       tableName,
     );
@@ -204,11 +207,16 @@ export async function buildDbTableBundle(
         fieldCandidates.push(field);
       } else {
         // Merge additional info, but prefer strong clause types
-        if (field.sqlAlias && !existing.sqlAlias) existing.sqlAlias = field.sqlAlias;
-        if (field.tablePrefix && !existing.tablePrefix) existing.tablePrefix = field.tablePrefix;
+        if (field.sqlAlias && !existing.sqlAlias)
+          existing.sqlAlias = field.sqlAlias;
+        if (field.tablePrefix && !existing.tablePrefix)
+          existing.tablePrefix = field.tablePrefix;
         // Only upgrade clause type if new one is stronger
         if (field.clauseType && strongClauseTypes.includes(field.clauseType)) {
-          if (!existing.clauseType || !strongClauseTypes.includes(existing.clauseType)) {
+          if (
+            !existing.clauseType ||
+            !strongClauseTypes.includes(existing.clauseType)
+          ) {
             existing.clauseType = field.clauseType;
             existing.sourceStatementId = field.sourceStatementId;
             existing.sourceMapper = field.sourceMapper;
@@ -226,24 +234,36 @@ export async function buildDbTableBundle(
   }
 
   // Then, merge entity evidence into field candidates
-  const directStatementIds = new Set(directStatements.map((statement) => statement.id.split('.').pop() ?? statement.id));
-  const directEntities = entityEvidence.filter((entity) => directStatementIds.has(entity.sourceStatementId));
+  const directStatementIds = new Set(
+    directStatements.map(
+      (statement) => statement.id.split(".").pop() ?? statement.id,
+    ),
+  );
+  const directEntities = entityEvidence.filter((entity) =>
+    directStatementIds.has(entity.sourceStatementId),
+  );
   const primaryEntityType = selectPrimaryEntityType(directEntities);
-  const targetFieldNames = new Set(fieldCandidates.map((candidate) => candidate.name));
+  const targetFieldNames = new Set(
+    fieldCandidates.map((candidate) => candidate.name),
+  );
   const entityOverlapScores = new Map(
     entityEvidence.map((entity) => [
       entity.sourceStatementId,
       entity.fields.reduce((count, field) => {
-        const mappedColumn = field.mappedColumn ?? toSnakeCase(field.javaProperty);
+        const mappedColumn =
+          field.mappedColumn ?? toSnakeCase(field.javaProperty);
         return count + (targetFieldNames.has(mappedColumn) ? 1 : 0);
       }, 0),
     ]),
   );
 
   for (const entity of entityEvidence) {
-    const isPrimaryEntity = !primaryEntityType || entity.javaType === primaryEntityType;
+    const isPrimaryEntity =
+      !primaryEntityType || entity.javaType === primaryEntityType;
     for (const entityField of entity.fields) {
-      const existing = fieldCandidates.find((f) => matchesEntityField(f, entityField));
+      const existing = fieldCandidates.find((f) =>
+        matchesEntityField(f, entityField),
+      );
       if (existing) {
         if (isPrimaryEntity) {
           existing.mappedJavaProperty = entityField.javaProperty;
@@ -253,17 +273,18 @@ export async function buildDbTableBundle(
         // Add Java type if available
         if (isPrimaryEntity && entityField.javaFieldType) {
           existing.javaType = entityField.javaFieldType;
-          existing.typeSource = entity.sourceStatementId.includes('select')
-            ? 'resultMap'
-            : entity.sourceStatementId.includes('insert')
-            ? 'insertParam'
-            : entity.sourceStatementId.includes('update')
-            ? 'updateParam'
-            : 'resultType';
+          existing.typeSource = entity.sourceStatementId.includes("select")
+            ? "resultMap"
+            : entity.sourceStatementId.includes("insert")
+              ? "insertParam"
+              : entity.sourceStatementId.includes("update")
+                ? "updateParam"
+                : "resultType";
         }
       } else if (entityField.mappedColumn || entityField.javaProperty) {
         const isDirectEntity = directStatementIds.has(entity.sourceStatementId);
-        const overlapScore = entityOverlapScores.get(entity.sourceStatementId) ?? 0;
+        const overlapScore =
+          entityOverlapScores.get(entity.sourceStatementId) ?? 0;
         if (!isDirectEntity || overlapScore < 2) {
           continue;
         }
@@ -273,14 +294,15 @@ export async function buildDbTableBundle(
         }
 
         // Add field from entity mapping that wasn't in SQL
-        const inferredColumn = entityField.mappedColumn ?? toSnakeCase(entityField.javaProperty);
+        const inferredColumn =
+          entityField.mappedColumn ?? toSnakeCase(entityField.javaProperty);
         fieldCandidates.push({
           name: inferredColumn,
-          source: 'entity',
+          source: "entity",
           mappedJavaProperty: entityField.javaProperty,
           javaFieldComment: entityField.javaFieldComment,
           javaType: entityField.javaFieldType,
-          typeSource: 'resultMap',
+          typeSource: "resultMap",
           sourceStatementId: entity.sourceStatementId,
         });
       }
@@ -305,7 +327,7 @@ export async function buildDbTableBundle(
   const gaps: GapInfo[] = [];
   if (mapperBindings.length === 0) {
     gaps.push({
-      type: 'missing_mapper',
+      type: "missing_mapper",
       description: `No mapper bindings found for table ${tableName}`,
     });
   }
@@ -322,7 +344,7 @@ export async function buildDbTableBundle(
     callerEvidence,
     gaps,
     provenance: {
-      source: 'embedded-analysis',
+      source: "embedded-analysis",
       repoPath,
       generatedAt: new Date().toISOString(),
     },
@@ -336,9 +358,17 @@ export async function buildDbTableBundle(
  */
 function findTableMappers(
   mappers: MapperDocument[],
-  tableName: string
-): Array<{ mapper: MapperDocument; resolved: ResolvedStatement; accessType: 'direct' | 'joined' }> {
-  const result: Array<{ mapper: MapperDocument; resolved: ResolvedStatement; accessType: 'direct' | 'joined' }> = [];
+  tableName: string,
+): Array<{
+  mapper: MapperDocument;
+  resolved: ResolvedStatement;
+  accessType: "direct" | "joined";
+}> {
+  const result: Array<{
+    mapper: MapperDocument;
+    resolved: ResolvedStatement;
+    accessType: "direct" | "joined";
+  }> = [];
 
   for (const mapper of mappers) {
     for (const draft of mapper.statements) {
@@ -347,7 +377,11 @@ function findTableMappers(
 
       // Only include if this specific statement touches the target table
       if (tables.includes(tableName)) {
-        const accessType = classifyTableAccessType(resolved.sql, tableName, resolved.type);
+        const accessType = classifyTableAccessType(
+          resolved.sql,
+          tableName,
+          resolved.type,
+        );
         result.push({ mapper, resolved, accessType });
       }
     }
@@ -356,7 +390,9 @@ function findTableMappers(
   return result;
 }
 
-function selectPrimaryEntityType(entities: EntityEvidence[]): string | undefined {
+function selectPrimaryEntityType(
+  entities: EntityEvidence[],
+): string | undefined {
   if (entities.length === 0) {
     return undefined;
   }
@@ -366,14 +402,13 @@ function selectPrimaryEntityType(entities: EntityEvidence[]): string | undefined
     counts.set(entity.javaType, (counts.get(entity.javaType) ?? 0) + 1);
   }
 
-  return [...counts.entries()]
-    .sort((left, right) => {
-      const countDiff = right[1] - left[1];
-      if (countDiff !== 0) {
-        return countDiff;
-      }
-      return left[0].localeCompare(right[0]);
-    })[0]?.[0];
+  return [...counts.entries()].sort((left, right) => {
+    const countDiff = right[1] - left[1];
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+    return left[0].localeCompare(right[0]);
+  })[0]?.[0];
 }
 
 /**
@@ -385,11 +420,15 @@ function selectPrimaryEntityType(entities: EntityEvidence[]): string | undefined
 function classifyTableAccessType(
   sql: string,
   tableName: string,
-  statementType: string
-): 'direct' | 'joined' {
+  statementType: string,
+): "direct" | "joined" {
   // INSERT/UPDATE/DELETE are always direct
-  if (statementType === 'insert' || statementType === 'update' || statementType === 'delete') {
-    return 'direct';
+  if (
+    statementType === "insert" ||
+    statementType === "update" ||
+    statementType === "delete"
+  ) {
+    return "direct";
   }
 
   // For SELECT, check FROM clause vs JOIN clause
@@ -397,29 +436,33 @@ function classifyTableAccessType(
   const lowerTable = tableName.toLowerCase();
 
   // Check if table appears in FROM clause
-  const fromRegex = /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?(?:\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?)*/gi;
+  const fromRegex =
+    /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?(?:\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?)*/gi;
   const fromMatch = lowerSql.match(fromRegex);
 
   if (fromMatch) {
     // Check if target table is in FROM clause (before any JOIN)
     const fromClause = fromMatch[0];
-    const beforeJoin = fromClause.split(/\s+(?:left|right|inner|outer|cross|natural)?\s*join/i)[0];
+    const beforeJoin = fromClause.split(
+      /\s+(?:left|right|inner|outer|cross|natural)?\s*join/i,
+    )[0];
     if (beforeJoin.includes(lowerTable)) {
-      return 'direct';
+      return "direct";
     }
   }
 
   // Check if table appears in JOIN clause
-  const joinRegex = /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?\s+ON/gi;
+  const joinRegex =
+    /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\s+[a-zA-Z_][a-zA-Z0-9_]*)?\s+ON/gi;
   const joinMatches = lowerSql.matchAll(joinRegex);
   for (const match of joinMatches) {
     if (match[0].toLowerCase().includes(lowerTable)) {
-      return 'joined';
+      return "joined";
     }
   }
 
   // Default to direct if table appears somewhere but classification unclear
-  return 'direct';
+  return "direct";
 }
 
 function filterFieldsForTargetTable(
@@ -435,7 +478,7 @@ function filterFieldsForTargetTable(
       return false;
     }
 
-    if (statement.statementType !== 'select') {
+    if (statement.statementType !== "select") {
       return true;
     }
 
@@ -457,7 +500,7 @@ function extractTargetAliases(sql: string, targetTable: string): Set<string> {
   const aliases = new Set<string>([targetTable]);
   const tablePattern = new RegExp(
     `\\b(?:FROM|JOIN)\\s+${escapeRegExp(targetTable)}\\b(?:\\s+(?:AS\\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?`,
-    'gi',
+    "gi",
   );
 
   let match: RegExpExecArray | null;
@@ -476,7 +519,7 @@ function isColumnLikeName(value: string): boolean {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -493,7 +536,7 @@ function extractFieldsFromSql(sql: string): string[] {
 function extractDetailedFieldsFromSql(
   sql: string,
   statementId?: string,
-  mapperNamespace?: string
+  mapperNamespace?: string,
 ): FieldCandidate[] {
   const fields: FieldCandidate[] = [];
 
@@ -503,10 +546,10 @@ function extractDetailedFieldsFromSql(
   for (const match of selectMatches) {
     const fieldList = match[1];
     // Split by comma and extract field names
-    const parts = fieldList.split(',');
+    const parts = fieldList.split(",");
     for (const part of parts) {
       const trimmed = part.trim();
-      if (!trimmed || trimmed === '*') continue;
+      if (!trimmed || trimmed === "*") continue;
 
       // Handle "field alias" or "table.field alias" patterns
       const tokens = trimmed.split(/\s+/);
@@ -514,20 +557,26 @@ function extractDetailedFieldsFromSql(
       const firstToken = tokens[0];
 
       // Parse table.field pattern
-      const fieldParts = firstToken.split('.');
+      const fieldParts = firstToken.split(".");
       const tablePrefix = fieldParts.length > 1 ? fieldParts[0] : undefined;
       const fieldName = fieldParts[fieldParts.length - 1];
 
-      if (fieldName && !isSqlKeyword(fieldName) && !fieldName.startsWith('?') && fieldName !== '*') {
+      if (
+        fieldName &&
+        !isSqlKeyword(fieldName) &&
+        !fieldName.startsWith("?") &&
+        fieldName !== "*"
+      ) {
         // Check if there's an alias (last token different from first)
-        const sqlAlias = tokens.length > 1 && tokens[tokens.length - 1] !== fieldName
-          ? tokens[tokens.length - 1]
-          : undefined;
+        const sqlAlias =
+          tokens.length > 1 && tokens[tokens.length - 1] !== fieldName
+            ? tokens[tokens.length - 1]
+            : undefined;
 
         fields.push({
           name: fieldName,
-          source: 'mapper',
-          clauseType: 'select',
+          source: "mapper",
+          clauseType: "select",
           sqlAlias,
           tablePrefix,
           sourceStatementId: statementId,
@@ -538,18 +587,19 @@ function extractDetailedFieldsFromSql(
   }
 
   // Match JOIN ON fields
-  const joinOnRegex = /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\s*=/gi;
+  const joinOnRegex =
+    /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_][a-zA-Z0-9_]*\s+ON\s+([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)\s*=/gi;
   const joinOnMatches = sql.matchAll(joinOnRegex);
   for (const match of joinOnMatches) {
     const fieldPart = match[1];
-    const parts = fieldPart.split('.');
+    const parts = fieldPart.split(".");
     const tablePrefix = parts[0];
     const fieldName = parts[1];
     if (fieldName && !isSqlKeyword(fieldName)) {
       fields.push({
         name: fieldName,
-        source: 'mapper',
-        clauseType: 'join',
+        source: "mapper",
+        clauseType: "join",
         tablePrefix,
         sourceStatementId: statementId,
         sourceMapper: mapperNamespace,
@@ -562,13 +612,13 @@ function extractDetailedFieldsFromSql(
   const insertMatches = sql.matchAll(insertRegex);
   for (const match of insertMatches) {
     const fieldList = match[1];
-    const fieldNames = fieldList.split(',').map((f) => f.trim());
+    const fieldNames = fieldList.split(",").map((f) => f.trim());
     for (const f of fieldNames) {
       if (f && !isSqlKeyword(f)) {
         fields.push({
           name: f,
-          source: 'mapper',
-          clauseType: 'insert',
+          source: "mapper",
+          clauseType: "insert",
           sourceStatementId: statementId,
           sourceMapper: mapperNamespace,
         });
@@ -577,18 +627,19 @@ function extractDetailedFieldsFromSql(
   }
 
   // Match UPDATE fields (SET field = value)
-  const setRegex = /SET\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
+  const setRegex =
+    /SET\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
   const setMatches = sql.matchAll(setRegex);
   for (const match of setMatches) {
     const fieldPart = match[1];
-    const parts = fieldPart.split('.');
+    const parts = fieldPart.split(".");
     const tablePrefix = parts.length > 1 ? parts[0] : undefined;
     const fieldName = parts[parts.length - 1];
     if (fieldName && !isSqlKeyword(fieldName)) {
       fields.push({
         name: fieldName,
-        source: 'mapper',
-        clauseType: 'update',
+        source: "mapper",
+        clauseType: "update",
         tablePrefix,
         sourceStatementId: statementId,
         sourceMapper: mapperNamespace,
@@ -597,18 +648,19 @@ function extractDetailedFieldsFromSql(
   }
 
   // Match WHERE fields (field = value)
-  const whereRegex = /WHERE\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
+  const whereRegex =
+    /WHERE\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*=/gi;
   const whereMatches = sql.matchAll(whereRegex);
   for (const match of whereMatches) {
     const fieldPart = match[1];
-    const parts = fieldPart.split('.');
+    const parts = fieldPart.split(".");
     const tablePrefix = parts.length > 1 ? parts[0] : undefined;
     const fieldName = parts[parts.length - 1];
     if (fieldName && !isSqlKeyword(fieldName)) {
       fields.push({
         name: fieldName,
-        source: 'mapper',
-        clauseType: 'where',
+        source: "mapper",
+        clauseType: "where",
         tablePrefix,
         sourceStatementId: statementId,
         sourceMapper: mapperNamespace,
@@ -617,18 +669,24 @@ function extractDetailedFieldsFromSql(
   }
 
   // Match ORDER BY fields
-  const orderByRegex = /ORDER\s+BY\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi;
+  const orderByRegex =
+    /ORDER\s+BY\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)/gi;
   const orderByMatches = sql.matchAll(orderByRegex);
   for (const match of orderByMatches) {
     const fieldPart = match[1];
-    const parts = fieldPart.split('.');
+    const parts = fieldPart.split(".");
     const tablePrefix = parts.length > 1 ? parts[0] : undefined;
     const fieldName = parts[parts.length - 1];
-    if (fieldName && !isSqlKeyword(fieldName) && fieldName !== 'desc' && fieldName !== 'asc') {
+    if (
+      fieldName &&
+      !isSqlKeyword(fieldName) &&
+      fieldName !== "desc" &&
+      fieldName !== "asc"
+    ) {
       fields.push({
         name: fieldName,
-        source: 'mapper',
-        clauseType: 'order_by',
+        source: "mapper",
+        clauseType: "order_by",
         tablePrefix,
         sourceStatementId: statementId,
         sourceMapper: mapperNamespace,
@@ -640,7 +698,11 @@ function extractDetailedFieldsFromSql(
   const uniqueFields = new Map<string, FieldCandidate>();
   for (const f of fields) {
     const existing = uniqueFields.get(f.name);
-    if (!existing || (f.sqlAlias && !existing.sqlAlias) || (f.tablePrefix && !existing.tablePrefix)) {
+    if (
+      !existing ||
+      (f.sqlAlias && !existing.sqlAlias) ||
+      (f.tablePrefix && !existing.tablePrefix)
+    ) {
       uniqueFields.set(f.name, f);
     }
   }
@@ -653,20 +715,63 @@ function extractDetailedFieldsFromSql(
  */
 function isSqlKeyword(word: string): boolean {
   const keywords = [
-    'select', 'from', 'where', 'and', 'or', 'not', 'in', 'like',
-    'between', 'exists', 'null', 'true', 'false', 'case', 'when',
-    'then', 'else', 'end', 'as', 'on', 'left', 'right', 'inner',
-    'distinct', 'all', 'count', 'sum', 'avg', 'min', 'max',
-    'values', 'set', 'into', 'default', 'primary', 'key',
-    'order', 'group', 'having', 'limit', 'offset', 'by', 'desc', 'asc',
-    'join', 'outer', 'full', 'cross', 'natural', 'using',
+    "select",
+    "from",
+    "where",
+    "and",
+    "or",
+    "not",
+    "in",
+    "like",
+    "between",
+    "exists",
+    "null",
+    "true",
+    "false",
+    "case",
+    "when",
+    "then",
+    "else",
+    "end",
+    "as",
+    "on",
+    "left",
+    "right",
+    "inner",
+    "distinct",
+    "all",
+    "count",
+    "sum",
+    "avg",
+    "min",
+    "max",
+    "values",
+    "set",
+    "into",
+    "default",
+    "primary",
+    "key",
+    "order",
+    "group",
+    "having",
+    "limit",
+    "offset",
+    "by",
+    "desc",
+    "asc",
+    "join",
+    "outer",
+    "full",
+    "cross",
+    "natural",
+    "using",
   ];
   return keywords.includes(word.toLowerCase());
 }
 
 function matchesEntityField(
   field: FieldCandidate,
-  entityField: EntityEvidence['fields'][number],
+  entityField: EntityEvidence["fields"][number],
 ): boolean {
   if (entityField.mappedColumn && field.name === entityField.mappedColumn) {
     return true;
@@ -676,7 +781,10 @@ function matchesEntityField(
     return true;
   }
 
-  if (field.mappedJavaProperty && field.mappedJavaProperty === entityField.javaProperty) {
+  if (
+    field.mappedJavaProperty &&
+    field.mappedJavaProperty === entityField.javaProperty
+  ) {
     return true;
   }
 
@@ -685,8 +793,8 @@ function matchesEntityField(
 
 function toSnakeCase(value: string): string {
   return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/-/g, '_')
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
     .toLowerCase();
 }
 
@@ -726,7 +834,9 @@ export async function buildAllDbTableBundles(
 /**
  * Merge multiple bundles into a single comprehensive bundle.
  */
-export function mergeDbTableBundles(bundles: DbTableEvidenceBundle[]): DbTableEvidenceBundle[] {
+export function mergeDbTableBundles(
+  bundles: DbTableEvidenceBundle[],
+): DbTableEvidenceBundle[] {
   // Group by table name
   const grouped = new Map<string, DbTableEvidenceBundle[]>();
 

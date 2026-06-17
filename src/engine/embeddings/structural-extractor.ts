@@ -5,13 +5,19 @@
  * to extract method and field names for embedding text generation.
  */
 
-import { getProviderForFile } from '../ingestion/languages/index.js';
-import type { MethodExtractorContext, ExtractedMethods } from '../ingestion/method-types.js';
-import type { FieldExtractorContext, ExtractedFields } from '../ingestion/field-types.js';
-import type { LanguageProvider } from '../ingestion/language-provider.js';
-import { buildTypeEnv } from '../ingestion/type-env.js';
-import { SupportedLanguages } from '../shared';
-import { ensureAndParse, findDeclarationNode } from './ast-utils.js';
+import { getProviderForFile } from "../ingestion/languages/index.js";
+import type {
+  MethodExtractorContext,
+  ExtractedMethods,
+} from "../ingestion/method-types.js";
+import type {
+  FieldExtractorContext,
+  ExtractedFields,
+} from "../ingestion/field-types.js";
+import type { LanguageProvider } from "../ingestion/language-provider.js";
+import { buildTypeEnv } from "../ingestion/type-env.js";
+import { SupportedLanguages } from "../shared";
+import { ensureAndParse, findDeclarationNode } from "./ast-utils.js";
 
 export interface StructuralNames {
   methodNames: string[];
@@ -44,8 +50,19 @@ export const extractStructuralNames = async (
 
   const language = provider.id;
 
-  const methodNames = extractMethodNames(classNode, provider, filePath, language);
-  const fieldNames = extractFieldNames(classNode, provider, tree, filePath, language);
+  const methodNames = extractMethodNames(
+    classNode,
+    provider,
+    filePath,
+    language,
+  );
+  const fieldNames = extractFieldNames(
+    classNode,
+    provider,
+    tree,
+    filePath,
+    language,
+  );
 
   return { methodNames, fieldNames };
 };
@@ -59,7 +76,10 @@ function extractMethodNames(
   if (!provider.methodExtractor) return [];
 
   const context: MethodExtractorContext = { filePath, language };
-  const result: ExtractedMethods | null = provider.methodExtractor.extract(classNode, context);
+  const result: ExtractedMethods | null = provider.methodExtractor.extract(
+    classNode,
+    context,
+  );
   if (!result?.methods?.length) return [];
 
   return result.methods.map((m) => m.name);
@@ -82,7 +102,10 @@ function extractFieldNames(
     filePath,
     language,
   };
-  const result: ExtractedFields | null = provider.fieldExtractor.extract(classNode, context);
+  const result: ExtractedFields | null = provider.fieldExtractor.extract(
+    classNode,
+    context,
+  );
   if (!result?.fields?.length) return [];
 
   return result.fields.map((f) => f.name);

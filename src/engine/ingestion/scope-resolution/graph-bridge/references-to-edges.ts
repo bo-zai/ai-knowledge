@@ -18,12 +18,15 @@
  * `referenceIndex` output and its own `nodeLookup`.
  */
 
-import type { Reference, ScopeId } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { resolveCallerGraphId, resolveDefGraphId } from '../graph-bridge/ids.js';
-import { mapReferenceKindToEdgeType } from '../graph-bridge/edges.js';
-import type { GraphNodeLookup } from '../graph-bridge/node-lookup.js';
+import type { Reference, ScopeId } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import {
+  resolveCallerGraphId,
+  resolveDefGraphId,
+} from "../graph-bridge/ids.js";
+import { mapReferenceKindToEdgeType } from "../graph-bridge/edges.js";
+import type { GraphNodeLookup } from "../graph-bridge/node-lookup.js";
 
 /**
  * Optional opaque skip key — providers may pre-emit edges (e.g. via
@@ -37,7 +40,9 @@ type ReferenceSiteSkipSet = ReadonlySet<string>;
 export function emitReferencesViaLookup(
   graph: KnowledgeGraph,
   scopes: ScopeResolutionIndexes,
-  referenceIndex: { readonly bySourceScope: ReadonlyMap<ScopeId, readonly Reference[]> },
+  referenceIndex: {
+    readonly bySourceScope: ReadonlyMap<ScopeId, readonly Reference[]>;
+  },
   nodeLookup: GraphNodeLookup,
   skipSites?: ReferenceSiteSkipSet,
 ): { emitted: number; skipped: number } {
@@ -68,7 +73,11 @@ export function emitReferencesViaLookup(
         skipped++;
         continue;
       }
-      const targetGraphId = resolveDefGraphId(targetDef.filePath, targetDef, nodeLookup);
+      const targetGraphId = resolveDefGraphId(
+        targetDef.filePath,
+        targetDef,
+        nodeLookup,
+      );
       if (targetGraphId === undefined) {
         skipped++;
         continue;

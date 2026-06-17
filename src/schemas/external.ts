@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonKnowledgeSchema } from './knowledge-type.js';
+import { z } from "zod";
+import { commonKnowledgeSchema } from "./knowledge-type.js";
 
 /**
  * 外部系统交互知识 Schema
@@ -11,14 +11,25 @@ import { commonKnowledgeSchema } from './knowledge-type.js';
 /**
  * 交互方式枚举
  */
-export const InteractionMethodSchema = z.enum(['sdk', 'http_api', 'callback', 'data_exchange', 'rpc']);
+export const InteractionMethodSchema = z.enum([
+  "sdk",
+  "http_api",
+  "callback",
+  "data_exchange",
+  "rpc",
+]);
 
 export type InteractionMethod = z.infer<typeof InteractionMethodSchema>;
 
 /**
  * 当前仓库角色枚举
  */
-export const RepositoryRoleSchema = z.enum(['caller', 'callee', 'data_producer', 'data_consumer']);
+export const RepositoryRoleSchema = z.enum([
+  "caller",
+  "callee",
+  "data_producer",
+  "data_consumer",
+]);
 
 export type RepositoryRole = z.infer<typeof RepositoryRoleSchema>;
 
@@ -26,7 +37,7 @@ export type RepositoryRole = z.infer<typeof RepositoryRoleSchema>;
  * 外部系统交互知识 Schema
  */
 export const externalSchema = commonKnowledgeSchema.extend({
-  type: z.literal('EXTERNAL'),
+  type: z.literal("EXTERNAL"),
 
   /** 外部系统名称 */
   external_system_name: z.string().min(1),

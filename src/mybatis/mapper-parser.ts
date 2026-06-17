@@ -6,21 +6,21 @@
  * Preserves <include> structure for downstream fragment expansion.
  */
 
-import { XMLParser } from 'fast-xml-parser';
-import fs from 'fs/promises';
-import { isMapperXmlFile } from './xml-language.js';
+import { XMLParser } from "fast-xml-parser";
+import fs from "fs/promises";
+import { isMapperXmlFile } from "./xml-language.js";
 import type {
   StatementDraft,
   SqlFragment,
   ResultMapDef,
   MapperDocument,
   SqlPart,
-} from './types.js';
+} from "./types.js";
 
 // Legacy types for backward compatibility
 export interface MapperStatement {
   id: string;
-  type: 'select' | 'insert' | 'update' | 'delete' | 'sql' | 'include';
+  type: "select" | "insert" | "update" | "delete" | "sql" | "include";
   sql: string;
   parameterType?: string;
   resultType?: string;
@@ -37,21 +37,33 @@ export interface MapperInfo {
 /**
  * Parse a MyBatis mapper file and extract all statements with preserved structure.
  */
-export async function parseMapperFile(filePath: string): Promise<MapperDocument | null> {
+export async function parseMapperFile(
+  filePath: string,
+): Promise<MapperDocument | null> {
   if (!isMapperXmlFile(filePath)) {
     return null;
   }
 
-  const content = await fs.readFile(filePath, 'utf-8');
+  const content = await fs.readFile(filePath, "utf-8");
 
   const parser = new XMLParser({
     ignoreAttributes: false,
-    attributeNamePrefix: '',
-    textNodeName: '#text',
+    attributeNamePrefix: "",
+    textNodeName: "#text",
     parseAttributeValue: false,
     trimValues: true,
     isArray: (name) =>
-      ['select', 'insert', 'update', 'delete', 'sql', 'resultMap', 'id', 'result', 'include'].includes(name),
+      [
+        "select",
+        "insert",
+        "update",
+        "delete",
+        "sql",
+        "resultMap",
+        "id",
+        "result",
+        "include",
+      ].includes(name),
   });
 
   const parsed = parser.parse(content);
@@ -61,7 +73,7 @@ export async function parseMapperFile(filePath: string): Promise<MapperDocument 
     return null;
   }
 
-  const namespace = mapper.namespace || '';
+  const namespace = mapper.namespace || "";
   const statements = extractStatements(mapper);
   const sqlFragments = extractSqlFragments(mapper);
   const resultMaps = extractResultMaps(mapper);
@@ -80,7 +92,7 @@ export async function parseMapperFile(filePath: string): Promise<MapperDocument 
  */
 function extractStatements(mapper: any): StatementDraft[] {
   const statements: StatementDraft[] = [];
-  const stmtTypes = ['select', 'insert', 'update', 'delete'];
+  const stmtTypes = ["select", "insert", "update", "delete"];
 
   for (const stmtType of stmtTypes) {
     const stmtArray = mapper[stmtType];
@@ -88,20 +100,28 @@ function extractStatements(mapper: any): StatementDraft[] {
 
     for (const stmt of stmtArray) {
       // Extract id (may be array due to parser config)
-      const id = Array.isArray(stmt.id) ? stmt.id[0] : (stmt.id || '');
+      const id = Array.isArray(stmt.id) ? stmt.id[0] : stmt.id || "";
       const rawSqlParts = parseSqlContent(stmt);
-      const includeRefs = rawSqlParts.filter((p) => p.kind === 'include').map((p) => p.value);
+      const includeRefs = rawSqlParts
+        .filter((p) => p.kind === "include")
+        .map((p) => p.value);
 
       // Extract resultType/resultMap (may be array due to parser config)
-      const resultType = Array.isArray(stmt.resultType) ? stmt.resultType[0] : stmt.resultType;
-      const resultMap = Array.isArray(stmt.resultMap) ? stmt.resultMap[0] : stmt.resultMap;
+      const resultType = Array.isArray(stmt.resultType)
+        ? stmt.resultType[0]
+        : stmt.resultType;
+      const resultMap = Array.isArray(stmt.resultMap)
+        ? stmt.resultMap[0]
+        : stmt.resultMap;
 
       statements.push({
         id,
-        type: stmtType as 'select' | 'insert' | 'update' | 'delete',
+        type: stmtType as "select" | "insert" | "update" | "delete",
         rawSqlParts,
         includeRefs,
-        parameterType: Array.isArray(stmt.parameterType) ? stmt.parameterType[0] : stmt.parameterType,
+        parameterType: Array.isArray(stmt.parameterType)
+          ? stmt.parameterType[0]
+          : stmt.parameterType,
         resultType,
         resultMap,
       });
@@ -118,22 +138,33 @@ function parseSqlContent(stmt: any): SqlPart[] {
   const parts: SqlPart[] = [];
 
   // Get the raw text content
-  const text = stmt['#text'] || '';
+  const text = stmt["#text"] || "";
   if (text) {
-    parts.push({ kind: 'text', value: cleanSql(text) });
+    parts.push({ kind: "text", value: cleanSql(text) });
   }
 
   // Check for nested include elements
   if (stmt.include) {
-    const includes = Array.isArray(stmt.include) ? stmt.include : [stmt.include];
+    const includes = Array.isArray(stmt.include)
+      ? stmt.include
+      : [stmt.include];
     for (const inc of includes) {
-      const refid = inc.refid || '';
-      parts.push({ kind: 'include', value: refid });
+      const refid = inc.refid || "";
+      parts.push({ kind: "include", value: refid });
     }
   }
 
   // Check for other nested MyBatis tags that might contain include
-  const nestedTags = ['if', 'where', 'set', 'trim', 'choose', 'when', 'otherwise', 'foreach'];
+  const nestedTags = [
+    "if",
+    "where",
+    "set",
+    "trim",
+    "choose",
+    "when",
+    "otherwise",
+    "foreach",
+  ];
   for (const tag of nestedTags) {
     if (stmt[tag]) {
       const nestedParts = extractNestedSqlParts(stmt[tag], tag);
@@ -153,29 +184,40 @@ function extractNestedSqlParts(nested: any, parentTag?: string): SqlPart[] {
   const items = Array.isArray(nested) ? nested : [nested];
   for (const item of items) {
     // 对于 <where> 和 <set> 标签，添加关键字前缀
-    if (parentTag === 'where') {
-      parts.push({ kind: 'text', value: 'where' });
-    } else if (parentTag === 'set') {
-      parts.push({ kind: 'text', value: 'set' });
+    if (parentTag === "where") {
+      parts.push({ kind: "text", value: "where" });
+    } else if (parentTag === "set") {
+      parts.push({ kind: "text", value: "set" });
     }
 
     // Get text content
-    const text = item['#text'] || '';
+    const text = item["#text"] || "";
     if (text) {
-      parts.push({ kind: 'text', value: cleanSql(text) });
+      parts.push({ kind: "text", value: cleanSql(text) });
     }
 
     // Get nested include
     if (item.include) {
-      const includes = Array.isArray(item.include) ? item.include : [item.include];
+      const includes = Array.isArray(item.include)
+        ? item.include
+        : [item.include];
       for (const inc of includes) {
-        const refid = inc.refid || '';
-        parts.push({ kind: 'include', value: refid });
+        const refid = inc.refid || "";
+        parts.push({ kind: "include", value: refid });
       }
     }
 
     // Recursively check nested tags
-    const nestedTags = ['if', 'where', 'set', 'trim', 'choose', 'when', 'otherwise', 'foreach'];
+    const nestedTags = [
+      "if",
+      "where",
+      "set",
+      "trim",
+      "choose",
+      "when",
+      "otherwise",
+      "foreach",
+    ];
     for (const tag of nestedTags) {
       if (item[tag]) {
         const deeperParts = extractNestedSqlParts(item[tag], tag);
@@ -198,7 +240,7 @@ function extractSqlFragments(mapper: any): SqlFragment[] {
 
   for (const sqlElem of sqlArray) {
     // Extract id (may be array due to parser config)
-    const id = Array.isArray(sqlElem.id) ? sqlElem.id[0] : (sqlElem.id || '');
+    const id = Array.isArray(sqlElem.id) ? sqlElem.id[0] : sqlElem.id || "";
     const rawSqlParts = parseSqlContent(sqlElem);
     fragments.push({ id, rawSqlParts });
   }
@@ -217,7 +259,7 @@ function extractResultMaps(mapper: any): ResultMapDef[] {
 
   for (const rm of rmArray) {
     // Extract id and type (may be array due to parser config)
-    const id = Array.isArray(rm.id) ? rm.id[0] : (rm.id || '');
+    const id = Array.isArray(rm.id) ? rm.id[0] : rm.id || "";
     const type = Array.isArray(rm.type) ? rm.type[0] : rm.type;
     const mappings = extractResultMapMappings(rm);
     resultMaps.push({ id, type, mappings });
@@ -229,7 +271,9 @@ function extractResultMaps(mapper: any): ResultMapDef[] {
 /**
  * Extract property/column mappings from resultMap.
  */
-function extractResultMapMappings(resultMap: any): Array<{ property: string; column: string }> {
+function extractResultMapMappings(
+  resultMap: any,
+): Array<{ property: string; column: string }> {
   const mappings: Array<{ property: string; column: string }> = [];
 
   // Extract <id> mappings
@@ -237,8 +281,12 @@ function extractResultMapMappings(resultMap: any): Array<{ property: string; col
     const ids = Array.isArray(resultMap.id) ? resultMap.id : [resultMap.id];
     for (const item of ids) {
       // Handle array values due to parser config
-      const column = Array.isArray(item.column) ? item.column[0] : (item.column || '');
-      const property = Array.isArray(item.property) ? item.property[0] : (item.property || '');
+      const column = Array.isArray(item.column)
+        ? item.column[0]
+        : item.column || "";
+      const property = Array.isArray(item.property)
+        ? item.property[0]
+        : item.property || "";
       if (column && property) {
         mappings.push({ property, column });
       }
@@ -247,11 +295,17 @@ function extractResultMapMappings(resultMap: any): Array<{ property: string; col
 
   // Extract <result> mappings
   if (resultMap.result) {
-    const results = Array.isArray(resultMap.result) ? resultMap.result : [resultMap.result];
+    const results = Array.isArray(resultMap.result)
+      ? resultMap.result
+      : [resultMap.result];
     for (const item of results) {
       // Handle array values due to parser config
-      const column = Array.isArray(item.column) ? item.column[0] : (item.column || '');
-      const property = Array.isArray(item.property) ? item.property[0] : (item.property || '');
+      const column = Array.isArray(item.column)
+        ? item.column[0]
+        : item.column || "";
+      const property = Array.isArray(item.property)
+        ? item.property[0]
+        : item.property || "";
       if (column && property) {
         mappings.push({ property, column });
       }
@@ -265,7 +319,7 @@ function extractResultMapMappings(resultMap: any): Array<{ property: string; col
  * Clean SQL text by removing extra whitespace.
  */
 function cleanSql(sql: string): string {
-  return sql.replace(/\s+/g, ' ').trim();
+  return sql.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -275,10 +329,12 @@ export function extractTablesFromSql(sql: string): string[] {
   const tables: string[] = [];
 
   // Match FROM table
-  const fromMatches = sql.match(/FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi);
+  const fromMatches = sql.match(
+    /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  );
   if (fromMatches) {
     for (const match of fromMatches) {
-      const tableName = match.replace(/FROM\s+/i, '').split('.')[0];
+      const tableName = match.replace(/FROM\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
         tables.push(tableName.toLowerCase());
       }
@@ -286,10 +342,12 @@ export function extractTablesFromSql(sql: string): string[] {
   }
 
   // Match JOIN table
-  const joinMatches = sql.match(/JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi);
+  const joinMatches = sql.match(
+    /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  );
   if (joinMatches) {
     for (const match of joinMatches) {
-      const tableName = match.replace(/JOIN\s+/i, '').split('.')[0];
+      const tableName = match.replace(/JOIN\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
         tables.push(tableName.toLowerCase());
       }
@@ -297,10 +355,12 @@ export function extractTablesFromSql(sql: string): string[] {
   }
 
   // Match INSERT INTO table
-  const insertMatches = sql.match(/INSERT\s+INTO\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi);
+  const insertMatches = sql.match(
+    /INSERT\s+INTO\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  );
   if (insertMatches) {
     for (const match of insertMatches) {
-      const tableName = match.replace(/INSERT\s+INTO\s+/i, '').split('.')[0];
+      const tableName = match.replace(/INSERT\s+INTO\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
         tables.push(tableName.toLowerCase());
       }
@@ -308,10 +368,12 @@ export function extractTablesFromSql(sql: string): string[] {
   }
 
   // Match UPDATE table
-  const updateMatches = sql.match(/UPDATE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi);
+  const updateMatches = sql.match(
+    /UPDATE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  );
   if (updateMatches) {
     for (const match of updateMatches) {
-      const tableName = match.replace(/UPDATE\s+/i, '').split('.')[0];
+      const tableName = match.replace(/UPDATE\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
         tables.push(tableName.toLowerCase());
       }
@@ -319,10 +381,12 @@ export function extractTablesFromSql(sql: string): string[] {
   }
 
   // Match DELETE FROM table
-  const deleteMatches = sql.match(/DELETE\s+FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi);
+  const deleteMatches = sql.match(
+    /DELETE\s+FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  );
   if (deleteMatches) {
     for (const match of deleteMatches) {
-      const tableName = match.replace(/DELETE\s+FROM\s+/i, '').split('.')[0];
+      const tableName = match.replace(/DELETE\s+FROM\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
         tables.push(tableName.toLowerCase());
       }
@@ -337,22 +401,118 @@ export function extractTablesFromSql(sql: string): string[] {
  */
 function isSqlKeyword(word: string): boolean {
   const keywords = [
-    'select', 'from', 'where', 'and', 'or', 'not', 'in', 'like',
-    'between', 'exists', 'null', 'true', 'false', 'case', 'when',
-    'then', 'else', 'end', 'as', 'on', 'left', 'right', 'inner',
-    'outer', 'full', 'cross', 'natural', 'using', 'group', 'order',
-    'having', 'limit', 'offset', 'union', 'except', 'intersect',
-    'distinct', 'all', 'any', 'some', 'count', 'sum', 'avg', 'min',
-    'max', 'values', 'set', 'into', 'default', 'primary', 'key',
-    'foreign', 'references', 'constraint', 'unique', 'index', 'table',
-    'create', 'alter', 'drop', 'truncate', 'insert', 'update', 'delete',
-    'with', 'recursive', 'temporary', 'if', 'dual', 'sysdate', 'current',
-    'timestamp', 'date', 'time', 'year', 'month', 'day', 'hour', 'minute',
-    'second', 'interval', 'cast', 'convert', 'coalesce', 'decode', 'nvl',
-    'substr', 'substring', 'length', 'char', 'varchar', 'int', 'integer',
-    'bigint', 'smallint', 'decimal', 'numeric', 'float', 'double', 'real',
-    'boolean', 'blob', 'clob', 'text', 'xml', 'json', 'uuid', 'auto_increment',
-    'by', 'desc', 'asc', 'join',
+    "select",
+    "from",
+    "where",
+    "and",
+    "or",
+    "not",
+    "in",
+    "like",
+    "between",
+    "exists",
+    "null",
+    "true",
+    "false",
+    "case",
+    "when",
+    "then",
+    "else",
+    "end",
+    "as",
+    "on",
+    "left",
+    "right",
+    "inner",
+    "outer",
+    "full",
+    "cross",
+    "natural",
+    "using",
+    "group",
+    "order",
+    "having",
+    "limit",
+    "offset",
+    "union",
+    "except",
+    "intersect",
+    "distinct",
+    "all",
+    "any",
+    "some",
+    "count",
+    "sum",
+    "avg",
+    "min",
+    "max",
+    "values",
+    "set",
+    "into",
+    "default",
+    "primary",
+    "key",
+    "foreign",
+    "references",
+    "constraint",
+    "unique",
+    "index",
+    "table",
+    "create",
+    "alter",
+    "drop",
+    "truncate",
+    "insert",
+    "update",
+    "delete",
+    "with",
+    "recursive",
+    "temporary",
+    "if",
+    "dual",
+    "sysdate",
+    "current",
+    "timestamp",
+    "date",
+    "time",
+    "year",
+    "month",
+    "day",
+    "hour",
+    "minute",
+    "second",
+    "interval",
+    "cast",
+    "convert",
+    "coalesce",
+    "decode",
+    "nvl",
+    "substr",
+    "substring",
+    "length",
+    "char",
+    "varchar",
+    "int",
+    "integer",
+    "bigint",
+    "smallint",
+    "decimal",
+    "numeric",
+    "float",
+    "double",
+    "real",
+    "boolean",
+    "blob",
+    "clob",
+    "text",
+    "xml",
+    "json",
+    "uuid",
+    "auto_increment",
+    "by",
+    "desc",
+    "asc",
+    "join",
   ];
   return keywords.includes(word.toLowerCase());
 }
@@ -361,13 +521,13 @@ function isSqlKeyword(word: string): boolean {
  * Find all mapper files in a directory.
  */
 export async function findMapperFiles(repoPath: string): Promise<string[]> {
-  const { glob } = await import('glob');
+  const { glob } = await import("glob");
 
-  const pattern = '**/*mapper*.xml';
+  const pattern = "**/*mapper*.xml";
   const matches = await glob(pattern, {
     cwd: repoPath,
     absolute: true,
-    ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', 'target/**'],
+    ignore: ["node_modules/**", ".git/**", "dist/**", "build/**", "target/**"],
   });
 
   return matches;
@@ -376,7 +536,9 @@ export async function findMapperFiles(repoPath: string): Promise<string[]> {
 /**
  * Parse all mapper files in a repository.
  */
-export async function parseAllMapperFiles(repoPath: string): Promise<MapperDocument[]> {
+export async function parseAllMapperFiles(
+  repoPath: string,
+): Promise<MapperDocument[]> {
   const mapperFiles = await findMapperFiles(repoPath);
   const results: MapperDocument[] = [];
 
@@ -396,20 +558,22 @@ export async function parseAllMapperFiles(repoPath: string): Promise<MapperDocum
 function concatenateSqlParts(parts: SqlPart[]): string {
   return parts
     .map((p) => {
-      if (p.kind === 'include') {
+      if (p.kind === "include") {
         return `<include refid="${p.value}" />`;
       }
       return p.value;
     })
-    .join(' ')
-    .replace(/\s+/g, ' ')
+    .join(" ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 /**
  * Build a table-to-mapper mapping (statement-scoped).
  */
-export async function buildTableMapperMap(repoPath: string): Promise<Map<string, MapperDocument[]>> {
+export async function buildTableMapperMap(
+  repoPath: string,
+): Promise<Map<string, MapperDocument[]>> {
   const mappers = await parseAllMapperFiles(repoPath);
   const tableMap = new Map<string, MapperDocument[]>();
 

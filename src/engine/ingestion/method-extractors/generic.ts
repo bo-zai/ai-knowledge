@@ -7,14 +7,14 @@
  * generate extractors from configs. No class hierarchy needed.
  */
 
-import type { SyntaxNode } from '../utils/ast-helpers.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
 import type {
   MethodExtractor,
   MethodExtractorContext,
   MethodExtractionConfig,
   ExtractedMethods,
   MethodInfo,
-} from '../method-types.js';
+} from "../method-types.js";
 
 /**
  * Node types that imply static member semantics when they appear as the owner
@@ -30,9 +30,9 @@ import type {
  * from the guard.
  */
 const STATIC_IMPLYING_OWNER_TYPES: ReadonlySet<string> = new Set([
-  'companion_object',
-  'object_declaration',
-  'singleton_class',
+  "companion_object",
+  "object_declaration",
+  "singleton_class",
 ]);
 
 /**
@@ -44,23 +44,28 @@ const STATIC_IMPLYING_OWNER_TYPES: ReadonlySet<string> = new Set([
  *   provider construction to prevent silent `isStatic=false` regressions. See
  *   `STATIC_IMPLYING_OWNER_TYPES` for the exact opt-out convention.
  */
-export function createMethodExtractor(config: MethodExtractionConfig): MethodExtractor {
+export function createMethodExtractor(
+  config: MethodExtractionConfig,
+): MethodExtractor {
   // Runtime invariant: each static-implying container type declared in
   // typeDeclarationNodes must be covered by staticOwnerTypes. An explicit
   // empty Set is treated as intentional opt-out.
   if (config.staticOwnerTypes === undefined) {
-    const missing = config.typeDeclarationNodes.filter((t) => STATIC_IMPLYING_OWNER_TYPES.has(t));
+    const missing = config.typeDeclarationNodes.filter((t) =>
+      STATIC_IMPLYING_OWNER_TYPES.has(t),
+    );
     if (missing.length > 0) {
       throw new Error(
         `[MethodExtractionConfig:${config.language}] typeDeclarationNodes includes static-implying owner type(s) ` +
           `${JSON.stringify(missing)} but staticOwnerTypes is not set. Add ` +
-          `'staticOwnerTypes: new Set([${missing.map((t) => `'${t}'`).join(', ')}])' ` +
+          `'staticOwnerTypes: new Set([${missing.map((t) => `'${t}'`).join(", ")}])' ` +
           `to the config, or set 'staticOwnerTypes: new Set()' to opt out explicitly.`,
       );
     }
   } else {
     const missing = config.typeDeclarationNodes.filter(
-      (t) => STATIC_IMPLYING_OWNER_TYPES.has(t) && !config.staticOwnerTypes!.has(t),
+      (t) =>
+        STATIC_IMPLYING_OWNER_TYPES.has(t) && !config.staticOwnerTypes!.has(t),
     );
     // Explicit empty Set is the opt-out signal; don't second-guess it.
     if (missing.length > 0 && config.staticOwnerTypes.size > 0) {
@@ -83,7 +88,10 @@ export function createMethodExtractor(config: MethodExtractionConfig): MethodExt
       return typeDeclarationSet.has(node.type);
     },
 
-    extract(node: SyntaxNode, context: MethodExtractorContext): ExtractedMethods | null {
+    extract(
+      node: SyntaxNode,
+      context: MethodExtractorContext,
+    ): ExtractedMethods | null {
       if (!typeDeclarationSet.has(node.type)) return null;
 
       // Resolve owner name: config hook → field-based → type_identifier → simple_identifier → "Companion"
@@ -92,7 +100,7 @@ export function createMethodExtractor(config: MethodExtractionConfig): MethodExt
         ownerName = config.extractOwnerName(node);
       }
       if (!ownerName) {
-        const nameField = node.childForFieldName('name');
+        const nameField = node.childForFieldName("name");
         if (nameField) {
           ownerName = nameField.text;
         } else {
@@ -100,9 +108,9 @@ export function createMethodExtractor(config: MethodExtractionConfig): MethodExt
             const child = node.namedChild(i);
             if (
               child &&
-              (child.type === 'type_identifier' ||
-                child.type === 'simple_identifier' ||
-                child.type === 'identifier')
+              (child.type === "type_identifier" ||
+                child.type === "simple_identifier" ||
+                child.type === "identifier")
             ) {
               ownerName = child.text;
               break;
@@ -111,15 +119,22 @@ export function createMethodExtractor(config: MethodExtractionConfig): MethodExt
         }
       }
       // Unnamed companion objects use "Companion" (Kotlin convention)
-      if (!ownerName && node.type === 'companion_object') {
-        ownerName = 'Companion';
+      if (!ownerName && node.type === "companion_object") {
+        ownerName = "Companion";
       }
       if (!ownerName) return null;
 
       const methods: MethodInfo[] = [];
       const bodies = findBodies(node, bodyNodeSet);
       for (const body of bodies) {
-        extractMethodsFromBody(body, node, context, config, methodNodeSet, methods);
+        extractMethodsFromBody(
+          body,
+          node,
+          context,
+          config,
+          methodNodeSet,
+          methods,
+        );
       }
 
       // Extract primary constructor from the owner node itself (e.g. C# 12)
@@ -131,18 +146,23 @@ export function createMethodExtractor(config: MethodExtractionConfig): MethodExt
       return { ownerName, methods };
     },
 
-    extractFromNode(node: SyntaxNode, context: MethodExtractorContext): MethodInfo | null {
+    extractFromNode(
+      node: SyntaxNode,
+      context: MethodExtractorContext,
+    ): MethodInfo | null {
       if (!methodNodeSet.has(node.type)) return null;
       return buildMethod(node, node, context, config);
     },
 
-    ...(config.extractFunctionName ? { extractFunctionName: config.extractFunctionName } : {}),
+    ...(config.extractFunctionName
+      ? { extractFunctionName: config.extractFunctionName }
+      : {}),
   };
 }
 
 function findBodies(node: SyntaxNode, bodyNodeSet: Set<string>): SyntaxNode[] {
   const result: SyntaxNode[] = [];
-  const bodyField = node.childForFieldName('body');
+  const bodyField = node.childForFieldName("body");
   if (bodyField && bodyNodeSet.has(bodyField.type)) {
     result.push(bodyField);
     addNestedBodies(bodyField, bodyNodeSet, result);
@@ -157,7 +177,7 @@ function findBodies(node: SyntaxNode, bodyNodeSet: Set<string>): SyntaxNode[] {
   if (result.length === 0 && bodyField) {
     // Fallback: body field exists but its type is not in bodyNodeTypes.
     // This may indicate a config typo — log for debugging if NODE_ENV is development.
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.warn(
         `[MethodExtractor] body field type '${bodyField.type}' not in bodyNodeTypes for node '${node.type}'`,
       );
@@ -197,7 +217,7 @@ function extractMethodsFromBody(
     if (!child) continue;
 
     // C++ template methods are wrapped in template_declaration — unwrap to the inner node
-    if (child.type === 'template_declaration') {
+    if (child.type === "template_declaration") {
       const inner = child.namedChildren.find((c) => methodNodeSet.has(c.type));
       if (inner) child = inner;
     }
@@ -208,11 +228,18 @@ function extractMethodsFromBody(
     }
 
     // Recurse into enum constant anonymous class bodies
-    if (child.type === 'enum_constant') {
+    if (child.type === "enum_constant") {
       for (let j = 0; j < child.namedChildCount; j++) {
         const innerBody = child.namedChild(j);
-        if (innerBody && innerBody.type === 'class_body') {
-          extractMethodsFromBody(innerBody, ownerNode, context, config, methodNodeSet, out);
+        if (innerBody && innerBody.type === "class_body") {
+          extractMethodsFromBody(
+            innerBody,
+            ownerNode,
+            context,
+            config,
+            methodNodeSet,
+            out,
+          );
         }
       }
     }
@@ -235,7 +262,9 @@ function buildMethod(
 
   // Static-owner detection is config-driven: each language declares which
   // container node types imply static (e.g. Ruby singleton_class, Kotlin companion_object).
-  const isStatic = (config.staticOwnerTypes?.has(ownerNode.type) ?? false) || config.isStatic(node);
+  const isStatic =
+    (config.staticOwnerTypes?.has(ownerNode.type) ?? false) ||
+    config.isStatic(node);
 
   return {
     name,

@@ -1,22 +1,22 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/python.ts
 // Verified against tree-sitter-python 0.23.4
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { hasKeyword } from '../../field-extractors/configs/helpers.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import { hasKeyword } from "../../field-extractors/configs/helpers.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Python helpers
 // ---------------------------------------------------------------------------
 
 /** Names that represent the instance/class receiver — not real parameters. */
-const SELF_NAMES = new Set(['self', 'cls']);
+const SELF_NAMES = new Set(["self", "cls"]);
 
 /**
  * Unwrap a decorated_definition to its inner function_definition.
@@ -26,10 +26,10 @@ const SELF_NAMES = new Set(['self', 'cls']);
  * This is different from TS/JS where decorators are siblings.
  */
 function unwrapDecorated(node: SyntaxNode): SyntaxNode {
-  if (node.type === 'decorated_definition') {
+  if (node.type === "decorated_definition") {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
-      if (child && child.type === 'function_definition') return child;
+      if (child && child.type === "function_definition") return child;
     }
   }
   return node;
@@ -44,9 +44,9 @@ function unwrapDecorated(node: SyntaxNode): SyntaxNode {
  */
 function collectDecorators(node: SyntaxNode): SyntaxNode[] {
   let wrapper: SyntaxNode | null = null;
-  if (node.type === 'decorated_definition') {
+  if (node.type === "decorated_definition") {
     wrapper = node;
-  } else if (node.parent?.type === 'decorated_definition') {
+  } else if (node.parent?.type === "decorated_definition") {
     wrapper = node.parent;
   }
   if (!wrapper) return [];
@@ -54,7 +54,7 @@ function collectDecorators(node: SyntaxNode): SyntaxNode[] {
   const decorators: SyntaxNode[] = [];
   for (let i = 0; i < wrapper.namedChildCount; i++) {
     const child = wrapper.namedChild(i);
-    if (child && child.type === 'decorator') {
+    if (child && child.type === "decorator") {
       decorators.push(child);
     }
   }
@@ -68,11 +68,11 @@ function extractDecoratorName(decorator: SyntaxNode): string | undefined {
   const expr = decorator.firstNamedChild;
   if (!expr) return undefined;
 
-  if (expr.type === 'identifier') return '@' + expr.text;
-  if (expr.type === 'attribute') return '@' + expr.text;
-  if (expr.type === 'call') {
-    const fn = expr.childForFieldName('function');
-    return fn ? '@' + fn.text : undefined;
+  if (expr.type === "identifier") return "@" + expr.text;
+  if (expr.type === "attribute") return "@" + expr.text;
+  if (expr.type === "call") {
+    const fn = expr.childForFieldName("function");
+    return fn ? "@" + fn.text : undefined;
   }
   return undefined;
 }
@@ -81,7 +81,7 @@ function hasDecorator(node: SyntaxNode, name: string): boolean {
   const decorators = collectDecorators(node);
   for (const dec of decorators) {
     const decName = extractDecoratorName(dec);
-    if (decName === '@' + name || decName?.endsWith('.' + name)) return true;
+    if (decName === "@" + name || decName?.endsWith("." + name)) return true;
   }
   return false;
 }
@@ -95,7 +95,7 @@ function hasDecorator(node: SyntaxNode, name: string): boolean {
  */
 function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
   const funcNode = unwrapDecorated(node);
-  const paramList = funcNode.childForFieldName('parameters');
+  const paramList = funcNode.childForFieldName("parameters");
   if (!paramList) return [];
 
   const params: ParameterInfo[] = [];
@@ -106,7 +106,7 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
     if (!param) continue;
 
     switch (param.type) {
-      case 'identifier': {
+      case "identifier": {
         // Bare parameter: `self`, `cls`, or untyped `x`
         if (isFirst && SELF_NAMES.has(param.text)) {
           isFirst = false;
@@ -122,10 +122,10 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
         });
         break;
       }
-      case 'default_parameter': {
+      case "default_parameter": {
         // `x = value` — untyped with default
         isFirst = false;
-        const nameNode = param.childForFieldName('name');
+        const nameNode = param.childForFieldName("name");
         if (nameNode) {
           params.push({
             name: nameNode.text,
@@ -137,25 +137,29 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'typed_parameter': {
+      case "typed_parameter": {
         // `x: int` or `*args: str` or `**kwargs: int`
         // The first named child can be identifier, list_splat_pattern, or dictionary_splat_pattern
         const inner = param.firstNamedChild;
         if (!inner) break;
 
-        if (isFirst && inner.type === 'identifier' && SELF_NAMES.has(inner.text)) {
+        if (
+          isFirst &&
+          inner.type === "identifier" &&
+          SELF_NAMES.has(inner.text)
+        ) {
           isFirst = false;
           continue;
         }
         isFirst = false;
 
-        const typeNode = param.childForFieldName('type');
+        const typeNode = param.childForFieldName("type");
         const typeText = typeNode
           ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
           : null;
 
         const rawTypeText = typeNode?.text?.trim() ?? null;
-        if (inner.type === 'list_splat_pattern') {
+        if (inner.type === "list_splat_pattern") {
           const nameId = inner.firstNamedChild;
           if (nameId) {
             params.push({
@@ -166,7 +170,7 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
               isVariadic: true,
             });
           }
-        } else if (inner.type === 'dictionary_splat_pattern') {
+        } else if (inner.type === "dictionary_splat_pattern") {
           const nameId = inner.firstNamedChild;
           if (nameId) {
             params.push({
@@ -188,16 +192,18 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'typed_default_parameter': {
+      case "typed_default_parameter": {
         // `x: int = 5` — typed with default
         isFirst = false;
-        const nameNode = param.childForFieldName('name');
-        const typeNode = param.childForFieldName('type');
+        const nameNode = param.childForFieldName("name");
+        const typeNode = param.childForFieldName("type");
         if (nameNode) {
           params.push({
             name: nameNode.text,
             type: typeNode
-              ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
+              ? (extractSimpleTypeName(typeNode) ??
+                typeNode.text?.trim() ??
+                null)
               : null,
             rawType: typeNode?.text?.trim() ?? null,
             isOptional: true,
@@ -206,7 +212,7 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'list_splat_pattern': {
+      case "list_splat_pattern": {
         // `*args` (untyped)
         isFirst = false;
         const nameId = param.firstNamedChild;
@@ -221,7 +227,7 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'dictionary_splat_pattern': {
+      case "dictionary_splat_pattern": {
         // `**kwargs` (untyped)
         isFirst = false;
         const nameId = param.firstNamedChild;
@@ -252,7 +258,7 @@ function extractPythonParameters(node: SyntaxNode): ParameterInfo[] {
  */
 function extractPythonReturnType(node: SyntaxNode): string | undefined {
   const funcNode = unwrapDecorated(node);
-  const returnType = funcNode.childForFieldName('return_type');
+  const returnType = funcNode.childForFieldName("return_type");
   if (!returnType) return undefined;
   // Use .text to preserve full generic types (e.g. list[User], Dict[str, User])
   // that the call resolver needs for for-loop iterable and return-type inference.
@@ -265,12 +271,13 @@ function extractPythonReturnType(node: SyntaxNode): string | undefined {
  */
 function extractPythonVisibility(node: SyntaxNode): MethodVisibility {
   const funcNode = unwrapDecorated(node);
-  const nameNode = funcNode.childForFieldName('name');
+  const nameNode = funcNode.childForFieldName("name");
   const name = nameNode?.text;
-  if (!name) return 'public';
-  if (name.startsWith('__') && !name.endsWith('__')) return 'private';
-  if (name.startsWith('_') && !(name.startsWith('__') && name.endsWith('__'))) return 'protected';
-  return 'public';
+  if (!name) return "public";
+  if (name.startsWith("__") && !name.endsWith("__")) return "private";
+  if (name.startsWith("_") && !(name.startsWith("__") && name.endsWith("__")))
+    return "protected";
+  return "public";
 }
 
 // ---------------------------------------------------------------------------
@@ -279,16 +286,16 @@ function extractPythonVisibility(node: SyntaxNode): MethodVisibility {
 
 export const pythonMethodConfig: MethodExtractionConfig = {
   language: SupportedLanguages.Python,
-  typeDeclarationNodes: ['class_definition'],
+  typeDeclarationNodes: ["class_definition"],
   // Both function_definition and decorated_definition must be listed:
   // decorated methods appear as decorated_definition in the class body block,
   // while undecorated methods appear as function_definition directly.
-  methodNodeTypes: ['function_definition', 'decorated_definition'],
-  bodyNodeTypes: ['block'],
+  methodNodeTypes: ["function_definition", "decorated_definition"],
+  bodyNodeTypes: ["block"],
 
   extractName(node) {
     const funcNode = unwrapDecorated(node);
-    const nameNode = funcNode.childForFieldName('name');
+    const nameNode = funcNode.childForFieldName("name");
     return nameNode?.text;
   },
 
@@ -297,11 +304,13 @@ export const pythonMethodConfig: MethodExtractionConfig = {
   extractVisibility: extractPythonVisibility,
 
   isStatic(node) {
-    return hasDecorator(node, 'staticmethod') || hasDecorator(node, 'classmethod');
+    return (
+      hasDecorator(node, "staticmethod") || hasDecorator(node, "classmethod")
+    );
   },
 
   isAbstract(node, _ownerNode) {
-    return hasDecorator(node, 'abstractmethod');
+    return hasDecorator(node, "abstractmethod");
   },
 
   isFinal(_node) {
@@ -320,6 +329,6 @@ export const pythonMethodConfig: MethodExtractionConfig = {
 
   isAsync(node) {
     const funcNode = unwrapDecorated(node);
-    return hasKeyword(funcNode, 'async');
+    return hasKeyword(funcNode, "async");
   },
 };

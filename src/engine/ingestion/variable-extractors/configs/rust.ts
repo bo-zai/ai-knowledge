@@ -1,10 +1,10 @@
 // gitnexus/src/core/ingestion/variable-extractors/configs/rust.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { VariableExtractionConfig } from '../../variable-types.js';
-import type { VariableVisibility } from '../../variable-types.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { VariableExtractionConfig } from "../../variable-types.js";
+import type { VariableVisibility } from "../../variable-types.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 /**
  * Rust variable extraction config.
@@ -24,7 +24,7 @@ import type { SyntaxNode } from '../../utils/ast-helpers.js';
 function hasVisibilityModifier(node: SyntaxNode): boolean {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child?.type === 'visibility_modifier') return true;
+    if (child?.type === "visibility_modifier") return true;
   }
   return false;
 }
@@ -32,51 +32,52 @@ function hasVisibilityModifier(node: SyntaxNode): boolean {
 function hasMutKeyword(node: SyntaxNode): boolean {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child?.text === 'mut') return true;
+    if (child?.text === "mut") return true;
   }
   return false;
 }
 
 export const rustVariableConfig: VariableExtractionConfig = {
   language: SupportedLanguages.Rust,
-  constNodeTypes: ['const_item'],
-  staticNodeTypes: ['static_item'],
-  variableNodeTypes: ['let_declaration'],
+  constNodeTypes: ["const_item"],
+  staticNodeTypes: ["static_item"],
+  variableNodeTypes: ["let_declaration"],
 
   extractName(node) {
-    const name = node.childForFieldName('name');
+    const name = node.childForFieldName("name");
     if (name) return name.text;
     // Fallback: first identifier child
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
-      if (child?.type === 'identifier') return child.text;
+      if (child?.type === "identifier") return child.text;
     }
     return undefined;
   },
 
   extractType(node) {
-    const typeNode = node.childForFieldName('type');
-    if (typeNode) return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
+    const typeNode = node.childForFieldName("type");
+    if (typeNode)
+      return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
     return undefined;
   },
 
   extractVisibility(node): VariableVisibility {
-    return hasVisibilityModifier(node) ? 'public' : 'private';
+    return hasVisibilityModifier(node) ? "public" : "private";
   },
 
   isConst(node) {
-    return node.type === 'const_item';
+    return node.type === "const_item";
   },
 
   isStatic(node) {
-    return node.type === 'static_item';
+    return node.type === "static_item";
   },
 
   isMutable(node) {
-    if (node.type === 'const_item') return false;
-    if (node.type === 'static_item') return hasMutKeyword(node);
+    if (node.type === "const_item") return false;
+    if (node.type === "static_item") return hasMutKeyword(node);
     // let_declaration: check for mut keyword
-    if (node.type === 'let_declaration') return hasMutKeyword(node);
+    if (node.type === "let_declaration") return hasMutKeyword(node);
     return true;
   },
 };

@@ -1,15 +1,20 @@
-import type { SyntaxNode } from '../utils/ast-helpers.js';
-import type { NamedBinding } from './types.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
+import type { NamedBinding } from "./types.js";
 
-export function extractPhpNamedBindings(importNode: SyntaxNode): NamedBinding[] | undefined {
+export function extractPhpNamedBindings(
+  importNode: SyntaxNode,
+): NamedBinding[] | undefined {
   // namespace_use_declaration > namespace_use_clause* (flat)
   // namespace_use_declaration > namespace_use_group > namespace_use_clause* (grouped)
-  if (importNode.type !== 'namespace_use_declaration') return undefined;
+  if (importNode.type !== "namespace_use_declaration") return undefined;
 
   // Skip 'use function' and 'use const' declarations — these import callables/constants,
   // not class types, and should not be added to namedImportMap as type bindings.
-  const useTypeNode = importNode.childForFieldName?.('type');
-  if (useTypeNode && (useTypeNode.text === 'function' || useTypeNode.text === 'const')) {
+  const useTypeNode = importNode.childForFieldName?.("type");
+  if (
+    useTypeNode &&
+    (useTypeNode.text === "function" || useTypeNode.text === "const")
+  ) {
     return undefined;
   }
 
@@ -19,12 +24,13 @@ export function extractPhpNamedBindings(importNode: SyntaxNode): NamedBinding[] 
   const clauses: SyntaxNode[] = [];
   for (let i = 0; i < importNode.namedChildCount; i++) {
     const child = importNode.namedChild(i);
-    if (child?.type === 'namespace_use_clause') {
+    if (child?.type === "namespace_use_clause") {
       clauses.push(child);
-    } else if (child?.type === 'namespace_use_group') {
+    } else if (child?.type === "namespace_use_group") {
       for (let j = 0; j < child.namedChildCount; j++) {
         const groupChild = child.namedChild(j);
-        if (groupChild?.type === 'namespace_use_clause') clauses.push(groupChild);
+        if (groupChild?.type === "namespace_use_clause")
+          clauses.push(groupChild);
       }
     }
   }
@@ -35,19 +41,23 @@ export function extractPhpNamedBindings(importNode: SyntaxNode): NamedBinding[] 
     const names: SyntaxNode[] = [];
     for (let j = 0; j < clause.namedChildCount; j++) {
       const child = clause.namedChild(j);
-      if (child?.type === 'qualified_name') qualifiedName = child;
-      else if (child?.type === 'name') names.push(child);
+      if (child?.type === "qualified_name") qualifiedName = child;
+      else if (child?.type === "name") names.push(child);
     }
 
     if (qualifiedName && names.length > 0) {
       // Flat aliased import: use App\Models\Repo as R;
       const fullText = qualifiedName.text;
-      const exportedName = fullText.includes('\\') ? fullText.split('\\').pop()! : fullText;
+      const exportedName = fullText.includes("\\")
+        ? fullText.split("\\").pop()!
+        : fullText;
       bindings.push({ local: names[0].text, exported: exportedName });
     } else if (qualifiedName && names.length === 0) {
       // Flat non-aliased import: use App\Models\User;
       const fullText = qualifiedName.text;
-      const lastSegment = fullText.includes('\\') ? fullText.split('\\').pop()! : fullText;
+      const lastSegment = fullText.includes("\\")
+        ? fullText.split("\\").pop()!
+        : fullText;
       bindings.push({ local: lastSegment, exported: lastSegment });
     } else if (!qualifiedName && names.length >= 2) {
       // Grouped aliased import: {Repo as R} — first name = exported, second = alias

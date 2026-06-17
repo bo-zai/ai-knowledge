@@ -22,11 +22,13 @@ CodeGraph explore SmsService SmsConfig SmsController
 ```
 
 一次返回三个类源码：
+
 - SmsConfig：smsCheckSwitch 开关字段、腾讯云配置（appId、appSecret、templateId）
 - SmsService.sendSms()：if (smsCheckSwitch) → 调腾讯云 SDK；else → 只记日志
 - SmsController：sendVerifyCode()、verifyCode()、queryRecords()
 
 **关键发现**：
+
 1. 短信功能已完整实现（发送、校验、记录查询）
 2. 有 smsCheckSwitch 开关控制
 3. 使用腾讯云 SDK
@@ -116,13 +118,13 @@ CodeGraph explore 一次调用就让我看到了全貌：功能完整、有开�
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| 短信功能是否存在 | CodeGraph explore | 无 |
-| 用的什么 SDK | CodeGraph explore（SmsConfig） | 无 |
-| 开关状态 | Grep yml | 无 |
-| 功能是否完整 | CodeGraph explore（SmsController） | 无 |
-| 注册/修改手机号位置 | CodeGraph search | 无 |
-| 配置是否有效 | **问用户** | 低——边界知识可提供 |
-| 频率限制有无 | Grep SmsService | 低——约束知识可提供 |
-| 启用后的副作用 | Grep smsCheckSwitch | 无 |
+| 信息需求            | 实际获取方式                       |  知识库的增量价值  |
+| ------------------- | ---------------------------------- | :----------------: |
+| 短信功能是否存在    | CodeGraph explore                  |         无         |
+| 用的什么 SDK        | CodeGraph explore（SmsConfig）     |         无         |
+| 开关状态            | Grep yml                           |         无         |
+| 功能是否完整        | CodeGraph explore（SmsController） |         无         |
+| 注册/修改手机号位置 | CodeGraph search                   |         无         |
+| 配置是否有效        | **问用户**                         | 低——边界知识可提供 |
+| 频率限制有无        | Grep SmsService                    | 低——约束知识可提供 |
+| 启用后的副作用      | Grep smsCheckSwitch                |         无         |

@@ -7,7 +7,7 @@
  * (array values) and arity-based filtering.
  */
 
-import type { SymbolDefinition } from '../../shared/index.js';
+import type { SymbolDefinition } from "../../shared/index.js";
 
 // ---------------------------------------------------------------------------
 // Public read-only interface
@@ -57,7 +57,10 @@ export interface MethodRegistry {
    *
    * Returns `[]` on miss so callers can iterate without null checks.
    */
-  lookupAllByOwner(ownerNodeId: string, methodName: string): readonly SymbolDefinition[];
+  lookupAllByOwner(
+    ownerNodeId: string,
+    methodName: string,
+  ): readonly SymbolDefinition[];
 
   /**
    * True iff at least one registered def has `type === 'Function'` — i.e.,
@@ -82,7 +85,11 @@ export interface MethodRegistry {
 
 export interface MutableMethodRegistry extends MethodRegistry {
   /** Register a method under its owner. Supports multiple overloads. */
-  register(ownerNodeId: string, methodName: string, def: SymbolDefinition): void;
+  register(
+    ownerNodeId: string,
+    methodName: string,
+    def: SymbolDefinition,
+  ): void;
   /** Clear all entries. */
   clear(): void;
 }
@@ -150,7 +157,8 @@ export const createMethodRegistry = (): MutableMethodRegistry => {
             continue;
           }
           const min = d.requiredParameterCount ?? d.parameterCount;
-          if (argCount >= min && argCount <= d.parameterCount) arityMatched.push(d);
+          if (argCount >= min && argCount <= d.parameterCount)
+            arityMatched.push(d);
         }
         pool = arityMatched;
       }
@@ -179,7 +187,11 @@ export const createMethodRegistry = (): MutableMethodRegistry => {
     return methodByOwner.get(`${ownerNodeId}\0${methodName}`) ?? EMPTY;
   };
 
-  const register = (ownerNodeId: string, methodName: string, def: SymbolDefinition): void => {
+  const register = (
+    ownerNodeId: string,
+    methodName: string,
+    def: SymbolDefinition,
+  ): void => {
     const key = `${ownerNodeId}\0${methodName}`;
     const existing = methodByOwner.get(key);
     if (existing) {
@@ -198,7 +210,7 @@ export const createMethodRegistry = (): MutableMethodRegistry => {
     // It was already written into `SymbolTable.callableByName` by the
     // upstream Function callable-index gate, so the two indexes are no
     // longer disjoint for this registry's lifetime — Tier 3 must dedup.
-    if (!hasFunctionMethodsFlag && def.type === 'Function') {
+    if (!hasFunctionMethodsFlag && def.type === "Function") {
       hasFunctionMethodsFlag = true;
     }
   };

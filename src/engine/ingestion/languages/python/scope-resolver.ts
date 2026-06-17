@@ -12,23 +12,26 @@
  * the 2 booleans, and register in `scope-resolution/pipeline/registry.ts`.
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import { SupportedLanguages } from '../../../shared/index.js';
-import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
-import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
-import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
-import { pythonProvider } from '../python.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import { SupportedLanguages } from "../../../shared/index.js";
+import {
+  buildMro,
+  defaultLinearize,
+} from "../../scope-resolution/passes/mro.js";
+import { populateClassOwnedMembers } from "../../scope-resolution/scope/walkers.js";
+import type { ScopeResolver } from "../../scope-resolution/contract/scope-resolver.js";
+import { pythonProvider } from "../python.js";
 import {
   pythonArityCompatibility,
   pythonMergeBindings,
   resolvePythonImportTarget,
   type PythonResolveContext,
-} from './index.js';
+} from "./index.js";
 
 const pythonScopeResolver: ScopeResolver = {
   language: SupportedLanguages.Python,
   languageProvider: pythonProvider,
-  importEdgeReason: 'python-scope: import',
+  importEdgeReason: "python-scope: import",
 
   resolveImportTarget: (targetRaw, fromFile, allFilePaths) => {
     // Copy the orchestrator's `ReadonlySet` into a `Set` because the
@@ -36,11 +39,14 @@ const pythonScopeResolver: ScopeResolver = {
     // `resolveAbsoluteFromFiles` / `hasRepoCandidate`) is typed to
     // receive a mutable `Set<string>`. The copy is O(N) but called
     // once per import — trivial compared to the parser work.
-    const ws: PythonResolveContext = { fromFile, allFilePaths: new Set(allFilePaths) };
+    const ws: PythonResolveContext = {
+      fromFile,
+      allFilePaths: new Set(allFilePaths),
+    };
     // `WorkspaceIndex` is an opaque `unknown` placeholder in the
     // shared contract, so `ws` passes structurally without a cast.
     return resolvePythonImportTarget(
-      { kind: 'named', localName: '_', importedName: '_', targetRaw },
+      { kind: "named", localName: "_", importedName: "_", targetRaw },
       ws,
     );
   },
@@ -49,13 +55,16 @@ const pythonScopeResolver: ScopeResolver = {
   // The per-scope id is unused by pythonMergeBindings (tier ordering
   // is computed purely from BindingRef.origin), so we don't need to
   // synthesize a Scope.
-  mergeBindings: (existing, incoming) => [...pythonMergeBindings([...existing, ...incoming])],
+  mergeBindings: (existing, incoming) => [
+    ...pythonMergeBindings([...existing, ...incoming]),
+  ],
 
   // Adapter: pythonArityCompatibility predates RegistryProviders and
   // uses (def, callsite). ScopeResolver contract is (callsite, def).
   // Wrapper kept to honor both contracts without altering the legacy
   // shape that LanguageProvider.arityCompatibility consumes.
-  arityCompatibility: (callsite, def) => pythonArityCompatibility(def, callsite),
+  arityCompatibility: (callsite, def) =>
+    pythonArityCompatibility(def, callsite),
 
   buildMro: (graph, parsedFiles, nodeLookup) =>
     buildMro(graph, parsedFiles, nodeLookup, defaultLinearize),

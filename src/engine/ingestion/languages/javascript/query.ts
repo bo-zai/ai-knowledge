@@ -46,18 +46,18 @@
  * tree-sitter init cost per file.
  */
 
-import Parser from 'tree-sitter';
-import JS from 'tree-sitter-javascript';
+import Parser from "tree-sitter";
+import JS from "tree-sitter-javascript";
 import {
   ARRAY_METHOD_NOT_ANY_OF_PREDICATE,
   DEFAULT_EXPORT_IDENTIFIER_NOT_ANY_OF_PREDICATE,
-} from '../../ts-js-hoc-utils.js';
+} from "../../ts-js-hoc-utils.js";
 
-const JS_GRAMMAR = JS as Parameters<Parser['setLanguage']>[0];
+const JS_GRAMMAR = JS as Parameters<Parser["setLanguage"]>[0];
 
 /** True when the file should be parsed with the JSX-extended query. */
 function isJsxFile(filePath: string): boolean {
-  return filePath.endsWith('.jsx');
+  return filePath.endsWith(".jsx");
 }
 
 const JAVASCRIPT_SCOPE_QUERY = `
@@ -517,7 +517,10 @@ export function getJsParser(filePath?: string): Parser {
 export function getJsScopeQuery(filePath?: string): Parser.Query {
   if (filePath !== undefined && isJsxFile(filePath)) {
     if (_jsxQuery === null) {
-      _jsxQuery = new Parser.Query(JS_GRAMMAR, JAVASCRIPT_SCOPE_QUERY + JSX_QUERY_SUFFIX);
+      _jsxQuery = new Parser.Query(
+        JS_GRAMMAR,
+        JAVASCRIPT_SCOPE_QUERY + JSX_QUERY_SUFFIX,
+      );
     }
     return _jsxQuery;
   }

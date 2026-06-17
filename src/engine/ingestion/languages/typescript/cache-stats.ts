@@ -9,7 +9,7 @@
  * a module-global counter and its reset/export surface.
  */
 
-const PROF = process.env.PROF_SCOPE_RESOLUTION === '1';
+const PROF = process.env.PROF_SCOPE_RESOLUTION === "1";
 
 let CACHE_HITS = 0;
 let CACHE_MISSES = 0;
@@ -22,7 +22,10 @@ export function recordCacheMiss(): void {
   if (PROF) CACHE_MISSES++;
 }
 
-export function getTypescriptCaptureCacheStats(): { hits: number; misses: number } {
+export function getTypescriptCaptureCacheStats(): {
+  hits: number;
+  misses: number;
+} {
   return { hits: CACHE_HITS, misses: CACHE_MISSES };
 }
 

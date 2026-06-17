@@ -11,11 +11,13 @@
 ### 1.1 当前项目现状
 
 **核心文件：**
+
 - `src/generation/llm-client.ts`: OpenAI SDK 直接封装
 - `llm.config.json`: 单一模型配置文件
 - `src/config/model-config.ts`: 配置加载和解析
 
 **现有能力：**
+
 - ✅ 流式和非流式调用
 - ✅ 基础的超时和重试机制
 - ❌ 无工具调用能力
@@ -26,12 +28,14 @@
 ### 1.2 目标项目参考
 
 **核心文件：**
+
 - `src/main/agent/runtime.ts`: DeepAgents Agent 运行时系统
 - `src/main/agent/local-sandbox.ts`: 文件系统工具后端
 - `src/main/storage.ts`: 多模型配置管理
 - `src/main/routing/index.ts`: 智能路由机制
 
 **目标能力：**
+
 - ✅ 工具调用能力（文件系统工具）
 - ✅ 上下文压缩（SummarizationMiddleware）
 - ✅ 多模型配置和智能路由
@@ -39,11 +43,13 @@
 ### 1.3 对齐目标
 
 根据需求确认，本次对齐的核心能力：
+
 1. ✅ 工具调用能力（文件系统工具，不含命令执行）
 2. ✅ 上下文压缩机制
 3. ✅ 多模型支持和智能路由
 
 **不包含：**
+
 - ❌ 命令执行工具
 - ❌ CodeGraph MCP 工具集成
 - ❌ 工具安全机制（审批、沙箱）
@@ -74,12 +80,12 @@
 
 ### 2.2 核心模块拆分
 
-| 模块 | 文件路径 | 职责 |
-|------|---------|------|
-| Agent Runtime | `src/agent-runtime/runtime.ts` | Agent 组装、工具集成、中间件配置 |
-| 文件系统工具 | `src/agent-runtime/file-tools.ts` | 文件操作工具后端实现 |
-| 多模型配置 | `src/config/multi-model-config.ts` | 多模型配置加载和管理 |
-| 智能路由 | `src/agent-runtime/routing/index.ts` | 模型选择策略 |
+| 模块          | 文件路径                             | 职责                             |
+| ------------- | ------------------------------------ | -------------------------------- |
+| Agent Runtime | `src/agent-runtime/runtime.ts`       | Agent 组装、工具集成、中间件配置 |
+| 文件系统工具  | `src/agent-runtime/file-tools.ts`    | 文件操作工具后端实现             |
+| 多模型配置    | `src/config/multi-model-config.ts`   | 多模型配置加载和管理             |
+| 智能路由      | `src/agent-runtime/routing/index.ts` | 模型选择策略                     |
 
 ---
 
@@ -88,6 +94,7 @@
 ### 3.1 文件系统工具列表
 
 **基础工具：**
+
 1. `ls` - 列出目录内容
 2. `read_file` - 读取文件内容
 3. `write_file` - 写入文件
@@ -96,29 +103,32 @@
 6. `grep` - 文件内容搜索（支持多文件）
 
 **工具配置示例：**
+
 ```typescript
 const filesystemMiddleware = createFilesystemMiddleware({
   backend: new FileBackend({
     rootDir: workspacePath,
     maxFileSize: 10 * 1024 * 1024, // 10MB
-    encoding: 'utf-8'
-  })
+    encoding: "utf-8",
+  }),
 });
 ```
 
 ### 3.2 工具实现方式
 
 使用 DeepAgents 的 `createFilesystemMiddleware`，配置：
+
 - `backend`: 文件操作后端（自定义实现）
 - `systemPrompt`: 文件系统使用提示词
 
 **关键配置：**
+
 ```typescript
 interface FileBackendConfig {
-  rootDir: string;           // 工作目录根路径
-  maxFileSize: number;       // 最大文件大小限制
-  encoding: string;          // 默认编码
-  virtualMode: false;        // 真实文件系统（非虚拟）
+  rootDir: string; // 工作目录根路径
+  maxFileSize: number; // 最大文件大小限制
+  encoding: string; // 默认编码
+  virtualMode: false; // 真实文件系统（非虚拟）
 }
 ```
 
@@ -129,27 +139,30 @@ interface FileBackendConfig {
 ### 4.1 SummarizationMiddleware 核心机制
 
 **触发条件：**
+
 - Token 数达到阈值（如 75% 上下文窗口）
 - 基于模型配置的 maxTokens 计算
 
 **保留策略：**
+
 - 保留最近 10% 的对话历史（keepTokens）
 - 摘要历史对话，提取关键信息
 
 **配置示例：**
+
 ```typescript
 const summarizationOptions = {
   model: modelInstance,
   backend: stateBackend,
-  historyPathPrefix: '.aiwiki/conversation_history',
-  trigger: { type: 'tokens', value: triggerTokens },
-  keep: { type: 'tokens', value: keepTokens },
+  historyPathPrefix: ".aiwiki/conversation_history",
+  trigger: { type: "tokens", value: triggerTokens },
+  keep: { type: "tokens", value: keepTokens },
   summaryPrompt: AIWIKI_SUMMARY_PROMPT,
   truncateArgsSettings: {
-    trigger: { type: 'tokens', value: triggerTokens },
-    keep: { type: 'tokens', value: keepTokens },
-    maxLength: 2000
-  }
+    trigger: { type: "tokens", value: triggerTokens },
+    keep: { type: "tokens", value: keepTokens },
+    maxLength: 2000,
+  },
 };
 ```
 
@@ -207,14 +220,20 @@ const AIWIKI_SUMMARY_PROMPT = `
 根据模型的 maxTokens 动态计算：
 
 ```typescript
-const SUMMARY_KEEP_RATIO = 0.1;       // 保留 10%
-const SUMMARY_INPUT_RATIO = 0.65;     // 输入 token 占 65%
+const SUMMARY_KEEP_RATIO = 0.1; // 保留 10%
+const SUMMARY_INPUT_RATIO = 0.65; // 输入 token 占 65%
 const SUMMARY_INPUT_TOKEN_CAP = 700_000; // 输入 token 上限
 
-const triggerTokens = Math.floor(maxTokens * 0.75);  // 75% 触发
+const triggerTokens = Math.floor(maxTokens * 0.75); // 75% 触发
 const keepTokens = Math.max(Math.floor(maxTokens * SUMMARY_KEEP_RATIO), 4_000);
-const trimForSummary = Math.min(SUMMARY_INPUT_TOKEN_CAP, Math.floor(maxTokens * SUMMARY_INPUT_RATIO));
-const toolEvictLimit = Math.min(20_000, Math.max(Math.floor(maxTokens * 0.08), 6_000));
+const trimForSummary = Math.min(
+  SUMMARY_INPUT_TOKEN_CAP,
+  Math.floor(maxTokens * SUMMARY_INPUT_RATIO),
+);
+const toolEvictLimit = Math.min(
+  20_000,
+  Math.max(Math.floor(maxTokens * 0.08), 6_000),
+);
 ```
 
 ---
@@ -272,14 +291,16 @@ interface MultiModelConfig {
   name: string;
   baseUrl: string;
   model: string;
-  apiKey: string;         // 支持环境变量引用 ${ENV_VAR}
+  apiKey: string; // 支持环境变量引用 ${ENV_VAR}
   maxTokens: number;
-  tier?: 'premium' | 'economy';
+  tier?: "premium" | "economy";
   interleavedThinking?: boolean;
 }
 
 export function loadMultiModelConfig(): MultiModelConfig[];
-export function getModelByTier(tier: 'premium' | 'economy'): MultiModelConfig | null;
+export function getModelByTier(
+  tier: "premium" | "economy",
+): MultiModelConfig | null;
 export function resolveApiKey(config: MultiModelConfig): string;
 ```
 
@@ -288,6 +309,7 @@ export function resolveApiKey(config: MultiModelConfig): string;
 **路由策略：**
 
 参考目标项目的三层路由机制：
+
 1. **Layer 1**：用户显式指定模型
 2. **Layer 2**：基于任务特征自动路由
 3. **Layer 3**：基于历史反馈调整
@@ -301,10 +323,10 @@ const PREMIUM_TASK_PATTERN = /\b(工具|文件|执行|调试|排查|重构)\b/i;
 // Economy 任务特征：
 const ECONOMY_TASK_PATTERN = /\b(写|实现|生成|创建|解释|说明|翻译)\b/i;
 
-function determineTierByTask(message: string): 'premium' | 'economy' {
-  if (PREMIUM_TASK_PATTERN.test(message)) return 'premium';
-  if (ECONOMY_TASK_PATTERN.test(message)) return 'economy';
-  return 'premium'; // 默认使用 premium
+function determineTierByTask(message: string): "premium" | "economy" {
+  if (PREMIUM_TASK_PATTERN.test(message)) return "premium";
+  if (ECONOMY_TASK_PATTERN.test(message)) return "economy";
+  return "premium"; // 默认使用 premium
 }
 ```
 
@@ -323,14 +345,16 @@ const RETRY_BASE_DELAY_MS = 1000;
 const PER_ATTEMPT_TIMEOUT_MS = 60_000;
 
 function createRetryingFetch(
-  maxAttempts: number = DEFAULT_RETRY_MAX_ATTEMPTS
+  maxAttempts: number = DEFAULT_RETRY_MAX_ATTEMPTS,
 ): typeof fetch {
   return async (input, init) => {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // Per-attempt AbortController
       const attemptCtrl = new AbortController();
       const timeoutHandle = setTimeout(() => {
-        attemptCtrl.abort(new DOMException('Per-attempt timeout', 'TimeoutError'));
+        attemptCtrl.abort(
+          new DOMException("Per-attempt timeout", "TimeoutError"),
+        );
       }, PER_ATTEMPT_TIMEOUT_MS);
 
       try {
@@ -373,23 +397,23 @@ function computeBackoffDelay(attempt: number): number {
 
 ### 8.1 新增文件清单
 
-| 文件路径 | 说明 |
-|---------|------|
-| `src/agent-runtime/runtime.ts` | Agent 运行时系统 |
-| `src/agent-runtime/file-tools.ts` | 文件系统工具实现 |
-| `src/agent-runtime/routing/index.ts` | 智能路由系统 |
-| `src/config/multi-model-config.ts` | 多模型配置管理 |
-| `multi-models.json` | 多模型配置文件 |
-| `src/shared/state-backend.ts` | StateBackend 实现 |
+| 文件路径                             | 说明              |
+| ------------------------------------ | ----------------- |
+| `src/agent-runtime/runtime.ts`       | Agent 运行时系统  |
+| `src/agent-runtime/file-tools.ts`    | 文件系统工具实现  |
+| `src/agent-runtime/routing/index.ts` | 智能路由系统      |
+| `src/config/multi-model-config.ts`   | 多模型配置管理    |
+| `multi-models.json`                  | 多模型配置文件    |
+| `src/shared/state-backend.ts`        | StateBackend 实现 |
 
 ### 8.2 现有文件调整
 
-| 文件路径 | 调整内容 |
-|---------|---------|
+| 文件路径                       | 调整内容                  |
+| ------------------------------ | ------------------------- |
 | `src/generation/llm-client.ts` | 重构为 Agent 模式调用入口 |
-| `llm.config.json` | 保留作为单模型配置的兼容 |
-| `package.json` | 新增依赖 |
-| `src/config/defaults.ts` | 更新默认配置 |
+| `llm.config.json`              | 保留作为单模型配置的兼容  |
+| `package.json`                 | 新增依赖                  |
+| `src/config/defaults.ts`       | 更新默认配置              |
 
 ---
 
@@ -411,13 +435,13 @@ function computeBackoffDelay(attempt: number): number {
 
 ### 9.2 依赖说明
 
-| 包名 | 版本 | 用途 |
-|------|------|------|
-| `deepagents` | ^1.8.1 | Agent 框架核心 |
-| `@langchain/core` | ^1.1.29 | LangChain 核心抽象 |
-| `@langchain/langgraph` | ^1.2.0 | 对话状态管理 |
-| `@langchain/openai` | ^1.2.11 | OpenAI 模型适配 |
-| `langchain` | ^1.2.28 | LangChain 完整包 |
+| 包名                   | 版本    | 用途               |
+| ---------------------- | ------- | ------------------ |
+| `deepagents`           | ^1.8.1  | Agent 框架核心     |
+| `@langchain/core`      | ^1.1.29 | LangChain 核心抽象 |
+| `@langchain/langgraph` | ^1.2.0  | 对话状态管理       |
+| `@langchain/openai`    | ^1.2.11 | OpenAI 模型适配    |
+| `langchain`            | ^1.2.28 | LangChain 完整包   |
 
 ---
 
@@ -428,11 +452,13 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段一：基础框架搭建（2-3天）**
 
 **目标：**
+
 - 安装依赖
 - 创建基础文件结构
 - 实现基础 Agent Runtime
 
 **关键任务：**
+
 1. 安装依赖包
 2. 创建 `src/agent-runtime/runtime.ts`
 3. 实现基础的 `createDeepAgent` 函数
@@ -441,10 +467,12 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段二：文件系统工具集成（3-4天）**
 
 **目标：**
+
 - 实现文件系统工具后端
 - 集成 createFilesystemMiddleware
 
 **关键任务：**
+
 1. 创建 `src/agent-runtime/file-tools.ts`
 2. 实现 FileBackend 类
 3. 配置文件工具：ls、read、write、edit、glob、grep
@@ -453,10 +481,12 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段三：上下文压缩集成（2-3天）**
 
 **目标：**
+
 - 集成 SummarizationMiddleware
 - 实现自定义摘要提示词
 
 **关键任务：**
+
 1. 配置 SummarizationMiddleware
 2. 实现 AIWIKI_SUMMARY_PROMPT
 3. 配置 token 阈值计算
@@ -465,10 +495,12 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段四：多模型支持（2-3天）**
 
 **目标：**
+
 - 实现多模型配置系统
 - 实现基础路由机制
 
 **关键任务：**
+
 1. 创建 `src/config/multi-model-config.ts`
 2. 创建 `multi-models.json` 配置文件
 3. 实现 `loadMultiModelConfig` 和 `getModelByTier`
@@ -478,10 +510,12 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段五：统一重试机制（1-2天）**
 
 **目标：**
+
 - 实现统一重试封装
 - 替换现有的简单重试
 
 **关键任务：**
+
 1. 实现 `createRetryingFetch`
 2. 配置指数退避和 per-attempt timeout
 3. 替换现有的超时配置
@@ -490,10 +524,12 @@ function computeBackoffDelay(attempt: number): number {
 #### **阶段六：集成测试和优化（2-3天）**
 
 **目标：**
+
 - 完整功能测试
 - 性能优化
 
 **关键任务：**
+
 1. 编写集成测试
 2. 性能测试和优化
 3. 文档更新
@@ -505,20 +541,20 @@ function computeBackoffDelay(attempt: number): number {
 
 ### 11.1 单元测试
 
-| 测试文件 | 测试内容 |
-|---------|---------|
-| `tests/unit/agent-runtime/runtime.test.ts` | Agent 组装和工具集成 |
-| `tests/unit/agent-runtime/file-tools.test.ts` | 文件工具功能 |
-| `tests/unit/config/multi-model-config.test.ts` | 多模型配置加载 |
-| `tests/unit/agent-runtime/routing.test.ts` | 路由逻辑 |
+| 测试文件                                       | 测试内容             |
+| ---------------------------------------------- | -------------------- |
+| `tests/unit/agent-runtime/runtime.test.ts`     | Agent 组装和工具集成 |
+| `tests/unit/agent-runtime/file-tools.test.ts`  | 文件工具功能         |
+| `tests/unit/config/multi-model-config.test.ts` | 多模型配置加载       |
+| `tests/unit/agent-runtime/routing.test.ts`     | 路由逻辑             |
 
 ### 11.2 集成测试
 
-| 测试场景 | 测试内容 |
-|---------|---------|
-| 文件工具调用 | 完整的文件操作流程 |
-| 上下文压缩触发 | Token 阈值触发摘要 |
-| 多模型路由 | 不同任务类型的模型选择 |
+| 测试场景       | 测试内容               |
+| -------------- | ---------------------- |
+| 文件工具调用   | 完整的文件操作流程     |
+| 上下文压缩触发 | Token 阈值触发摘要     |
+| 多模型路由     | 不同任务类型的模型选择 |
 
 ---
 
@@ -547,19 +583,19 @@ function computeBackoffDelay(attempt: number): number {
 
 ### 13.1 技术风险
 
-| 风险 | 缓解措施 |
-|------|---------|
-| DeepAgents API 变化 | 锁定版本，定期更新评估 |
-| 工具调用安全性 | 限制文件路径范围，设置文件大小限制 |
-| 摘要质量不稳定 | 自定义摘要提示词，定期优化 |
+| 风险                | 缓解措施                           |
+| ------------------- | ---------------------------------- |
+| DeepAgents API 变化 | 锁定版本，定期更新评估             |
+| 工具调用安全性      | 限制文件路径范围，设置文件大小限制 |
+| 摘要质量不稳定      | 自定义摘要提示词，定期优化         |
 
 ### 13.2 兼容性风险
 
-| 风险 | 缓解措施 |
-|------|---------|
+| 风险                  | 缓解措施                             |
+| --------------------- | ------------------------------------ |
 | 现有 API 调用方式变化 | 提供兼容层，保留旧的调用方式一段时间 |
-| 配置文件格式变化 | 提供配置迁移脚本 |
-| 依赖包冲突 | 仔细测试依赖兼容性 |
+| 配置文件格式变化      | 提供配置迁移脚本                     |
+| 依赖包冲突            | 仔细测试依赖兼容性                   |
 
 ---
 

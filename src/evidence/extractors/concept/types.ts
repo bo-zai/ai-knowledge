@@ -5,20 +5,20 @@
  */
 export interface ConceptCandidate {
   // 基础信息
-  candidateId: string;              // CAND-{table-name}
-  nameCandidates: string[];         // 候选概念名称
-  confidence: number;               // 置信度 0-1
+  candidateId: string; // CAND-{table-name}
+  nameCandidates: string[]; // 候选概念名称
+  confidence: number; // 置信度 0-1
   confidenceBreakdown: {
-    traceDepth: number;             // 追溯深度（完整度）0.5-1.0
-    crossModule: number;            // 跨模块加权 0-0.2
-    multiEntryPoint: number;        // 多入口覆盖 0-0.15
-    tableRelation: number;          // 表关联密度 0-0.1
+    traceDepth: number; // 追溯深度（完整度）0.5-1.0
+    crossModule: number; // 跨模块加权 0-0.2
+    multiEntryPoint: number; // 多入口覆盖 0-0.15
+    tableRelation: number; // 表关联密度 0-0.1
   };
 
   // 模块信息
-  modulePath: string;               // 主模块路径
-  moduleName: string;               // 主模块名
-  isCrossModule: boolean;           // 是否跨模块候选
+  modulePath: string; // 主模块路径
+  moduleName: string; // 主模块名
+  isCrossModule: boolean; // 是否跨模块候选
 
   // 表锚点信息
   tableAnchor: TableAnchor;
@@ -30,49 +30,53 @@ export interface ConceptCandidate {
   gitCommits: GitCommitEvidence[];
 
   // 标记信息
-  suspiciousMark?: 'transmission_class' | 'config_class' | 'simple_enum' | 'external_enum_usage';
+  suspiciousMark?:
+    | "transmission_class"
+    | "config_class"
+    | "simple_enum"
+    | "external_enum_usage";
 }
 
 /**
  * 表锚点 - 跨模块聚合的核心锚点
  */
 export interface TableAnchor {
-  tableName: string;                // 数据库表名（唯一锚点）
+  tableName: string; // 数据库表名（唯一锚点）
   schema?: string;
   columns: string[];
 
   traceSources: TableTraceSource[];
-  isCrossModule: boolean;           // traceSources 来自多个模块
+  isCrossModule: boolean; // traceSources 来自多个模块
   moduleCount: number;
   moduleNames: string[];
 
   aggregatedConfidence: number;
 
   // Task 7 添加：关联表信息
-  relatedTables?: RelatedTableInfo[];  // 通过外键关联的表
-  tableRelationBonus?: number;          // 表关联密度加成 0-0.1
+  relatedTables?: RelatedTableInfo[]; // 通过外键关联的表
+  tableRelationBonus?: number; // 表关联密度加成 0-0.1
 }
 
 /**
  * 关联表信息 - Task 7 添加
  */
 export interface RelatedTableInfo {
-  tableName: string;                     // 关联表名
-  relationType: 'foreign_key' | 'join';  // 关联类型
-  sourceField?: string;                  // 当前表的关联字段
-  targetField?: string;                  // 目标表的关联字段
-  confidence: number;                    // 关联置信度 0-1
+  tableName: string; // 关联表名
+  relationType: "foreign_key" | "join"; // 关联类型
+  sourceField?: string; // 当前表的关联字段
+  targetField?: string; // 目标表的关联字段
+  confidence: number; // 关联置信度 0-1
 }
 
 /**
  * Service 聚类 - Task 7 添加
  */
 export interface ServiceCluster {
-  serviceName: string;                   // Service 类名（唯一标识）
-  entryPointCallers: string[];           // 调用该 Service 的入口点列表
-  callerServices: string[];              // 调用该 Service 的其他 Service
-  isDomainCore: boolean;                 // 是否为业务域核心
-  domainHint?: string;                   // 业务域提示（从表名推断）
+  serviceName: string; // Service 类名（唯一标识）
+  entryPointCallers: string[]; // 调用该 Service 的入口点列表
+  callerServices: string[]; // 调用该 Service 的其他 Service
+  isDomainCore: boolean; // 是否为业务域核心
+  domainHint?: string; // 业务域提示（从表名推断）
 }
 
 /**
@@ -93,14 +97,14 @@ export interface TableTraceSource {
  * 入口点信息
  */
 export interface EntryPointInfo {
-  kind: 'controller' | 'scheduled' | 'mq_consumer';
+  kind: "controller" | "scheduled" | "mq_consumer";
   className: string;
   filePath: string;
   moduleName: string;
   modulePath: string;
   methodName?: string;
   startLine: number;
-  signature?: string;             // @GetMapping("/product/list")
+  signature?: string; // @GetMapping("/product/list")
 }
 
 /**
@@ -169,25 +173,25 @@ export interface EntityInfo {
  */
 export interface GitCommitEvidence {
   commitHash: string;
-  commitMessage: string;            // 业务描述
+  commitMessage: string; // 业务描述
   commitDate: string;
   author?: string;
 
   changedFiles: {
     filePath: string;
     moduleName: string;
-    changeType: 'added' | 'modified' | 'deleted';
+    changeType: "added" | "modified" | "deleted";
   }[];
 
-  relevanceScore: number;           // 与候选相关度 0-1
+  relevanceScore: number; // 与候选相关度 0-1
 }
 
 /**
  * 业务域定义
  */
 export interface BusinessDomain {
-  domainId: string;                 // domain-{table-name}
-  domainName: string;               // 业务域名称
+  domainId: string; // domain-{table-name}
+  domainName: string; // 业务域名称
 
   coreTables: TableAnchor[];
   relatedTables: TableAnchor[];
@@ -195,7 +199,7 @@ export interface BusinessDomain {
   coveredModules: {
     moduleName: string;
     modulePath: string;
-    role: 'primary' | 'supporting';
+    role: "primary" | "supporting";
     entryPointCount: number;
   }[];
 
@@ -208,7 +212,7 @@ export interface BusinessDomain {
  * 发现途径结果
  */
 export interface DiscoveryPathResult {
-  pathway: 'controller' | 'scheduled' | 'mq_consumer';
+  pathway: "controller" | "scheduled" | "mq_consumer";
   entryPoints: EntryPointInfo[];
   tracePaths: ConceptTracePath[];
   errors: string[];
@@ -223,5 +227,8 @@ export interface LanguageAdapter {
   traceToService(entryPoint: EntryPointInfo): Promise<ServiceChainNode[]>;
   traceToMapper(serviceNode: ServiceChainNode): Promise<MapperInfo[]>;
   extractTableFromMapper(mapper: MapperInfo): Promise<TableInfo[]>;
-  findEntityForTable(table: TableInfo, modulePath: string): Promise<EntityInfo | undefined>;
+  findEntityForTable(
+    table: TableInfo,
+    modulePath: string,
+  ): Promise<EntityInfo | undefined>;
 }

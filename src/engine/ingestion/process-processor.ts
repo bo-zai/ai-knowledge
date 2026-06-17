@@ -10,12 +10,12 @@
  * Processes help agents understand how features work through the codebase.
  */
 
-import type { GraphNode, NodeLabel } from '../shared';
-import { KnowledgeGraph } from '../graph/types.js';
-import { CommunityMembership } from './community-processor.js';
-import { calculateEntryPointScore, isTestFile } from './entry-point-scoring.js';
-import { SupportedLanguages } from '../shared';
-import { isDev } from './utils/env.js';
+import type { GraphNode, NodeLabel } from "../shared";
+import { KnowledgeGraph } from "../graph/types.js";
+import { CommunityMembership } from "./community-processor.js";
+import { calculateEntryPointScore, isTestFile } from "./entry-point-scoring.js";
+import { SupportedLanguages } from "../shared";
+import { isDev } from "./utils/env.js";
 
 // ============================================================================
 // CONFIGURATION
@@ -43,7 +43,7 @@ export interface ProcessNode {
   id: string; // "proc_handleLogin_createSession"
   label: string; // "HandleLogin → CreateSession"
   heuristicLabel: string;
-  processType: 'intra_community' | 'cross_community';
+  processType: "intra_community" | "cross_community";
   stepCount: number;
   communities: string[]; // Community IDs touched
   entryPointId: string;
@@ -85,7 +85,7 @@ export const processProcesses = async (
 ): Promise<ProcessDetectionResult> => {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
-  onProgress?.('Finding entry points...', 0);
+  onProgress?.("Finding entry points...", 0);
 
   // Build lookup maps
   const membershipMap = new Map<string, string>();
@@ -97,21 +97,37 @@ export const processProcesses = async (
   for (const n of knowledgeGraph.iterNodes()) nodeMap.set(n.id, n);
 
   // Step 1: Find entry points (functions that call others but have few callers)
-  const entryPoints = findEntryPoints(knowledgeGraph, reverseCallsEdges, callsEdges);
+  const entryPoints = findEntryPoints(
+    knowledgeGraph,
+    reverseCallsEdges,
+    callsEdges,
+  );
 
-  onProgress?.(`Found ${entryPoints.length} entry points, tracing flows...`, 20);
+  onProgress?.(
+    `Found ${entryPoints.length} entry points, tracing flows...`,
+    20,
+  );
 
-  onProgress?.(`Found ${entryPoints.length} entry points, tracing flows...`, 20);
+  onProgress?.(
+    `Found ${entryPoints.length} entry points, tracing flows...`,
+    20,
+  );
 
   // Step 2: Trace processes from each entry point
   const allTraces: string[][] = [];
 
-  for (let i = 0; i < entryPoints.length && allTraces.length < cfg.maxProcesses * 2; i++) {
+  for (
+    let i = 0;
+    i < entryPoints.length && allTraces.length < cfg.maxProcesses * 2;
+    i++
+  ) {
     const entryId = entryPoints[i];
     const traces = traceFromEntryPoint(entryId, callsEdges, cfg);
 
     // Filter out traces that are too short
-    traces.filter((t) => t.length >= cfg.minSteps).forEach((t) => allTraces.push(t));
+    traces
+      .filter((t) => t.length >= cfg.minSteps)
+      .forEach((t) => allTraces.push(t));
 
     if (i % 10 === 0) {
       onProgress?.(
@@ -158,14 +174,14 @@ export const processProcesses = async (
     const communities = Array.from(communitiesSet);
 
     // Determine process type
-    const processType: 'intra_community' | 'cross_community' =
-      communities.length > 1 ? 'cross_community' : 'intra_community';
+    const processType: "intra_community" | "cross_community" =
+      communities.length > 1 ? "cross_community" : "intra_community";
 
     // Generate label
     const entryNode = nodeMap.get(entryPointId);
     const terminalNode = nodeMap.get(terminalId);
-    const entryName = entryNode?.properties.name || 'Unknown';
-    const terminalName = terminalNode?.properties.name || 'Unknown';
+    const entryName = entryNode?.properties.name || "Unknown";
+    const terminalName = terminalNode?.properties.name || "Unknown";
     const heuristicLabel = `${capitalize(entryName)} → ${capitalize(terminalName)}`;
 
     const processId = `proc_${idx}_${sanitizeId(entryName)}`;
@@ -192,10 +208,12 @@ export const processProcesses = async (
     });
   });
 
-  onProgress?.('Process detection complete!', 100);
+  onProgress?.("Process detection complete!", 100);
 
   // Calculate stats
-  const crossCommunityCount = processes.filter((p) => p.processType === 'cross_community').length;
+  const crossCommunityCount = processes.filter(
+    (p) => p.processType === "cross_community",
+  ).length;
   const avgStepCount =
     processes.length > 0
       ? processes.reduce((sum, p) => sum + p.stepCount, 0) / processes.length
@@ -230,7 +248,7 @@ const buildCallsGraph = (graph: KnowledgeGraph): AdjacencyList => {
   const adj = new Map<string, string[]>();
 
   for (const rel of graph.iterRelationships()) {
-    if (rel.type === 'CALLS' && rel.confidence >= MIN_TRACE_CONFIDENCE) {
+    if (rel.type === "CALLS" && rel.confidence >= MIN_TRACE_CONFIDENCE) {
       if (!adj.has(rel.sourceId)) {
         adj.set(rel.sourceId, []);
       }
@@ -245,7 +263,7 @@ const buildReverseCallsGraph = (graph: KnowledgeGraph): AdjacencyList => {
   const adj = new Map<string, string[]>();
 
   for (const rel of graph.iterRelationships()) {
-    if (rel.type === 'CALLS' && rel.confidence >= MIN_TRACE_CONFIDENCE) {
+    if (rel.type === "CALLS" && rel.confidence >= MIN_TRACE_CONFIDENCE) {
       if (!adj.has(rel.targetId)) {
         adj.set(rel.targetId, []);
       }
@@ -271,7 +289,7 @@ const findEntryPoints = (
   reverseCallsEdges: AdjacencyList,
   callsEdges: AdjacencyList,
 ): string[] => {
-  const symbolTypes = new Set<NodeLabel>(['Function', 'Method']);
+  const symbolTypes = new Set<NodeLabel>(["Function", "Method"]);
   const entryPointCandidates: {
     id: string;
     score: number;
@@ -281,7 +299,7 @@ const findEntryPoints = (
   for (const node of graph.iterNodes()) {
     if (!symbolTypes.has(node.label)) continue;
 
-    const filePath = node.properties.filePath || '';
+    const filePath = node.properties.filePath || "";
 
     // Skip test files entirely
     if (isTestFile(filePath)) continue;
@@ -295,7 +313,8 @@ const findEntryPoints = (
     // Calculate entry point score using new scoring system
     const { score: baseScore, reasons } = calculateEntryPointScore(
       node.properties.name,
-      (node.properties.language ?? SupportedLanguages.JavaScript) as SupportedLanguages,
+      (node.properties.language ??
+        SupportedLanguages.JavaScript) as SupportedLanguages,
       node.properties.isExported ?? false,
       callers.length,
       callees.length,
@@ -303,10 +322,13 @@ const findEntryPoints = (
     );
 
     let score = baseScore;
-    const astFrameworkMultiplier = node.properties.astFrameworkMultiplier ?? 1.0;
+    const astFrameworkMultiplier =
+      node.properties.astFrameworkMultiplier ?? 1.0;
     if (astFrameworkMultiplier > 1.0) {
       score *= astFrameworkMultiplier;
-      reasons.push(`framework-ast:${node.properties.astFrameworkReason || 'decorator'}`);
+      reasons.push(
+        `framework-ast:${node.properties.astFrameworkReason || "decorator"}`,
+      );
     }
 
     if (score > 0) {
@@ -322,10 +344,15 @@ const findEntryPoints = (
     console.log(`[Process] Top 10 entry point candidates (new scoring):`);
     sorted.slice(0, 10).forEach((c, i) => {
       const node = graph.getNode(c.id);
-      const exported = node?.properties.isExported ? '✓' : '✗';
-      const shortPath = node?.properties.filePath?.split('/').slice(-2).join('/') || '';
-      console.log(`  ${i + 1}. ${node?.properties.name} [exported:${exported}] (${shortPath})`);
-      console.log(`     score: ${c.score.toFixed(2)} = [${c.reasons.join(' × ')}]`);
+      const exported = node?.properties.isExported ? "✓" : "✗";
+      const shortPath =
+        node?.properties.filePath?.split("/").slice(-2).join("/") || "";
+      console.log(
+        `  ${i + 1}. ${node?.properties.name} [exported:${exported}] (${shortPath})`,
+      );
+      console.log(
+        `     score: ${c.score.toFixed(2)} = [${c.reasons.join(" × ")}]`,
+      );
     });
   }
 
@@ -409,9 +436,9 @@ const deduplicateTraces = (traces: string[][]): string[][] => {
 
   for (const trace of sorted) {
     // Check if this trace is a subset of any already-added trace
-    const traceKey = trace.join('->');
+    const traceKey = trace.join("->");
     const isSubset = unique.some((existing) => {
-      const existingKey = existing.join('->');
+      const existingKey = existing.join("->");
       return existingKey.includes(traceKey);
     });
 
@@ -459,7 +486,7 @@ const capitalize = (s: string): string => {
 
 const sanitizeId = (s: string): string => {
   return s
-    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/[^a-zA-Z0-9]/g, "_")
     .substring(0, 20)
     .toLowerCase();
 };

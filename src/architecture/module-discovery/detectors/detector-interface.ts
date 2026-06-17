@@ -4,7 +4,7 @@
  * 定义所有探测器必须实现的接口，支持策略模式扩展
  */
 
-import type { ModuleInfo } from '../../../schemas/module.js';
+import type { ModuleInfo } from "../../../schemas/module.js";
 
 /**
  * 探测结果
@@ -17,7 +17,7 @@ export interface DetectionResult {
   modules: ModuleInfo[];
 
   /** 探测层级 */
-  layer: 'root-build-system' | 'sub-project' | 'nested';
+  layer: "root-build-system" | "sub-project" | "nested";
 
   /** 探测是否成功 */
   success: boolean;
@@ -50,7 +50,7 @@ export interface ModuleDetector {
   readonly priority: number;
 
   /** 探测层级 */
-  readonly layer: 'root-build-system' | 'sub-project' | 'nested';
+  readonly layer: "root-build-system" | "sub-project" | "nested";
 
   /**
    * 检查该探测器是否适用于当前路径
@@ -65,7 +65,10 @@ export interface ModuleDetector {
    * @param repoPath 仓库路径
    * @param options 探测选项
    */
-  detect(repoPath: string, options?: DetectionOptions): Promise<DetectionResult>;
+  detect(
+    repoPath: string,
+    options?: DetectionOptions,
+  ): Promise<DetectionResult>;
 }
 
 /**
@@ -76,10 +79,13 @@ export interface ModuleDetector {
 export abstract class BaseDetector implements ModuleDetector {
   abstract readonly name: string;
   abstract readonly priority: number;
-  abstract readonly layer: 'root-build-system' | 'sub-project' | 'nested';
+  abstract readonly layer: "root-build-system" | "sub-project" | "nested";
 
   abstract canDetect(repoPath: string): Promise<boolean>;
-  abstract detect(repoPath: string, options?: DetectionOptions): Promise<DetectionResult>;
+  abstract detect(
+    repoPath: string,
+    options?: DetectionOptions,
+  ): Promise<DetectionResult>;
 
   /**
    * 创建成功的探测结果

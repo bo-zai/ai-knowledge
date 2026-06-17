@@ -1,4 +1,4 @@
-import type { SliceSeed, SliceKind } from './types.js';
+import type { SliceSeed, SliceKind } from "./types.js";
 
 export function discoverSlices(input: {
   routes: string[];
@@ -8,11 +8,36 @@ export function discoverSlices(input: {
   tables: string[];
 }): SliceSeed[] {
   return [
-    ...input.routes.map((value) => ({ id: `route:${value}`, kind: 'route' as const, title: value, source: value })),
-    ...input.processes.map((value) => ({ id: `process:${value}`, kind: 'process' as const, title: value, source: value })),
-    ...input.tools.map((value) => ({ id: `tool:${value}`, kind: 'tool' as const, title: value, source: value })),
-    ...input.communities.map((value) => ({ id: `community:${value}`, kind: 'community' as const, title: value, source: value })),
-    ...input.tables.map((value) => ({ id: `database:${value}`, kind: 'database' as const, title: value, source: value })),
+    ...input.routes.map((value) => ({
+      id: `route:${value}`,
+      kind: "route" as const,
+      title: value,
+      source: value,
+    })),
+    ...input.processes.map((value) => ({
+      id: `process:${value}`,
+      kind: "process" as const,
+      title: value,
+      source: value,
+    })),
+    ...input.tools.map((value) => ({
+      id: `tool:${value}`,
+      kind: "tool" as const,
+      title: value,
+      source: value,
+    })),
+    ...input.communities.map((value) => ({
+      id: `community:${value}`,
+      kind: "community" as const,
+      title: value,
+      source: value,
+    })),
+    ...input.tables.map((value) => ({
+      id: `database:${value}`,
+      kind: "database" as const,
+      title: value,
+      source: value,
+    })),
   ];
 }
 

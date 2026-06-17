@@ -36,11 +36,11 @@
  * Pure function — safe to call repeatedly; no side effects.
  */
 
-import type { NodeLabel } from '../graph/types.js';
-import type { SymbolDefinition } from './symbol-definition.js';
-import type { BindingRef, ScopeId, ScopeLookup, TypeRef } from './types.js';
-import type { DefIndex } from './def-index.js';
-import type { QualifiedNameIndex } from './qualified-name-index.js';
+import type { NodeLabel } from "../graph/types.js";
+import type { SymbolDefinition } from "./symbol-definition.js";
+import type { BindingRef, ScopeId, ScopeLookup, TypeRef } from "./types.js";
+import type { DefIndex } from "./def-index.js";
+import type { QualifiedNameIndex } from "./qualified-name-index.js";
 
 // ─── Public contracts ───────────────────────────────────────────────────────
 
@@ -58,12 +58,9 @@ export interface ResolveTypeRefContext {
 // ─── Strict policy constants ────────────────────────────────────────────────
 
 /** `'wildcard'` is deliberately absent. See file header. */
-const STRICT_ORIGINS: ReadonlySet<BindingRef['origin']> = new Set<BindingRef['origin']>([
-  'local',
-  'import',
-  'namespace',
-  'reexport',
-]);
+const STRICT_ORIGINS: ReadonlySet<BindingRef["origin"]> = new Set<
+  BindingRef["origin"]
+>(["local", "import", "namespace", "reexport"]);
 
 /**
  * `NodeLabel` values that may appear on the RHS of a type annotation.
@@ -81,23 +78,26 @@ const STRICT_ORIGINS: ReadonlySet<BindingRef['origin']> = new Set<BindingRef['or
  * here and add a test asserting the new path.
  */
 const TYPE_KINDS: ReadonlySet<NodeLabel> = new Set<NodeLabel>([
-  'Class',
-  'Interface',
-  'Enum',
-  'Struct',
-  'Union',
-  'Trait',
-  'TypeAlias',
-  'Typedef',
-  'Record',
-  'Delegate',
-  'Annotation',
-  'Template',
+  "Class",
+  "Interface",
+  "Enum",
+  "Struct",
+  "Union",
+  "Trait",
+  "TypeAlias",
+  "Typedef",
+  "Record",
+  "Delegate",
+  "Annotation",
+  "Template",
 ]);
 
 // ─── Main entry point ──────────────────────────────────────────────────────
 
-export function resolveTypeRef(ref: TypeRef, ctx: ResolveTypeRefContext): SymbolDefinition | null {
+export function resolveTypeRef(
+  ref: TypeRef,
+  ctx: ResolveTypeRefContext,
+): SymbolDefinition | null {
   // Phase 1: scope-chain walk anchored at the declaration site.
   let currentId: ScopeId | null = ref.declaredAtScope;
   const visited = new Set<ScopeId>();
@@ -131,7 +131,7 @@ export function resolveTypeRef(ref: TypeRef, ctx: ResolveTypeRefContext): Symbol
 
   // Phase 2: dotted fallback via `QualifiedNameIndex`. Only accept a unique
   // type-kind hit; anything ambiguous returns null (strict: no guesses).
-  if (ref.rawName.includes('.')) {
+  if (ref.rawName.includes(".")) {
     const candidates = ctx.qualifiedNameIndex.get(ref.rawName);
     let onlyTypeDef: SymbolDefinition | null = null;
     for (const defId of candidates) {

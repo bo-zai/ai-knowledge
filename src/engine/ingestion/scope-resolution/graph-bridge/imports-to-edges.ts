@@ -12,16 +12,16 @@
  * filters on reason.
  */
 
-import type { ImportEdge, ScopeId } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { generateId } from '../../../lib/utils.js';
+import type { ImportEdge, ScopeId } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { generateId } from "../../../lib/utils.js";
 
 export function emitImportEdges(
   graph: KnowledgeGraph,
   imports: ReadonlyMap<ScopeId, readonly ImportEdge[]>,
-  scopeTree: ScopeResolutionIndexes['scopeTree'],
-  reason = 'scope-resolution: import',
+  scopeTree: ScopeResolutionIndexes["scopeTree"],
+  reason = "scope-resolution: import",
 ): number {
   const seen = new Set<string>();
   let emitted = 0;
@@ -39,13 +39,13 @@ export function emitImportEdges(
       if (seen.has(dedupKey)) continue;
       seen.add(dedupKey);
 
-      const sourceId = generateId('File', sourceFile);
-      const targetId = generateId('File', edge.targetFile);
+      const sourceId = generateId("File", sourceFile);
+      const targetId = generateId("File", edge.targetFile);
       graph.addRelationship({
-        id: generateId('IMPORTS', dedupKey),
+        id: generateId("IMPORTS", dedupKey),
         sourceId,
         targetId,
-        type: 'IMPORTS',
+        type: "IMPORTS",
         confidence: 1.0,
         reason,
       });

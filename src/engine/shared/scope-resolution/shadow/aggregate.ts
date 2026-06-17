@@ -13,9 +13,9 @@
  * Part of RFC #909 Ring 2 SHARED — #918.
  */
 
-import type { SupportedLanguages } from '../../languages.js';
-import type { ResolutionEvidence } from '../types.js';
-import type { ShadowAgreement, ShadowDiff } from './diff.js';
+import type { SupportedLanguages } from "../../languages.js";
+import type { ResolutionEvidence } from "../types.js";
+import type { ShadowAgreement, ShadowDiff } from "./diff.js";
 
 // ─── Aggregated report shape ────────────────────────────────────────────────
 
@@ -42,13 +42,13 @@ export interface LanguageParityRow {
    * from `ShadowDiff.evidenceDelta` on non-agreeing rows only — `both-agree`
    * and `both-empty` do not contribute.
    */
-  readonly evidenceBreakdown: ReadonlyMap<ResolutionEvidence['kind'], number>;
+  readonly evidenceBreakdown: ReadonlyMap<ResolutionEvidence["kind"], number>;
 }
 
 export interface ShadowParityReport {
   readonly generatedAt: string; // ISO 8601
   readonly perLanguage: readonly LanguageParityRow[];
-  readonly overall: Omit<LanguageParityRow, 'language' | 'evidenceBreakdown'>;
+  readonly overall: Omit<LanguageParityRow, "language" | "evidenceBreakdown">;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -65,7 +65,10 @@ export interface ShadowParityReport {
  *   deterministic; production callers let it default to `new Date()`.
  */
 export function aggregateDiffs(
-  diffs: readonly { readonly language: SupportedLanguages; readonly diff: ShadowDiff }[],
+  diffs: readonly {
+    readonly language: SupportedLanguages;
+    readonly diff: ShadowDiff;
+  }[],
   now: Date = new Date(),
 ): ShadowParityReport {
   const perLanguageMap = new Map<SupportedLanguages, MutableCounts>();
@@ -101,7 +104,7 @@ interface MutableCounts {
   onlyNew: number;
   bothDisagree: number;
   bothEmpty: number;
-  evidenceBreakdown: Map<ResolutionEvidence['kind'], number>;
+  evidenceBreakdown: Map<ResolutionEvidence["kind"], number>;
 }
 
 function makeEmptyCounts(): MutableCounts {
@@ -119,33 +122,43 @@ function makeEmptyCounts(): MutableCounts {
 function tallyDiff(counts: MutableCounts, diff: ShadowDiff): void {
   counts.totalCalls += 1;
   incrementAgreement(counts, diff.agreement);
-  if (diff.agreement === 'both-agree' || diff.agreement === 'both-empty') return;
+  if (diff.agreement === "both-agree" || diff.agreement === "both-empty")
+    return;
   for (const ev of diff.evidenceDelta) {
-    counts.evidenceBreakdown.set(ev.kind, (counts.evidenceBreakdown.get(ev.kind) ?? 0) + 1);
+    counts.evidenceBreakdown.set(
+      ev.kind,
+      (counts.evidenceBreakdown.get(ev.kind) ?? 0) + 1,
+    );
   }
 }
 
-function incrementAgreement(counts: MutableCounts, agreement: ShadowAgreement): void {
+function incrementAgreement(
+  counts: MutableCounts,
+  agreement: ShadowAgreement,
+): void {
   switch (agreement) {
-    case 'both-agree':
+    case "both-agree":
       counts.bothAgree += 1;
       return;
-    case 'only-legacy':
+    case "only-legacy":
       counts.onlyLegacy += 1;
       return;
-    case 'only-new':
+    case "only-new":
       counts.onlyNew += 1;
       return;
-    case 'both-disagree':
+    case "both-disagree":
       counts.bothDisagree += 1;
       return;
-    case 'both-empty':
+    case "both-empty":
       counts.bothEmpty += 1;
       return;
   }
 }
 
-function buildRow(language: SupportedLanguages, counts: MutableCounts): LanguageParityRow {
+function buildRow(
+  language: SupportedLanguages,
+  counts: MutableCounts,
+): LanguageParityRow {
   const resolved = counts.totalCalls - counts.bothEmpty;
   const parity = resolved > 0 ? counts.bothAgree / resolved : 0;
   return {
@@ -160,14 +173,16 @@ function buildRow(language: SupportedLanguages, counts: MutableCounts): Language
     // Freeze via `new Map` on a sorted-kind copy so downstream consumers
     // can't mutate the aggregator's internal state.
     evidenceBreakdown: new Map(
-      Array.from(counts.evidenceBreakdown.entries()).sort(([a], [b]) => a.localeCompare(b)),
+      Array.from(counts.evidenceBreakdown.entries()).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
     ),
   };
 }
 
 function buildOverallRow(
   perLanguage: readonly LanguageParityRow[],
-): Omit<LanguageParityRow, 'language' | 'evidenceBreakdown'> {
+): Omit<LanguageParityRow, "language" | "evidenceBreakdown"> {
   let totalCalls = 0;
   let bothAgree = 0;
   let onlyLegacy = 0;
@@ -184,5 +199,13 @@ function buildOverallRow(
   }
   const resolved = totalCalls - bothEmpty;
   const parity = resolved > 0 ? bothAgree / resolved : 0;
-  return { totalCalls, bothAgree, onlyLegacy, onlyNew, bothDisagree, bothEmpty, parity };
+  return {
+    totalCalls,
+    bothAgree,
+    onlyLegacy,
+    onlyNew,
+    bothDisagree,
+    bothEmpty,
+    parity,
+  };
 }

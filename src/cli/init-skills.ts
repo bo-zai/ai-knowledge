@@ -4,13 +4,13 @@
  * 初始化项目的 AI Agent skills
  */
 
-import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
-import { logger } from '../shared/logger.js';
+import { resolveTargetRepo } from "../shared/resolve-target-repo.js";
+import { logger } from "../shared/logger.js";
 import {
   initializeSkills,
   getSupportedAgentIds,
   type SkillInitSummary,
-} from '../skills/index.js';
+} from "../skills/index.js";
 
 export interface InitSkillsOptions {
   /** 项目路径 */
@@ -45,16 +45,16 @@ export async function runInitSkills(options: InitSkillsOptions): Promise<void> {
 
   // 解析 Agent ID 列表
   const agentIds = options.agents
-    ? options.agents.split(',').map(id => id.trim())
+    ? options.agents.split(",").map((id) => id.trim())
     : undefined;
 
   // 验证 Agent ID
   if (agentIds) {
     const supportedIds = getSupportedAgentIds();
-    const invalidIds = agentIds.filter(id => !supportedIds.includes(id));
+    const invalidIds = agentIds.filter((id) => !supportedIds.includes(id));
     if (invalidIds.length > 0) {
-      logger.error(`Invalid agent IDs: ${invalidIds.join(', ')}`);
-      logger.info(`Supported agents: ${supportedIds.join(', ')}`);
+      logger.error(`Invalid agent IDs: ${invalidIds.join(", ")}`);
+      logger.info(`Supported agents: ${supportedIds.join(", ")}`);
       return;
     }
   }
@@ -78,32 +78,32 @@ export async function runInitSkills(options: InitSkillsOptions): Promise<void> {
  * 打印初始化摘要
  */
 function printSummary(summary: SkillInitSummary): void {
-  console.log('\nSkill Initialization Summary:');
+  console.log("\nSkill Initialization Summary:");
   console.log(`  Agents: ${summary.agentCount}`);
   console.log(`  Succeeded: ${summary.succeeded}`);
   console.log(`  Failed: ${summary.failed}`);
 
   if (summary.agentsMdUpdated) {
-    console.log('  AGENTS.md: updated');
+    console.log("  AGENTS.md: updated");
   }
 
   // 列出创建的文件
-  const allFiles = summary.results.flatMap(r => r.files);
+  const allFiles = summary.results.flatMap((r) => r.files);
   if (allFiles.length > 0) {
-    console.log('\n  Created files:');
+    console.log("\n  Created files:");
     for (const file of allFiles) {
       console.log(`    - ${file.filename}`);
     }
   }
 
   // 列出失败信息
-  const failed = summary.results.filter(r => !r.success);
+  const failed = summary.results.filter((r) => !r.success);
   if (failed.length > 0) {
-    console.log('\n  Failed agents:');
+    console.log("\n  Failed agents:");
     for (const result of failed) {
       console.log(`    - ${result.agentName}: ${result.error}`);
     }
   }
 
-  console.log('');
+  console.log("");
 }

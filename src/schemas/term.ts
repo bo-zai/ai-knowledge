@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonObjectSchema } from './common.js';
+import { z } from "zod";
+import { commonObjectSchema } from "./common.js";
 
 /**
  * 概念知识值说明 Schema
@@ -22,7 +22,7 @@ export type ValueExplanation = z.infer<typeof valueExplanationSchema>;
  */
 export const codeManifestationSchema = z.object({
   /** 体现类型：enum, class, field, constant */
-  kind: z.enum(['enum', 'class', 'field', 'constant']),
+  kind: z.enum(["enum", "class", "field", "constant"]),
   /** 代码元素名称 */
   name: z.string().min(1),
   /** 代码位置 */
@@ -38,7 +38,7 @@ export type CodeManifestation = z.infer<typeof codeManifestationSchema>;
  * 扩展字段支持枚举值说明、别名、关键区分等业务视角信息。
  */
 export const termObjectSchema = commonObjectSchema.extend({
-  type: z.literal('TERM'),
+  type: z.literal("TERM"),
 
   /** 术语名称（业务化） */
   term: z.string().min(1),

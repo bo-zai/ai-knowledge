@@ -1,8 +1,8 @@
 // gitnexus/src/core/ingestion/field-extractors/configs/go.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { FieldExtractionConfig } from '../generic.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { FieldExtractionConfig } from "../generic.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
 
 /**
  * Go field extraction config.
@@ -15,27 +15,28 @@ import { extractSimpleTypeName } from '../../type-extractors/shared.js';
  */
 export const goConfig: FieldExtractionConfig = {
   language: SupportedLanguages.Go,
-  typeDeclarationNodes: ['type_declaration'],
-  fieldNodeTypes: ['field_declaration'],
-  bodyNodeTypes: ['field_declaration_list'],
-  defaultVisibility: 'package',
+  typeDeclarationNodes: ["type_declaration"],
+  fieldNodeTypes: ["field_declaration"],
+  bodyNodeTypes: ["field_declaration_list"],
+  defaultVisibility: "package",
 
   extractName(node) {
     // field_declaration > name:(field_identifier)
-    const name = node.childForFieldName('name');
+    const name = node.childForFieldName("name");
     if (name) return name.text;
     // fallback: first field_identifier child
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
-      if (child?.type === 'field_identifier') return child.text;
+      if (child?.type === "field_identifier") return child.text;
     }
     return undefined;
   },
 
   extractType(node) {
     // field_declaration > type:(type_identifier | pointer_type | ...)
-    const typeNode = node.childForFieldName('type');
-    if (typeNode) return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
+    const typeNode = node.childForFieldName("type");
+    if (typeNode)
+      return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
     // fallback: second named child is usually the type
     if (node.namedChildCount >= 2) {
       const t = node.namedChild(1);
@@ -45,13 +46,15 @@ export const goConfig: FieldExtractionConfig = {
   },
 
   extractVisibility(node) {
-    const name = node.childForFieldName('name');
+    const name = node.childForFieldName("name");
     const text = name?.text;
     if (text && text.length > 0) {
       const first = text.charAt(0);
-      return first === first.toUpperCase() && first !== first.toLowerCase() ? 'public' : 'package';
+      return first === first.toUpperCase() && first !== first.toLowerCase()
+        ? "public"
+        : "package";
     }
-    return 'package';
+    return "package";
   },
 
   isStatic(_node) {

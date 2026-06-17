@@ -10,7 +10,7 @@ import {
   getDbTableContext,
   type DbTableNode,
   type DbTableContext,
-} from './index-service.js';
+} from "./index-service.js";
 
 export interface QueryServiceDeps {
   repoPath: string;
@@ -23,8 +23,10 @@ export function createQueryService(deps: QueryServiceDeps): QueryService {
   return {
     repoPath: deps.repoPath,
     findDbTables: (limit?: number) => findDbTables(deps.repoPath, limit),
-    getDbTableContext: (tableName: string) => getDbTableContext(deps.repoPath, tableName),
-    buildDbEvidenceBundle: (tableName: string) => buildDbEvidenceBundle(deps.repoPath, tableName),
+    getDbTableContext: (tableName: string) =>
+      getDbTableContext(deps.repoPath, tableName),
+    buildDbEvidenceBundle: (tableName: string) =>
+      buildDbEvidenceBundle(deps.repoPath, tableName),
   };
 }
 
@@ -38,7 +40,10 @@ export interface QueryService {
 /**
  * Build a DB evidence bundle for a table.
  */
-export async function buildDbEvidenceBundle(repoPath: string, tableName: string): Promise<DbEvidenceBundle> {
+export async function buildDbEvidenceBundle(
+  repoPath: string,
+  tableName: string,
+): Promise<DbEvidenceBundle> {
   const context = await getDbTableContext(repoPath, tableName);
 
   return {
@@ -47,24 +52,24 @@ export async function buildDbEvidenceBundle(repoPath: string, tableName: string)
       callers: context.callers.map((c) => ({
         symbol: c.name,
         file: c.filePath,
-        kind: 'caller',
+        kind: "caller",
       })),
       classes: context.classes.map((c) => ({
         symbol: c.name,
         file: c.filePath,
-        kind: 'class',
+        kind: "class",
       })),
       fields: context.fields.map((f) => ({
         symbol: f,
-        kind: 'field',
+        kind: "field",
       })),
       queries: context.queries.map((q) => ({
         content: q,
-        kind: 'query',
+        kind: "query",
       })),
     },
     provenance: {
-      source: 'embedded-analysis',
+      source: "embedded-analysis",
       repoPath,
       generatedAt: new Date().toISOString(),
     },

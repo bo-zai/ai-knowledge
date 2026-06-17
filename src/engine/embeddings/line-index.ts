@@ -19,7 +19,10 @@ const clampOffset = (lineOffsets: Int32Array, charOffset: number): number => {
   return charOffset;
 };
 
-export const lineFromOffset = (lineOffsets: Int32Array, charOffset: number): number => {
+export const lineFromOffset = (
+  lineOffsets: Int32Array,
+  charOffset: number,
+): number => {
   if (lineOffsets.length === 0) return 0;
 
   const clamped = clampOffset(lineOffsets, charOffset);
@@ -40,7 +43,8 @@ export const resolveChunkLines = (
   baseStartLine: number,
 ): ResolvedLineRange => {
   const relativeStartLine = lineFromOffset(lineOffsets, startOffset);
-  const effectiveEndOffset = endOffset > startOffset ? endOffset - 1 : startOffset;
+  const effectiveEndOffset =
+    endOffset > startOffset ? endOffset - 1 : startOffset;
   const relativeEndLine = lineFromOffset(lineOffsets, effectiveEndOffset);
 
   return {

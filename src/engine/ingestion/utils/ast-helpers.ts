@@ -1,7 +1,7 @@
-import type Parser from 'tree-sitter';
-import type { Capture, NodeLabel, Range } from '../../shared/index.js';
-import type { LanguageProvider } from '../language-provider.js';
-import { generateId } from '../../lib/utils.js';
+import type Parser from "tree-sitter";
+import type { Capture, NodeLabel, Range } from "../../shared/index.js";
+import type { LanguageProvider } from "../language-provider.js";
+import { generateId } from "../../lib/utils.js";
 
 /** Tree-sitter AST node. Re-exported for use across ingestion modules. */
 export type SyntaxNode = Parser.SyntaxNode;
@@ -11,29 +11,29 @@ export type SyntaxNode = Parser.SyntaxNode;
  * Used to extract the definition node from a capture map.
  */
 export const DEFINITION_CAPTURE_KEYS = [
-  'definition.function',
-  'definition.class',
-  'definition.interface',
-  'definition.method',
-  'definition.struct',
-  'definition.enum',
-  'definition.namespace',
-  'definition.module',
-  'definition.trait',
-  'definition.impl',
-  'definition.type',
-  'definition.const',
-  'definition.static',
-  'definition.variable',
-  'definition.typedef',
-  'definition.macro',
-  'definition.union',
-  'definition.property',
-  'definition.record',
-  'definition.delegate',
-  'definition.annotation',
-  'definition.constructor',
-  'definition.template',
+  "definition.function",
+  "definition.class",
+  "definition.interface",
+  "definition.method",
+  "definition.struct",
+  "definition.enum",
+  "definition.namespace",
+  "definition.module",
+  "definition.trait",
+  "definition.impl",
+  "definition.type",
+  "definition.const",
+  "definition.static",
+  "definition.variable",
+  "definition.typedef",
+  "definition.macro",
+  "definition.union",
+  "definition.property",
+  "definition.record",
+  "definition.delegate",
+  "definition.annotation",
+  "definition.constructor",
+  "definition.template",
 ] as const;
 
 /** Extract the definition node from a tree-sitter query capture map. */
@@ -58,43 +58,43 @@ export const getDefinitionNodeFromCaptures = (
  */
 export const FUNCTION_NODE_TYPES = new Set([
   // TypeScript/JavaScript
-  'function_declaration',
-  'arrow_function',
-  'function_expression',
-  'method_definition',
-  'generator_function_declaration',
+  "function_declaration",
+  "arrow_function",
+  "function_expression",
+  "method_definition",
+  "generator_function_declaration",
   // Python
-  'function_definition',
+  "function_definition",
   // Common async variants
-  'async_function_declaration',
-  'async_arrow_function',
+  "async_function_declaration",
+  "async_arrow_function",
   // Java
-  'method_declaration',
-  'constructor_declaration',
-  'compact_constructor_declaration',
-  'annotation_type_element_declaration',
+  "method_declaration",
+  "constructor_declaration",
+  "compact_constructor_declaration",
+  "annotation_type_element_declaration",
   // C/C++
   // 'function_definition' already included above
   // Go
   // 'method_declaration' already included from Java
   // C#
-  'local_function_statement',
+  "local_function_statement",
   // Rust
-  'function_item',
-  'impl_item', // Methods inside impl blocks
+  "function_item",
+  "impl_item", // Methods inside impl blocks
   // PHP
-  'anonymous_function',
+  "anonymous_function",
   // Kotlin
-  'lambda_literal',
+  "lambda_literal",
   // Swift
-  'init_declaration',
-  'deinit_declaration',
+  "init_declaration",
+  "deinit_declaration",
   // Ruby
-  'method', // def foo
-  'singleton_method', // def self.foo
+  "method", // def foo
+  "singleton_method", // def self.foo
   // Dart
-  'function_signature',
-  'method_signature',
+  "function_signature",
+  "method_signature",
 ]);
 
 /**
@@ -106,53 +106,53 @@ export const FUNCTION_NODE_TYPES = new Set([
  * orphaned HAS_METHOD edges or incorrect labels.
  */
 export const CLASS_CONTAINER_TYPES = new Set([
-  'class_declaration',
-  'abstract_class_declaration',
-  'interface_declaration',
-  'struct_declaration',
-  'record_declaration',
-  'class_specifier',
-  'struct_specifier',
-  'impl_item',
-  'trait_item',
-  'struct_item',
-  'enum_item',
-  'class_definition',
-  'trait_declaration',
+  "class_declaration",
+  "abstract_class_declaration",
+  "interface_declaration",
+  "struct_declaration",
+  "record_declaration",
+  "class_specifier",
+  "struct_specifier",
+  "impl_item",
+  "trait_item",
+  "struct_item",
+  "enum_item",
+  "class_definition",
+  "trait_declaration",
   // PHP
-  'enum_declaration',
-  'protocol_declaration',
+  "enum_declaration",
+  "protocol_declaration",
   // Dart
-  'mixin_declaration',
-  'extension_declaration',
+  "mixin_declaration",
+  "extension_declaration",
   // Ruby
-  'class',
-  'module',
-  'singleton_class', // Ruby: class << self
+  "class",
+  "module",
+  "singleton_class", // Ruby: class << self
   // Kotlin
-  'object_declaration',
-  'companion_object',
+  "object_declaration",
+  "companion_object",
 ]);
 
 export const CONTAINER_TYPE_TO_LABEL: Record<string, string> = {
-  class_declaration: 'Class',
-  abstract_class_declaration: 'Class',
-  interface_declaration: 'Interface',
-  struct_declaration: 'Struct',
-  struct_specifier: 'Struct',
-  class_specifier: 'Class',
-  class_definition: 'Class',
-  impl_item: 'Impl',
-  trait_item: 'Trait',
-  struct_item: 'Struct',
-  enum_item: 'Enum',
-  trait_declaration: 'Trait',
-  enum_declaration: 'Enum',
-  record_declaration: 'Record',
-  protocol_declaration: 'Interface',
-  mixin_declaration: 'Mixin',
-  extension_declaration: 'Extension',
-  class: 'Class',
+  class_declaration: "Class",
+  abstract_class_declaration: "Class",
+  interface_declaration: "Interface",
+  struct_declaration: "Struct",
+  struct_specifier: "Struct",
+  class_specifier: "Class",
+  class_definition: "Class",
+  impl_item: "Impl",
+  trait_item: "Trait",
+  struct_item: "Struct",
+  enum_item: "Enum",
+  trait_declaration: "Trait",
+  enum_declaration: "Enum",
+  record_declaration: "Record",
+  protocol_declaration: "Interface",
+  mixin_declaration: "Mixin",
+  extension_declaration: "Extension",
+  class: "Class",
   // Ruby `module` declarations map to `Trait` so they participate in the
   // class-like type registry used by `lookupClassByName` / `buildHeritageMap`.
   // This lets `include` / `extend` / `prepend` mixin heritage resolve to
@@ -160,10 +160,10 @@ export const CONTAINER_TYPE_TO_LABEL: Record<string, string> = {
   // grammar that uses the bare `module` AST node type as a container is
   // Ruby (Rust uses `mod_item`). Any new language adding a `module` node
   // type must explicitly reclassify here.
-  module: 'Trait',
-  singleton_class: 'Class', // Ruby: class << self inherits enclosing class name
-  object_declaration: 'Class',
-  companion_object: 'Class',
+  module: "Trait",
+  singleton_class: "Class", // Ruby: class << self inherits enclosing class name
+  object_declaration: "Class",
+  companion_object: "Class",
 };
 
 /** Return the first matching ancestor unless a boundary ancestor is reached first. */
@@ -191,49 +191,55 @@ export function getLabelFromCaptures(
   captureMap: Record<string, SyntaxNode>,
   provider: LanguageProvider,
 ): NodeLabel | null {
-  if (captureMap['import'] || captureMap['call']) return null;
-  if (!captureMap['name'] && !captureMap['definition.constructor']) return null;
+  if (captureMap["import"] || captureMap["call"]) return null;
+  if (!captureMap["name"] && !captureMap["definition.constructor"]) return null;
 
-  if (captureMap['definition.function']) {
+  if (captureMap["definition.function"]) {
     if (provider.labelOverride) {
-      const override = provider.labelOverride(captureMap['definition.function'], 'Function');
-      if (override !== 'Function') return override;
+      const override = provider.labelOverride(
+        captureMap["definition.function"],
+        "Function",
+      );
+      if (override !== "Function") return override;
     }
-    return 'Function';
+    return "Function";
   }
-  if (captureMap['definition.class']) return 'Class';
-  if (captureMap['definition.interface']) return 'Interface';
-  if (captureMap['definition.method']) return 'Method';
-  if (captureMap['definition.struct']) return 'Struct';
-  if (captureMap['definition.enum']) return 'Enum';
-  if (captureMap['definition.namespace']) return 'Namespace';
-  if (captureMap['definition.module']) {
+  if (captureMap["definition.class"]) return "Class";
+  if (captureMap["definition.interface"]) return "Interface";
+  if (captureMap["definition.method"]) return "Method";
+  if (captureMap["definition.struct"]) return "Struct";
+  if (captureMap["definition.enum"]) return "Enum";
+  if (captureMap["definition.namespace"]) return "Namespace";
+  if (captureMap["definition.module"]) {
     // Let providers reclassify module captures (e.g. Ruby remaps `Module`→`Trait`
     // so mixin heritage resolves through `lookupClassByName`). Returning null
     // from labelOverride means "skip this symbol"; treat it as a no-op here so
     // we keep the default label rather than dropping a real definition.
     if (provider.labelOverride) {
-      const override = provider.labelOverride(captureMap['definition.module'], 'Module');
-      if (override && override !== 'Module') return override;
+      const override = provider.labelOverride(
+        captureMap["definition.module"],
+        "Module",
+      );
+      if (override && override !== "Module") return override;
     }
-    return 'Module';
+    return "Module";
   }
-  if (captureMap['definition.trait']) return 'Trait';
-  if (captureMap['definition.impl']) return 'Impl';
-  if (captureMap['definition.type']) return 'TypeAlias';
-  if (captureMap['definition.const']) return 'Const';
-  if (captureMap['definition.static']) return 'Static';
-  if (captureMap['definition.variable']) return 'Variable';
-  if (captureMap['definition.typedef']) return 'Typedef';
-  if (captureMap['definition.macro']) return 'Macro';
-  if (captureMap['definition.union']) return 'Union';
-  if (captureMap['definition.property']) return 'Property';
-  if (captureMap['definition.record']) return 'Record';
-  if (captureMap['definition.delegate']) return 'Delegate';
-  if (captureMap['definition.annotation']) return 'Annotation';
-  if (captureMap['definition.constructor']) return 'Constructor';
-  if (captureMap['definition.template']) return 'Template';
-  return 'CodeElement';
+  if (captureMap["definition.trait"]) return "Trait";
+  if (captureMap["definition.impl"]) return "Impl";
+  if (captureMap["definition.type"]) return "TypeAlias";
+  if (captureMap["definition.const"]) return "Const";
+  if (captureMap["definition.static"]) return "Static";
+  if (captureMap["definition.variable"]) return "Variable";
+  if (captureMap["definition.typedef"]) return "Typedef";
+  if (captureMap["definition.macro"]) return "Macro";
+  if (captureMap["definition.union"]) return "Union";
+  if (captureMap["definition.property"]) return "Property";
+  if (captureMap["definition.record"]) return "Record";
+  if (captureMap["definition.delegate"]) return "Delegate";
+  if (captureMap["definition.annotation"]) return "Annotation";
+  if (captureMap["definition.constructor"]) return "Constructor";
+  if (captureMap["definition.template"]) return "Template";
+  return "CodeElement";
 }
 
 /** Enclosing class info: both the generated node ID and the bare class name. */
@@ -277,19 +283,25 @@ export const findEnclosingClassInfo = (
       return null;
     }
     // Go: method_declaration has a receiver parameter with the struct type
-    if (current.type === 'method_declaration') {
-      const receiver = current.childForFieldName?.('receiver');
+    if (current.type === "method_declaration") {
+      const receiver = current.childForFieldName?.("receiver");
       if (receiver) {
         const paramDecl = receiver.namedChildren?.find?.(
-          (c: SyntaxNode) => c.type === 'parameter_declaration',
+          (c: SyntaxNode) => c.type === "parameter_declaration",
         );
         if (paramDecl) {
-          const typeNode = paramDecl.childForFieldName?.('type');
+          const typeNode = paramDecl.childForFieldName?.("type");
           if (typeNode) {
-            const inner = typeNode.type === 'pointer_type' ? typeNode.firstNamedChild : typeNode;
-            if (inner && (inner.type === 'type_identifier' || inner.type === 'identifier')) {
+            const inner =
+              typeNode.type === "pointer_type"
+                ? typeNode.firstNamedChild
+                : typeNode;
+            if (
+              inner &&
+              (inner.type === "type_identifier" || inner.type === "identifier")
+            ) {
               return {
-                classId: generateId('Struct', `${filePath}:${inner.text}`),
+                classId: generateId("Struct", `${filePath}:${inner.text}`),
                 className: inner.text,
               };
             }
@@ -298,14 +310,20 @@ export const findEnclosingClassInfo = (
       }
     }
     // Go: type_declaration wrapping a struct_type (type User struct { ... })
-    if (current.type === 'type_declaration') {
-      const typeSpec = current.children?.find((c: SyntaxNode) => c.type === 'type_spec');
+    if (current.type === "type_declaration") {
+      const typeSpec = current.children?.find(
+        (c: SyntaxNode) => c.type === "type_spec",
+      );
       if (typeSpec) {
-        const typeBody = typeSpec.childForFieldName?.('type');
-        if (typeBody?.type === 'struct_type' || typeBody?.type === 'interface_type') {
-          const nameNode = typeSpec.childForFieldName?.('name');
+        const typeBody = typeSpec.childForFieldName?.("type");
+        if (
+          typeBody?.type === "struct_type" ||
+          typeBody?.type === "interface_type"
+        ) {
+          const nameNode = typeSpec.childForFieldName?.("name");
           if (nameNode) {
-            const label = typeBody.type === 'struct_type' ? 'Struct' : 'Interface';
+            const label =
+              typeBody.type === "struct_type" ? "Struct" : "Interface";
             return {
               classId: generateId(label, `${filePath}:${nameNode.text}`),
               className: nameNode.text,
@@ -341,54 +359,56 @@ export const findEnclosingClassInfo = (
       // Rust impl_item: for `impl Trait for Struct {}`, pick the type after `for`
       // NOTE: This impl_item ownership logic is duplicated in rust.ts:extractOwnerName.
       // If modifying this block, update the other location too.
-      if (current.type === 'impl_item') {
+      if (current.type === "impl_item") {
         const children = current.children ?? [];
-        const forIdx = children.findIndex((c: SyntaxNode) => c.text === 'for');
+        const forIdx = children.findIndex((c: SyntaxNode) => c.text === "for");
         if (forIdx !== -1) {
           const nameNode = children
             .slice(forIdx + 1)
             .find(
               (c: SyntaxNode) =>
-                c.type === 'type_identifier' ||
-                c.type === 'scoped_type_identifier' ||
-                c.type === 'identifier',
+                c.type === "type_identifier" ||
+                c.type === "scoped_type_identifier" ||
+                c.type === "identifier",
             );
           if (nameNode) {
             return {
-              classId: generateId('Struct', `${filePath}:${nameNode.text}`),
+              classId: generateId("Struct", `${filePath}:${nameNode.text}`),
               className: nameNode.text,
             };
           }
         }
-        const firstType = children.find((c: SyntaxNode) => c.type === 'type_identifier');
+        const firstType = children.find(
+          (c: SyntaxNode) => c.type === "type_identifier",
+        );
         if (firstType) {
           return {
-            classId: generateId('Impl', `${filePath}:${firstType.text}`),
+            classId: generateId("Impl", `${filePath}:${firstType.text}`),
             className: firstType.text,
           };
         }
       }
 
       const nameNode =
-        current.childForFieldName?.('name') ??
+        current.childForFieldName?.("name") ??
         current.children?.find(
           (c: SyntaxNode) =>
-            c.type === 'type_identifier' ||
-            c.type === 'identifier' ||
-            c.type === 'name' ||
-            c.type === 'constant',
+            c.type === "type_identifier" ||
+            c.type === "identifier" ||
+            c.type === "name" ||
+            c.type === "constant",
         );
       if (nameNode) {
-        let label = CONTAINER_TYPE_TO_LABEL[current.type] || 'Class';
+        let label = CONTAINER_TYPE_TO_LABEL[current.type] || "Class";
         // Kotlin: class_declaration with an anonymous "interface" keyword child
         // is actually an interface, not a class. Refine the label to match the
         // node ID generated from the tree-sitter query capture (@definition.interface).
         if (
-          current.type === 'class_declaration' &&
-          label === 'Class' &&
-          current.children?.some((c: SyntaxNode) => c.type === 'interface')
+          current.type === "class_declaration" &&
+          label === "Class" &&
+          current.children?.some((c: SyntaxNode) => c.type === "interface")
         ) {
-          label = 'Interface';
+          label = "Interface";
         }
         return {
           classId: generateId(label, `${filePath}:${nameNode.text}`),
@@ -402,7 +422,10 @@ export const findEnclosingClassInfo = (
 };
 
 /** Convenience wrapper: returns just the class ID string (backward compat). */
-export const findEnclosingClassId = (node: SyntaxNode, filePath: string): string | null => {
+export const findEnclosingClassId = (
+  node: SyntaxNode,
+  filePath: string,
+): string | null => {
   return findEnclosingClassInfo(node, filePath)?.classId ?? null;
 };
 
@@ -442,17 +465,17 @@ export const findSiblingChild = (
  *  declines, the parent walk should continue rather than fall through
  *  here. See issue #1166. */
 export const genericFuncName = (node: SyntaxNode): string | null => {
-  const nameField = node.childForFieldName?.('name');
+  const nameField = node.childForFieldName?.("name");
   if (nameField) return nameField.text;
-  if (node.type === 'arrow_function' || node.type === 'function_expression') {
+  if (node.type === "arrow_function" || node.type === "function_expression") {
     return null;
   }
   for (let i = 0; i < node.childCount; i++) {
     const c = node.child(i);
     if (
-      c?.type === 'identifier' ||
-      c?.type === 'property_identifier' ||
-      c?.type === 'simple_identifier'
+      c?.type === "identifier" ||
+      c?.type === "property_identifier" ||
+      c?.type === "simple_identifier"
     )
       return c.text;
   }
@@ -461,35 +484,42 @@ export const genericFuncName = (node: SyntaxNode): string | null => {
 
 /** AST node types that represent a method definition (for `inferFunctionLabel`). */
 export const METHOD_LABEL_NODE_TYPES = new Set([
-  'method_definition',
-  'method_declaration',
-  'method',
-  'singleton_method',
+  "method_definition",
+  "method_declaration",
+  "method",
+  "singleton_method",
 ]);
 
 /** AST node types that represent a constructor definition (for `inferFunctionLabel`). */
 export const CONSTRUCTOR_LABEL_NODE_TYPES = new Set([
-  'constructor_declaration',
-  'compact_constructor_declaration',
+  "constructor_declaration",
+  "compact_constructor_declaration",
 ]);
 
 /** Infer node label from AST node type for function-like nodes without a provider hook. */
 export const inferFunctionLabel = (nodeType: string): NodeLabel =>
   METHOD_LABEL_NODE_TYPES.has(nodeType)
-    ? 'Method'
+    ? "Method"
     : CONSTRUCTOR_LABEL_NODE_TYPES.has(nodeType)
-      ? 'Constructor'
-      : 'Function';
+      ? "Constructor"
+      : "Function";
 
 /** Argument list node types shared between countCallArguments and call-resolution helpers. */
-export const CALL_ARGUMENT_LIST_TYPES = new Set(['arguments', 'argument_list', 'value_arguments']);
+export const CALL_ARGUMENT_LIST_TYPES = new Set([
+  "arguments",
+  "argument_list",
+  "value_arguments",
+]);
 
 // ============================================================================
 // Generic AST traversal helpers (shared by parse-worker + php-helpers)
 // ============================================================================
 
 /** Walk an AST node depth-first, returning the first descendant with the given type. */
-export function findDescendant(root: SyntaxNode, type: string): SyntaxNode | null {
+export function findDescendant(
+  root: SyntaxNode,
+  type: string,
+): SyntaxNode | null {
   const stack: SyntaxNode[] = [root];
   while (stack.length > 0) {
     const node = stack.pop()!;
@@ -504,11 +534,15 @@ export function findDescendant(root: SyntaxNode, type: string): SyntaxNode | nul
 }
 
 /** Extract the text content from a string or encapsed_string AST node. */
-export function extractStringContent(node: SyntaxNode | null | undefined): string | null {
+export function extractStringContent(
+  node: SyntaxNode | null | undefined,
+): string | null {
   if (!node) return null;
-  const content = node.children?.find((c: SyntaxNode) => c.type === 'string_content');
+  const content = node.children?.find(
+    (c: SyntaxNode) => c.type === "string_content",
+  );
   if (content) return content.text;
-  if (node.type === 'string_content') return node.text;
+  if (node.type === "string_content") return node.text;
   return null;
 }
 
@@ -543,7 +577,11 @@ export function nodeToCapture(name: string, node: SyntaxNode): Capture {
 /** Build a `Capture` whose range mirrors `atNode` but whose `text` is
  *  caller-supplied. Used to synthesize markers that don't have a
  *  corresponding source token. */
-export function syntheticCapture(name: string, atNode: SyntaxNode, text: string): Capture {
+export function syntheticCapture(
+  name: string,
+  atNode: SyntaxNode,
+  text: string,
+): Capture {
   return {
     name,
     range: {
@@ -585,7 +623,10 @@ export function findNodeAtRange(
   const stack: SyntaxNode[] = [root];
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (rangeMatches(node, range) && (expectedType === undefined || node.type === expectedType)) {
+    if (
+      rangeMatches(node, range) &&
+      (expectedType === undefined || node.type === expectedType)
+    ) {
       return node;
     }
     for (let i = node.namedChildCount - 1; i >= 0; i--) {

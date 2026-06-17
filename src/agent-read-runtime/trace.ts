@@ -1,11 +1,13 @@
-import type { KnowledgeReadTrace, ToolTraceEvent } from './types.js';
+import type { KnowledgeReadTrace, ToolTraceEvent } from "./types.js";
 
 export interface TraceCollector {
   recordToolCall(event: ToolTraceEvent): void;
   finalize(): KnowledgeReadTrace;
 }
 
-export function createTraceCollector(now: () => Date = () => new Date()): TraceCollector {
+export function createTraceCollector(
+  now: () => Date = () => new Date(),
+): TraceCollector {
   const started = now();
   const startedAt = started.toISOString();
   const toolCalls: ToolTraceEvent[] = [];
@@ -21,7 +23,10 @@ export function createTraceCollector(now: () => Date = () => new Date()): TraceC
         finishedAt: finished.toISOString(),
         durationMs: finished.getTime() - started.getTime(),
         toolCalls: [...toolCalls],
-        totalToolResultChars: toolCalls.reduce((sum, event) => sum + event.acceptedBudgetChars, 0),
+        totalToolResultChars: toolCalls.reduce(
+          (sum, event) => sum + event.acceptedBudgetChars,
+          0,
+        ),
       };
     },
   };

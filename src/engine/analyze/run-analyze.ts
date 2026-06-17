@@ -9,9 +9,9 @@
  * wrapper or server worker) is responsible for process lifecycle.
  */
 
-import path from 'path';
-import fs from 'fs/promises';
-import { runPipelineFromRepo } from '../ingestion/pipeline.js';
+import path from "path";
+import fs from "fs/promises";
+import { runPipelineFromRepo } from "../ingestion/pipeline.js";
 import {
   initLbug,
   loadGraphToLbug,
@@ -21,8 +21,8 @@ import {
   closeLbug,
   loadCachedEmbeddings,
   clearAllData,
-} from '../lbug/lbug-adapter.js';
-import { createSearchFTSIndexes } from '../search/fts-indexes.js';
+} from "../lbug/lbug-adapter.js";
+import { createSearchFTSIndexes } from "../search/fts-indexes.js";
 import {
   getStoragePaths,
   saveMeta,
@@ -30,16 +30,16 @@ import {
   ensureKnowledgeIgnored,
   registerRepo,
   cleanupOldKuzuFiles,
-} from '../storage/repo-manager.js';
+} from "../storage/repo-manager.js";
 import {
   getCurrentCommit,
   getRemoteUrl,
   hasGitDir,
   getInferredRepoName,
   resolveRepoIdentityRoot,
-} from '../storage/git.js';
-import type { CachedEmbedding } from '../embeddings/types.js';
-import { EMBEDDING_TABLE_NAME, STALE_HASH_SENTINEL } from '../lbug/schema.js';
+} from "../storage/git.js";
+import type { CachedEmbedding } from "../embeddings/types.js";
+import { EMBEDDING_TABLE_NAME, STALE_HASH_SENTINEL } from "../lbug/schema.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -113,28 +113,31 @@ export interface AnalyzeResult {
 
 // Re-export the pure flag-derivation helper so external callers (and tests)
 // keep importing from this module's stable surface.
-export { deriveEmbeddingMode, DEFAULT_EMBEDDING_NODE_LIMIT } from './embedding-mode.js';
-export type { EmbeddingMode } from './embedding-mode.js';
+export {
+  deriveEmbeddingMode,
+  DEFAULT_EMBEDDING_NODE_LIMIT,
+} from "./embedding-mode.js";
+export type { EmbeddingMode } from "./embedding-mode.js";
 import {
   deriveEmbeddingMode as _deriveEmbeddingMode,
   deriveEmbeddingCap,
   DEFAULT_EMBEDDING_NODE_LIMIT,
-} from './embedding-mode.js';
+} from "./embedding-mode.js";
 
 export const PHASE_LABELS: Record<string, string> = {
-  extracting: 'Scanning files',
-  structure: 'Building structure',
-  parsing: 'Parsing code',
-  imports: 'Resolving imports',
-  calls: 'Tracing calls',
-  heritage: 'Extracting inheritance',
-  communities: 'Detecting communities',
-  processes: 'Detecting processes',
-  complete: 'Pipeline complete',
-  lbug: 'Loading into LadybugDB',
-  fts: 'Creating search indexes',
-  embeddings: 'Generating embeddings',
-  done: 'Done',
+  extracting: "Scanning files",
+  structure: "Building structure",
+  parsing: "Parsing code",
+  imports: "Resolving imports",
+  calls: "Tracing calls",
+  heritage: "Extracting inheritance",
+  communities: "Detecting communities",
+  processes: "Detecting processes",
+  complete: "Pipeline complete",
+  lbug: "Loading into LadybugDB",
+  fts: "Creating search indexes",
+  embeddings: "Generating embeddings",
+  done: "Done",
 };
 
 // ---------------------------------------------------------------------------
@@ -166,7 +169,7 @@ export async function runFullAnalysis(
   // Clean up stale KuzuDB files from before the LadybugDB migration.
   const kuzuResult = await cleanupOldKuzuFiles(storagePath);
   if (kuzuResult.found && kuzuResult.needsReindex) {
-    log('Migrating from KuzuDB to LadybugDB — rebuilding index...');
+    log("Migrating from KuzuDB to LadybugDB — rebuilding index...");
   }
 
   // Force mode: delete old database file to ensure schema updates
@@ -175,20 +178,24 @@ export async function runFullAnalysis(
   if (options.force) {
     try {
       await fs.unlink(lbugPath);
-      log('Force mode: removed old database file for schema rebuild');
+      log("Force mode: removed old database file for schema rebuild");
     } catch {
       // File may not exist, ignore
     }
   }
 
   const repoHasGit = hasGitDir(repoPath);
-  const currentCommit = repoHasGit ? getCurrentCommit(repoPath) : '';
+  const currentCommit = repoHasGit ? getCurrentCommit(repoPath) : "";
   const existingMeta = await loadMeta(storagePath);
 
   // ── Early-return: already up to date ──────────────────────────────
-  if (existingMeta && !options.force && existingMeta.lastCommit === currentCommit) {
+  if (
+    existingMeta &&
+    !options.force &&
+    existingMeta.lastCommit === currentCommit
+  ) {
     // Non-git folders have currentCommit = '' — always rebuild since we can't detect changes
-    if (currentCommit !== '') {
+    if (currentCommit !== "") {
       await ensureKnowledgeIgnored(repoPath);
       return {
         // `resolveRepoIdentityRoot` collapses worktree roots to the
@@ -252,7 +259,7 @@ export async function runFullAnalysis(
 
   if (shouldLoadCache && existingMeta) {
     try {
-      progress('embeddings', 0, 'Caching embeddings...');
+      progress("embeddings", 0, "Caching embeddings...");
       await initLbug(lbugPath);
       const cached = await loadCachedEmbeddings();
       cachedEmbeddingNodeIds = cached.embeddingNodeIds;
@@ -275,12 +282,14 @@ export async function runFullAnalysis(
   const pipelineResult = await runPipelineFromRepo(repoPath, (p) => {
     const phaseLabel = PHASE_LABELS[p.phase] || p.phase;
     const scaled = Math.round(p.percent * 0.6);
-    const message = p.detail ? `${p.message || phaseLabel} (${p.detail})` : p.message || phaseLabel;
+    const message = p.detail
+      ? `${p.message || phaseLabel} (${p.detail})`
+      : p.message || phaseLabel;
     progress(p.phase, scaled, message);
   });
 
   // ── Phase 2: LadybugDB (60–85%) ──────────────────────────────────
-  progress('lbug', 60, 'Loading into LadybugDB...');
+  progress("lbug", 60, "Loading into LadybugDB...");
 
   // Init DB if not already open (from cached embeddings load above).
   // Keep the connection open — on Windows, LadybugDB doesn't release
@@ -293,21 +302,29 @@ export async function runFullAnalysis(
     // must be released to avoid blocking subsequent invocations.
 
     let lbugMsgCount = 0;
-    await loadGraphToLbug(pipelineResult.graph, pipelineResult.repoPath, storagePath, (msg) => {
-      lbugMsgCount++;
-      const pct = Math.min(84, 60 + Math.round((lbugMsgCount / (lbugMsgCount + 10)) * 24));
-      progress('lbug', pct, msg);
-    });
+    await loadGraphToLbug(
+      pipelineResult.graph,
+      pipelineResult.repoPath,
+      storagePath,
+      (msg) => {
+        lbugMsgCount++;
+        const pct = Math.min(
+          84,
+          60 + Math.round((lbugMsgCount / (lbugMsgCount + 10)) * 24),
+        );
+        progress("lbug", pct, msg);
+      },
+    );
 
     // ── Phase 3: FTS (85–90%) ─────────────────────────────────────────
-    progress('fts', 85, 'Creating search indexes...');
+    progress("fts", 85, "Creating search indexes...");
     await createSearchFTSIndexes();
-    progress('fts', 90, 'Search indexes ready');
+    progress("fts", 90, "Search indexes ready");
 
     // ── Phase 3.5: Re-insert cached embeddings ────────────────────────
     if (cachedEmbeddings.length > 0) {
       const cachedDims = cachedEmbeddings[0].embedding.length;
-      const { EMBEDDING_DIMS } = await import('../lbug/schema.js');
+      const { EMBEDDING_DIMS } = await import("../lbug/schema.js");
       if (cachedDims !== EMBEDDING_DIMS) {
         // Dimensions changed (e.g. switched embedding model) — discard cache and re-embed all
         log(
@@ -316,9 +333,13 @@ export async function runFullAnalysis(
         cachedEmbeddings = [];
         cachedEmbeddingNodeIds = new Set();
       } else {
-        progress('embeddings', 88, `Restoring ${cachedEmbeddings.length} cached embeddings...`);
+        progress(
+          "embeddings",
+          88,
+          `Restoring ${cachedEmbeddings.length} cached embeddings...`,
+        );
         const { batchInsertEmbeddings: batchInsert } =
-          await import('../embeddings/embedding-pipeline.js');
+          await import("../embeddings/embedding-pipeline.js");
         const EMBED_BATCH = 200;
         for (let i = 0; i < cachedEmbeddings.length; i += EMBED_BATCH) {
           const batch = cachedEmbeddings.slice(i, i + EMBED_BATCH);
@@ -335,7 +356,7 @@ export async function runFullAnalysis(
     // ── Phase 4: Embeddings (90–98%) ──────────────────────────────────
     const stats = await getLbugStats();
     let embeddingSkipped = true;
-    let semanticMode: 'vector-index' | 'exact-scan' | undefined;
+    let semanticMode: "vector-index" | "exact-scan" | undefined;
 
     if (shouldGenerateEmbeddings) {
       const { skipForCap, capDisabled, nodeLimit } = deriveEmbeddingCap(
@@ -363,24 +384,31 @@ export async function runFullAnalysis(
     }
 
     if (!embeddingSkipped) {
-      const { isHttpMode } = await import('../embeddings/http-client.js');
+      const { isHttpMode } = await import("../embeddings/http-client.js");
       const httpMode = isHttpMode();
       progress(
-        'embeddings',
+        "embeddings",
         90,
-        httpMode ? 'Connecting to embedding endpoint...' : 'Loading embedding model...',
+        httpMode
+          ? "Connecting to embedding endpoint..."
+          : "Loading embedding model...",
       );
-      const { runEmbeddingPipeline } = await import('../embeddings/embedding-pipeline.js');
+      const { runEmbeddingPipeline } =
+        await import("../embeddings/embedding-pipeline.js");
       // Build a Map<nodeId, contentHash> from cached embeddings for incremental mode
       let existingEmbeddings: Map<string, string> | undefined;
       if (cachedEmbeddingNodeIds.size > 0) {
         existingEmbeddings = new Map<string, string>();
         for (const e of cachedEmbeddings) {
-          existingEmbeddings.set(e.nodeId, e.contentHash ?? STALE_HASH_SENTINEL);
+          existingEmbeddings.set(
+            e.nodeId,
+            e.contentHash ?? STALE_HASH_SENTINEL,
+          );
         }
       }
 
-      const { readServerMapping } = await import('../embeddings/server-mapping.js');
+      const { readServerMapping } =
+        await import("../embeddings/server-mapping.js");
       // Mirror the registry's name-resolution chain so the server-mapping
       // lookup key stays aligned with the final registry name (#1259):
       //   --name → remote-derived → canonical-root basename
@@ -401,31 +429,31 @@ export async function runFullAnalysis(
         (p) => {
           const scaled = 90 + Math.round((p.percent / 100) * 8);
           const label =
-            p.phase === 'loading-model'
+            p.phase === "loading-model"
               ? httpMode
-                ? 'Connecting to embedding endpoint...'
-                : 'Loading embedding model...'
-              : `Embedding ${p.nodesProcessed || 0}/${p.totalNodes || '?'}`;
-          progress('embeddings', scaled, label);
+                ? "Connecting to embedding endpoint..."
+                : "Loading embedding model..."
+              : `Embedding ${p.nodesProcessed || 0}/${p.totalNodes || "?"}`;
+          progress("embeddings", scaled, label);
         },
         {},
         cachedEmbeddingNodeIds.size > 0 ? cachedEmbeddingNodeIds : undefined,
         { repoName: projectName, serverName },
         existingEmbeddings,
       );
-      if (embeddingResult.semanticMode === 'exact-scan') {
-        semanticMode = 'exact-scan';
+      if (embeddingResult.semanticMode === "exact-scan") {
+        semanticMode = "exact-scan";
         log(
-          'Semantic embeddings were generated without a VECTOR index; ' +
-            'queries will use exact-scan fallback within the configured limit.',
+          "Semantic embeddings were generated without a VECTOR index; " +
+            "queries will use exact-scan fallback within the configured limit.",
         );
       } else {
-        semanticMode = 'vector-index';
+        semanticMode = "vector-index";
       }
     }
 
     // ── Phase 5: Finalize (98–100%) ───────────────────────────────────
-    progress('done', 98, 'Saving metadata...');
+    progress("done", 98, "Saving metadata...");
 
     // Count embeddings in the index (cached + newly generated)
     let embeddingCount = 0;
@@ -441,16 +469,19 @@ export async function runFullAnalysis(
 
     if (!embeddingSkipped && stats.nodes > 0 && embeddingCount === 0) {
       throw new Error(
-        'Embedding generation completed without persisted embeddings. ' +
-          'The index was not registered to avoid silently reporting embeddings: 0.',
+        "Embedding generation completed without persisted embeddings. " +
+          "The index was not registered to avoid silently reporting embeddings: 0.",
       );
     }
 
-    const { getRuntimeCapabilities } = await import('../platform/capabilities.js');
+    const { getRuntimeCapabilities } =
+      await import("../platform/capabilities.js");
     const runtimeCapabilities = getRuntimeCapabilities();
     const effectiveSemanticMode =
       semanticMode ??
-      (runtimeCapabilities.semanticMode === 'vector-index' ? 'vector-index' : 'exact-scan');
+      (runtimeCapabilities.semanticMode === "vector-index"
+        ? "vector-index"
+        : "exact-scan");
     const meta = {
       repoPath,
       lastCommit: currentCommit,
@@ -471,11 +502,14 @@ export async function runFullAnalysis(
         embeddings: embeddingCount,
       },
       capabilities: {
-        graph: { provider: 'ladybugdb', status: runtimeCapabilities.graph },
-        fts: { provider: 'ladybugdb-fts', status: runtimeCapabilities.fts },
+        graph: { provider: "ladybugdb", status: runtimeCapabilities.graph },
+        fts: { provider: "ladybugdb-fts", status: runtimeCapabilities.fts },
         vectorSearch: {
-          provider: effectiveSemanticMode === 'vector-index' ? 'ladybugdb-vector' : 'exact-scan',
-          status: embeddingCount > 0 ? effectiveSemanticMode : 'unavailable',
+          provider:
+            effectiveSemanticMode === "vector-index"
+              ? "ladybugdb-vector"
+              : "exact-scan",
+          status: embeddingCount > 0 ? effectiveSemanticMode : "unavailable",
           exactScanLimit: runtimeCapabilities.exactScanLimit,
           reason: runtimeCapabilities.reason,
         },
@@ -503,7 +537,7 @@ export async function runFullAnalysis(
       await closeLbug();
     }
 
-    progress('done', 100, 'Done');
+    progress("done", 100, "Done");
 
     return {
       repoName: projectName,

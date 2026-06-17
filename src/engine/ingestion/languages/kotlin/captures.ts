@@ -1,28 +1,34 @@
-import { makeScopeId, type Capture, type CaptureMatch } from '../../../shared/index.js';
+import {
+  makeScopeId,
+  type Capture,
+  type CaptureMatch,
+} from "../../../shared/index.js";
 import {
   nodeIfType,
   nodeToCapture,
   syntheticCapture,
   type SyntaxNode,
-} from '../../utils/ast-helpers.js';
-import { getTreeSitterBufferSize } from '../../constants.js';
-import { parseSourceSafe } from '../../../tree-sitter/safe-parse.js';
-import { computeKotlinArityMetadata } from './arity-metadata.js';
-import { splitKotlinImportHeader } from './import-decomposer.js';
-import { recordKotlinCacheHit, recordKotlinCacheMiss } from './cache-stats.js';
-import { normalizeKotlinType } from './interpret.js';
-import { synthesizeKotlinReceiverBinding } from './receiver-binding.js';
-import { getKotlinParser, getKotlinScopeQuery } from './query.js';
-import { markCompanionScope } from './companion-scopes.js';
+} from "../../utils/ast-helpers.js";
+import { getTreeSitterBufferSize } from "../../constants.js";
+import { parseSourceSafe } from "../../../tree-sitter/safe-parse.js";
+import { computeKotlinArityMetadata } from "./arity-metadata.js";
+import { splitKotlinImportHeader } from "./import-decomposer.js";
+import { recordKotlinCacheHit, recordKotlinCacheMiss } from "./cache-stats.js";
+import { normalizeKotlinType } from "./interpret.js";
+import { synthesizeKotlinReceiverBinding } from "./receiver-binding.js";
+import { getKotlinParser, getKotlinScopeQuery } from "./query.js";
+import { markCompanionScope } from "./companion-scopes.js";
 
-const FUNCTION_DECL_TAGS = ['@declaration.function'] as const;
+const FUNCTION_DECL_TAGS = ["@declaration.function"] as const;
 
 export function emitKotlinScopeCaptures(
   sourceText: string,
   filePath: string,
   cachedTree?: unknown,
 ): readonly CaptureMatch[] {
-  let tree = cachedTree as ReturnType<ReturnType<typeof getKotlinParser>['parse']> | undefined;
+  let tree = cachedTree as
+    | ReturnType<ReturnType<typeof getKotlinParser>["parse"]>
+    | undefined;
   if (tree === undefined) {
     tree = parseSourceSafe(getKotlinParser(), sourceText, undefined, {
       bufferSize: getTreeSitterBufferSize(sourceText),
@@ -34,7 +40,9 @@ export function emitKotlinScopeCaptures(
 
   const out: CaptureMatch[] = [];
   const returnTypes = collectKotlinReturnTypeTexts(tree.rootNode);
-  out.push(...synthesizeKotlinLocalAssignmentBindings(tree.rootNode, returnTypes));
+  out.push(
+    ...synthesizeKotlinLocalAssignmentBindings(tree.rootNode, returnTypes),
+  );
   out.push(...synthesizeKotlinLoopBindings(tree.rootNode, returnTypes));
   out.push(...synthesizeKotlinSmartCastBindings(tree.rootNode));
   out.push(...synthesizeKotlinLambdaBindings(tree.rootNode, returnTypes));
@@ -49,7 +57,7 @@ export function emitKotlinScopeCaptures(
     // root-walk fixed for go #1915 / python #1918 / csharp, mirrored here.
     const groupedNodes: Record<string, SyntaxNode> = {};
     for (const capture of match.captures) {
-      const tag = '@' + capture.name;
+      const tag = "@" + capture.name;
       grouped[tag] = nodeToCapture(tag, capture.node);
       groupedNodes[tag] = capture.node;
     }
@@ -66,18 +74,21 @@ export function emitKotlinScopeCaptures(
     // NOT pushed to the output — the scope-extractor would reject the
     // `companion` kind suffix anyway, but suppressing the emit keeps
     // downstream pipelines from re-processing the same range twice.
-    if (grouped['@scope.companion'] !== undefined) {
+    if (grouped["@scope.companion"] !== undefined) {
       const scopeId = makeScopeId({
         filePath,
-        range: grouped['@scope.companion']!.range,
-        kind: 'Class',
+        range: grouped["@scope.companion"]!.range,
+        kind: "Class",
       });
       markCompanionScope(filePath, scopeId);
       continue;
     }
 
-    if (grouped['@import.statement'] !== undefined) {
-      const importNode = nodeIfType(groupedNodes['@import.statement'], 'import_header');
+    if (grouped["@import.statement"] !== undefined) {
+      const importNode = nodeIfType(
+        groupedNodes["@import.statement"],
+        "import_header",
+      );
       if (importNode !== null) {
         const decomposed = splitKotlinImportHeader(importNode);
         if (decomposed !== null) {
@@ -88,14 +99,17 @@ export function emitKotlinScopeCaptures(
     }
 
     if (
-      grouped['@reference.call.free'] !== undefined &&
-      grouped['@reference.receiver'] !== undefined
+      grouped["@reference.call.free"] !== undefined &&
+      grouped["@reference.receiver"] !== undefined
     ) {
       continue;
     }
 
-    if (grouped['@reference.read.member'] !== undefined) {
-      const navNode = nodeIfType(groupedNodes['@reference.read.member'], 'navigation_expression');
+    if (grouped["@reference.read.member"] !== undefined) {
+      const navNode = nodeIfType(
+        groupedNodes["@reference.read.member"],
+        "navigation_expression",
+      );
       if (navNode === null || !shouldEmitReadMember(navNode)) continue;
     }
 
@@ -113,47 +127,55 @@ export function emitKotlinScopeCaptures(
     // make the constructor type prevail is to drop the annotation at
     // emission time.
     if (
-      grouped['@type-binding.annotation'] !== undefined &&
-      grouped['@type-binding.name'] !== undefined &&
-      grouped['@type-binding.type'] !== undefined
+      grouped["@type-binding.annotation"] !== undefined &&
+      grouped["@type-binding.name"] !== undefined &&
+      grouped["@type-binding.type"] !== undefined
     ) {
-      const propNode = nodeIfType(groupedNodes['@type-binding.annotation'], 'property_declaration');
+      const propNode = nodeIfType(
+        groupedNodes["@type-binding.annotation"],
+        "property_declaration",
+      );
       if (propNode !== null && propertyDeclHasConstructorValue(propNode)) {
         continue;
       }
     }
 
-    if (grouped['@scope.function'] !== undefined) {
+    if (grouped["@scope.function"] !== undefined) {
       out.push(grouped);
-      const fnNode = nodeIfType(groupedNodes['@scope.function'], 'function_declaration');
+      const fnNode = nodeIfType(
+        groupedNodes["@scope.function"],
+        "function_declaration",
+      );
       if (fnNode !== null) {
         out.push(...synthesizeKotlinReceiverBinding(fnNode));
       }
       continue;
     }
 
-    const declTag = FUNCTION_DECL_TAGS.find((tag) => grouped[tag] !== undefined);
+    const declTag = FUNCTION_DECL_TAGS.find(
+      (tag) => grouped[tag] !== undefined,
+    );
     if (declTag !== undefined) {
-      const fnNode = nodeIfType(groupedNodes[declTag], 'function_declaration');
+      const fnNode = nodeIfType(groupedNodes[declTag], "function_declaration");
       if (fnNode !== null) {
         const arity = computeKotlinArityMetadata(fnNode);
         if (arity.parameterCount !== undefined) {
-          grouped['@declaration.parameter-count'] = syntheticCapture(
-            '@declaration.parameter-count',
+          grouped["@declaration.parameter-count"] = syntheticCapture(
+            "@declaration.parameter-count",
             fnNode,
             String(arity.parameterCount),
           );
         }
         if (arity.requiredParameterCount !== undefined) {
-          grouped['@declaration.required-parameter-count'] = syntheticCapture(
-            '@declaration.required-parameter-count',
+          grouped["@declaration.required-parameter-count"] = syntheticCapture(
+            "@declaration.required-parameter-count",
             fnNode,
             String(arity.requiredParameterCount),
           );
         }
         if (arity.parameterTypes !== undefined) {
-          grouped['@declaration.parameter-types'] = syntheticCapture(
-            '@declaration.parameter-types',
+          grouped["@declaration.parameter-types"] = syntheticCapture(
+            "@declaration.parameter-types",
             fnNode,
             JSON.stringify(arity.parameterTypes),
           );
@@ -162,19 +184,23 @@ export function emitKotlinScopeCaptures(
     }
 
     const callTag = (
-      ['@reference.call.free', '@reference.call.member', '@reference.call.constructor'] as const
+      [
+        "@reference.call.free",
+        "@reference.call.member",
+        "@reference.call.constructor",
+      ] as const
     ).find((tag) => grouped[tag] !== undefined);
-    if (callTag !== undefined && grouped['@reference.arity'] === undefined) {
-      const callNode = nodeIfType(groupedNodes[callTag], 'call_expression');
+    if (callTag !== undefined && grouped["@reference.arity"] === undefined) {
+      const callNode = nodeIfType(groupedNodes[callTag], "call_expression");
       if (callNode !== null) {
         const args = callArguments(callNode);
-        grouped['@reference.arity'] = syntheticCapture(
-          '@reference.arity',
+        grouped["@reference.arity"] = syntheticCapture(
+          "@reference.arity",
           callNode,
           String(args.length),
         );
-        grouped['@reference.parameter-types'] = syntheticCapture(
-          '@reference.parameter-types',
+        grouped["@reference.parameter-types"] = syntheticCapture(
+          "@reference.parameter-types",
           callNode,
           JSON.stringify(args.map(inferArgType)),
         );
@@ -223,11 +249,13 @@ export function emitKotlinScopeCaptures(
  * resolves it. The extracted bare name agrees with the legacy leg's
  * `normalizeSupertypeName` for every shape (verified by real-parse).
  */
-function synthesizeKotlinInheritanceReferences(rootNode: SyntaxNode): CaptureMatch[] {
+function synthesizeKotlinInheritanceReferences(
+  rootNode: SyntaxNode,
+): CaptureMatch[] {
   const out: CaptureMatch[] = [];
-  for (const classNode of descendantsOfType(rootNode, 'class_declaration')) {
+  for (const classNode of descendantsOfType(rootNode, "class_declaration")) {
     for (const child of classNode.namedChildren) {
-      if (child.type !== 'delegation_specifier') continue;
+      if (child.type !== "delegation_specifier") continue;
       // Three wrappers, all resolving to a leading `user_type` →
       // `type_identifier`:
       //   - `(delegation_specifier (constructor_invocation (user_type …)))` for `Base()`
@@ -235,18 +263,22 @@ function synthesizeKotlinInheritanceReferences(rootNode: SyntaxNode): CaptureMat
       //     for `Iface by d` — the supertype is the FIRST `user_type`; the
       //     delegate expression that trails `by` is ignored.
       //   - `(delegation_specifier (user_type …))` for a bare interface/superclass.
-      const ctor = child.namedChildren.find((n) => n.type === 'constructor_invocation');
-      const delegation = child.namedChildren.find((n) => n.type === 'explicit_delegation');
+      const ctor = child.namedChildren.find(
+        (n) => n.type === "constructor_invocation",
+      );
+      const delegation = child.namedChildren.find(
+        (n) => n.type === "explicit_delegation",
+      );
       const userType =
-        ctor?.namedChildren.find((n) => n.type === 'user_type') ??
-        delegation?.namedChildren.find((n) => n.type === 'user_type') ??
-        child.namedChildren.find((n) => n.type === 'user_type');
+        ctor?.namedChildren.find((n) => n.type === "user_type") ??
+        delegation?.namedChildren.find((n) => n.type === "user_type") ??
+        child.namedChildren.find((n) => n.type === "user_type");
       if (userType === undefined) continue;
       const nameNode = kotlinUserTypeNameNode(userType);
       if (nameNode === null) continue;
       out.push({
-        '@reference.inherits': nodeToCapture('@reference.inherits', child),
-        '@reference.name': nodeToCapture('@reference.name', nameNode),
+        "@reference.inherits": nodeToCapture("@reference.inherits", child),
+        "@reference.name": nodeToCapture("@reference.name", nameNode),
       });
     }
   }
@@ -263,7 +295,7 @@ function synthesizeKotlinInheritanceReferences(rootNode: SyntaxNode): CaptureMat
 function kotlinUserTypeNameNode(userType: SyntaxNode): SyntaxNode | null {
   let nameNode: SyntaxNode | null = null;
   for (const child of userType.namedChildren) {
-    if (child.type === 'type_identifier') nameNode = child;
+    if (child.type === "type_identifier") nameNode = child;
   }
   return nameNode;
 }
@@ -273,31 +305,47 @@ function synthesizeKotlinLoopBindings(
   returnTypes: ReadonlyMap<string, string>,
 ): CaptureMatch[] {
   const out: CaptureMatch[] = [];
-  for (const fnNode of descendantsOfType(rootNode, 'function_declaration')) {
+  for (const fnNode of descendantsOfType(rootNode, "function_declaration")) {
     const localTypes = collectKotlinLocalTypeTexts(fnNode, returnTypes);
-    for (const forNode of descendantsOfType(fnNode, 'for_statement')) {
-      const variable = forNode.namedChildren.find((child) => child.type === 'variable_declaration');
-      const name = variable?.namedChildren.find((child) => child.type === 'simple_identifier');
+    for (const forNode of descendantsOfType(fnNode, "for_statement")) {
+      const variable = forNode.namedChildren.find(
+        (child) => child.type === "variable_declaration",
+      );
+      const name = variable?.namedChildren.find(
+        (child) => child.type === "simple_identifier",
+      );
       if (variable === undefined || name === undefined) continue;
 
-      const explicitType = variable.namedChildren.find((child) => isKotlinTypeNode(child));
+      const explicitType = variable.namedChildren.find((child) =>
+        isKotlinTypeNode(child),
+      );
       const iterable = forNode.namedChildren.find(
-        (child) => child.id !== variable.id && child.type !== 'control_structure_body',
+        (child) =>
+          child.id !== variable.id && child.type !== "control_structure_body",
       );
       const rawType =
         explicitType?.text ??
         (iterable === undefined
           ? null
           : inferKotlinIterableElementType(iterable, localTypes, returnTypes));
-      if (rawType === null || rawType.trim() === '') continue;
+      if (rawType === null || rawType.trim() === "") continue;
 
       const anchor =
-        forNode.namedChildren.find((child) => child.type === 'control_structure_body') ?? forNode;
+        forNode.namedChildren.find(
+          (child) => child.type === "control_structure_body",
+        ) ?? forNode;
       out.push({
-        '@type-binding.annotation': nodeToCapture('@type-binding.annotation', anchor),
-        '@type-binding.name': syntheticCapture('@type-binding.name', name, name.text),
-        '@type-binding.type': syntheticCapture(
-          '@type-binding.type',
+        "@type-binding.annotation": nodeToCapture(
+          "@type-binding.annotation",
+          anchor,
+        ),
+        "@type-binding.name": syntheticCapture(
+          "@type-binding.name",
+          name,
+          name.text,
+        ),
+        "@type-binding.type": syntheticCapture(
+          "@type-binding.type",
           explicitType ?? iterable ?? name,
           normalizeKotlinType(rawType),
         ),
@@ -327,33 +375,47 @@ function synthesizeKotlinLoopBindings(
  * `else` arms and non-narrowing conditions emit nothing — the fall-through to
  * the outer scope's declared type is the correct semantic.
  */
-function synthesizeKotlinSmartCastBindings(rootNode: SyntaxNode): CaptureMatch[] {
+function synthesizeKotlinSmartCastBindings(
+  rootNode: SyntaxNode,
+): CaptureMatch[] {
   const out: CaptureMatch[] = [];
 
-  for (const whenNode of descendantsOfType(rootNode, 'when_expression')) {
+  for (const whenNode of descendantsOfType(rootNode, "when_expression")) {
     const subjectName = extractWhenSubjectIdentifier(whenNode);
     if (subjectName === null) continue;
 
     for (const entry of whenNode.namedChildren) {
-      if (entry.type !== 'when_entry') continue;
+      if (entry.type !== "when_entry") continue;
       const narrowedType = extractIsTestTargetType(entry);
       if (narrowedType === null) continue;
-      const body = entry.namedChildren.find((child) => child.type === 'control_structure_body');
+      const body = entry.namedChildren.find(
+        (child) => child.type === "control_structure_body",
+      );
       if (body === undefined) continue;
-      out.push(buildNarrowedTypeBindingCapture(subjectName.node, body, narrowedType));
+      out.push(
+        buildNarrowedTypeBindingCapture(subjectName.node, body, narrowedType),
+      );
     }
   }
 
-  for (const ifNode of descendantsOfType(rootNode, 'if_expression')) {
-    const check = ifNode.namedChildren.find((child) => child.type === 'check_expression');
+  for (const ifNode of descendantsOfType(rootNode, "if_expression")) {
+    const check = ifNode.namedChildren.find(
+      (child) => child.type === "check_expression",
+    );
     if (check === undefined) continue;
-    const subject = check.namedChildren.find((child) => child.type === 'simple_identifier');
-    const typeNode = check.namedChildren.find((child) => isKotlinTypeNode(child));
+    const subject = check.namedChildren.find(
+      (child) => child.type === "simple_identifier",
+    );
+    const typeNode = check.namedChildren.find((child) =>
+      isKotlinTypeNode(child),
+    );
     if (subject === undefined || typeNode === undefined) continue;
     // The first control_structure_body sibling is the then-branch; else
     // branches (when present) appear as the second control_structure_body
     // and are intentionally not narrowed.
-    const body = ifNode.namedChildren.find((child) => child.type === 'control_structure_body');
+    const body = ifNode.namedChildren.find(
+      (child) => child.type === "control_structure_body",
+    );
     if (body === undefined) continue;
     out.push(buildNarrowedTypeBindingCapture(subject, body, typeNode));
   }
@@ -361,25 +423,33 @@ function synthesizeKotlinSmartCastBindings(rootNode: SyntaxNode): CaptureMatch[]
   return out;
 }
 
-function extractWhenSubjectIdentifier(whenNode: SyntaxNode): { node: SyntaxNode } | null {
-  const subject = whenNode.namedChildren.find((child) => child.type === 'when_subject');
+function extractWhenSubjectIdentifier(
+  whenNode: SyntaxNode,
+): { node: SyntaxNode } | null {
+  const subject = whenNode.namedChildren.find(
+    (child) => child.type === "when_subject",
+  );
   if (subject === undefined) return null;
-  const ident = subject.namedChildren.find((child) => child.type === 'simple_identifier');
+  const ident = subject.namedChildren.find(
+    (child) => child.type === "simple_identifier",
+  );
   return ident === undefined ? null : { node: ident };
 }
 
 function extractIsTestTargetType(whenEntry: SyntaxNode): SyntaxNode | null {
-  const condition = whenEntry.namedChildren.find((child) => child.type === 'when_condition');
+  const condition = whenEntry.namedChildren.find(
+    (child) => child.type === "when_condition",
+  );
   if (condition === undefined) return null;
   // Exactly one when_condition child must be a positive type_test.
   // Compound conditions (multiple `when_condition` siblings joined with
   // commas in some grammars) or negated `!is` are not safe to narrow.
   if (condition.namedChildCount !== 1) return null;
   const test = condition.namedChild(0);
-  if (test === null || test.type !== 'type_test') return null;
+  if (test === null || test.type !== "type_test") return null;
   // `!is` produces a different node (`negated_type_test` in some grammars,
   // or an extra `!` child in others) — defend by checking text prefix.
-  if (test.text.trim().startsWith('!')) return null;
+  if (test.text.trim().startsWith("!")) return null;
   return test.namedChildren.find((child) => isKotlinTypeNode(child)) ?? null;
 }
 
@@ -389,10 +459,17 @@ function buildNarrowedTypeBindingCapture(
   typeNode: SyntaxNode,
 ): CaptureMatch {
   return {
-    '@type-binding.annotation': nodeToCapture('@type-binding.annotation', bodyAnchor),
-    '@type-binding.name': syntheticCapture('@type-binding.name', subject, subject.text),
-    '@type-binding.type': syntheticCapture(
-      '@type-binding.type',
+    "@type-binding.annotation": nodeToCapture(
+      "@type-binding.annotation",
+      bodyAnchor,
+    ),
+    "@type-binding.name": syntheticCapture(
+      "@type-binding.name",
+      subject,
+      subject.text,
+    ),
+    "@type-binding.type": syntheticCapture(
+      "@type-binding.type",
       typeNode,
       normalizeKotlinType(typeNode.text),
     ),
@@ -401,7 +478,11 @@ function buildNarrowedTypeBindingCapture(
     // (`is User -> obj.save()`) make the body anchor coincide with the
     // Block scope's range; without this marker the binding would hoist
     // to the enclosing function scope and lose its arm-local narrowing.
-    '@type-binding.narrowed': syntheticCapture('@type-binding.narrowed', bodyAnchor, '1'),
+    "@type-binding.narrowed": syntheticCapture(
+      "@type-binding.narrowed",
+      bodyAnchor,
+      "1",
+    ),
   };
 }
 
@@ -451,9 +532,9 @@ function synthesizeKotlinLambdaBindings(
   const out: CaptureMatch[] = [];
   const classMembers = collectKotlinClassMembers(rootNode);
 
-  for (const fnNode of descendantsOfType(rootNode, 'function_declaration')) {
+  for (const fnNode of descendantsOfType(rootNode, "function_declaration")) {
     const localTypes = collectKotlinLocalTypeTexts(fnNode, returnTypes);
-    for (const lambdaNode of descendantsOfType(fnNode, 'lambda_literal')) {
+    for (const lambdaNode of descendantsOfType(fnNode, "lambda_literal")) {
       const anchor = lambdaBodyAnchor(lambdaNode);
       if (anchor === null) continue;
 
@@ -470,8 +551,10 @@ function synthesizeKotlinLambdaBindings(
         // scope inside the body. Synthesize the `it` type-binding so
         // calls like `it.save()` resolve through the typeBinding chain.
         const typeNode = inferredType?.typeNode ?? lambdaNode;
-        const typeText = inferredType?.typeText ?? '';
-        out.push(buildLambdaTypeBindingCapture(anchor, 'it', typeNode, typeText));
+        const typeText = inferredType?.typeText ?? "";
+        out.push(
+          buildLambdaTypeBindingCapture(anchor, "it", typeNode, typeText),
+        );
       } else {
         // Explicit parameters: `{ user -> ... }`, `{ (a, b) -> ... }`,
         // `{ key, value -> ... }`. Emit one binding per parameter.
@@ -483,9 +566,17 @@ function synthesizeKotlinLambdaBindings(
         // gates leakage but won't drive call resolution for those names.
         for (let i = 0; i < params.length; i++) {
           const paramName = params[i]!.text;
-          const typeNode = i === 0 ? (inferredType?.typeNode ?? params[i]!) : params[i]!;
-          const typeText = i === 0 ? (inferredType?.typeText ?? '') : '';
-          out.push(buildLambdaTypeBindingCapture(anchor, paramName, typeNode, typeText));
+          const typeNode =
+            i === 0 ? (inferredType?.typeNode ?? params[i]!) : params[i]!;
+          const typeText = i === 0 ? (inferredType?.typeText ?? "") : "";
+          out.push(
+            buildLambdaTypeBindingCapture(
+              anchor,
+              paramName,
+              typeNode,
+              typeText,
+            ),
+          );
         }
       }
     }
@@ -501,7 +592,9 @@ function synthesizeKotlinLambdaBindings(
  *  (e.g. empty lambda); the `@type-binding.lambda-scoped` marker in
  *  `kotlinBindingScopeFor` then forces no-hoist explicitly. */
 function lambdaBodyAnchor(lambdaNode: SyntaxNode): SyntaxNode | null {
-  const statements = lambdaNode.namedChildren.find((c) => c.type === 'statements');
+  const statements = lambdaNode.namedChildren.find(
+    (c) => c.type === "statements",
+  );
   return statements ?? lambdaNode;
 }
 
@@ -509,12 +602,16 @@ function lambdaBodyAnchor(lambdaNode: SyntaxNode): SyntaxNode | null {
  *  `lambda_literal`. Returns an empty array when no `lambda_parameters`
  *  is present (implicit `it` form). */
 function explicitLambdaParameters(lambdaNode: SyntaxNode): SyntaxNode[] {
-  const params = lambdaNode.namedChildren.find((c) => c.type === 'lambda_parameters');
+  const params = lambdaNode.namedChildren.find(
+    (c) => c.type === "lambda_parameters",
+  );
   if (params === undefined) return [];
   const out: SyntaxNode[] = [];
   for (const child of params.namedChildren) {
-    if (child.type !== 'variable_declaration') continue;
-    const ident = child.namedChildren.find((c) => c.type === 'simple_identifier');
+    if (child.type !== "variable_declaration") continue;
+    const ident = child.namedChildren.find(
+      (c) => c.type === "simple_identifier",
+    );
     if (ident !== undefined) out.push(ident);
   }
   return out;
@@ -527,57 +624,64 @@ function buildLambdaTypeBindingCapture(
   typeText: string,
 ): CaptureMatch {
   return {
-    '@type-binding.annotation': nodeToCapture('@type-binding.annotation', anchor),
-    '@type-binding.name': syntheticCapture('@type-binding.name', anchor, name),
-    '@type-binding.type': syntheticCapture(
-      '@type-binding.type',
+    "@type-binding.annotation": nodeToCapture(
+      "@type-binding.annotation",
+      anchor,
+    ),
+    "@type-binding.name": syntheticCapture("@type-binding.name", anchor, name),
+    "@type-binding.type": syntheticCapture(
+      "@type-binding.type",
       typeNode,
-      typeText === '' ? '' : normalizeKotlinType(typeText),
+      typeText === "" ? "" : normalizeKotlinType(typeText),
     ),
     // Marker consumed by `kotlinBindingScopeFor` (simple-hooks.ts) to
     // pin this binding inside the lambda Block scope — without it the
     // scope-extractor would auto-hoist the binding to the enclosing
     // function scope and `it` (or the lambda parameter name) would
     // leak past the closing brace.
-    '@type-binding.lambda-scoped': syntheticCapture('@type-binding.lambda-scoped', anchor, '1'),
+    "@type-binding.lambda-scoped": syntheticCapture(
+      "@type-binding.lambda-scoped",
+      anchor,
+      "1",
+    ),
   };
 }
 
 /** Stdlib higher-order functions whose lambda parameter receives the
  *  ELEMENT type of the receiver collection (Map / Iterable element). */
 const KOTLIN_ELEMENT_TYPE_LAMBDAS = new Set([
-  'forEach',
-  'forEachIndexed',
-  'map',
-  'mapNotNull',
-  'mapIndexed',
-  'filter',
-  'filterNot',
-  'filterNotNull',
-  'filterIsInstance',
-  'flatMap',
-  'flatten',
-  'onEach',
-  'find',
-  'findLast',
-  'firstOrNull',
-  'lastOrNull',
-  'singleOrNull',
-  'any',
-  'all',
-  'none',
-  'count',
-  'partition',
-  'sortedBy',
-  'sortedByDescending',
-  'groupBy',
-  'associate',
-  'associateBy',
-  'associateWith',
-  'minByOrNull',
-  'maxByOrNull',
-  'sumOf',
-  'distinctBy',
+  "forEach",
+  "forEachIndexed",
+  "map",
+  "mapNotNull",
+  "mapIndexed",
+  "filter",
+  "filterNot",
+  "filterNotNull",
+  "filterIsInstance",
+  "flatMap",
+  "flatten",
+  "onEach",
+  "find",
+  "findLast",
+  "firstOrNull",
+  "lastOrNull",
+  "singleOrNull",
+  "any",
+  "all",
+  "none",
+  "count",
+  "partition",
+  "sortedBy",
+  "sortedByDescending",
+  "groupBy",
+  "associate",
+  "associateBy",
+  "associateWith",
+  "minByOrNull",
+  "maxByOrNull",
+  "sumOf",
+  "distinctBy",
 ]);
 
 /** Stdlib scope functions whose lambda receives the RECEIVER itself as
@@ -586,7 +690,13 @@ const KOTLIN_ELEMENT_TYPE_LAMBDAS = new Set([
  *  to the receiver type; `apply`/`run`/`with` callers see free calls
  *  inside the body which fall through to free-call resolution against
  *  the enclosing scope (no `this`-aware dispatch yet — follow-up). */
-const KOTLIN_SCOPE_FUNCTION_LAMBDAS = new Set(['let', 'also', 'takeIf', 'takeUnless', 'use']);
+const KOTLIN_SCOPE_FUNCTION_LAMBDAS = new Set([
+  "let",
+  "also",
+  "takeIf",
+  "takeUnless",
+  "use",
+]);
 
 /** `apply`, `run`, `with` expose the receiver as `this` rather than
  *  `it`. We still synthesize an `it` binding because the lambda may
@@ -594,7 +704,7 @@ const KOTLIN_SCOPE_FUNCTION_LAMBDAS = new Set(['let', 'also', 'takeIf', 'takeUnl
  *  (`user.apply { save() }`) goes through free-call resolution on the
  *  body, not through `it`. Including these here keeps the binding
  *  scope correct without claiming we resolve `this`-form correctly. */
-const KOTLIN_THIS_RECEIVER_LAMBDAS = new Set(['apply', 'run', 'with']);
+const KOTLIN_THIS_RECEIVER_LAMBDAS = new Set(["apply", "run", "with"]);
 
 /** Walk up from `lambdaNode` to the enclosing `call_expression` and
  *  infer the lambda parameter's type from the call's receiver and
@@ -615,11 +725,11 @@ function inferKotlinLambdaReceiverType(
   const callExpr = findEnclosingCallExpression(lambdaNode);
   if (callExpr === null) return null;
   const callee = callExpr.namedChildren.find(
-    (c) => c.type === 'navigation_expression' || c.type === 'simple_identifier',
+    (c) => c.type === "navigation_expression" || c.type === "simple_identifier",
   );
   if (callee === undefined) return null;
 
-  if (callee.type === 'simple_identifier') {
+  if (callee.type === "simple_identifier") {
     // `with(receiver) { ... }` — argument is the receiver. Not yet
     // wired through; defer to follow-up.
     return null;
@@ -628,8 +738,8 @@ function inferKotlinLambdaReceiverType(
   // navigation_expression: <receiver>.<member>
   const receiver = callee.namedChild(0);
   const memberName = callee.namedChildren
-    .find((c) => c.type === 'navigation_suffix')
-    ?.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+    .find((c) => c.type === "navigation_suffix")
+    ?.namedChildren.find((c) => c.type === "simple_identifier")?.text;
   if (receiver === null || memberName === undefined) return null;
 
   const receiverType = inferKotlinLambdaReceiverExpressionType(
@@ -641,8 +751,8 @@ function inferKotlinLambdaReceiverType(
   if (receiverType === null) return null;
 
   if (KOTLIN_ELEMENT_TYPE_LAMBDAS.has(memberName)) {
-    const element = kotlinContainerElementType(receiverType, 'values');
-    if (element === null || element === '') return null;
+    const element = kotlinContainerElementType(receiverType, "values");
+    if (element === null || element === "") return null;
     return { typeText: element, typeNode: lambdaNode };
   }
 
@@ -669,39 +779,50 @@ function inferKotlinLambdaReceiverExpressionType(
   returnTypes: ReadonlyMap<string, string>,
   classMembers: KotlinClassMembers,
 ): string | null {
-  if (receiver.type === 'simple_identifier') {
+  if (receiver.type === "simple_identifier") {
     return localTypes.get(receiver.text) ?? null;
   }
 
-  if (receiver.type === 'indexing_expression') {
+  if (receiver.type === "indexing_expression") {
     // `posts[user]` — the underlying receiver's container type tells
     // us the element/value type.
     const base = receiver.namedChild(0);
     if (base === null) return null;
-    const baseType = base.type === 'simple_identifier' ? localTypes.get(base.text) : null;
+    const baseType =
+      base.type === "simple_identifier" ? localTypes.get(base.text) : null;
     if (baseType === undefined || baseType === null) return null;
     // Indexing a Map returns the value type; indexing a List returns
     // the element type. `kotlinContainerElementType` already encodes
     // both via the 'values' tag.
-    return kotlinContainerElementType(baseType, 'values');
+    return kotlinContainerElementType(baseType, "values");
   }
 
-  if (receiver.type === 'navigation_expression') {
+  if (receiver.type === "navigation_expression") {
     // `users.map { ... }` chain — receiver is itself a navigation/
     // call. Tier-2 chain inference: try the navigation field/method.
-    const navField = inferKotlinNavigationFieldType(receiver, localTypes, classMembers);
+    const navField = inferKotlinNavigationFieldType(
+      receiver,
+      localTypes,
+      classMembers,
+    );
     if (navField !== null) return navField;
     const callee = receiver.namedChildren
-      .find((c) => c.type === 'navigation_suffix')
-      ?.namedChildren.find((c) => c.type === 'simple_identifier');
+      .find((c) => c.type === "navigation_suffix")
+      ?.namedChildren.find((c) => c.type === "simple_identifier");
     if (callee !== undefined) {
-      return inferKotlinNavigationCallReturnType(receiver, localTypes, classMembers);
+      return inferKotlinNavigationCallReturnType(
+        receiver,
+        localTypes,
+        classMembers,
+      );
     }
     return null;
   }
 
-  if (receiver.type === 'call_expression') {
-    const callee = receiver.namedChildren.find((c) => c.type === 'simple_identifier');
+  if (receiver.type === "call_expression") {
+    const callee = receiver.namedChildren.find(
+      (c) => c.type === "simple_identifier",
+    );
     if (callee === undefined) return null;
     return returnTypes.get(callee.text) ?? null;
   }
@@ -714,14 +835,19 @@ function inferKotlinLambdaReceiverExpressionType(
  *  for trailing lambdas, or `lambda_literal → value_argument →
  *  value_arguments → call_suffix → call_expression` for paren form.
  *  Returns null if the lambda is not inside a call. */
-function findEnclosingCallExpression(lambdaNode: SyntaxNode): SyntaxNode | null {
+function findEnclosingCallExpression(
+  lambdaNode: SyntaxNode,
+): SyntaxNode | null {
   let current: SyntaxNode | null = lambdaNode.parent;
   while (current !== null) {
-    if (current.type === 'call_expression') return current;
+    if (current.type === "call_expression") return current;
     // Don't cross out of the immediate call boundary — if we hit a
     // function_body or function_declaration ancestor, the lambda is
     // not call-bound.
-    if (current.type === 'function_body' || current.type === 'function_declaration') {
+    if (
+      current.type === "function_body" ||
+      current.type === "function_declaration"
+    ) {
       return null;
     }
     current = current.parent;
@@ -735,22 +861,30 @@ function synthesizeKotlinLocalAssignmentBindings(
 ): CaptureMatch[] {
   const out: CaptureMatch[] = [];
   const classMembers = collectKotlinClassMembers(rootNode);
-  for (const fnNode of descendantsOfType(rootNode, 'function_declaration')) {
+  for (const fnNode of descendantsOfType(rootNode, "function_declaration")) {
     const localTypes = new Map<string, string>();
-    for (const prop of descendantsOfType(fnNode, 'property_declaration')) {
-      const inferred = inferKotlinPropertyType(prop, localTypes, returnTypes, classMembers);
+    for (const prop of descendantsOfType(fnNode, "property_declaration")) {
+      const inferred = inferKotlinPropertyType(
+        prop,
+        localTypes,
+        returnTypes,
+        classMembers,
+      );
       if (inferred === null) continue;
       localTypes.set(inferred.name.text, inferred.rawType);
       if (inferred.synthetic) {
         out.push({
-          '@type-binding.annotation': nodeToCapture('@type-binding.annotation', prop),
-          '@type-binding.name': syntheticCapture(
-            '@type-binding.name',
+          "@type-binding.annotation": nodeToCapture(
+            "@type-binding.annotation",
+            prop,
+          ),
+          "@type-binding.name": syntheticCapture(
+            "@type-binding.name",
             inferred.name,
             inferred.name.text,
           ),
-          '@type-binding.type': syntheticCapture(
-            '@type-binding.type',
+          "@type-binding.type": syntheticCapture(
+            "@type-binding.type",
             inferred.source,
             normalizeKotlinType(inferred.rawType),
           ),
@@ -782,49 +916,67 @@ interface KotlinClassMembers {
 function collectKotlinClassMembers(rootNode: SyntaxNode): KotlinClassMembers {
   const fields = new Map<string, Map<string, string>>();
   const methods = new Map<string, Map<string, string>>();
-  for (const cls of descendantsOfType(rootNode, 'class_declaration')) {
-    const className = cls.namedChildren.find((child) => child.type === 'type_identifier')?.text;
+  for (const cls of descendantsOfType(rootNode, "class_declaration")) {
+    const className = cls.namedChildren.find(
+      (child) => child.type === "type_identifier",
+    )?.text;
     if (className === undefined) continue;
     const fmap = fields.get(className) ?? new Map<string, string>();
     const mmap = methods.get(className) ?? new Map<string, string>();
 
-    const primary = cls.namedChildren.find((child) => child.type === 'primary_constructor');
+    const primary = cls.namedChildren.find(
+      (child) => child.type === "primary_constructor",
+    );
     if (primary !== undefined) {
       for (const param of primary.namedChildren) {
-        if (param.type !== 'class_parameter') continue;
+        if (param.type !== "class_parameter") continue;
         // Constructor params are class fields ONLY when prefixed with
         // `val`/`var` (binding_pattern_kind). Plain `fn(x: Int)`-style
         // params remain locals to the constructor.
-        if (param.namedChildren.find((c) => c.type === 'binding_pattern_kind') === undefined) {
+        if (
+          param.namedChildren.find((c) => c.type === "binding_pattern_kind") ===
+          undefined
+        ) {
           continue;
         }
-        const fname = param.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
-        const ftype = param.namedChildren.find((c) => isKotlinTypeNode(c))?.text;
+        const fname = param.namedChildren.find(
+          (c) => c.type === "simple_identifier",
+        )?.text;
+        const ftype = param.namedChildren.find((c) =>
+          isKotlinTypeNode(c),
+        )?.text;
         if (fname !== undefined && ftype !== undefined) fmap.set(fname, ftype);
       }
     }
 
-    const body = cls.namedChildren.find((child) => child.type === 'class_body');
+    const body = cls.namedChildren.find((child) => child.type === "class_body");
     if (body !== undefined) {
       for (const member of body.namedChildren) {
-        if (member.type === 'property_declaration') {
-          const v = member.namedChildren.find((c) => c.type === 'variable_declaration');
-          const fname = v?.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+        if (member.type === "property_declaration") {
+          const v = member.namedChildren.find(
+            (c) => c.type === "variable_declaration",
+          );
+          const fname = v?.namedChildren.find(
+            (c) => c.type === "simple_identifier",
+          )?.text;
           const ftype = v?.namedChildren.find((c) => isKotlinTypeNode(c))?.text;
-          if (fname !== undefined && ftype !== undefined) fmap.set(fname, ftype);
-        } else if (member.type === 'function_declaration') {
+          if (fname !== undefined && ftype !== undefined)
+            fmap.set(fname, ftype);
+        } else if (member.type === "function_declaration") {
           collectKotlinFunctionReturn(member, mmap);
-        } else if (member.type === 'companion_object') {
+        } else if (member.type === "companion_object") {
           // Companion-object methods (`companion object { fun create() … }`)
           // are addressable via the outer class name (`Logger.create()`).
           // Register them on the outer class so chain-binding for
           // `val x = Logger.create(...)` picks up the return type (#1756).
           // The receiver-side filtering needed to prevent
           // `instance.companionMethod()` crossover is handled elsewhere.
-          const compBody = member.namedChildren.find((c) => c.type === 'class_body');
+          const compBody = member.namedChildren.find(
+            (c) => c.type === "class_body",
+          );
           if (compBody !== undefined) {
             for (const compMember of compBody.namedChildren) {
-              if (compMember.type !== 'function_declaration') continue;
+              if (compMember.type !== "function_declaration") continue;
               collectKotlinFunctionReturn(compMember, mmap);
             }
           }
@@ -838,13 +990,22 @@ function collectKotlinClassMembers(rootNode: SyntaxNode): KotlinClassMembers {
   return { fields, methods };
 }
 
-function collectKotlinFunctionReturn(fnNode: SyntaxNode, target: Map<string, string>): void {
-  const mname = fnNode.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
-  const paramsIdx = fnNode.namedChildren.findIndex((c) => c.type === 'function_value_parameters');
+function collectKotlinFunctionReturn(
+  fnNode: SyntaxNode,
+  target: Map<string, string>,
+): void {
+  const mname = fnNode.namedChildren.find(
+    (c) => c.type === "simple_identifier",
+  )?.text;
+  const paramsIdx = fnNode.namedChildren.findIndex(
+    (c) => c.type === "function_value_parameters",
+  );
   const rtype =
     paramsIdx < 0
       ? undefined
-      : fnNode.namedChildren.slice(paramsIdx + 1).find((c) => isKotlinTypeNode(c))?.text;
+      : fnNode.namedChildren
+          .slice(paramsIdx + 1)
+          .find((c) => isKotlinTypeNode(c))?.text;
   if (mname !== undefined && rtype !== undefined) target.set(mname, rtype);
 }
 
@@ -854,14 +1015,15 @@ function collectKotlinLocalTypeTexts(
 ): Map<string, string> {
   const out = new Map<string, string>();
   for (const node of descendants(fnNode)) {
-    if (node.type === 'parameter') {
-      const name = descendantsOfType(node, 'simple_identifier')[0];
+    if (node.type === "parameter") {
+      const name = descendantsOfType(node, "simple_identifier")[0];
       const type = node.namedChildren.find((child) => isKotlinTypeNode(child));
-      if (name !== undefined && type !== undefined) out.set(name.text, type.text);
+      if (name !== undefined && type !== undefined)
+        out.set(name.text, type.text);
       continue;
     }
 
-    if (node.type === 'property_declaration') {
+    if (node.type === "property_declaration") {
       const inferred = inferKotlinPropertyType(node, out, returnTypes);
       if (inferred !== null) out.set(inferred.name.text, inferred.rawType);
     }
@@ -869,17 +1031,23 @@ function collectKotlinLocalTypeTexts(
   return out;
 }
 
-function collectKotlinReturnTypeTexts(rootNode: SyntaxNode): Map<string, string> {
+function collectKotlinReturnTypeTexts(
+  rootNode: SyntaxNode,
+): Map<string, string> {
   const out = new Map<string, string>();
-  for (const fnNode of descendantsOfType(rootNode, 'function_declaration')) {
-    const name = fnNode.namedChildren.find((child) => child.type === 'simple_identifier');
+  for (const fnNode of descendantsOfType(rootNode, "function_declaration")) {
+    const name = fnNode.namedChildren.find(
+      (child) => child.type === "simple_identifier",
+    );
     const paramsIndex = fnNode.namedChildren.findIndex(
-      (child) => child.type === 'function_value_parameters',
+      (child) => child.type === "function_value_parameters",
     );
     const type =
       paramsIndex < 0
         ? undefined
-        : fnNode.namedChildren.slice(paramsIndex + 1).find((child) => isKotlinTypeNode(child));
+        : fnNode.namedChildren
+            .slice(paramsIndex + 1)
+            .find((child) => isKotlinTypeNode(child));
     if (name !== undefined && type !== undefined) out.set(name.text, type.text);
   }
   return out;
@@ -890,44 +1058,74 @@ function inferKotlinPropertyType(
   localTypes: ReadonlyMap<string, string>,
   returnTypes: ReadonlyMap<string, string>,
   classMembers?: KotlinClassMembers,
-): { name: SyntaxNode; rawType: string; source: SyntaxNode; synthetic: boolean } | null {
-  const variable = prop.namedChildren.find((child) => child.type === 'variable_declaration');
-  const name = variable?.namedChildren.find((child) => child.type === 'simple_identifier');
+): {
+  name: SyntaxNode;
+  rawType: string;
+  source: SyntaxNode;
+  synthetic: boolean;
+} | null {
+  const variable = prop.namedChildren.find(
+    (child) => child.type === "variable_declaration",
+  );
+  const name = variable?.namedChildren.find(
+    (child) => child.type === "simple_identifier",
+  );
   if (variable === undefined || name === undefined) return null;
 
-  const explicitType = variable.namedChildren.find((child) => isKotlinTypeNode(child));
+  const explicitType = variable.namedChildren.find((child) =>
+    isKotlinTypeNode(child),
+  );
   if (explicitType !== undefined) {
-    return { name, rawType: explicitType.text, source: explicitType, synthetic: false };
+    return {
+      name,
+      rawType: explicitType.text,
+      source: explicitType,
+      synthetic: false,
+    };
   }
 
   const value = prop.namedChildren.find(
-    (child) => child.id !== variable.id && child.type !== 'binding_pattern_kind',
+    (child) =>
+      child.id !== variable.id && child.type !== "binding_pattern_kind",
   );
-  if (value?.type === 'simple_identifier') {
+  if (value?.type === "simple_identifier") {
     const rawType = localTypes.get(value.text);
-    return rawType === undefined ? null : { name, rawType, source: value, synthetic: true };
+    return rawType === undefined
+      ? null
+      : { name, rawType, source: value, synthetic: true };
   }
 
-  if (value?.type === 'navigation_expression') {
+  if (value?.type === "navigation_expression") {
     // `val addr = user.address` — receiver type → field on that class (#1760).
-    const chained = inferKotlinNavigationFieldType(value, localTypes, classMembers);
+    const chained = inferKotlinNavigationFieldType(
+      value,
+      localTypes,
+      classMembers,
+    );
     if (chained === null) return null;
     return { name, rawType: chained, source: value, synthetic: true };
   }
 
-  if (value?.type === 'call_expression') {
+  if (value?.type === "call_expression") {
     const callee = value.namedChildren.find(
-      (child) => child.type === 'simple_identifier' || child.type === 'navigation_expression',
+      (child) =>
+        child.type === "simple_identifier" ||
+        child.type === "navigation_expression",
     );
     if (callee === undefined) return null;
-    if (callee.type === 'simple_identifier') {
+    if (callee.type === "simple_identifier") {
       const rawType =
-        returnTypes.get(callee.text) ?? (isUppercaseName(callee.text) ? callee.text : null);
+        returnTypes.get(callee.text) ??
+        (isUppercaseName(callee.text) ? callee.text : null);
       if (rawType === null) return null;
       return { name, rawType, source: callee, synthetic: true };
     }
     // `val city = addr.getCity()` — receiver type → method return on that class (#1760).
-    const chained = inferKotlinNavigationCallReturnType(callee, localTypes, classMembers);
+    const chained = inferKotlinNavigationCallReturnType(
+      callee,
+      localTypes,
+      classMembers,
+    );
     if (chained === null) return null;
     return { name, rawType: chained, source: callee, synthetic: true };
   }
@@ -946,14 +1144,16 @@ function inferKotlinNavigationFieldType(
 ): string | null {
   if (classMembers === undefined) return null;
   const receiver = nav.namedChild(0);
-  if (receiver === null || receiver.type !== 'simple_identifier') return null;
+  if (receiver === null || receiver.type !== "simple_identifier") return null;
   const member = nav.namedChildren
-    .find((c) => c.type === 'navigation_suffix')
-    ?.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+    .find((c) => c.type === "navigation_suffix")
+    ?.namedChildren.find((c) => c.type === "simple_identifier")?.text;
   if (member === undefined) return null;
   const recvType = localTypes.get(receiver.text);
   if (recvType === undefined) return null;
-  return classMembers.fields.get(normalizeKotlinType(recvType))?.get(member) ?? null;
+  return (
+    classMembers.fields.get(normalizeKotlinType(recvType))?.get(member) ?? null
+  );
 }
 
 /** Resolve `receiver.method()` → method's declared return type. The
@@ -976,14 +1176,18 @@ function inferKotlinNavigationCallReturnType(
 ): string | null {
   if (classMembers === undefined) return null;
   const receiver = navCallee.namedChild(0);
-  if (receiver === null || receiver.type !== 'simple_identifier') return null;
+  if (receiver === null || receiver.type !== "simple_identifier") return null;
   const methodName = navCallee.namedChildren
-    .find((c) => c.type === 'navigation_suffix')
-    ?.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+    .find((c) => c.type === "navigation_suffix")
+    ?.namedChildren.find((c) => c.type === "simple_identifier")?.text;
   if (methodName === undefined) return null;
   const recvType = localTypes.get(receiver.text);
   if (recvType !== undefined) {
-    return classMembers.methods.get(normalizeKotlinType(recvType))?.get(methodName) ?? null;
+    return (
+      classMembers.methods
+        .get(normalizeKotlinType(recvType))
+        ?.get(methodName) ?? null
+    );
   }
   return classMembers.methods.get(receiver.text)?.get(methodName) ?? null;
 }
@@ -993,26 +1197,30 @@ function inferKotlinIterableElementType(
   localTypes: ReadonlyMap<string, string>,
   returnTypes: ReadonlyMap<string, string>,
 ): string | null {
-  if (iterable.type === 'simple_identifier') {
+  if (iterable.type === "simple_identifier") {
     const raw = localTypes.get(iterable.text);
-    return raw === undefined ? null : kotlinContainerElementType(raw, 'values');
+    return raw === undefined ? null : kotlinContainerElementType(raw, "values");
   }
 
-  if (iterable.type === 'navigation_expression') {
+  if (iterable.type === "navigation_expression") {
     const receiver = iterable.namedChildren[0];
     const member = iterable.namedChildren
-      .find((child) => child.type === 'navigation_suffix')
-      ?.namedChildren.find((child) => child.type === 'simple_identifier')?.text;
-    if (receiver?.type !== 'simple_identifier') return null;
+      .find((child) => child.type === "navigation_suffix")
+      ?.namedChildren.find((child) => child.type === "simple_identifier")?.text;
+    if (receiver?.type !== "simple_identifier") return null;
     const raw = localTypes.get(receiver.text);
-    return raw === undefined ? null : kotlinContainerElementType(raw, member ?? 'values');
+    return raw === undefined
+      ? null
+      : kotlinContainerElementType(raw, member ?? "values");
   }
 
-  if (iterable.type === 'call_expression') {
-    const callee = iterable.namedChildren.find((child) => child.type === 'simple_identifier');
+  if (iterable.type === "call_expression") {
+    const callee = iterable.namedChildren.find(
+      (child) => child.type === "simple_identifier",
+    );
     if (callee === undefined) return null;
     const raw = returnTypes.get(callee.text);
-    if (raw !== undefined) return kotlinContainerElementType(raw, 'values');
+    if (raw !== undefined) return kotlinContainerElementType(raw, "values");
     // Cross-file fallback (#1759): the callee's return type is unknown
     // locally because the function lives in another file. Emit the
     // callee name itself as the binding's rawName; `propagateImported
@@ -1031,23 +1239,28 @@ function isUppercaseName(text: string): boolean {
   return /^[A-Z]/.test(text);
 }
 
-function kotlinContainerElementType(rawType: string, member: string): string | null {
+function kotlinContainerElementType(
+  rawType: string,
+  member: string,
+): string | null {
   const parsed = parseKotlinGeneric(rawType);
   if (parsed === null) return normalizeKotlinType(rawType);
 
-  const base = parsed.base.split('.').pop() ?? parsed.base;
+  const base = parsed.base.split(".").pop() ?? parsed.base;
   if (isKotlinMapType(base)) {
-    if (member === 'keys') return parsed.args[0] ?? null;
+    if (member === "keys") return parsed.args[0] ?? null;
     return parsed.args[1] ?? null;
   }
   if (isKotlinIterableType(base)) return parsed.args[0] ?? null;
   return normalizeKotlinType(rawType);
 }
 
-function parseKotlinGeneric(text: string): { base: string; args: string[] } | null {
-  const trimmed = text.trim().replace(/\?$/, '');
-  const open = trimmed.indexOf('<');
-  const close = trimmed.lastIndexOf('>');
+function parseKotlinGeneric(
+  text: string,
+): { base: string; args: string[] } | null {
+  const trimmed = text.trim().replace(/\?$/, "");
+  const open = trimmed.indexOf("<");
+  const close = trimmed.lastIndexOf(">");
   if (open < 0 || close < open) return null;
   return {
     base: trimmed.slice(0, open).trim(),
@@ -1061,9 +1274,9 @@ function splitTopLevelKotlinArgs(text: string): string[] {
   let start = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch === '<') depth++;
-    else if (ch === '>') depth--;
-    else if (ch === ',' && depth === 0) {
+    if (ch === "<") depth++;
+    else if (ch === ">") depth--;
+    else if (ch === "," && depth === 0) {
       out.push(text.slice(start, i).trim());
       start = i + 1;
     }
@@ -1073,26 +1286,28 @@ function splitTopLevelKotlinArgs(text: string): string[] {
 }
 
 function isKotlinMapType(base: string): boolean {
-  return ['Map', 'MutableMap', 'HashMap', 'LinkedHashMap'].includes(base);
+  return ["Map", "MutableMap", "HashMap", "LinkedHashMap"].includes(base);
 }
 
 function isKotlinIterableType(base: string): boolean {
   return [
-    'List',
-    'MutableList',
-    'ArrayList',
-    'Set',
-    'MutableSet',
-    'Collection',
-    'Iterable',
-    'Sequence',
-    'Array',
+    "List",
+    "MutableList",
+    "ArrayList",
+    "Set",
+    "MutableSet",
+    "Collection",
+    "Iterable",
+    "Sequence",
+    "Array",
   ].includes(base);
 }
 
 function isKotlinTypeNode(node: SyntaxNode): boolean {
   return (
-    node.type === 'user_type' || node.type === 'nullable_type' || node.type === 'function_type'
+    node.type === "user_type" ||
+    node.type === "nullable_type" ||
+    node.type === "function_type"
   );
 }
 
@@ -1113,8 +1328,8 @@ function descendants(node: SyntaxNode): SyntaxNode[] {
 function shouldEmitReadMember(navNode: SyntaxNode): boolean {
   const parent = navNode.parent;
   if (parent === null) return true;
-  if (parent.type === 'call_expression') return false;
-  if (parent.type === 'directly_assignable_expression') return false;
+  if (parent.type === "call_expression") return false;
+  if (parent.type === "directly_assignable_expression") return false;
   return true;
 }
 
@@ -1123,46 +1338,57 @@ function shouldEmitReadMember(navNode: SyntaxNode): boolean {
  *  explicit-annotation type-binding capture so the constructor-inferred
  *  binding wins (#1762). */
 function propertyDeclHasConstructorValue(propNode: SyntaxNode): boolean {
-  const variable = propNode.namedChildren.find((c) => c.type === 'variable_declaration');
+  const variable = propNode.namedChildren.find(
+    (c) => c.type === "variable_declaration",
+  );
   if (variable === undefined) return false;
   const value = propNode.namedChildren.find(
-    (c) => c.id !== variable.id && c.type !== 'binding_pattern_kind',
+    (c) => c.id !== variable.id && c.type !== "binding_pattern_kind",
   );
-  return value?.type === 'call_expression';
+  return value?.type === "call_expression";
 }
 
 function callArguments(callNode: SyntaxNode): SyntaxNode[] {
-  const suffix = callNode.namedChildren.find((child) => child.type === 'call_suffix');
+  const suffix = callNode.namedChildren.find(
+    (child) => child.type === "call_suffix",
+  );
   if (suffix === undefined) return [];
 
-  const valueArgs = suffix?.namedChildren.find((child) => child.type === 'value_arguments');
-  const args = valueArgs?.namedChildren.filter((child) => child.type === 'value_argument') ?? [];
-  const trailingLambdas = suffix.namedChildren.filter((child) => child.type === 'annotated_lambda');
+  const valueArgs = suffix?.namedChildren.find(
+    (child) => child.type === "value_arguments",
+  );
+  const args =
+    valueArgs?.namedChildren.filter(
+      (child) => child.type === "value_argument",
+    ) ?? [];
+  const trailingLambdas = suffix.namedChildren.filter(
+    (child) => child.type === "annotated_lambda",
+  );
   return [...args, ...trailingLambdas];
 }
 
 function inferArgType(argNode: SyntaxNode): string {
   const value = argNode.namedChild(0) ?? argNode;
   switch (value.type) {
-    case 'integer_literal':
-    case 'long_literal':
-      return 'Int';
-    case 'real_literal':
-      return 'Double';
-    case 'string_literal':
-    case 'line_string_literal':
-    case 'multi_line_string_literal':
-      return 'String';
-    case 'character_literal':
-      return 'Char';
-    case 'boolean_literal':
-      return 'Boolean';
-    case 'call_expression': {
+    case "integer_literal":
+    case "long_literal":
+      return "Int";
+    case "real_literal":
+      return "Double";
+    case "string_literal":
+    case "line_string_literal":
+    case "multi_line_string_literal":
+      return "String";
+    case "character_literal":
+      return "Char";
+    case "boolean_literal":
+      return "Boolean";
+    case "call_expression": {
       const first = value.namedChild(0);
-      return first?.type === 'simple_identifier' ? first.text : '';
+      return first?.type === "simple_identifier" ? first.text : "";
     }
     default:
-      return '';
+      return "";
   }
 }
 
@@ -1170,40 +1396,49 @@ function extensionFreeCallFallback(
   grouped: Record<string, Capture>,
   groupedNodes: Record<string, SyntaxNode>,
 ): CaptureMatch | null {
-  const member = grouped['@reference.call.member'];
-  const receiver = grouped['@reference.receiver'];
-  const name = grouped['@reference.name'];
-  if (member === undefined || receiver === undefined || name === undefined) return null;
+  const member = grouped["@reference.call.member"];
+  const receiver = grouped["@reference.receiver"];
+  const name = grouped["@reference.name"];
+  if (member === undefined || receiver === undefined || name === undefined)
+    return null;
 
   // The `@reference.call.member` anchor IS the `call_expression`, and the
   // `@reference.receiver` anchor IS the receiver node — both threaded from the
   // query match (no per-match root walk).
-  const callNode = nodeIfType(groupedNodes['@reference.call.member'], 'call_expression');
+  const callNode = nodeIfType(
+    groupedNodes["@reference.call.member"],
+    "call_expression",
+  );
   if (callNode === null) return null;
-  const receiverNode = groupedNodes['@reference.receiver'];
-  if (receiverNode === undefined || !isLiteralReceiver(receiverNode)) return null;
+  const receiverNode = groupedNodes["@reference.receiver"];
+  if (receiverNode === undefined || !isLiteralReceiver(receiverNode))
+    return null;
 
   const out: Record<string, Capture> = {
-    '@reference.call.free': syntheticCapture('@reference.call.free', callNode, callNode.text),
-    '@reference.name': syntheticCapture('@reference.name', callNode, name.text),
+    "@reference.call.free": syntheticCapture(
+      "@reference.call.free",
+      callNode,
+      callNode.text,
+    ),
+    "@reference.name": syntheticCapture("@reference.name", callNode, name.text),
   };
-  if (grouped['@reference.arity'] !== undefined)
-    out['@reference.arity'] = grouped['@reference.arity'];
-  if (grouped['@reference.parameter-types'] !== undefined) {
-    out['@reference.parameter-types'] = grouped['@reference.parameter-types'];
+  if (grouped["@reference.arity"] !== undefined)
+    out["@reference.arity"] = grouped["@reference.arity"];
+  if (grouped["@reference.parameter-types"] !== undefined) {
+    out["@reference.parameter-types"] = grouped["@reference.parameter-types"];
   }
   return out;
 }
 
 function isLiteralReceiver(node: SyntaxNode): boolean {
   return [
-    'integer_literal',
-    'long_literal',
-    'real_literal',
-    'string_literal',
-    'line_string_literal',
-    'multi_line_string_literal',
-    'character_literal',
-    'boolean_literal',
+    "integer_literal",
+    "long_literal",
+    "real_literal",
+    "string_literal",
+    "line_string_literal",
+    "multi_line_string_literal",
+    "character_literal",
+    "boolean_literal",
   ].includes(node.type);
 }

@@ -1,13 +1,16 @@
-import { logger } from '../../shared/logger.js';
-import { extractClassCodes } from '../../code-extractor/index.js';
-import { executeLayer1And2, type ConceptCandidate } from '../concept-filter.js';
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { groupByPackagePathWithMarks } from './shared.js';
-import { discoverUniversalExternalRefs } from './universal-external-ref-discovery.js';
-import { getLanguageAdapter, detectProjectLanguage } from './language-adapters/index.js';
+import { logger } from "../../shared/logger.js";
+import { extractClassCodes } from "../../code-extractor/index.js";
+import { executeLayer1And2, type ConceptCandidate } from "../concept-filter.js";
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { groupByPackagePathWithMarks } from "./shared.js";
+import { discoverUniversalExternalRefs } from "./universal-external-ref-discovery.js";
+import {
+  getLanguageAdapter,
+  detectProjectLanguage,
+} from "./language-adapters/index.js";
 
 /**
  * CONCEPT: 查询候选类并执行分层过滤
@@ -30,8 +33,8 @@ export async function queryConceptEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : '';
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : "";
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   // 使用通用语言检测（基于项目配置文件或文件扩展名统计）
   const language = await detectProjectLanguage(repoPath);
@@ -44,10 +47,16 @@ export async function queryConceptEvidenceByPackage(
   const patterns = adapter.namingPatterns;
 
   // 构建命名模式的 Cypher 正则
-  const entryPointPattern = patterns.entryPointSuffixes.map(s => `${s}$`).join('|');
-  const dataModelPattern = patterns.dataModelSuffixes.map(s => `${s}$`).join('|');
-  const enumPattern = patterns.enumPatterns.join('|');
-  const innerClassCondition = patterns.innerClassSeparator ? `c.name CONTAINS '${patterns.innerClassSeparator}'` : '';
+  const entryPointPattern = patterns.entryPointSuffixes
+    .map((s) => `${s}$`)
+    .join("|");
+  const dataModelPattern = patterns.dataModelSuffixes
+    .map((s) => `${s}$`)
+    .join("|");
+  const enumPattern = patterns.enumPatterns.join("|");
+  const innerClassCondition = patterns.innerClassSeparator
+    ? `c.name CONTAINS '${patterns.innerClassSeparator}'`
+    : "";
 
   // 第一批：业务入口类（Controller/Handler 等）
   const entryPointCypher = `
@@ -67,7 +76,9 @@ export async function queryConceptEvidenceByPackage(
   const enumConditions = [
     `c.name =~ '(?i).*(${enumPattern}).*'`,
     innerClassCondition,
-  ].filter(Boolean).join(' OR ');
+  ]
+    .filter(Boolean)
+    .join(" OR ");
   const enumCypher = `
     MATCH (c:Class)
     WHERE (${enumConditions}) ${targetFilter}
@@ -98,8 +109,20 @@ export async function queryConceptEvidenceByPackage(
   const dataModelResults = await executeQuery(dataModelCypher);
 
   // 合并候选（去重）
-  const candidateMap = new Map<string, { name: string; filePath: string; fieldList?: string[]; priority: string }>();
-  for (const row of [...entryPointResults, ...enumResults, ...dataModelResults] as Array<{ name: string; filePath: string; fieldList?: string[]; priority: string }>) {
+  const candidateMap = new Map<
+    string,
+    { name: string; filePath: string; fieldList?: string[]; priority: string }
+  >();
+  for (const row of [
+    ...entryPointResults,
+    ...enumResults,
+    ...dataModelResults,
+  ] as Array<{
+    name: string;
+    filePath: string;
+    fieldList?: string[];
+    priority: string;
+  }>) {
     const key = `${row.filePath}:${row.name}`;
     if (!candidateMap.has(key)) {
       candidateMap.set(key, row);
@@ -109,31 +132,49 @@ export async function queryConceptEvidenceByPackage(
   const candidateResults = Array.from(candidateMap.values());
 
   // 转换为候选列表（图谱可能没有字段信息）
-  const candidates: ConceptCandidate[] = (candidateResults as Array<{ name: string; filePath: string; fieldList?: string[] }>).map(row => {
+  const candidates: ConceptCandidate[] = (
+    candidateResults as Array<{
+      name: string;
+      filePath: string;
+      fieldList?: string[];
+    }>
+  ).map((row) => {
     // 判断是否是枚举（使用命名模式）
-    const isEnum = patterns.enumPatterns.some(p => row.name.includes(p));
+    const isEnum = patterns.enumPatterns.some((p) => row.name.includes(p));
 
     return {
       className: row.name,
       filePath: row.filePath,
       codeSnippet: undefined,
-      enumValues: isEnum && row.fieldList ? row.fieldList.filter(v => v.length > 0) : undefined,
+      enumValues:
+        isEnum && row.fieldList
+          ? row.fieldList.filter((v) => v.length > 0)
+          : undefined,
     };
   });
 
-  logger.info(`CONCEPT: ${candidates.length} class candidates before external discovery`);
+  logger.info(
+    `CONCEPT: ${candidates.length} class candidates before external discovery`,
+  );
 
   // 使用新的代码提取器提取代码片段
-  const candidatesWithoutSnippet = candidates.filter(c => !c.codeSnippet);
+  const candidatesWithoutSnippet = candidates.filter((c) => !c.codeSnippet);
   if (candidatesWithoutSnippet.length > 0) {
-    logger.info(`CONCEPT: Reading files for ${candidatesWithoutSnippet.length} candidates without graph data`);
+    logger.info(
+      `CONCEPT: Reading files for ${candidatesWithoutSnippet.length} candidates without graph data`,
+    );
 
     const extractResult = await extractClassCodes(
-      candidatesWithoutSnippet.map(c => ({ filePath: c.filePath, className: c.className })),
+      candidatesWithoutSnippet.map((c) => ({
+        filePath: c.filePath,
+        className: c.className,
+      })),
       { dbPath: lbugPath },
     );
 
-    logger.info(`CONCEPT: extraction stats - success: ${extractResult.successCount}, fallback: ${extractResult.fallbackCount}, fail: ${extractResult.failCount}`);
+    logger.info(
+      `CONCEPT: extraction stats - success: ${extractResult.successCount}, fallback: ${extractResult.fallbackCount}, fail: ${extractResult.failCount}`,
+    );
 
     for (const c of candidates) {
       const key = `${c.filePath}:${c.className}`;
@@ -143,7 +184,7 @@ export async function queryConceptEvidenceByPackage(
       }
     }
 
-    const filledCount = candidates.filter(c => c.codeSnippet).length;
+    const filledCount = candidates.filter((c) => c.codeSnippet).length;
     logger.info(`CONCEPT: ${filledCount} candidates now have code snippets`);
   }
 
@@ -155,19 +196,25 @@ export async function queryConceptEvidenceByPackage(
     repoPath,
     executeQuery,
     language,
-    { maxFiles: 150 },  // 扫描更多文件，确保覆盖外部引用
+    { maxFiles: 150 }, // 扫描更多文件，确保覆盖外部引用
   );
 
   if (externalRefCandidates.length > 0) {
-    logger.info(`CONCEPT: discovered ${externalRefCandidates.length} external enum/constant references`);
+    logger.info(
+      `CONCEPT: discovered ${externalRefCandidates.length} external enum/constant references`,
+    );
     for (const c of externalRefCandidates) {
-      logger.debug(`ExternalRef: ${c.className} at ${c.filePath}, mark=${c.suspiciousMark}`);
+      logger.debug(
+        `ExternalRef: ${c.className} at ${c.filePath}, mark=${c.suspiciousMark}`,
+      );
     }
     // 将外部引用候选合并到主候选列表
     candidates.push(...externalRefCandidates);
   }
 
-  logger.info(`CONCEPT: total candidates before filtering: ${candidates.length}`);
+  logger.info(
+    `CONCEPT: total candidates before filtering: ${candidates.length}`,
+  );
 
   // 执行第一、二层过滤
   const filteredCandidates = executeLayer1And2(candidates, repoPath);
@@ -187,8 +234,12 @@ export async function queryConceptEvidenceByPackage(
       markStats[c.suspiciousMark] = (markStats[c.suspiciousMark] || 0) + 1;
     }
   }
-  logger.info(`CONCEPT: after filtering - ${filteredCandidates.length} candidates`);
-  logger.info(`CONCEPT: soft marks - unmarked: ${markStats.unmarked}, transmission: ${markStats.transmission_class}, config: ${markStats.config_class}, simple_enum: ${markStats.simple_enum}, external_enum: ${markStats.external_enum_usage}`);
+  logger.info(
+    `CONCEPT: after filtering - ${filteredCandidates.length} candidates`,
+  );
+  logger.info(
+    `CONCEPT: soft marks - unmarked: ${markStats.unmarked}, transmission: ${markStats.transmission_class}, config: ${markStats.config_class}, simple_enum: ${markStats.simple_enum}, external_enum: ${markStats.external_enum_usage}`,
+  );
 
   // 按包路径分组（保留软标记信息）
   const packageGroups = groupByPackagePathWithMarks(filteredCandidates, 8);
@@ -196,21 +247,24 @@ export async function queryConceptEvidenceByPackage(
   const groups: EvidenceGroup[] = [];
 
   for (const [packagePath, rows] of packageGroups.entries()) {
-    const groupId = `CONCEPT-${packagePath.replace(/[\/]/g, '-')}`;
-    const bundleId = `BUNDLE-CONCEPT-${packagePath.replace(/[\/]/g, '-')}`.toUpperCase();
+    const groupId = `CONCEPT-${packagePath.replace(/[\/]/g, "-")}`;
+    const bundleId =
+      `BUNDLE-CONCEPT-${packagePath.replace(/[\/]/g, "-")}`.toUpperCase();
 
-    const dataContracts: EvidenceBundle['dataContracts'] = rows.map((row, idx) => ({
-      ref: `evidence://contract/CON-${String(idx + 1).padStart(3, '0')}`,
-      kind: 'type',
-      location: row.filePath,
-      name: row.className,
-      fields: [],
-      customData: {
-        suspiciousMark: row.suspiciousMark,
-        codeSnippet: row.codeSnippet,
-        enumValues: row.enumValues,
-      },
-    }));
+    const dataContracts: EvidenceBundle["dataContracts"] = rows.map(
+      (row, idx) => ({
+        ref: `evidence://contract/CON-${String(idx + 1).padStart(3, "0")}`,
+        kind: "type",
+        location: row.filePath,
+        name: row.className,
+        fields: [],
+        customData: {
+          suspiciousMark: row.suspiciousMark,
+          codeSnippet: row.codeSnippet,
+          enumValues: row.enumValues,
+        },
+      }),
+    );
 
     groups.push({
       groupId,
@@ -222,7 +276,7 @@ export async function queryConceptEvidenceByPackage(
         confidence: 0.7,
         risks: [],
         capabilityHints: {
-          nameCandidates: rows.map(r => r.className),
+          nameCandidates: rows.map((r) => r.className),
           relatedTerms: [],
         },
         entryPoints: [],

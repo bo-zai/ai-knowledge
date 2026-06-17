@@ -7,16 +7,16 @@
  * ├── _index.json           # 索引文件
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import fs from "fs/promises";
+import path from "path";
 import type {
   DomainPartition,
   PartitionIndex,
   PartitionIndexEntry,
   CandidateSnapshot,
   StoredLlmDecision,
-} from './types.js';
-import { logger } from '../shared/logger.js';
+} from "./types.js";
+import { logger } from "../shared/logger.js";
 
 /**
  * PartitionWriter - JSON 写入器
@@ -42,17 +42,23 @@ export class PartitionWriter {
     // 防止空 tables 导致的错误
     if (!partition.tables || partition.tables.length === 0) {
       logger.warn(`Partition ${partition.partitionId} has no tables, skipping`);
-      return '';
+      return "";
     }
 
-    const anchorTable = partition.tables.find(t => t.role === 'primary')?.tableName ?? partition.tables[0].tableName;
+    const anchorTable =
+      partition.tables.find((t) => t.role === "primary")?.tableName ??
+      partition.tables[0].tableName;
     const fileName = `${anchorTable}.json`;
     const filePath = path.join(this.outputDir, fileName);
 
     // 精简 JSON：移除未填充的字段
     const compactPartition = this.compactPartition(partition);
 
-    await fs.writeFile(filePath, JSON.stringify(compactPartition, null, 2), 'utf-8');
+    await fs.writeFile(
+      filePath,
+      JSON.stringify(compactPartition, null, 2),
+      "utf-8",
+    );
 
     return filePath;
   }
@@ -63,14 +69,18 @@ export class PartitionWriter {
   async writeAllPartitions(
     partitions: DomainPartition[],
     candidateSnapshot?: CandidateSnapshot,
-    llmDecisions?: StoredLlmDecision[]
+    llmDecisions?: StoredLlmDecision[],
   ): Promise<string[]> {
     await this.ensureOutputDir();
 
     // 过滤空分区
-    const validPartitions = partitions.filter(p => p.tables && p.tables.length > 0);
+    const validPartitions = partitions.filter(
+      (p) => p.tables && p.tables.length > 0,
+    );
     if (validPartitions.length < partitions.length) {
-      logger.warn(`Filtered ${partitions.length - validPartitions.length} partitions with empty tables`);
+      logger.warn(
+        `Filtered ${partitions.length - validPartitions.length} partitions with empty tables`,
+      );
     }
 
     const filePaths: string[] = [];
@@ -94,25 +104,29 @@ export class PartitionWriter {
   async writeIndex(
     partitions: DomainPartition[],
     candidateSnapshot?: CandidateSnapshot,
-    llmDecisions?: StoredLlmDecision[]
+    llmDecisions?: StoredLlmDecision[],
   ): Promise<string> {
-    const indexPath = path.join(this.outputDir, '_index.json');
+    const indexPath = path.join(this.outputDir, "_index.json");
 
     // 过滤空分区
-    const validPartitions = partitions.filter(p => p.tables && p.tables.length > 0);
+    const validPartitions = partitions.filter(
+      (p) => p.tables && p.tables.length > 0,
+    );
 
-    const entries: PartitionIndexEntry[] = validPartitions.map(p => ({
+    const entries: PartitionIndexEntry[] = validPartitions.map((p) => ({
       partitionId: p.partitionId,
-      file: `${p.tables.find(t => t.role === 'primary')?.tableName ?? p.tables[0].tableName}.json`,
-      anchorTable: p.tables.find(t => t.role === 'primary')?.tableName ?? p.tables[0].tableName,
+      file: `${p.tables.find((t) => t.role === "primary")?.tableName ?? p.tables[0].tableName}.json`,
+      anchorTable:
+        p.tables.find((t) => t.role === "primary")?.tableName ??
+        p.tables[0].tableName,
       tableCount: p.tables.length,
       entryPointCount: p.entryPoints.length,
       isCrossModule: p.backendModules.length > 1,
     }));
 
     const index: PartitionIndex = {
-      version: '1.0.0',
-      algorithmVersion: validPartitions[0]?.algorithmVersion ?? '1.0.0',
+      version: "1.0.0",
+      algorithmVersion: validPartitions[0]?.algorithmVersion ?? "1.0.0",
       updatedAt: new Date().toISOString(),
       // 添加候选快照（用于增量更新）
       candidateSnapshot,
@@ -121,12 +135,15 @@ export class PartitionWriter {
       partitions: entries,
       stats: {
         totalPartitions: validPartitions.length,
-        crossModuleCount: entries.filter(e => e.isCrossModule).length,
-        backendEntryPointCount: validPartitions.reduce((sum, p) => sum + p.entryPoints.length, 0),
+        crossModuleCount: entries.filter((e) => e.isCrossModule).length,
+        backendEntryPointCount: validPartitions.reduce(
+          (sum, p) => sum + p.entryPoints.length,
+          0,
+        ),
       },
     };
 
-    await fs.writeFile(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    await fs.writeFile(indexPath, JSON.stringify(index, null, 2), "utf-8");
 
     return indexPath;
   }
@@ -145,7 +162,7 @@ export class PartitionWriter {
       logger.info(`Cleaned ${files.length} files from output directory`);
     } catch (err) {
       // 目录不存在，忽略
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
         throw err;
       }
     }
@@ -154,7 +171,9 @@ export class PartitionWriter {
   /**
    * 精简 Partition：移除空字段
    */
-  private compactPartition(partition: DomainPartition): Record<string, unknown> {
+  private compactPartition(
+    partition: DomainPartition,
+  ): Record<string, unknown> {
     const result: Record<string, unknown> = {
       partitionId: partition.partitionId,
       partitionHash: partition.partitionHash,
@@ -163,12 +182,14 @@ export class PartitionWriter {
 
     // tables
     if (partition.tables.length > 0) {
-      result.tables = partition.tables.map(t => this.compactTableInfo(t));
+      result.tables = partition.tables.map((t) => this.compactTableInfo(t));
     }
 
     // entryPoints
     if (partition.entryPoints.length > 0) {
-      result.entryPoints = partition.entryPoints.map(ep => this.compactEntryPoint(ep));
+      result.entryPoints = partition.entryPoints.map((ep) =>
+        this.compactEntryPoint(ep),
+      );
     }
 
     // sharedResources
@@ -276,7 +297,8 @@ export class PartitionWriter {
     if (ep.clientType) result.clientType = ep.clientType;
     if (ep.signature) result.signature = ep.signature;
     if ((ep.callChain?.length ?? 0) > 0) result.callChain = ep.callChain;
-    if ((ep.crossDomainCalls?.length ?? 0) > 0) result.crossDomainCalls = ep.crossDomainCalls;
+    if ((ep.crossDomainCalls?.length ?? 0) > 0)
+      result.crossDomainCalls = ep.crossDomainCalls;
     if (ep.noServiceLayer) result.noServiceLayer = ep.noServiceLayer;
     if (ep.mqType) result.mqType = ep.mqType;
     if (ep.mqTopic) result.mqTopic = ep.mqTopic;
@@ -286,7 +308,7 @@ export class PartitionWriter {
 }
 
 // 导入类型用于 compact 方法
-import type { TableInfo, EntryPoint } from './types.js';
+import type { TableInfo, EntryPoint } from "./types.js";
 
 /**
  * 创建 PartitionWriter 实例

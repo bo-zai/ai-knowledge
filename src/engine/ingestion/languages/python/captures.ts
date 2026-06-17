@@ -16,15 +16,19 @@
  * Pure given the input source text. No I/O, no globals consulted.
  */
 
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
-import { findNodeAtRange, nodeToCapture, syntheticCapture } from '../../utils/ast-helpers.js';
-import { splitImportStatement } from './import-decomposer.js';
-import { getPythonParser, getPythonScopeQuery } from './query.js';
-import { synthesizeReceiverTypeBinding } from './receiver-binding.js';
-import { computePythonArityMetadata } from './arity-metadata.js';
-import { recordCacheHit, recordCacheMiss } from './cache-stats.js';
-import { getTreeSitterBufferSize } from '../../constants.js';
-import { pythonFunctionDefinitionLabel } from './simple-hooks.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
+import {
+  findNodeAtRange,
+  nodeToCapture,
+  syntheticCapture,
+} from "../../utils/ast-helpers.js";
+import { splitImportStatement } from "./import-decomposer.js";
+import { getPythonParser, getPythonScopeQuery } from "./query.js";
+import { synthesizeReceiverTypeBinding } from "./receiver-binding.js";
+import { computePythonArityMetadata } from "./arity-metadata.js";
+import { recordCacheHit, recordCacheMiss } from "./cache-stats.js";
+import { getTreeSitterBufferSize } from "../../constants.js";
+import { pythonFunctionDefinitionLabel } from "./simple-hooks.js";
 
 export function emitPythonScopeCaptures(
   sourceText: string,
@@ -36,25 +40,27 @@ export function emitPythonScopeCaptures(
   // before. The cachedTree parameter is typed as `unknown` at the
   // contract layer (see `LanguageProvider.emitScopeCaptures`); cast
   // here at the use site.
-  let tree = cachedTree as ReturnType<ReturnType<typeof getPythonParser>['parse']> | undefined;
+  let tree = cachedTree as
+    | ReturnType<ReturnType<typeof getPythonParser>["parse"]>
+    | undefined;
   if (tree === undefined) {
     try {
       tree = getPythonParser().parse(sourceText, undefined, {
         bufferSize: getTreeSitterBufferSize(sourceText),
       });
     } catch (err) {
-      throw scopeExtractionError('parse', _filePath, err);
+      throw scopeExtractionError("parse", _filePath, err);
     }
     recordCacheMiss();
   } else {
     recordCacheHit();
   }
 
-  let rawMatches: ReturnType<ReturnType<typeof getPythonScopeQuery>['matches']>;
+  let rawMatches: ReturnType<ReturnType<typeof getPythonScopeQuery>["matches"]>;
   try {
     rawMatches = getPythonScopeQuery().matches(tree.rootNode);
   } catch (err) {
-    throw scopeExtractionError('scope query', _filePath, err);
+    throw scopeExtractionError("scope query", _filePath, err);
   }
 
   const out: CaptureMatch[] = [];
@@ -65,19 +71,23 @@ export function emitPythonScopeCaptures(
     // (`@scope.`, `@declaration.`, …) work.
     const grouped: Record<string, Capture> = {};
     for (const c of m.captures) {
-      const tag = '@' + c.name;
+      const tag = "@" + c.name;
       grouped[tag] = nodeToCapture(tag, c.node);
     }
     if (Object.keys(grouped).length === 0) continue;
 
-    if (grouped['@import.statement'] !== undefined) {
+    if (grouped["@import.statement"] !== undefined) {
       // Decompose multi-name imports. Both `import_statement` and
       // `import_from_statement` share the matched range, so we try the
       // `from` form first and fall back to plain.
-      const stmtCapture = grouped['@import.statement'];
+      const stmtCapture = grouped["@import.statement"];
       const stmtNode =
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'import_from_statement') ??
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'import_statement');
+        findNodeAtRange(
+          tree.rootNode,
+          stmtCapture.range,
+          "import_from_statement",
+        ) ??
+        findNodeAtRange(tree.rootNode, stmtCapture.range, "import_statement");
       if (stmtNode !== null) {
         for (const piece of splitImportStatement(stmtNode)) out.push(piece);
       } else {
@@ -87,12 +97,12 @@ export function emitPythonScopeCaptures(
       continue;
     }
 
-    if (grouped['@scope.function'] !== undefined) {
+    if (grouped["@scope.function"] !== undefined) {
       out.push(grouped);
       const fnNode = findNodeAtRange(
         tree.rootNode,
-        grouped['@scope.function']!.range,
-        'function_definition',
+        grouped["@scope.function"]!.range,
+        "function_definition",
       );
       if (fnNode !== null) {
         const synth = synthesizeReceiverTypeBinding(fnNode);
@@ -101,29 +111,36 @@ export function emitPythonScopeCaptures(
       continue;
     }
 
-    if (grouped['@declaration.function'] !== undefined) {
+    if (grouped["@declaration.function"] !== undefined) {
       // Synthesize arity captures on the declaration match so the
       // central scope-extractor picks them up alongside @declaration.name.
       // The anchor range is the function_definition itself — we resolve
       // the node and pipe it through the arity helper.
-      const anchorCap = grouped['@declaration.function']!;
-      const fnNode = findNodeAtRange(tree.rootNode, anchorCap.range, 'function_definition');
+      const anchorCap = grouped["@declaration.function"]!;
+      const fnNode = findNodeAtRange(
+        tree.rootNode,
+        anchorCap.range,
+        "function_definition",
+      );
       if (fnNode !== null) {
-        if (pythonFunctionDefinitionLabel(fnNode, 'Function') === 'Method') {
-          delete grouped['@declaration.function'];
-          grouped['@declaration.method'] = { ...anchorCap, name: '@declaration.method' };
+        if (pythonFunctionDefinitionLabel(fnNode, "Function") === "Method") {
+          delete grouped["@declaration.function"];
+          grouped["@declaration.method"] = {
+            ...anchorCap,
+            name: "@declaration.method",
+          };
         }
         const arity = computePythonArityMetadata(fnNode);
         if (arity.parameterCount !== undefined) {
-          grouped['@declaration.parameter-count'] = syntheticCapture(
-            '@declaration.parameter-count',
+          grouped["@declaration.parameter-count"] = syntheticCapture(
+            "@declaration.parameter-count",
             fnNode,
             String(arity.parameterCount),
           );
         }
         if (arity.requiredParameterCount !== undefined) {
-          grouped['@declaration.required-parameter-count'] = syntheticCapture(
-            '@declaration.required-parameter-count',
+          grouped["@declaration.required-parameter-count"] = syntheticCapture(
+            "@declaration.required-parameter-count",
             fnNode,
             String(arity.requiredParameterCount),
           );
@@ -132,8 +149,8 @@ export function emitPythonScopeCaptures(
           // Serialize as JSON so the consumer can round-trip without
           // inventing a quoting convention for type names that may
           // contain commas (`Dict[str, int]`).
-          grouped['@declaration.parameter-types'] = syntheticCapture(
-            '@declaration.parameter-types',
+          grouped["@declaration.parameter-types"] = syntheticCapture(
+            "@declaration.parameter-types",
             fnNode,
             JSON.stringify(arity.parameterTypes),
           );
@@ -149,7 +166,11 @@ export function emitPythonScopeCaptures(
   return out;
 }
 
-function scopeExtractionError(stage: string, filePath: string, err: unknown): Error {
+function scopeExtractionError(
+  stage: string,
+  filePath: string,
+  err: unknown,
+): Error {
   const reason = err instanceof Error ? err.message : String(err);
   return new Error(
     `[python] tree-sitter ${stage} failed for ${filePath}: ${reason}; skipping scope extraction for this file`,

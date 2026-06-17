@@ -301,7 +301,10 @@
     {
       "frontendPageName": "OrderListPage",
       "frontendModule": "mall-admin-web",
-      "backendApiIds": ["controller:OrderController:getOrderList", "controller:OrderController:cancelOrder"],
+      "backendApiIds": [
+        "controller:OrderController:getOrderList",
+        "controller:OrderController:cancelOrder"
+      ],
       "linkType": "page_to_api"
     },
     {

@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonKnowledgeSchema } from './knowledge-type.js';
+import { z } from "zod";
+import { commonKnowledgeSchema } from "./knowledge-type.js";
 
 /**
  * 边界知识 Schema
@@ -11,7 +11,7 @@ import { commonKnowledgeSchema } from './knowledge-type.js';
 /**
  * 边界类型枚举
  */
-export const BoundaryTypeSchema = z.enum(['limitation', 'disabled_feature']);
+export const BoundaryTypeSchema = z.enum(["limitation", "disabled_feature"]);
 
 export type BoundaryType = z.infer<typeof BoundaryTypeSchema>;
 
@@ -19,7 +19,7 @@ export type BoundaryType = z.infer<typeof BoundaryTypeSchema>;
  * 边界知识 Schema
  */
 export const boundarySchema = commonKnowledgeSchema.extend({
-  type: z.literal('BOUNDARY'),
+  type: z.literal("BOUNDARY"),
 
   /** 边界标题：简短描述边界内容 */
   boundary_title: z.string().min(1),

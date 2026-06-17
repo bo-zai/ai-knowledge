@@ -12,23 +12,27 @@
  * `self` / `cls`.
  */
 
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
-import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
+import {
+  nodeToCapture,
+  syntheticCapture,
+  type SyntaxNode,
+} from "../../utils/ast-helpers.js";
 
 const TYPE_DECL_NODE_TYPES = new Set([
-  'class_declaration',
-  'struct_declaration',
-  'record_declaration',
-  'interface_declaration',
+  "class_declaration",
+  "struct_declaration",
+  "record_declaration",
+  "interface_declaration",
 ]);
 
 const FUNCTION_NODE_TYPES = new Set([
-  'method_declaration',
-  'constructor_declaration',
-  'destructor_declaration',
-  'operator_declaration',
-  'conversion_operator_declaration',
-  'local_function_statement',
+  "method_declaration",
+  "constructor_declaration",
+  "destructor_declaration",
+  "operator_declaration",
+  "conversion_operator_declaration",
+  "local_function_statement",
 ]);
 
 /** Walk up to the enclosing type declaration, stopping at any other
@@ -46,7 +50,7 @@ function findEnclosingTypeDeclaration(node: SyntaxNode): SyntaxNode | null {
 }
 
 function typeName(typeNode: SyntaxNode): string | null {
-  return typeNode.childForFieldName('name')?.text ?? null;
+  return typeNode.childForFieldName("name")?.text ?? null;
 }
 
 /** First entry in the type's `base_list`, read as raw text. C# allows
@@ -57,7 +61,7 @@ function typeName(typeNode: SyntaxNode): string | null {
 function firstBaseText(typeNode: SyntaxNode): string | null {
   for (let i = 0; i < typeNode.namedChildCount; i++) {
     const child = typeNode.namedChild(i);
-    if (child === null || child.type !== 'base_list') continue;
+    if (child === null || child.type !== "base_list") continue;
     const firstBase = child.namedChild(0);
     if (firstBase === null) return null;
     return firstBase.text;
@@ -72,7 +76,12 @@ function isStaticMethod(fnNode: SyntaxNode): boolean {
   // receiver-binding module dependency-free.
   for (let i = 0; i < fnNode.namedChildCount; i++) {
     const child = fnNode.namedChild(i);
-    if (child !== null && child.type === 'modifier' && child.text.trim() === 'static') return true;
+    if (
+      child !== null &&
+      child.type === "modifier" &&
+      child.text.trim() === "static"
+    )
+      return true;
   }
   return false;
 }
@@ -92,7 +101,9 @@ function isStaticMethod(fnNode: SyntaxNode): boolean {
  *  The caller is responsible for guaranteeing
  *  `FUNCTION_NODE_TYPES.has(fnNode.type)`.
  */
-export function synthesizeCsharpReceiverBinding(fnNode: SyntaxNode): CaptureMatch[] {
+export function synthesizeCsharpReceiverBinding(
+  fnNode: SyntaxNode,
+): CaptureMatch[] {
   if (!FUNCTION_NODE_TYPES.has(fnNode.type)) return [];
   if (isStaticMethod(fnNode)) return [];
 
@@ -109,11 +120,11 @@ export function synthesizeCsharpReceiverBinding(fnNode: SyntaxNode): CaptureMatc
   // be inside the function scope. If the method has no body (interface
   // declaration, `abstract`), skip — there's no function scope to
   // attach the binding to.
-  const anchorNode = fnNode.childForFieldName('body');
+  const anchorNode = fnNode.childForFieldName("body");
   if (anchorNode === null) return [];
 
   const out: CaptureMatch[] = [];
-  out.push(buildReceiverMatch(anchorNode, 'this', enclosingName));
+  out.push(buildReceiverMatch(anchorNode, "this", enclosingName));
 
   // `base` applies only to class / record methods with an explicit
   // base class. `struct` can't inherit a class; `interface` can't
@@ -122,21 +133,36 @@ export function synthesizeCsharpReceiverBinding(fnNode: SyntaxNode): CaptureMatc
   // but `base.X` only compiles when the first entry IS a class, so we
   // trust the source — if the user wrote `base.X` in a class with
   // interface-only bases, their code wouldn't compile anyway.
-  if (enclosingType.type === 'class_declaration' || enclosingType.type === 'record_declaration') {
+  if (
+    enclosingType.type === "class_declaration" ||
+    enclosingType.type === "record_declaration"
+  ) {
     const baseText = firstBaseText(enclosingType);
     if (baseText !== null) {
-      out.push(buildReceiverMatch(anchorNode, 'base', baseText));
+      out.push(buildReceiverMatch(anchorNode, "base", baseText));
     }
   }
 
   return out;
 }
 
-function buildReceiverMatch(anchorNode: SyntaxNode, name: string, typeText: string): CaptureMatch {
+function buildReceiverMatch(
+  anchorNode: SyntaxNode,
+  name: string,
+  typeText: string,
+): CaptureMatch {
   const m: Record<string, Capture> = {
-    '@type-binding.self': nodeToCapture('@type-binding.self', anchorNode),
-    '@type-binding.name': syntheticCapture('@type-binding.name', anchorNode, name),
-    '@type-binding.type': syntheticCapture('@type-binding.type', anchorNode, typeText),
+    "@type-binding.self": nodeToCapture("@type-binding.self", anchorNode),
+    "@type-binding.name": syntheticCapture(
+      "@type-binding.name",
+      anchorNode,
+      name,
+    ),
+    "@type-binding.type": syntheticCapture(
+      "@type-binding.type",
+      anchorNode,
+      typeText,
+    ),
   };
   return m;
 }

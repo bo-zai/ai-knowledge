@@ -1,4 +1,4 @@
-import YAML from 'yaml';
+import YAML from "yaml";
 
 export function parseYaml(text: string): unknown {
   return YAML.parse(text);

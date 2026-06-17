@@ -4,28 +4,30 @@
  * Provides parsing and recognition for MyBatis mapper.xml files.
  */
 
-import { XMLParser } from 'fast-xml-parser';
-import fs from 'fs/promises';
-import path from 'path';
+import { XMLParser } from "fast-xml-parser";
+import fs from "fs/promises";
+import path from "path";
 
 /**
  * Check if a file is a MyBatis mapper.xml file.
  */
 export function isMapperXmlFile(filePath: string): boolean {
   const basename = path.basename(filePath).toLowerCase();
-  return basename.endsWith('mapper.xml') || basename.includes('-mapper.xml');
+  return basename.endsWith("mapper.xml") || basename.includes("-mapper.xml");
 }
 
 /**
  * Parse a MyBatis mapper.xml file.
  */
-export async function parseMapperXml(filePath: string): Promise<MapperXmlDocument> {
-  const content = await fs.readFile(filePath, 'utf-8');
+export async function parseMapperXml(
+  filePath: string,
+): Promise<MapperXmlDocument> {
+  const content = await fs.readFile(filePath, "utf-8");
 
   const parser = new XMLParser({
     ignoreAttributes: false,
-    attributeNamePrefix: '',
-    textNodeName: '#text',
+    attributeNamePrefix: "",
+    textNodeName: "#text",
     parseAttributeValue: false,
     trimValues: true,
   });
@@ -59,12 +61,14 @@ function extractStatements(parsed: any): SqlStatement[] {
 
   // Extract select statements
   if (mapper.select) {
-    const selects = Array.isArray(mapper.select) ? mapper.select : [mapper.select];
+    const selects = Array.isArray(mapper.select)
+      ? mapper.select
+      : [mapper.select];
     for (const select of selects) {
       statements.push({
         id: select.id,
-        type: 'select',
-        sql: cleanSql(select['#text'] || ''),
+        type: "select",
+        sql: cleanSql(select["#text"] || ""),
         resultType: select.resultType,
         parameterType: select.parameterType,
       });
@@ -73,12 +77,14 @@ function extractStatements(parsed: any): SqlStatement[] {
 
   // Extract insert statements
   if (mapper.insert) {
-    const inserts = Array.isArray(mapper.insert) ? mapper.insert : [mapper.insert];
+    const inserts = Array.isArray(mapper.insert)
+      ? mapper.insert
+      : [mapper.insert];
     for (const insert of inserts) {
       statements.push({
         id: insert.id,
-        type: 'insert',
-        sql: cleanSql(insert['#text'] || ''),
+        type: "insert",
+        sql: cleanSql(insert["#text"] || ""),
         parameterType: insert.parameterType,
       });
     }
@@ -86,12 +92,14 @@ function extractStatements(parsed: any): SqlStatement[] {
 
   // Extract update statements
   if (mapper.update) {
-    const updates = Array.isArray(mapper.update) ? mapper.update : [mapper.update];
+    const updates = Array.isArray(mapper.update)
+      ? mapper.update
+      : [mapper.update];
     for (const update of updates) {
       statements.push({
         id: update.id,
-        type: 'update',
-        sql: cleanSql(update['#text'] || ''),
+        type: "update",
+        sql: cleanSql(update["#text"] || ""),
         parameterType: update.parameterType,
       });
     }
@@ -99,12 +107,14 @@ function extractStatements(parsed: any): SqlStatement[] {
 
   // Extract delete statements
   if (mapper.delete) {
-    const deletes = Array.isArray(mapper.delete) ? mapper.delete : [mapper.delete];
+    const deletes = Array.isArray(mapper.delete)
+      ? mapper.delete
+      : [mapper.delete];
     for (const delete_ of deletes) {
       statements.push({
         id: delete_.id,
-        type: 'delete',
-        sql: cleanSql(delete_['#text'] || ''),
+        type: "delete",
+        sql: cleanSql(delete_["#text"] || ""),
         parameterType: delete_.parameterType,
       });
     }
@@ -117,10 +127,7 @@ function extractStatements(parsed: any): SqlStatement[] {
  * Clean SQL text (remove extra whitespace, etc).
  */
 function cleanSql(sql: string): string {
-  return sql
-    .replace(/\s+/g, ' ')
-    .replace(/^\s*/, '')
-    .replace(/\s*$/, '');
+  return sql.replace(/\s+/g, " ").replace(/^\s*/, "").replace(/\s*$/, "");
 }
 
 export interface MapperXmlDocument {
@@ -131,7 +138,7 @@ export interface MapperXmlDocument {
 
 export interface SqlStatement {
   id: string;
-  type: 'select' | 'insert' | 'update' | 'delete';
+  type: "select" | "insert" | "update" | "delete";
   sql: string;
   resultType?: string;
   parameterType?: string;

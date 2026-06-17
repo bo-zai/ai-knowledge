@@ -14,25 +14,33 @@
  *   - All other languages: default to EXTENDS
  */
 
-import { KnowledgeGraph } from '../graph/types.js';
-import { ASTCache } from './ast-cache.js';
-import Parser from 'tree-sitter';
-import { isLanguageAvailable, loadParser, loadLanguage } from '../tree-sitter/parser-loader.js';
-import { generateId } from '../lib/utils.js';
-import { getLanguageFromFilename, type NodeLabel, type SupportedLanguages } from '../shared';
-import { isVerboseIngestionEnabled } from './utils/verbose.js';
-import { yieldToEventLoop } from './utils/event-loop.js';
-import { getProvider } from './languages/index.js';
-import { getTreeSitterBufferSize } from './constants.js';
+import { KnowledgeGraph } from "../graph/types.js";
+import { ASTCache } from "./ast-cache.js";
+import Parser from "tree-sitter";
+import {
+  isLanguageAvailable,
+  loadParser,
+  loadLanguage,
+} from "../tree-sitter/parser-loader.js";
+import { generateId } from "../lib/utils.js";
+import {
+  getLanguageFromFilename,
+  type NodeLabel,
+  type SupportedLanguages,
+} from "../shared";
+import { isVerboseIngestionEnabled } from "./utils/verbose.js";
+import { yieldToEventLoop } from "./utils/event-loop.js";
+import { getProvider } from "./languages/index.js";
+import { getTreeSitterBufferSize } from "./constants.js";
 import type {
   ExtractedHeritage,
   HeritageResolutionStrategy,
   HeritageStrategyLookup,
-} from './model/heritage-map.js';
-import { resolveExtendsType } from './model/heritage-map.js';
-import type { ResolutionContext } from './model/resolution-context.js';
-import { TIER_CONFIDENCE } from './model/resolution-context.js';
-import type { HeritageInfo } from './heritage-types.js';
+} from "./model/heritage-map.js";
+import { resolveExtendsType } from "./model/heritage-map.js";
+import type { ResolutionContext } from "./model/resolution-context.js";
+import { TIER_CONFIDENCE } from "./model/resolution-context.js";
+import type { HeritageInfo } from "./heritage-types.js";
 
 /**
  * Derive the heritage-resolution strategy for a language from its
@@ -46,7 +54,7 @@ export const getHeritageStrategyForLanguage: HeritageStrategyLookup = (
   const provider = getProvider(lang);
   return {
     interfaceNamePattern: provider.interfaceNamePattern,
-    defaultEdge: provider.heritageDefaultEdge ?? 'EXTENDS',
+    defaultEdge: provider.heritageDefaultEdge ?? "EXTENDS",
   };
 };
 
@@ -69,18 +77,21 @@ const resolveHeritageId = (
   const resolved = ctx.resolve(name, filePath);
   if (resolved && resolved.candidates.length > 0) {
     // For global with multiple candidates, refuse (a wrong edge is worse than no edge)
-    if (resolved.tier === 'global' && resolved.candidates.length > 1) {
+    if (resolved.tier === "global" && resolved.candidates.length > 1) {
       return {
         id: generateId(fallbackLabel, fallbackKey ?? name),
-        confidence: TIER_CONFIDENCE['global'],
+        confidence: TIER_CONFIDENCE["global"],
       };
     }
-    return { id: resolved.candidates[0].nodeId, confidence: TIER_CONFIDENCE[resolved.tier] };
+    return {
+      id: resolved.candidates[0].nodeId,
+      confidence: TIER_CONFIDENCE[resolved.tier],
+    };
   }
   // Unresolved: use global-tier confidence as fallback
   return {
     id: generateId(fallbackLabel, fallbackKey ?? name),
-    confidence: TIER_CONFIDENCE['global'],
+    confidence: TIER_CONFIDENCE["global"],
   };
 };
 
@@ -96,7 +107,7 @@ const resolveAndAddHeritageEdge = (
   language: SupportedLanguages,
   ctx: ResolutionContext,
 ): void => {
-  if (item.kind === 'extends') {
+  if (item.kind === "extends") {
     const { type: relType, idPrefix } = resolveExtendsType(
       item.parentName,
       filePath,
@@ -108,7 +119,7 @@ const resolveAndAddHeritageEdge = (
       item.className,
       filePath,
       ctx,
-      'Class',
+      "Class",
       `${filePath}:${item.className}`,
     );
     const parent = resolveHeritageId(item.parentName, filePath, ctx, idPrefix);
@@ -120,34 +131,39 @@ const resolveAndAddHeritageEdge = (
         targetId: parent.id,
         type: relType,
         confidence: Math.sqrt(child.confidence * parent.confidence),
-        reason: '',
+        reason: "",
       });
     }
-  } else if (item.kind === 'implements') {
+  } else if (item.kind === "implements") {
     const cls = resolveHeritageId(
       item.className,
       filePath,
       ctx,
-      'Class',
+      "Class",
       `${filePath}:${item.className}`,
     );
-    const iface = resolveHeritageId(item.parentName, filePath, ctx, 'Interface');
+    const iface = resolveHeritageId(
+      item.parentName,
+      filePath,
+      ctx,
+      "Interface",
+    );
 
     if (cls.id && iface.id) {
       graph.addRelationship({
-        id: generateId('IMPLEMENTS', `${cls.id}->${iface.id}`),
+        id: generateId("IMPLEMENTS", `${cls.id}->${iface.id}`),
         sourceId: cls.id,
         targetId: iface.id,
-        type: 'IMPLEMENTS',
+        type: "IMPLEMENTS",
         confidence: Math.sqrt(cls.confidence * iface.confidence),
-        reason: '',
+        reason: "",
       });
     }
   } else if (
-    item.kind === 'trait-impl' ||
-    item.kind === 'include' ||
-    item.kind === 'extend' ||
-    item.kind === 'prepend'
+    item.kind === "trait-impl" ||
+    item.kind === "include" ||
+    item.kind === "extend" ||
+    item.kind === "prepend"
   ) {
     // Fallback label for an unresolved child name. Rust `trait-impl` children
     // are structs; Ruby mixin children are classes or modules (Trait). For
@@ -158,7 +174,8 @@ const resolveAndAddHeritageEdge = (
     // emit for a Ruby `class` — the dominant shape. Ruby modules that fail
     // to resolve still lose their `Trait` label in the synthesized id, but
     // they fail to resolve rarely and the tradeoff is documented.
-    const childFallbackLabel: NodeLabel = item.kind === 'trait-impl' ? 'Struct' : 'Class';
+    const childFallbackLabel: NodeLabel =
+      item.kind === "trait-impl" ? "Struct" : "Class";
     const strct = resolveHeritageId(
       item.className,
       filePath,
@@ -166,14 +183,14 @@ const resolveAndAddHeritageEdge = (
       childFallbackLabel,
       `${filePath}:${item.className}`,
     );
-    const trait = resolveHeritageId(item.parentName, filePath, ctx, 'Trait');
+    const trait = resolveHeritageId(item.parentName, filePath, ctx, "Trait");
 
     if (strct.id && trait.id) {
       graph.addRelationship({
-        id: generateId('IMPLEMENTS', `${strct.id}->${trait.id}:${item.kind}`),
+        id: generateId("IMPLEMENTS", `${strct.id}->${trait.id}:${item.kind}`),
         sourceId: strct.id,
         targetId: trait.id,
-        type: 'IMPLEMENTS',
+        type: "IMPLEMENTS",
         confidence: Math.sqrt(strct.confidence * trait.confidence),
         reason: item.kind,
       });
@@ -249,7 +266,7 @@ export const processHeritage = async (
         captureMap[c.name] = c.node;
       });
 
-      if (!captureMap['heritage.class']) return;
+      if (!captureMap["heritage.class"]) return;
       if (!heritageExtractor) return;
 
       const heritageItems = heritageExtractor.extract(captureMap, {
@@ -294,7 +311,7 @@ export const processHeritageFromExtracted = async (
 
     const h = extractedHeritage[i];
 
-    if (h.kind === 'extends') {
+    if (h.kind === "extends") {
       const fileLanguage = getLanguageFromFilename(h.filePath);
       if (!fileLanguage) continue;
       const { type: relType, idPrefix } = resolveExtendsType(
@@ -308,7 +325,7 @@ export const processHeritageFromExtracted = async (
         h.className,
         h.filePath,
         ctx,
-        'Class',
+        "Class",
         `${h.filePath}:${h.className}`,
       );
       const parent = resolveHeritageId(h.parentName, h.filePath, ctx, idPrefix);
@@ -320,39 +337,45 @@ export const processHeritageFromExtracted = async (
           targetId: parent.id,
           type: relType,
           confidence: Math.sqrt(child.confidence * parent.confidence),
-          reason: '',
+          reason: "",
         });
       }
-    } else if (h.kind === 'implements') {
+    } else if (h.kind === "implements") {
       const cls = resolveHeritageId(
         h.className,
         h.filePath,
         ctx,
-        'Class',
+        "Class",
         `${h.filePath}:${h.className}`,
       );
-      const iface = resolveHeritageId(h.parentName, h.filePath, ctx, 'Interface');
+      const iface = resolveHeritageId(
+        h.parentName,
+        h.filePath,
+        ctx,
+        "Interface",
+      );
 
       if (cls.id && iface.id) {
         graph.addRelationship({
-          id: generateId('IMPLEMENTS', `${cls.id}->${iface.id}`),
+          id: generateId("IMPLEMENTS", `${cls.id}->${iface.id}`),
           sourceId: cls.id,
           targetId: iface.id,
-          type: 'IMPLEMENTS',
+          type: "IMPLEMENTS",
           confidence: Math.sqrt(cls.confidence * iface.confidence),
-          reason: '',
+          reason: "",
         });
       }
     } else if (
-      h.kind === 'trait-impl' ||
-      h.kind === 'include' ||
-      h.kind === 'extend' ||
-      h.kind === 'prepend'
+      h.kind === "trait-impl" ||
+      h.kind === "include" ||
+      h.kind === "extend" ||
+      h.kind === "prepend"
     ) {
       // See the per-item call above (processHeritageFromExtractedItem) for
       // rationale: `Class` is the correct fallback for Ruby mixin kinds,
       // `Struct` stays the Rust `trait-impl` default.
-      const childFallbackLabel: NodeLabel = h.kind === 'trait-impl' ? 'Struct' : 'Class';
+      const childFallbackLabel: NodeLabel =
+        h.kind === "trait-impl" ? "Struct" : "Class";
       const strct = resolveHeritageId(
         h.className,
         h.filePath,
@@ -360,14 +383,14 @@ export const processHeritageFromExtracted = async (
         childFallbackLabel,
         `${h.filePath}:${h.className}`,
       );
-      const trait = resolveHeritageId(h.parentName, h.filePath, ctx, 'Trait');
+      const trait = resolveHeritageId(h.parentName, h.filePath, ctx, "Trait");
 
       if (strct.id && trait.id) {
         graph.addRelationship({
-          id: generateId('IMPLEMENTS', `${strct.id}->${trait.id}:${h.kind}`),
+          id: generateId("IMPLEMENTS", `${strct.id}->${trait.id}:${h.kind}`),
           sourceId: strct.id,
           targetId: trait.id,
-          type: 'IMPLEMENTS',
+          type: "IMPLEMENTS",
           confidence: Math.sqrt(strct.confidence * trait.confidence),
           reason: h.kind,
         });
@@ -439,7 +462,7 @@ export async function extractExtractedHeritageFromFiles(
         captureMap[c.name] = c.node;
       });
 
-      if (captureMap['heritage.class']) {
+      if (captureMap["heritage.class"]) {
         if (provider.heritageExtractor) {
           const heritageItems = provider.heritageExtractor.extract(captureMap, {
             filePath: file.path,
@@ -462,11 +485,11 @@ export async function extractExtractedHeritageFromFiles(
       // `provider.heritageExtractor?.extractFromCall` branch there. We only
       // need call-based records here; other @call captures are consumed by
       // processCalls later in the sequential loop.
-      if (callBasedEnabled && captureMap['call'] && captureMap['call.name']) {
-        const calledName: string = captureMap['call.name'].text;
+      if (callBasedEnabled && captureMap["call"] && captureMap["call.name"]) {
+        const calledName: string = captureMap["call.name"].text;
         const heritageItems = provider.heritageExtractor!.extractFromCall!(
           calledName,
-          captureMap['call'],
+          captureMap["call"],
           { filePath: file.path, language },
         );
         if (heritageItems) {

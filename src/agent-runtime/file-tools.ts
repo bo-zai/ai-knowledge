@@ -5,9 +5,9 @@
  * 不包含 execute 工具（命令执行）
  */
 
-import { createFilesystemMiddleware } from 'deepagents';
-import { FileBackend } from './file-backend.js';
-import { logger } from '../shared/logger.js';
+import { createFilesystemMiddleware } from "deepagents";
+import { FileBackend } from "./file-backend.js";
+import { logger } from "../shared/logger.js";
 
 // ── 类型定义 ──────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ const DEFAULT_MAX_FILE_SIZE_MB = 10;
 /**
  * 默认编码
  */
-const DEFAULT_ENCODING: BufferEncoding = 'utf-8';
+const DEFAULT_ENCODING: BufferEncoding = "utf-8";
 
 /**
  * 默认工具结果 Token 限制
@@ -87,7 +87,7 @@ export function createFileToolsMiddleware(config: FileToolsConfig) {
     encoding: config.encoding ?? DEFAULT_ENCODING,
   });
 
-  logger.info('创建文件系统中间件', {
+  logger.info("创建文件系统中间件", {
     rootDir: config.rootDir,
     maxFileSizeMb: config.maxFileSizeMb ?? DEFAULT_MAX_FILE_SIZE_MB,
     enableWrite: config.enableWrite ?? true,
@@ -96,11 +96,15 @@ export function createFileToolsMiddleware(config: FileToolsConfig) {
   // 使用 DeepAgents 的 createFilesystemMiddleware
   // backend 选项接受 AnyBackendProtocol，FileBackend 实现了 BackendProtocolV2 兼容接口
   const middleware = createFilesystemMiddleware({
-    backend: backend as unknown as Parameters<typeof createFilesystemMiddleware>[0]['backend'],
+    backend: backend as unknown as Parameters<
+      typeof createFilesystemMiddleware
+    >[0]["backend"],
     systemPrompt: config.customSystemPrompt ?? null,
-    toolTokenLimitBeforeEvict: config.toolTokenLimitBeforeEvict ?? DEFAULT_TOOL_TOKEN_LIMIT,
+    toolTokenLimitBeforeEvict:
+      config.toolTokenLimitBeforeEvict ?? DEFAULT_TOOL_TOKEN_LIMIT,
     humanMessageTokenLimitBeforeEvict:
-      config.humanMessageTokenLimitBeforeEvict ?? DEFAULT_HUMAN_MESSAGE_TOKEN_LIMIT,
+      config.humanMessageTokenLimitBeforeEvict ??
+      DEFAULT_HUMAN_MESSAGE_TOKEN_LIMIT,
     // 注意：execute 工具需要 SandboxBackend，这里使用普通 FileBackend，execute 不可用
   });
 
@@ -118,7 +122,10 @@ export function createFileToolsMiddleware(config: FileToolsConfig) {
  * @param enableWrite - 是否启用写入操作
  * @returns 系统提示词字符串
  */
-export function getFileToolsSystemPrompt(rootDir: string, enableWrite = true): string {
+export function getFileToolsSystemPrompt(
+  rootDir: string,
+  enableWrite = true,
+): string {
   const basePrompt = `
 你拥有文件系统访问能力。所有文件路径必须使用绝对路径。
 

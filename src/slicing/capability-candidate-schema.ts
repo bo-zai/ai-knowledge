@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const EntrySignalSchema = z.object({
-  kind: z.enum(['cli', 'http', 'handler', 'job', 'service']),
+  kind: z.enum(["cli", "http", "handler", "job", "service"]),
   location: z.string(),
   name: z.string(),
   signature: z.string().optional(),
@@ -24,7 +24,15 @@ export const BehaviorSignalSchema = z.object({
 });
 
 export const DataSignalSchema = z.object({
-  kind: z.enum(['schema', 'type', 'interface', 'table', 'sql', 'output', 'field']),
+  kind: z.enum([
+    "schema",
+    "type",
+    "interface",
+    "table",
+    "sql",
+    "output",
+    "field",
+  ]),
   location: z.string(),
   name: z.string(),
   fields: z.array(z.string()).optional(),
@@ -47,7 +55,7 @@ export const TestSignalSchema = z.object({
 
 export const DocSignalSchema = z.object({
   location: z.string(),
-  kind: z.enum(['readme', 'agents', 'notes', 'docs']),
+  kind: z.enum(["readme", "agents", "notes", "docs"]),
   terms: z.array(z.string()).optional(),
   constraints: z.array(z.string()).optional(),
   targetRelevance: z.number().min(0).max(1).optional(),

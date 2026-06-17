@@ -1,5 +1,8 @@
-import type { ParsedFile } from '../../../shared/index.js';
-import { isClassLike, populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import {
+  isClassLike,
+  populateClassOwnedMembers,
+} from "../../scope-resolution/scope/walkers.js";
 
 /**
  * Populate `ownerId` on Go Method defs by matching receiver types
@@ -28,7 +31,9 @@ export function populateGoWorkspaceOwners(
 ): void {
   const filesByPackage = new Map<string, ParsedFile[]>();
   for (const parsed of parsedFiles) {
-    const pkgName = inferPackageName(ctx.fileContents.get(parsed.filePath) ?? '');
+    const pkgName = inferPackageName(
+      ctx.fileContents.get(parsed.filePath) ?? "",
+    );
     if (pkgName === null) continue;
     const key = `${packageDir(parsed.filePath)}\0${pkgName}`;
     const bucket = filesByPackage.get(key) ?? [];
@@ -61,16 +66,16 @@ function populateGoOwnersInPackage(parsedFiles: readonly ParsedFile[]): void {
   if (structByQualifiedName.size > 0) {
     for (const parsed of parsedFiles) {
       for (const scope of parsed.scopes) {
-        if (scope.kind !== 'Function') continue;
+        if (scope.kind !== "Function") continue;
         const methodDefs = scope.ownedDefs.filter(
-          (d) => d.type === 'Method' && d.ownerId === undefined,
+          (d) => d.type === "Method" && d.ownerId === undefined,
         );
         if (methodDefs.length === 0) continue;
 
         // Find the self typeBinding in this Function scope.
         let receiverType: string | undefined;
         for (const [, tb] of scope.typeBindings) {
-          if (tb.source === 'self') {
+          if (tb.source === "self") {
             receiverType = tb.rawName;
             break;
           }
@@ -80,7 +85,7 @@ function populateGoOwnersInPackage(parsedFiles: readonly ParsedFile[]): void {
         let ownerId = structByQualifiedName.get(receiverType);
         if (ownerId === undefined) {
           for (const [qname, nodeId] of structByQualifiedName) {
-            if (qname.endsWith('.' + receiverType)) {
+            if (qname.endsWith("." + receiverType)) {
               ownerId = nodeId;
               break;
             }
@@ -102,7 +107,7 @@ function inferPackageName(sourceText: string): string | null {
 }
 
 function packageDir(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  const idx = normalized.lastIndexOf('/');
-  return idx === -1 ? '' : normalized.slice(0, idx);
+  const normalized = filePath.replace(/\\/g, "/");
+  const idx = normalized.lastIndexOf("/");
+  return idx === -1 ? "" : normalized.slice(0, idx);
 }

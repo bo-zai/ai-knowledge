@@ -1,12 +1,15 @@
-import { execSync } from 'child_process';
-import { statSync } from 'fs';
-import path from 'path';
+import { execSync } from "child_process";
+import { statSync } from "fs";
+import path from "path";
 
 // Git utilities for repository detection, commit tracking, and diff analysis
 
 export const isGitRepo = (repoPath: string): boolean => {
   try {
-    execSync('git rev-parse --is-inside-work-tree', { cwd: repoPath, stdio: 'ignore' });
+    execSync("git rev-parse --is-inside-work-tree", {
+      cwd: repoPath,
+      stdio: "ignore",
+    });
     return true;
   } catch {
     return false;
@@ -15,19 +18,19 @@ export const isGitRepo = (repoPath: string): boolean => {
 
 export const getCurrentCommit = (repoPath: string): string => {
   try {
-    return execSync('git rev-parse HEAD', {
+    return execSync("git rev-parse HEAD", {
       cwd: repoPath,
       // Suppress stderr -- without an explicit stdio option, Node's execSync
       // forwards the child's stderr to the parent process (documented behaviour).
       // When repoPath is not inside a git worktree, git prints
       // "fatal: not a git repository" to stderr, which leaks to the user's
       // terminal even though the error is caught here (#1172).
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ["ignore", "pipe", "ignore"],
     })
       .toString()
       .trim();
   } catch {
-    return '';
+    return "";
   }
 };
 
@@ -57,9 +60,9 @@ export const getCurrentCommit = (repoPath: string): string => {
 export const getRemoteUrl = (repoPath: string): string | undefined => {
   let raw: string;
   try {
-    raw = execSync('git config --get remote.origin.url', {
+    raw = execSync("git config --get remote.origin.url", {
       cwd: repoPath,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ["ignore", "pipe", "ignore"],
     })
       .toString()
       .trim();
@@ -68,7 +71,7 @@ export const getRemoteUrl = (repoPath: string): string | undefined => {
   }
   if (!raw) return undefined;
 
-  let normalised = raw.replace(/\/$/, '').replace(/\.git$/, '');
+  let normalised = raw.replace(/\/$/, "").replace(/\.git$/, "");
 
   // Lower-case the host segment of `scheme://[user@]host[:port]/...`
   // and the host segment of `git@host:owner/repo` SCP form.
@@ -82,9 +85,11 @@ export const getRemoteUrl = (repoPath: string): string | undefined => {
   if (sshMatch) {
     normalised = `${sshMatch[1]}${sshMatch[2].toLowerCase()}${sshMatch[3]}`;
   } else {
-    const urlMatch = normalised.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/]+)(\/.*)?$/);
+    const urlMatch = normalised.match(
+      /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)([^/]+)(\/.*)?$/,
+    );
     if (urlMatch) {
-      normalised = `${urlMatch[1]}${urlMatch[2].toLowerCase()}${urlMatch[3] ?? ''}`;
+      normalised = `${urlMatch[1]}${urlMatch[2].toLowerCase()}${urlMatch[3] ?? ""}`;
     }
   }
 
@@ -96,10 +101,10 @@ export const getRemoteUrl = (repoPath: string): string | undefined => {
  */
 export const getGitRoot = (fromPath: string): string | null => {
   try {
-    const raw = execSync('git rev-parse --show-toplevel', {
+    const raw = execSync("git rev-parse --show-toplevel", {
       cwd: fromPath,
       // Suppress stderr -- see getCurrentCommit comment and #1172.
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ["ignore", "pipe", "ignore"],
     })
       .toString()
       .trim();
@@ -139,10 +144,13 @@ export const getGitRoot = (fromPath: string): string | null => {
  */
 export const getCanonicalRepoRoot = (fromPath: string): string | null => {
   try {
-    const commonDir = execSync('git rev-parse --path-format=absolute --git-common-dir', {
-      cwd: fromPath,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
+    const commonDir = execSync(
+      "git rev-parse --path-format=absolute --git-common-dir",
+      {
+        cwd: fromPath,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    )
       .toString()
       .trim();
     if (!commonDir) return null;
@@ -202,7 +210,7 @@ export const findGitRootByDotGit = (fromPath: string): string | null => {
 
   while (true) {
     try {
-      statSync(path.join(current, '.git'));
+      statSync(path.join(current, ".git"));
       return current;
     } catch {
       const parent = path.dirname(current);
@@ -224,7 +232,7 @@ export const findGitRootByDotGit = (fromPath: string): string | null => {
  */
 export const hasGitDir = (dirPath: string): boolean => {
   try {
-    statSync(path.join(dirPath, '.git'));
+    statSync(path.join(dirPath, ".git"));
     return true;
   } catch {
     return false;
@@ -242,9 +250,9 @@ export const hasGitDir = (dirPath: string): boolean => {
  */
 export const getRemoteOriginUrl = (repoPath: string): string | null => {
   try {
-    const url = execSync('git config --get remote.origin.url', {
+    const url = execSync("git config --get remote.origin.url", {
       cwd: repoPath,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ["ignore", "pipe", "ignore"],
     })
       .toString()
       .trim();
@@ -263,12 +271,14 @@ export const getRemoteOriginUrl = (repoPath: string): string | null => {
  * The heuristic: strip a trailing `.git` and trailing slashes, then
  * take the segment after the last `/` or `:`.
  */
-export const parseRepoNameFromUrl = (url: string | null | undefined): string | null => {
+export const parseRepoNameFromUrl = (
+  url: string | null | undefined,
+): string | null => {
   if (!url) return null;
   const trimmed = url.trim();
   if (!trimmed) return null;
   // Strip `.git` suffix (case-insensitive) and any trailing slashes.
-  const withoutSuffix = trimmed.replace(/\.git\/*$/i, '').replace(/\/+$/, '');
+  const withoutSuffix = trimmed.replace(/\.git\/*$/i, "").replace(/\/+$/, "");
   // Last path segment, splitting on either `/` or `:` (covers SSH form).
   const m = withoutSuffix.match(/[/:]([^/:]+)$/);
   const candidate = m ? m[1] : withoutSuffix;
@@ -300,11 +310,11 @@ export interface FileDiff {
 export function parseDiffHunks(diffOutput: string): FileDiff[] {
   const files: FileDiff[] = [];
   let current: FileDiff | null = null;
-  for (const line of diffOutput.split('\n')) {
-    if (line.startsWith('+++ b/')) {
+  for (const line of diffOutput.split("\n")) {
+    if (line.startsWith("+++ b/")) {
       current = { filePath: line.slice(6), hunks: [] };
       files.push(current);
-    } else if (line.startsWith('@@') && current) {
+    } else if (line.startsWith("@@") && current) {
       const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
       if (match) {
         const start = parseInt(match[1], 10);

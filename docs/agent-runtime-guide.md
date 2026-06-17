@@ -7,13 +7,13 @@ Agent Runtime 是 RKG (Repo Knowledge Generator) 项目中的核心组件，负�
 ### 基本使用
 
 ```typescript
-import { runKnowledgeReadRuntime } from 'rkg/agent-read-runtime';
+import { runKnowledgeReadRuntime } from "rkg/agent-read-runtime";
 
 const result = await runKnowledgeReadRuntime({
-  repoPath: '/path/to/your/repo',
-  instruction: '查找 UserService 类的定义和主要方法',
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
+  repoPath: "/path/to/your/repo",
+  instruction: "查找 UserService 类的定义和主要方法",
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -27,11 +27,11 @@ console.log(result.evidenceRefs);
 
 ```typescript
 interface KnowledgeReadResult {
-  answer: string;                  // LLM 生成的回答
-  evidenceRefs: EvidenceRef[];     // 证据引用列表
-  insufficientEvidence: boolean;   // 是否证据不足
-  toolCallsUsed: number;           // 使用的工具调用次数
-  trace: KnowledgeReadTrace;       // 执行追踪信息
+  answer: string; // LLM 生成的回答
+  evidenceRefs: EvidenceRef[]; // 证据引用列表
+  insufficientEvidence: boolean; // 是否证据不足
+  toolCallsUsed: number; // 使用的工具调用次数
+  trace: KnowledgeReadTrace; // 执行追踪信息
 }
 ```
 
@@ -41,12 +41,12 @@ interface KnowledgeReadResult {
 
 ```typescript
 interface KnowledgeReadRuntimeInput {
-  repoPath: string;                // 仓库路径（必填）
-  instruction: string;             // 查询指令（必填）
-  initialContext?: string;         // 初始上下文（可选）
-  model: string;                   // LLM 模型名称
-  baseUrl: string;                 // LLM API 地址
-  apiKey: string;                  // API 密钥
+  repoPath: string; // 仓库路径（必填）
+  instruction: string; // 查询指令（必填）
+  initialContext?: string; // 初始上下文（可选）
+  model: string; // LLM 模型名称
+  baseUrl: string; // LLM API 地址
+  apiKey: string; // API 密钥
   limits?: Partial<KnowledgeReadLimits>; // 预算限制（可选）
 }
 ```
@@ -57,12 +57,12 @@ interface KnowledgeReadRuntimeInput {
 
 ```typescript
 const DEFAULT_KNOWLEDGE_READ_LIMITS = {
-  maxToolCalls: 8,                 // 最大工具调用次数
-  maxToolResultChars: 12_000,      // 单次工具返回最大字符数
+  maxToolCalls: 8, // 最大工具调用次数
+  maxToolResultChars: 12_000, // 单次工具返回最大字符数
   maxTotalToolResultChars: 40_000, // 总工具返回最大字符数
-  maxFileWindowLines: 240,         // 单次文件读取最大行数
-  searchResultLimit: 30,           // 搜索结果最大条数
-  maxSearchFileBytes: 512_000,     // 搜索文件最大字节数
+  maxFileWindowLines: 240, // 单次文件读取最大行数
+  searchResultLimit: 30, // 搜索结果最大条数
+  maxSearchFileBytes: 512_000, // 搜索文件最大字节数
 };
 ```
 
@@ -70,10 +70,10 @@ const DEFAULT_KNOWLEDGE_READ_LIMITS = {
 
 ```typescript
 const result = await runKnowledgeReadRuntime({
-  repoPath: '/path/to/repo',
-  instruction: '查询...',
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
+  repoPath: "/path/to/repo",
+  instruction: "查询...",
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
   limits: {
     maxToolCalls: 5,
@@ -88,13 +88,13 @@ const result = await runKnowledgeReadRuntime({
 
 Agent Runtime 提供五种受控的本地读取工具：
 
-| 工具名称 | 功能描述 |
-|---------|---------|
-| `read_file_window` | 读取指定文件指定行范围的内容 |
-| `search_repo_text` | 在仓库中搜索文本，返回匹配行 |
-| `read_symbol_definition` | 搜索符号定义位置 |
-| `read_symbol_references` | 搜索符号引用位置 |
-| `read_related_tests` | 搜索与路径或符号相关的测试 |
+| 工具名称                 | 功能描述                     |
+| ------------------------ | ---------------------------- |
+| `read_file_window`       | 读取指定文件指定行范围的内容 |
+| `search_repo_text`       | 在仓库中搜索文本，返回匹配行 |
+| `read_symbol_definition` | 搜索符号定义位置             |
+| `read_symbol_references` | 搜索符号引用位置             |
+| `read_related_tests`     | 搜索与路径或符号相关的测试   |
 
 #### 工具参数示例
 
@@ -188,19 +188,19 @@ Agent Runtime 提供五种受控的本地读取工具：
 
 ```typescript
 const result = await runKnowledgeReadRuntime({
-  repoPath: '/workspace/my-project',
-  instruction: '查找 formatUser 函数的定义并描述其功能',
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
+  repoPath: "/workspace/my-project",
+  instruction: "查找 formatUser 函数的定义并描述其功能",
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 if (result.insufficientEvidence) {
-  console.log('证据不足，无法完成查询');
+  console.log("证据不足，无法完成查询");
 } else {
-  console.log('回答:', result.answer);
-  console.log('证据:');
-  result.evidenceRefs.forEach(ref => {
+  console.log("回答:", result.answer);
+  console.log("证据:");
+  result.evidenceRefs.forEach((ref) => {
     console.log(`  ${ref.file}:${ref.startLine}-${ref.endLine} - ${ref.note}`);
   });
 }
@@ -210,16 +210,16 @@ if (result.insufficientEvidence) {
 
 ```typescript
 const result = await runKnowledgeReadRuntime({
-  repoPath: '/workspace/my-project',
-  instruction: '分析 UserService 和 OrderService 的交互关系',
+  repoPath: "/workspace/my-project",
+  instruction: "分析 UserService 和 OrderService 的交互关系",
   initialContext: `
 已知信息：
 - UserService 位于 src/services/user.ts
 - OrderService 位于 src/services/order.ts
 - 两个服务都使用 DatabaseConnection
 `,
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
 });
 ```
@@ -247,15 +247,15 @@ result.trace.toolCalls.forEach(call => {
 ```typescript
 // 严格预算场景
 const result = await runKnowledgeReadRuntime({
-  repoPath: '/workspace/my-project',
-  instruction: '快速查找 main 函数入口',
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
+  repoPath: "/workspace/my-project",
+  instruction: "快速查找 main 函数入口",
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
   apiKey: process.env.OPENAI_API_KEY,
   limits: {
-    maxToolCalls: 3,              // 最多 3 次调用
-    maxFileWindowLines: 50,       // 每次最多读 50 行
-    searchResultLimit: 5,         // 搜索最多返回 5 条
+    maxToolCalls: 3, // 最多 3 次调用
+    maxFileWindowLines: 50, // 每次最多读 50 行
+    searchResultLimit: 5, // 搜索最多返回 5 条
   },
 });
 ```
@@ -390,10 +390,10 @@ validateFinalOutput(state: {
 
 ```typescript
 // 默认预算限制
-DEFAULT_KNOWLEDGE_READ_LIMITS: KnowledgeReadLimits
+DEFAULT_KNOWLEDGE_READ_LIMITS: KnowledgeReadLimits;
 
 // 输出 Schema（用于 Zod 验证）
-KnowledgeReadAgentOutputSchema: ZodSchema<KnowledgeReadAgentOutput>
+KnowledgeReadAgentOutputSchema: ZodSchema<KnowledgeReadAgentOutput>;
 ```
 
 ## 错误处理

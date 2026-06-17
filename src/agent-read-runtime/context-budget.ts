@@ -1,4 +1,4 @@
-import type { KnowledgeReadLimits } from './types.js';
+import type { KnowledgeReadLimits } from "./types.js";
 
 export const DEFAULT_KNOWLEDGE_READ_LIMITS: KnowledgeReadLimits = {
   maxToolCalls: 8,
@@ -15,7 +15,9 @@ export interface BudgetState {
   totalToolResultChars: number;
 }
 
-export function resolveKnowledgeReadLimits(input?: Partial<KnowledgeReadLimits>): KnowledgeReadLimits {
+export function resolveKnowledgeReadLimits(
+  input?: Partial<KnowledgeReadLimits>,
+): KnowledgeReadLimits {
   return {
     ...DEFAULT_KNOWLEDGE_READ_LIMITS,
     ...input,
@@ -30,7 +32,10 @@ export function createBudgetState(limits: KnowledgeReadLimits): BudgetState {
   };
 }
 
-export function truncateToolResult(text: string, maxChars: number): { text: string; truncated: boolean } {
+export function truncateToolResult(
+  text: string,
+  maxChars: number,
+): { text: string; truncated: boolean } {
   if (text.length <= maxChars) {
     return { text, truncated: false };
   }
@@ -41,7 +46,10 @@ export function truncateToolResult(text: string, maxChars: number): { text: stri
   };
 }
 
-export function recordToolCall(state: BudgetState): { allowed: boolean; message?: string } {
+export function recordToolCall(state: BudgetState): {
+  allowed: boolean;
+  message?: string;
+} {
   if (state.toolCallsUsed >= state.limits.maxToolCalls) {
     return {
       allowed: false,
@@ -53,7 +61,10 @@ export function recordToolCall(state: BudgetState): { allowed: boolean; message?
   return { allowed: true };
 }
 
-export function recordToolResult(state: BudgetState, text: string): { allowed: boolean; message?: string } {
+export function recordToolResult(
+  state: BudgetState,
+  text: string,
+): { allowed: boolean; message?: string } {
   const nextTotal = state.totalToolResultChars + text.length;
   if (nextTotal > state.limits.maxTotalToolResultChars) {
     return {

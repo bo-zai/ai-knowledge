@@ -1,26 +1,30 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/swift.ts
 // Verified against tree-sitter-swift 0.7.x
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { findVisibility, hasKeyword, hasModifier } from '../../field-extractors/configs/helpers.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import {
+  findVisibility,
+  hasKeyword,
+  hasModifier,
+} from "../../field-extractors/configs/helpers.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Swift helpers
 // ---------------------------------------------------------------------------
 
 const SWIFT_VIS = new Set<MethodVisibility>([
-  'public',
-  'private',
-  'fileprivate',
-  'internal',
-  'open',
+  "public",
+  "private",
+  "fileprivate",
+  "internal",
+  "open",
 ]);
 
 /**
@@ -31,13 +35,13 @@ const SWIFT_VIS = new Set<MethodVisibility>([
  */
 function extractSwiftName(node: SyntaxNode): string | undefined {
   // Try field-based name first
-  const nameField = node.childForFieldName('name');
+  const nameField = node.childForFieldName("name");
   if (nameField) return nameField.text;
 
   // Walk named children for simple_identifier (the function name)
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child?.type === 'simple_identifier') return child.text;
+    if (child?.type === "simple_identifier") return child.text;
   }
   return undefined;
 }
@@ -57,23 +61,23 @@ function extractSwiftReturnType(node: SyntaxNode): string | undefined {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (!child) continue;
-    if (child.type === 'parameter') {
+    if (child.type === "parameter") {
       seenParams = true;
       continue;
     }
     // The parameter list may be unnamed children; track when we pass ')'
-    if (seenParams || child.type === 'type_annotation') {
-      if (child.type === 'type_annotation') {
+    if (seenParams || child.type === "type_annotation") {
+      if (child.type === "type_annotation") {
         const inner = child.firstNamedChild;
         if (inner) return inner.text?.trim();
       }
       if (
-        child.type === 'user_type' ||
-        child.type === 'optional_type' ||
-        child.type === 'tuple_type' ||
-        child.type === 'array_type' ||
-        child.type === 'dictionary_type' ||
-        child.type === 'function_type'
+        child.type === "user_type" ||
+        child.type === "optional_type" ||
+        child.type === "tuple_type" ||
+        child.type === "array_type" ||
+        child.type === "dictionary_type" ||
+        child.type === "function_type"
       ) {
         return child.text?.trim();
       }
@@ -85,7 +89,7 @@ function extractSwiftReturnType(node: SyntaxNode): string | undefined {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
-    if (!child.isNamed && child.text.trim() === '->') {
+    if (!child.isNamed && child.text.trim() === "->") {
       seenArrow = true;
       continue;
     }
@@ -115,13 +119,13 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
   // function_declaration level, not children of the parameter node.
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (!child?.isNamed || child.type !== 'parameter') continue;
+    if (!child?.isNamed || child.type !== "parameter") continue;
 
     // Extract parameter name — the last simple_identifier is the internal name
     let paramName: string | undefined;
     for (let j = 0; j < child.namedChildCount; j++) {
       const part = child.namedChild(j);
-      if (part?.type === 'simple_identifier') {
+      if (part?.type === "simple_identifier") {
         paramName = part.text;
       }
     }
@@ -132,7 +136,7 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
     let rawTypeName: string | null = null;
     for (let j = 0; j < child.namedChildCount; j++) {
       const part = child.namedChild(j);
-      if (part?.type === 'user_type' || part?.type === 'type_annotation') {
+      if (part?.type === "user_type" || part?.type === "type_annotation") {
         rawTypeName = part.text?.trim() ?? null;
         const inner = part.firstNamedChild;
         if (inner) {
@@ -143,7 +147,7 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
         break;
       }
       // Handle built-in types (array_type, dictionary_type, optional_type, tuple_type)
-      if (part?.type.endsWith('_type') && part.type !== 'simple_identifier') {
+      if (part?.type.endsWith("_type") && part.type !== "simple_identifier") {
         rawTypeName = part.text?.trim() ?? null;
         typeName = extractSimpleTypeName(part) ?? rawTypeName;
         break;
@@ -153,7 +157,11 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
     // Check for default value: '=' token appears as a sibling after the parameter node
     let isOptional = false;
     const nextSibling = node.child(i + 1);
-    if (nextSibling && !nextSibling.isNamed && nextSibling.text.trim() === '=') {
+    if (
+      nextSibling &&
+      !nextSibling.isNamed &&
+      nextSibling.text.trim() === "="
+    ) {
       isOptional = true;
     }
 
@@ -161,7 +169,7 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
     let isVariadic = false;
     for (let j = 0; j < child.childCount; j++) {
       const c = child.child(j);
-      if (c && c.text.trim() === '...') {
+      if (c && c.text.trim() === "...") {
         isVariadic = true;
         break;
       }
@@ -188,16 +196,16 @@ function extractSwiftParameters(node: SyntaxNode): ParameterInfo[] {
  */
 function isSwiftAbstract(node: SyntaxNode, ownerNode: SyntaxNode): boolean {
   // protocol_function_declaration nodes are inherently abstract
-  if (node.type === 'protocol_function_declaration') return true;
+  if (node.type === "protocol_function_declaration") return true;
 
   // function_declaration inside a protocol is abstract if it has no body
-  if (ownerNode.type === 'protocol_declaration') {
-    const body = node.childForFieldName('body');
+  if (ownerNode.type === "protocol_declaration") {
+    const body = node.childForFieldName("body");
     if (!body) {
       // Also check for function_body named child
       for (let i = 0; i < node.namedChildCount; i++) {
         const child = node.namedChild(i);
-        if (child?.type === 'function_body') return false;
+        if (child?.type === "function_body") return false;
       }
       return true;
     }
@@ -221,14 +229,14 @@ function extractSwiftAnnotations(node: SyntaxNode): string[] {
     const child = node.namedChild(i);
     if (!child) continue;
 
-    if (child.type === 'attribute') {
+    if (child.type === "attribute") {
       const text = child.text?.trim();
       if (text) {
         // Normalize: strip arguments, keep just the name
         // e.g. "@objc(myMethod)" -> "@objc", "@available(iOS 13, *)" -> "@available"
         const match = text.match(/^@(\w+)/);
         if (match) {
-          annotations.push('@' + match[1]);
+          annotations.push("@" + match[1]);
         } else {
           annotations.push(text);
         }
@@ -236,15 +244,15 @@ function extractSwiftAnnotations(node: SyntaxNode): string[] {
     }
 
     // Also check inside modifiers wrapper
-    if (child.type === 'modifiers') {
+    if (child.type === "modifiers") {
       for (let j = 0; j < child.namedChildCount; j++) {
         const mod = child.namedChild(j);
-        if (mod?.type === 'attribute') {
+        if (mod?.type === "attribute") {
           const text = mod.text?.trim();
           if (text) {
             const match = text.match(/^@(\w+)/);
             if (match) {
-              annotations.push('@' + match[1]);
+              annotations.push("@" + match[1]);
             } else {
               annotations.push(text);
             }
@@ -268,42 +276,44 @@ export const swiftMethodConfig: MethodExtractionConfig = {
   // TODO: Verify struct_declaration, enum_declaration, extension_declaration, actor_declaration
   // node types once tree-sitter-swift loads on Node 22, and add them here if they are distinct.
   // protocol_declaration is a separate, confirmed node type.
-  typeDeclarationNodes: ['class_declaration', 'protocol_declaration'],
+  typeDeclarationNodes: ["class_declaration", "protocol_declaration"],
 
   // function_declaration for class/struct methods, protocol_function_declaration for protocol methods
-  methodNodeTypes: ['function_declaration', 'protocol_function_declaration'],
+  methodNodeTypes: ["function_declaration", "protocol_function_declaration"],
 
-  bodyNodeTypes: ['class_body', 'protocol_body'],
+  bodyNodeTypes: ["class_body", "protocol_body"],
 
   extractName: extractSwiftName,
   extractReturnType: extractSwiftReturnType,
   extractParameters: extractSwiftParameters,
 
   extractVisibility(node) {
-    return findVisibility(node, SWIFT_VIS, 'internal', 'modifiers');
+    return findVisibility(node, SWIFT_VIS, "internal", "modifiers");
   },
 
   isStatic(node) {
     return (
-      hasKeyword(node, 'static') ||
-      hasKeyword(node, 'class') ||
-      hasModifier(node, 'modifiers', 'static') ||
-      hasModifier(node, 'modifiers', 'class')
+      hasKeyword(node, "static") ||
+      hasKeyword(node, "class") ||
+      hasModifier(node, "modifiers", "static") ||
+      hasModifier(node, "modifiers", "class")
     );
   },
 
   isAbstract: isSwiftAbstract,
 
   isFinal(node) {
-    return hasKeyword(node, 'final') || hasModifier(node, 'modifiers', 'final');
+    return hasKeyword(node, "final") || hasModifier(node, "modifiers", "final");
   },
 
   isAsync(node) {
-    return hasKeyword(node, 'async') || hasModifier(node, 'modifiers', 'async');
+    return hasKeyword(node, "async") || hasModifier(node, "modifiers", "async");
   },
 
   isOverride(node) {
-    return hasKeyword(node, 'override') || hasModifier(node, 'modifiers', 'override');
+    return (
+      hasKeyword(node, "override") || hasModifier(node, "modifiers", "override")
+    );
   },
 
   extractAnnotations: extractSwiftAnnotations,

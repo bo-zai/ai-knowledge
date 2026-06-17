@@ -1,20 +1,20 @@
 // @ts-nocheck - Test fixture, not compiled
-import express from 'express';
+import express from "express";
 
 const app = express();
 
 // Route: POST /api/users
-app.post('/api/users', async (req: any, res: any) => {
+app.post("/api/users", async (req: any, res: any) => {
   const { name, email } = req.body;
   // Create user logic
   res.json({ id: 1, name, email });
 });
 
 // Route: GET /api/users/:id
-app.get('/api/users/:id', async (req: any, res: any) => {
+app.get("/api/users/:id", async (req: any, res: any) => {
   const { id } = req.params;
   // Get user logic
-  res.json({ id, name: 'Test User', email: 'test@example.com' });
+  res.json({ id, name: "Test User", email: "test@example.com" });
 });
 
 export default app;

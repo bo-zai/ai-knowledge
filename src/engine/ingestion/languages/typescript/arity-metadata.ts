@@ -50,8 +50,8 @@
  * field only, which contains value parameters, not type parameters.
  */
 
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
-import { typescriptMethodConfig } from '../../method-extractors/configs/typescript-javascript.js';
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
+import { typescriptMethodConfig } from "../../method-extractors/configs/typescript-javascript.js";
 
 interface TsArityMetadata {
   readonly parameterCount: number | undefined;
@@ -68,10 +68,13 @@ export function computeTsArityMetadata(fnNode: SyntaxNode): TsArityMetadata {
   for (const p of params) {
     if (p.isVariadic) hasRest = true;
     else if (p.isOptional) optionalCount++;
-    const t = p.type !== null && p.type !== undefined ? stripGenericsAndArraySuffix(p.type) : '';
+    const t =
+      p.type !== null && p.type !== undefined
+        ? stripGenericsAndArraySuffix(p.type)
+        : "";
     types.push(t);
   }
-  if (hasRest) types.push('params');
+  if (hasRest) types.push("params");
 
   const total = params.length;
   const parameterCount = hasRest ? undefined : total;
@@ -81,8 +84,9 @@ export function computeTsArityMetadata(fnNode: SyntaxNode): TsArityMetadata {
   // empty type name. An array of all empty strings adds noise to the
   // registry without aiding narrowing — callers treat absence as
   // "types unknown".
-  const hasAnyType = types.some((t) => t !== '' && t !== 'params');
-  const parameterTypes = hasAnyType || hasRest ? (types.length > 0 ? types : undefined) : undefined;
+  const hasAnyType = types.some((t) => t !== "" && t !== "params");
+  const parameterTypes =
+    hasAnyType || hasRest ? (types.length > 0 ? types : undefined) : undefined;
 
   return {
     parameterCount,
@@ -104,9 +108,9 @@ function stripGenericsAndArraySuffix(raw: string): string {
   // Repeatedly peel trailing `[]` pairs, then peel the outermost `<…>`
   // block once. We don't loop the `<>` peel since nesting is rare and
   // the head name is already reached after one peel.
-  while (t.endsWith('[]')) t = t.slice(0, -2).trim();
-  const lt = t.indexOf('<');
-  if (lt > 0 && t.endsWith('>')) {
+  while (t.endsWith("[]")) t = t.slice(0, -2).trim();
+  const lt = t.indexOf("<");
+  if (lt > 0 && t.endsWith(">")) {
     t = t.slice(0, lt).trim();
   }
   return t;

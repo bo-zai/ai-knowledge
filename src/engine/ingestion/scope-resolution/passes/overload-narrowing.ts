@@ -23,7 +23,7 @@
  *   5. Empty input returns empty output.
  */
 
-import type { SymbolDefinition } from '../../../shared/index.js';
+import type { SymbolDefinition } from "../../../shared/index.js";
 
 export function narrowOverloadCandidates(
   overloads: readonly SymbolDefinition[],
@@ -41,7 +41,9 @@ export function narrowOverloadCandidates(
           if (max !== undefined && argCount > max) {
             const variadic =
               d.parameterTypes !== undefined &&
-              d.parameterTypes.some((t) => t === 'params' || t.startsWith('params '));
+              d.parameterTypes.some(
+                (t) => t === "params" || t.startsWith("params "),
+              );
             if (!variadic) return false;
           }
           if (min !== undefined && argCount < min) return false;
@@ -56,7 +58,7 @@ export function narrowOverloadCandidates(
       const params = d.parameterTypes;
       if (params === undefined) return false;
       for (let i = 0; i < argTypes.length && i < params.length; i++) {
-        if (argTypes[i] === '') continue;
+        if (argTypes[i] === "") continue;
         if (argTypes[i] !== params[i]) return false;
       }
       return true;

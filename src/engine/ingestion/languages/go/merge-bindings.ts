@@ -1,6 +1,6 @@
-import type { BindingRef } from '../../../shared/index.js';
+import type { BindingRef } from "../../../shared/index.js";
 
-const TIER: Record<BindingRef['origin'], number> = {
+const TIER: Record<BindingRef["origin"], number> = {
   local: 0,
   namespace: 1,
   import: 2,
@@ -17,7 +17,8 @@ export function goMergeBindings(
   return [...existing, ...incoming]
     .sort(
       (a, b) =>
-        (TIER[a.origin] ?? 99) - (TIER[b.origin] ?? 99) || a.def.nodeId.localeCompare(b.def.nodeId),
+        (TIER[a.origin] ?? 99) - (TIER[b.origin] ?? 99) ||
+        a.def.nodeId.localeCompare(b.def.nodeId),
     )
     .filter((binding) => {
       if (seen.has(binding.def.nodeId)) return false;

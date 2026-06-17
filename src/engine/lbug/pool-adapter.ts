@@ -15,11 +15,14 @@
  * from the same Database is the officially supported concurrency pattern.
  */
 
-import fs from 'fs/promises';
-import lbug from '@ladybugdb/core';
-import { type Database, Connection } from '@ladybugdb/core';
-import { loadFTSExtension, closeLbug as closeWritableLbug } from './lbug-adapter.js';
-import { createLbugDatabase } from './lbug-config.js';
+import fs from "fs/promises";
+import lbug from "@ladybugdb/core";
+import { type Database, Connection } from "@ladybugdb/core";
+import {
+  loadFTSExtension,
+  closeLbug as closeWritableLbug,
+} from "./lbug-adapter.js";
+import { createLbugDatabase } from "./lbug-config.js";
 
 /** Per-repo pool: one Database, many Connections */
 interface PoolEntry {
@@ -105,7 +108,7 @@ function ensureIdleTimer(): void {
       }
     }
   }, 60_000);
-  if (idleTimer && typeof idleTimer === 'object' && 'unref' in idleTimer) {
+  if (idleTimer && typeof idleTimer === "object" && "unref" in idleTimer) {
     (idleTimer as NodeJS.Timeout).unref();
   }
 }
@@ -259,7 +262,10 @@ const initPromises = new Map<string, Promise<void>>();
  * Concurrent calls for the same repoId are deduplicated — the second caller
  * awaits the first's in-progress init rather than starting a redundant one.
  */
-export const initLbug = async (repoId: string, dbPath: string): Promise<void> => {
+export const initLbug = async (
+  repoId: string,
+  dbPath: string,
+): Promise<void> => {
   const existing = pool.get(repoId);
   if (existing) {
     existing.lastUsed = Date.now();
@@ -316,16 +322,19 @@ async function doInitLbug(repoId: string, dbPath: string): Promise<void> {
         restoreStdout();
         lastError = err instanceof Error ? err : new Error(String(err));
         const isLockError =
-          lastError.message.includes('Could not set lock') || lastError.message.includes('lock');
+          lastError.message.includes("Could not set lock") ||
+          lastError.message.includes("lock");
         if (!isLockError || attempt === LOCK_RETRY_ATTEMPTS) break;
-        await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_DELAY_MS * attempt));
+        await new Promise((resolve) =>
+          setTimeout(resolve, LOCK_RETRY_DELAY_MS * attempt),
+        );
       }
     }
 
     if (!shared) {
       throw new Error(
         `LadybugDB unavailable for ${repoId}. Another process may be rebuilding the index. ` +
-          `Retry later. (${lastError?.message || 'unknown error'})`,
+          `Retry later. (${lastError?.message || "unknown error"})`,
       );
     }
   }
@@ -353,7 +362,9 @@ async function doInitLbug(repoId: string, dbPath: string): Promise<void> {
   // install; analyze owns extension installation. If LOAD fails, search
   // features degrade gracefully and the user-facing query path proceeds.
   if (!shared.ftsLoaded) {
-    shared.ftsLoaded = await loadFTSExtension(available[0], { policy: 'load-only' });
+    shared.ftsLoaded = await loadFTSExtension(available[0], {
+      policy: "load-only",
+    });
   }
 
   // Register pool entry only after all connections are pre-warmed and FTS is
@@ -418,7 +429,9 @@ export async function initLbugWithDb(
   // policy: 'load-only' — same contract as initLbug above; the read pool
   // must not block on a network install during query execution.
   if (!shared.ftsLoaded) {
-    shared.ftsLoaded = await loadFTSExtension(available[0], { policy: 'load-only' });
+    shared.ftsLoaded = await loadFTSExtension(available[0], {
+      policy: "load-only",
+    });
   }
 
   pool.set(repoId, {
@@ -504,22 +517,36 @@ function checkin(entry: PoolEntry, conn: Connection): void {
  * Automatically checks out a connection, runs the query, and returns it.
  */
 /** Race a promise against a timeout */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export const executeQuery = async (repoId: string, cypher: string): Promise<any[]> => {
+export const executeQuery = async (
+  repoId: string,
+  cypher: string,
+): Promise<any[]> => {
   const entry = pool.get(repoId);
   if (!entry) {
-    throw new Error(`LadybugDB not initialized for repo "${repoId}". Call initLbug first.`);
+    throw new Error(
+      `LadybugDB not initialized for repo "${repoId}". Call initLbug first.`,
+    );
   }
 
   if (isWriteQuery(cypher)) {
-    throw new Error('Write operations are not allowed. The pool adapter is read-only.');
+    throw new Error(
+      "Write operations are not allowed. The pool adapter is read-only.",
+    );
   }
 
   entry.lastUsed = Date.now();
@@ -528,7 +555,11 @@ export const executeQuery = async (repoId: string, cypher: string): Promise<any[
   silenceStdout();
   activeQueryCount++;
   try {
-    const queryResult = await withTimeout(conn.query(cypher), QUERY_TIMEOUT_MS, 'Query');
+    const queryResult = await withTimeout(
+      conn.query(cypher),
+      QUERY_TIMEOUT_MS,
+      "Query",
+    );
     const result = Array.isArray(queryResult) ? queryResult[0] : queryResult;
     const rows = await result.getAll();
     return rows;
@@ -550,7 +581,9 @@ export const executeParameterized = async (
 ): Promise<any[]> => {
   const entry = pool.get(repoId);
   if (!entry) {
-    throw new Error(`LadybugDB not initialized for repo "${repoId}". Call initLbug first.`);
+    throw new Error(
+      `LadybugDB not initialized for repo "${repoId}". Call initLbug first.`,
+    );
   }
 
   entry.lastUsed = Date.now();
@@ -559,12 +592,20 @@ export const executeParameterized = async (
   silenceStdout();
   activeQueryCount++;
   try {
-    const stmt = await withTimeout(conn.prepare(cypher), QUERY_TIMEOUT_MS, 'Prepare');
+    const stmt = await withTimeout(
+      conn.prepare(cypher),
+      QUERY_TIMEOUT_MS,
+      "Prepare",
+    );
     if (!stmt.isSuccess()) {
       const errMsg = await stmt.getErrorMessage();
       throw new Error(`Prepare failed: ${errMsg}`);
     }
-    const queryResult = await withTimeout(conn.execute(stmt, params), QUERY_TIMEOUT_MS, 'Execute');
+    const queryResult = await withTimeout(
+      conn.execute(stmt, params),
+      QUERY_TIMEOUT_MS,
+      "Execute",
+    );
     const result = Array.isArray(queryResult) ? queryResult[0] : queryResult;
     const rows = await result.getAll();
     return rows;
@@ -618,6 +659,6 @@ export function isWriteQuery(query: string): boolean {
  * 用于 CLI 命令退出前清理资源。
  */
 export async function closeAllLbugResources(): Promise<void> {
-  await closeLbug();          // 关闭 read-only 连接池
-  await closeWritableLbug();  // 关闭 writable 单例连接
+  await closeLbug(); // 关闭 read-only 连接池
+  await closeWritableLbug(); // 关闭 writable 单例连接
 }

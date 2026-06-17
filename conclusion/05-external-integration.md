@@ -14,6 +14,7 @@ CodeGraph search "Sms" kind=class
 ```
 
 一次并行返回：
+
 - context → SmsService、SmsConfig、SmsController、SmsSendRecord
 - search → 完整类列表和位置
 
@@ -26,11 +27,13 @@ CodeGraph explore SmsService SmsConfig SmsController
 ```
 
 一次返回三个类的源码：
+
 - SmsConfig：有 smsCheckSwitch 字段（开关）、腾讯云 SDK 配置（appId、appSecret、templateId）
 - SmsService.sendSms()：if (smsCheckSwitch) → 调用腾讯云 SDK；else → 只记日志不发送
 - SmsController：sendVerifyCode()（发送验证码）、verifyCode()（校验验证码）、queryRecords()（查询记录）
 
 **关键发现**：
+
 1. 短信功能已实现，但 smsCheckSwitch 当前关闭
 2. 用的是腾讯云 SDK，需求要求阿里云
 3. 发送、校验、查询三个方法都有
@@ -79,6 +82,7 @@ CodeGraph node SmsController.queryRecords()
 根据用户回答：
 
 **如果是替换腾讯云**：
+
 1. pom.xml：移除腾讯云 SDK，添加阿里云 SDK
 2. SmsConfig：替换为阿里云配置字段（accessKeyId、accessKeySecret、signName）
 3. SmsService.sendSms()：重写为阿里云 SDK 调用
@@ -87,6 +91,7 @@ CodeGraph node SmsController.queryRecords()
 6. 支持多模板配置
 
 **如果是共存**：
+
 1. SmsConfig 中增加阿里云配置
 2. SmsService 中增加策略选择（配置决定用哪个）
 3. 其余同上
@@ -110,12 +115,12 @@ CodeGraph explore 一次调用就让我看到了全貌：短信功能存在、�
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| 现有短信实现 | CodeGraph explore | 无 |
-| 用的什么 SDK | CodeGraph explore（SmsConfig） | 无 |
-| 开关状态 | Grep yml | 无 |
-| 发送/校验/查询方法 | CodeGraph explore（SmsController） | 无 |
-| 频率限制有无 | Grep | 无 |
-| 配置是否仍有效 | **无法从代码获取** | **高**——边界知识可提供 |
-| 发送记录查询 | CodeGraph node | 无 |
+| 信息需求           | 实际获取方式                       |    知识库的增量价值    |
+| ------------------ | ---------------------------------- | :--------------------: |
+| 现有短信实现       | CodeGraph explore                  |           无           |
+| 用的什么 SDK       | CodeGraph explore（SmsConfig）     |           无           |
+| 开关状态           | Grep yml                           |           无           |
+| 发送/校验/查询方法 | CodeGraph explore（SmsController） |           无           |
+| 频率限制有无       | Grep                               |           无           |
+| 配置是否仍有效     | **无法从代码获取**                 | **高**——边界知识可提供 |
+| 发送记录查询       | CodeGraph node                     |           无           |

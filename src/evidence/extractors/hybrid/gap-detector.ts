@@ -1,13 +1,16 @@
-import type { KnowledgeType } from '../../../schemas/knowledge-type.js';
-import type { EvidenceGroup } from '../../type-evidence-builder.js';
+import type { KnowledgeType } from "../../../schemas/knowledge-type.js";
+import type { EvidenceGroup } from "../../type-evidence-builder.js";
 
 /**
  * Gap assessment thresholds for each knowledge type
  */
-export const GAP_THRESHOLDS: Record<KnowledgeType, {
-  minCount: number;
-  triggerRatio: number;
-}> = {
+export const GAP_THRESHOLDS: Record<
+  KnowledgeType,
+  {
+    minCount: number;
+    triggerRatio: number;
+  }
+> = {
   ARCHITECTURE: { minCount: 1, triggerRatio: 0.5 },
   BOUNDARY: { minCount: 3, triggerRatio: 0.4 },
   CAPABILITY: { minCount: 3, triggerRatio: 0.5 },
@@ -51,7 +54,7 @@ export function assessGap(
   if (staticCount === 0) {
     return {
       needsLlmSupplement: true,
-      reason: '静态抽取结果为空，必须触发LLM补充',
+      reason: "静态抽取结果为空，必须触发LLM补充",
       staticCount: 0,
       threshold,
     };
@@ -96,7 +99,7 @@ export function assessGap(
 function assessFieldCompleteness(groups: EvidenceGroup[]): number {
   if (groups.length === 0) return 0;
 
-  const essentialFields = ['entryPoints', 'behaviorSlices', 'flowTraces'];
+  const essentialFields = ["entryPoints", "behaviorSlices", "flowTraces"];
 
   let filledCount = 0;
   let totalChecks = 0;

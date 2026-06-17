@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildProcessEvidence(input: {
   processName: string;
@@ -9,16 +9,16 @@ export function buildProcessEvidence(input: {
   return {
     slice: {
       id: `process:${input.processName}`,
-      kind: 'process',
+      kind: "process",
       title: input.processName,
       scope: input.entryFile,
       seed: input.processName,
     },
     facts: [
       {
-        id: 'F-001',
+        id: "F-001",
         claim: `Process ${input.processName} starts at ${input.entryFile}`,
-        source_kind: 'analysis-runtime',
+        source_kind: "analysis-runtime",
         refs: [{ file: input.entryFile }],
       },
     ],

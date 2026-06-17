@@ -1,5 +1,5 @@
-import { ensureDir, writeText } from '../shared/fs.js';
-import YAML from 'yaml';
+import { ensureDir, writeText } from "../shared/fs.js";
+import YAML from "yaml";
 
 export interface GenerationReport {
   totalObjects: number;
@@ -8,7 +8,10 @@ export interface GenerationReport {
   failures: Array<{ id: string; type: string; error: string }>;
   warnings: Array<{ id: string; message: string }>;
   // 新增统计
-  objectCountsByType?: Record<string, { attempted: number; succeeded: number; failed: number }>;
+  objectCountsByType?: Record<
+    string,
+    { attempted: number; succeeded: number; failed: number }
+  >;
   dbCoverage?: {
     tablesFound: number;
     tablesGenerated: number;
@@ -47,93 +50,112 @@ export async function writeReports(input: {
 
 function buildSummaryMarkdown(report: GenerationReport): string {
   const lines = [
-    '# Generation Summary',
-    '',
+    "# Generation Summary",
+    "",
     `**Total Objects:** ${report.totalObjects}`,
     `**Succeeded:** ${report.succeeded}`,
     `**Failed:** ${report.failed}`,
     `**Warnings:** ${report.warnings.length}`,
-    '',
+    "",
   ];
 
   // DB Coverage 统计
   if (report.dbCoverage) {
-    lines.push('## DB Coverage');
-    lines.push('');
+    lines.push("## DB Coverage");
+    lines.push("");
     lines.push(`| Metric | Count |`);
     lines.push(`|--------|-------|`);
     lines.push(`| Tables Found | ${report.dbCoverage.tablesFound} |`);
     lines.push(`| Tables Generated | ${report.dbCoverage.tablesGenerated} |`);
-    lines.push(`| Fields with Comment Source | ${report.dbCoverage.fieldsWithCommentSource} |`);
-    lines.push(`| Fields with Inferred Source | ${report.dbCoverage.fieldsWithInferredSource} |`);
-    lines.push(`| Inferred Field Gaps | ${report.dbCoverage.inferredFieldGaps} |`);
-    lines.push('');
+    lines.push(
+      `| Fields with Comment Source | ${report.dbCoverage.fieldsWithCommentSource} |`,
+    );
+    lines.push(
+      `| Fields with Inferred Source | ${report.dbCoverage.fieldsWithInferredSource} |`,
+    );
+    lines.push(
+      `| Inferred Field Gaps | ${report.dbCoverage.inferredFieldGaps} |`,
+    );
+    lines.push("");
   }
 
   // Slice Coverage 统计
   if (report.sliceCoverage) {
-    lines.push('## Slice Coverage');
-    lines.push('');
+    lines.push("## Slice Coverage");
+    lines.push("");
     lines.push(`| Metric | Count |`);
     lines.push(`|--------|-------|`);
     lines.push(`| Total Slices | ${report.sliceCoverage.totalSlices} |`);
-    lines.push(`| Slices Processed | ${report.sliceCoverage.slicesProcessed} |`);
-    lines.push(`| Slices with Objects | ${report.sliceCoverage.slicesWithObjects} |`);
-    lines.push('');
+    lines.push(
+      `| Slices Processed | ${report.sliceCoverage.slicesProcessed} |`,
+    );
+    lines.push(
+      `| Slices with Objects | ${report.sliceCoverage.slicesWithObjects} |`,
+    );
+    lines.push("");
   }
 
   // 按类型统计
   if (report.objectCountsByType) {
-    lines.push('## Object Counts by Type');
-    lines.push('');
+    lines.push("## Object Counts by Type");
+    lines.push("");
     lines.push(`| Type | Attempted | Succeeded | Failed |`);
     lines.push(`|------|-----------|-----------|--------|`);
     for (const [type, counts] of Object.entries(report.objectCountsByType)) {
-      lines.push(`| ${type} | ${counts.attempted} | ${counts.succeeded} | ${counts.failed} |`);
+      lines.push(
+        `| ${type} | ${counts.attempted} | ${counts.succeeded} | ${counts.failed} |`,
+      );
     }
-    lines.push('');
+    lines.push("");
   }
 
   if (report.failures.length > 0) {
-    lines.push('## Failures');
-    lines.push('');
+    lines.push("## Failures");
+    lines.push("");
     for (const failure of report.failures) {
       lines.push(`- **${failure.id}** (${failure.type}): ${failure.error}`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   if (report.warnings.length > 0) {
-    lines.push('## Warnings');
-    lines.push('');
+    lines.push("## Warnings");
+    lines.push("");
     for (const warning of report.warnings) {
       lines.push(`- **${warning.id}**: ${warning.message}`);
     }
-    lines.push('');
+    lines.push("");
   }
 
   // 状态标记
   if (report.failures.length > 0) {
-    lines.push('---');
-    lines.push('');
-    lines.push('**STATUS: PARTIAL** - Some objects failed to generate. Review failures above.');
+    lines.push("---");
+    lines.push("");
+    lines.push(
+      "**STATUS: PARTIAL** - Some objects failed to generate. Review failures above.",
+    );
   } else if (report.succeeded === 0 && report.totalObjects === 0) {
-    lines.push('---');
-    lines.push('');
-    lines.push('**STATUS: EMPTY** - No objects were generated. Check evidence extraction.');
+    lines.push("---");
+    lines.push("");
+    lines.push(
+      "**STATUS: EMPTY** - No objects were generated. Check evidence extraction.",
+    );
   } else if (report.succeeded === report.totalObjects) {
-    lines.push('---');
-    lines.push('');
-    lines.push('**STATUS: COMPLETE** - All objects generated successfully.');
+    lines.push("---");
+    lines.push("");
+    lines.push("**STATUS: COMPLETE** - All objects generated successfully.");
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function buildCoverageYaml(report: GenerationReport): string {
   const data = {
     success_rate: `${report.succeeded}/${report.totalObjects}`,
-    success_percentage: report.totalObjects > 0 ? Math.round((report.succeeded / report.totalObjects) * 100) : 0,
+    success_percentage:
+      report.totalObjects > 0
+        ? Math.round((report.succeeded / report.totalObjects) * 100)
+        : 0,
     failures: report.failures,
     warnings: report.warnings,
     db_coverage: report.dbCoverage,

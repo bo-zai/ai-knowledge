@@ -2,7 +2,7 @@
  * Character-based sliding window chunking (pure, no tree-sitter dependency)
  */
 
-import { buildLineIndex, resolveChunkLines } from './line-index.js';
+import { buildLineIndex, resolveChunkLines } from "./line-index.js";
 
 export interface Chunk {
   text: string;

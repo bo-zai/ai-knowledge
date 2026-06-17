@@ -36,8 +36,8 @@
  * `isSemanticModelValidatorEnabled()` (`utils/env.ts`).
  */
 
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { isSemanticModelValidatorEnabled } from '../../utils/env.js';
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { isSemanticModelValidatorEnabled } from "../../utils/env.js";
 
 export function validateBindingsImmutability(
   indexes: ScopeResolutionIndexes,

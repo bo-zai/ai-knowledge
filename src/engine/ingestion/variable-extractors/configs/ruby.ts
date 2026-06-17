@@ -1,8 +1,8 @@
 // gitnexus/src/core/ingestion/variable-extractors/configs/ruby.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { VariableExtractionConfig } from '../../variable-types.js';
-import type { VariableVisibility } from '../../variable-types.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { VariableExtractionConfig } from "../../variable-types.js";
+import type { VariableVisibility } from "../../variable-types.js";
 
 /**
  * Ruby variable extraction config.
@@ -17,13 +17,14 @@ export const rubyVariableConfig: VariableExtractionConfig = {
   language: SupportedLanguages.Ruby,
   constNodeTypes: [],
   staticNodeTypes: [],
-  variableNodeTypes: ['assignment'],
+  variableNodeTypes: ["assignment"],
 
   extractName(node) {
-    const left = node.childForFieldName('left');
+    const left = node.childForFieldName("left");
     if (!left) return undefined;
-    if (left.type === 'identifier' || left.type === 'constant') return left.text;
-    if (left.type === 'global_variable') return left.text;
+    if (left.type === "identifier" || left.type === "constant")
+      return left.text;
+    if (left.type === "global_variable") return left.text;
     return undefined;
   },
 
@@ -33,16 +34,17 @@ export const rubyVariableConfig: VariableExtractionConfig = {
   },
 
   extractVisibility(_node): VariableVisibility {
-    const left = _node.childForFieldName('left');
-    if (!left) return 'public';
+    const left = _node.childForFieldName("left");
+    if (!left) return "public";
     // Constants (uppercase start) and global variables are effectively public
-    if (left.type === 'constant' || left.type === 'global_variable') return 'public';
-    return 'private';
+    if (left.type === "constant" || left.type === "global_variable")
+      return "public";
+    return "private";
   },
 
   isConst(node) {
-    const left = node.childForFieldName('left');
-    return left?.type === 'constant';
+    const left = node.childForFieldName("left");
+    return left?.type === "constant";
   },
 
   isStatic(_node) {
@@ -50,8 +52,8 @@ export const rubyVariableConfig: VariableExtractionConfig = {
   },
 
   isMutable(node) {
-    const left = node.childForFieldName('left');
+    const left = node.childForFieldName("left");
     // Constants are immutable by convention
-    return left?.type !== 'constant';
+    return left?.type !== "constant";
   },
 };

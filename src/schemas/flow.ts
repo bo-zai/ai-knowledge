@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonObjectSchema } from './common.js';
+import { z } from "zod";
+import { commonObjectSchema } from "./common.js";
 
 /**
  * 跨域业务流程步骤 Schema
@@ -44,7 +44,7 @@ export type FlowStep = z.infer<typeof flowStepSchema>;
  * 扩展字段支持涉及域、业务目标、完成标志、关键分支等业务视角信息。
  */
 export const flowObjectSchema = commonObjectSchema.extend({
-  type: z.literal('FLOW'),
+  type: z.literal("FLOW"),
 
   /** 流程名称 */
   flow_name: z.string().min(1),

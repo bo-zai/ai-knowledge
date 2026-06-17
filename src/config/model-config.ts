@@ -1,8 +1,8 @@
-import type OpenAI from 'openai';
+import type OpenAI from "openai";
 
-import { fileExists, readText } from '../shared/fs.js';
-import { LLM_DEFAULTS } from './defaults.js';
-import { logger } from '../shared/logger.js';
+import { fileExists, readText } from "../shared/fs.js";
+import { LLM_DEFAULTS } from "./defaults.js";
+import { logger } from "../shared/logger.js";
 
 export interface LlmConfigFile {
   /** LLM 模型名称 */
@@ -25,7 +25,7 @@ export interface LlmConfigFile {
 export interface ModelConfig {
   baseUrl: string;
   apiKey: string;
-  apiKeyEnv?: string;  // 环境变量名（可选）
+  apiKeyEnv?: string; // 环境变量名（可选）
   model: string;
   /** 全局并发数 */
   concurrency: number;
@@ -35,7 +35,9 @@ export interface ModelConfig {
   maxRetries: number;
 }
 
-export async function loadLlmConfigFile(configPath: string): Promise<LlmConfigFile> {
+export async function loadLlmConfigFile(
+  configPath: string,
+): Promise<LlmConfigFile> {
   if (!(await fileExists(configPath))) {
     throw new Error(`LLM config file not found: ${configPath}`);
   }
@@ -52,27 +54,36 @@ export function resolveModelConfig(input: {
 
   // 验证并发数
   let concurrency = fileConfig?.concurrency ?? LLM_DEFAULTS.concurrency;
-  if (typeof fileConfig?.concurrency !== 'number' || fileConfig.concurrency < 1) {
+  if (
+    typeof fileConfig?.concurrency !== "number" ||
+    fileConfig.concurrency < 1
+  ) {
     if (fileConfig?.concurrency !== undefined) {
-      logger.warn(`Invalid concurrency value (${fileConfig.concurrency}), using default ${LLM_DEFAULTS.concurrency}`);
+      logger.warn(
+        `Invalid concurrency value (${fileConfig.concurrency}), using default ${LLM_DEFAULTS.concurrency}`,
+      );
     }
     concurrency = LLM_DEFAULTS.concurrency;
   }
 
   // 验证超时
   let timeoutSeconds = fileConfig?.timeout ?? LLM_DEFAULTS.timeoutSeconds;
-  if (typeof fileConfig?.timeout !== 'number' || fileConfig.timeout < 1) {
+  if (typeof fileConfig?.timeout !== "number" || fileConfig.timeout < 1) {
     if (fileConfig?.timeout !== undefined) {
-      logger.warn(`Invalid timeout value (${fileConfig.timeout}), using default ${LLM_DEFAULTS.timeoutSeconds}`);
+      logger.warn(
+        `Invalid timeout value (${fileConfig.timeout}), using default ${LLM_DEFAULTS.timeoutSeconds}`,
+      );
     }
     timeoutSeconds = LLM_DEFAULTS.timeoutSeconds;
   }
 
   // 验证重试次数
   let maxRetries = fileConfig?.maxRetries ?? LLM_DEFAULTS.maxRetries;
-  if (typeof fileConfig?.maxRetries !== 'number' || fileConfig.maxRetries < 1) {
+  if (typeof fileConfig?.maxRetries !== "number" || fileConfig.maxRetries < 1) {
     if (fileConfig?.maxRetries !== undefined) {
-      logger.warn(`Invalid maxRetries value (${fileConfig.maxRetries}), using default ${LLM_DEFAULTS.maxRetries}`);
+      logger.warn(
+        `Invalid maxRetries value (${fileConfig.maxRetries}), using default ${LLM_DEFAULTS.maxRetries}`,
+      );
     }
     maxRetries = LLM_DEFAULTS.maxRetries;
   }
@@ -83,7 +94,7 @@ export function resolveModelConfig(input: {
   return {
     baseUrl: fileConfig?.baseUrl ?? LLM_DEFAULTS.baseUrl,
     apiKey: fileConfig?.apiKey ?? LLM_DEFAULTS.apiKey,
-    apiKeyEnv: fileConfig?.apiKeyEnv,  // 可选，无默认值
+    apiKeyEnv: fileConfig?.apiKeyEnv, // 可选，无默认值
     model: fileConfig?.model ?? LLM_DEFAULTS.model,
     concurrency,
     timeoutMs,
@@ -92,7 +103,7 @@ export function resolveModelConfig(input: {
 }
 
 export async function createOpenAiClient(config: ModelConfig): Promise<OpenAI> {
-  const mod = await import('openai');
+  const mod = await import("openai");
   const OpenAI = mod.default;
   return new OpenAI({
     baseURL: config.baseUrl,

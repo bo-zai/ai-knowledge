@@ -9,10 +9,10 @@ import type {
   GoModuleConfig,
   CSharpProjectConfig,
   ComposerConfig,
-} from '../language-config.js';
-import type { SwiftPackageConfig } from '../language-config.js';
-import type { SuffixIndex } from './utils.js';
-import type { SupportedLanguages } from '../../shared/index.js';
+} from "../language-config.js";
+import type { SwiftPackageConfig } from "../language-config.js";
+import type { SuffixIndex } from "./utils.js";
+import type { SupportedLanguages } from "../../shared/index.js";
 
 /**
  * Result of resolving an import via language-specific dispatch.
@@ -21,8 +21,8 @@ import type { SupportedLanguages } from '../../shared/index.js';
  * - null: no resolution (external dependency, etc.)
  */
 export type ImportResult =
-  | { kind: 'files'; files: string[] }
-  | { kind: 'package'; files: string[]; dirSuffix: string }
+  | { kind: "files"; files: string[] }
+  | { kind: "package"; files: string[]; dirSuffix: string }
   | null;
 
 /** Bundled language-specific configs loaded once per ingestion run. */

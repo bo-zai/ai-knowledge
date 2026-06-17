@@ -28,7 +28,7 @@
  * included) and how closed PR #902's `enclosingFunctions` behaved.
  */
 
-import type { Range, Scope, ScopeId } from './types.js';
+import type { Range, Scope, ScopeId } from "./types.js";
 
 export interface PositionIndex {
   /** Total scope entries indexed across all files. */
@@ -99,9 +99,12 @@ interface Entry {
  * innermost scope.
  */
 function compareEntry(a: Entry, b: Entry): number {
-  if (a.range.startLine !== b.range.startLine) return a.range.startLine - b.range.startLine;
-  if (a.range.startCol !== b.range.startCol) return a.range.startCol - b.range.startCol;
-  if (a.range.endLine !== b.range.endLine) return b.range.endLine - a.range.endLine;
+  if (a.range.startLine !== b.range.startLine)
+    return a.range.startLine - b.range.startLine;
+  if (a.range.startCol !== b.range.startCol)
+    return a.range.startCol - b.range.startCol;
+  if (a.range.endLine !== b.range.endLine)
+    return b.range.endLine - a.range.endLine;
   return b.range.endCol - a.range.endCol;
 }
 
@@ -126,7 +129,11 @@ function endIsAtOrAfter(range: Range, line: number, col: number): boolean {
  * Classic "upper bound - 1" binary search: find the first entry that
  * starts *after* the query, then step back one.
  */
-function findLastStartLteIndex(arr: readonly Entry[], line: number, col: number): number {
+function findLastStartLteIndex(
+  arr: readonly Entry[],
+  line: number,
+  col: number,
+): number {
   let lo = 0;
   let hi = arr.length;
   while (lo < hi) {
@@ -140,12 +147,19 @@ function findLastStartLteIndex(arr: readonly Entry[], line: number, col: number)
   return lo - 1;
 }
 
-function wrapIndex(entriesByFile: Map<string, Entry[]>, size: number): PositionIndex {
+function wrapIndex(
+  entriesByFile: Map<string, Entry[]>,
+  size: number,
+): PositionIndex {
   return {
     get size() {
       return size;
     },
-    atPosition(filePath: string, line: number, col: number): ScopeId | undefined {
+    atPosition(
+      filePath: string,
+      line: number,
+      col: number,
+    ): ScopeId | undefined {
       const bucket = entriesByFile.get(filePath);
       if (bucket === undefined || bucket.length === 0) return undefined;
 

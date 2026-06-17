@@ -1,4 +1,4 @@
-import type { EvidenceGroup } from '../../type-evidence-builder.js';
+import type { EvidenceGroup } from "../../type-evidence-builder.js";
 
 /**
  * Merge static extraction results with LLM supplement results.
@@ -35,7 +35,9 @@ export function mergeEvidenceGroups(
       });
     } else {
       // Merge fields into existing group if supplement has additional info
-      const existingIndex = merged.findIndex(g => g.groupId === group.groupId);
+      const existingIndex = merged.findIndex(
+        (g) => g.groupId === group.groupId,
+      );
       if (existingIndex >= 0) {
         merged[existingIndex] = mergeFields(merged[existingIndex], group);
       }
@@ -49,7 +51,10 @@ export function mergeEvidenceGroups(
  * Merge fields from supplement into existing group.
  * Static fields take precedence.
  */
-function mergeFields(staticGroup: EvidenceGroup, supplementGroup: EvidenceGroup): EvidenceGroup {
+function mergeFields(
+  staticGroup: EvidenceGroup,
+  supplementGroup: EvidenceGroup,
+): EvidenceGroup {
   const staticBundle = staticGroup.bundle;
   const supplementBundle = supplementGroup.bundle;
 
@@ -58,12 +63,30 @@ function mergeFields(staticGroup: EvidenceGroup, supplementGroup: EvidenceGroup)
     bundle: {
       ...staticBundle,
       // Merge arrays - static items first, then supplement items not in static
-      entryPoints: mergeArrays(staticBundle.entryPoints, supplementBundle.entryPoints),
-      behaviorSlices: mergeArrays(staticBundle.behaviorSlices, supplementBundle.behaviorSlices),
-      flowTraces: mergeArrays(staticBundle.flowTraces, supplementBundle.flowTraces),
-      dataContracts: mergeArrays(staticBundle.dataContracts, supplementBundle.dataContracts),
-      validationAnchors: mergeArrays(staticBundle.validationAnchors, supplementBundle.validationAnchors),
-      moduleSurfaces: mergeArrays(staticBundle.moduleSurfaces, supplementBundle.moduleSurfaces),
+      entryPoints: mergeArrays(
+        staticBundle.entryPoints,
+        supplementBundle.entryPoints,
+      ),
+      behaviorSlices: mergeArrays(
+        staticBundle.behaviorSlices,
+        supplementBundle.behaviorSlices,
+      ),
+      flowTraces: mergeArrays(
+        staticBundle.flowTraces,
+        supplementBundle.flowTraces,
+      ),
+      dataContracts: mergeArrays(
+        staticBundle.dataContracts,
+        supplementBundle.dataContracts,
+      ),
+      validationAnchors: mergeArrays(
+        staticBundle.validationAnchors,
+        supplementBundle.validationAnchors,
+      ),
+      moduleSurfaces: mergeArrays(
+        staticBundle.moduleSurfaces,
+        supplementBundle.moduleSurfaces,
+      ),
       // Add LLM-derived open questions
       openQuestions: [
         ...staticBundle.openQuestions,
@@ -84,7 +107,9 @@ function mergeArrays<T extends { ref?: string }>(
   if (!Array.isArray(staticArray)) return supplementArray || [];
   if (!Array.isArray(supplementArray)) return staticArray;
 
-  const refs = new Set(staticArray.map(item => item.ref || JSON.stringify(item)));
+  const refs = new Set(
+    staticArray.map((item) => item.ref || JSON.stringify(item)),
+  );
 
   const result = [...staticArray];
   for (const item of supplementArray) {

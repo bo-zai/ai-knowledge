@@ -13,17 +13,17 @@ import type {
   MapperInfo,
   TableInfo,
   EntityInfo,
-} from '../types.js';
+} from "../types.js";
 
 /**
  * 入口点类型
  */
-export type EntryPointKind = 'controller' | 'scheduled' | 'mq_consumer';
+export type EntryPointKind = "controller" | "scheduled" | "mq_consumer";
 
 /**
  * 发现途径类型
  */
-export type DiscoveryPathway = 'controller' | 'scheduled' | 'mq_consumer';
+export type DiscoveryPathway = "controller" | "scheduled" | "mq_consumer";
 
 /**
  * 路径发现配置
@@ -98,7 +98,9 @@ export abstract class BasePathDiscovery {
 
     try {
       // 1. 检测所有入口点
-      const allEntryPoints = await this.adapter.detectEntryPoints(this.modulePath);
+      const allEntryPoints = await this.adapter.detectEntryPoints(
+        this.modulePath,
+      );
 
       // 2. 过滤只保留当前类型的入口点
       for (const ep of allEntryPoints) {
@@ -115,8 +117,11 @@ export abstract class BasePathDiscovery {
             tracePaths.push(tracePath);
           }
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          errors.push(`追溯 ${this.getPathTypeName()} ${this.formatEntryPointName(entryPoint)} 失败: ${errorMsg}`);
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          errors.push(
+            `追溯 ${this.getPathTypeName()} ${this.formatEntryPointName(entryPoint)} 失败: ${errorMsg}`,
+          );
         }
       }
     } catch (error) {
@@ -137,12 +142,12 @@ export abstract class BasePathDiscovery {
    */
   protected getPathTypeName(): string {
     switch (this.pathway) {
-      case 'controller':
-        return 'Controller';
-      case 'scheduled':
-        return 'Scheduled';
-      case 'mq_consumer':
-        return 'MQ Consumer';
+      case "controller":
+        return "Controller";
+      case "scheduled":
+        return "Scheduled";
+      case "mq_consumer":
+        return "MQ Consumer";
       default:
         return this.pathway;
     }
@@ -210,8 +215,11 @@ export abstract class BasePathDiscovery {
           const deeperServices = await this.traceDeeperServices(svc, visited);
           nextServices.push(...deeperServices);
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          errors.push(`追溯 Service ${svc.className} 的深层调用失败: ${errorMsg}`);
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          errors.push(
+            `追溯 Service ${svc.className} 的深层调用失败: ${errorMsg}`,
+          );
         }
       }
 
@@ -238,10 +246,13 @@ export abstract class BasePathDiscovery {
     serviceNode: ServiceChainNode,
     visited: Set<string>,
   ): Promise<ServiceChainNode[]> {
-    const { lbugPath } = await import('../../../../engine/storage/repo-manager.js').then(m => m.getStoragePaths(serviceNode.modulePath));
+    const { lbugPath } =
+      await import("../../../../engine/storage/repo-manager.js").then((m) =>
+        m.getStoragePaths(serviceNode.modulePath),
+      );
 
     try {
-      const fs = await import('fs/promises');
+      const fs = await import("fs/promises");
       await fs.access(lbugPath);
     } catch {
       return [];
@@ -258,7 +269,7 @@ export abstract class BasePathDiscovery {
     });
 
     // 过滤掉已访问的
-    return deeperServices.filter(svc => {
+    return deeperServices.filter((svc) => {
       const key = `${svc.className}:${svc.filePath}`;
       return !visited.has(key);
     });
@@ -292,7 +303,9 @@ export abstract class BasePathDiscovery {
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        errors.push(`追溯 Service ${serviceNode.className} 的 Mapper 失败: ${errorMsg}`);
+        errors.push(
+          `追溯 Service ${serviceNode.className} 的 Mapper 失败: ${errorMsg}`,
+        );
       }
 
       if (!this.config.collectAllMappers && mappers.length >= 1) {
@@ -353,7 +366,10 @@ export abstract class BasePathDiscovery {
 
     for (const table of tables) {
       try {
-        const entity = await this.adapter.findEntityForTable(table, this.modulePath);
+        const entity = await this.adapter.findEntityForTable(
+          table,
+          this.modulePath,
+        );
 
         if (entity) {
           const key = `${entity.className}:${entity.filePath}`;

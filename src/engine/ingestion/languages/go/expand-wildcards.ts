@@ -1,5 +1,10 @@
-import type { BindingRef, ParsedFile, ScopeId, SymbolDefinition } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
+import type {
+  BindingRef,
+  ParsedFile,
+  ScopeId,
+  SymbolDefinition,
+} from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
 
 /**
  * Expand Go dot imports (`import . "pkg"`) into binding augmentations.
@@ -16,7 +21,10 @@ export function expandGoDotImports(
   parsedFiles: readonly ParsedFile[],
   indexes: ScopeResolutionIndexes,
 ): void {
-  const augmentations = indexes.bindingAugmentations as Map<ScopeId, Map<string, BindingRef[]>>;
+  const augmentations = indexes.bindingAugmentations as Map<
+    ScopeId,
+    Map<string, BindingRef[]>
+  >;
 
   for (const parsed of parsedFiles) {
     const moduleEdges = indexes.imports.get(parsed.moduleScope);
@@ -26,11 +34,15 @@ export function expandGoDotImports(
     for (const edge of moduleEdges) {
       // Go dot imports start as `kind: 'wildcard'`; finalize materializes
       // them as `wildcard-expanded` import edges.
-      if (edge.kind !== 'wildcard-expanded' && edge.kind !== 'dynamic-resolved') {
+      if (
+        edge.kind !== "wildcard-expanded" &&
+        edge.kind !== "dynamic-resolved"
+      ) {
         continue;
       }
       if (edge.targetFile === null) continue;
-      if (!wildcardTargets.includes(edge.targetFile)) wildcardTargets.push(edge.targetFile);
+      if (!wildcardTargets.includes(edge.targetFile))
+        wildcardTargets.push(edge.targetFile);
     }
     if (wildcardTargets.length === 0) continue;
 
@@ -47,7 +59,7 @@ export function expandGoDotImports(
         // V1: ASCII-only export check; Unicode uppercase identifiers (e.g. Ñame)
         // are not recognized as exported. Conforms to Go community convention.
         const first = name[0]!;
-        if (first < 'A' || first > 'Z') continue;
+        if (first < "A" || first > "Z") continue;
 
         // Check if the importer already has this name.
         const importerBindings = indexes.bindings.get(parsed.moduleScope);
@@ -66,9 +78,9 @@ export function expandGoDotImports(
         }
 
         for (const ref of refs) {
-          if (ref.origin !== 'local') continue;
+          if (ref.origin !== "local") continue;
           if (entries.some((e) => e.def.nodeId === ref.def.nodeId)) continue;
-          entries.push({ def: ref.def, origin: 'wildcard' });
+          entries.push({ def: ref.def, origin: "wildcard" });
         }
       }
     }
@@ -79,21 +91,23 @@ export function expandGoWildcardNames(
   targetModuleScope: ScopeId,
   parsedFiles: readonly ParsedFile[],
 ): readonly string[] {
-  const target = parsedFiles.find((parsed) => parsed.moduleScope === targetModuleScope);
+  const target = parsedFiles.find(
+    (parsed) => parsed.moduleScope === targetModuleScope,
+  );
   if (target === undefined) return [];
 
   const names: string[] = [];
   for (const def of target.localDefs) {
     const name = simpleName(def);
-    if (name === '') continue;
+    if (name === "") continue;
     // V1: ASCII-only export check; see expandGoDotImports for full note.
     const first = name[0]!;
-    if (first < 'A' || first > 'Z') continue;
+    if (first < "A" || first > "Z") continue;
     if (!names.includes(name)) names.push(name);
   }
   return names;
 }
 
 function simpleName(def: SymbolDefinition): string {
-  return def.qualifiedName?.split('.').pop() ?? def.qualifiedName ?? '';
+  return def.qualifiedName?.split(".").pop() ?? def.qualifiedName ?? "";
 }

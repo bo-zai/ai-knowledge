@@ -4,9 +4,10 @@
  * 运行方式: npx tsx scripts/validate-partition-candidates.ts
  */
 
-import { runValidation } from '../src/partitioning/candidate-validator.js';
+import { runValidation } from "../src/partitioning/candidate-validator.js";
 
-const repoPath = process.argv[2] || 'D:\\workspace\\other_project\\music-education-app';
+const repoPath =
+  process.argv[2] || "D:\\workspace\\other_project\\music-education-app";
 
 console.log(`\n========== Validating: ${repoPath} ==========\n`);
 
@@ -15,19 +16,25 @@ const result = await runValidation({
   verbose: true,
 });
 
-console.log('=== Validation Summary ===');
-console.log(JSON.stringify({
-  success: result.success,
-  entryPointCount: result.entryPointCount,
-  candidateCount: result.candidateCount,
-  relationCount: result.relationCount,
-  groupCount: result.groupCount,
-  executionTimeMs: result.executionTimeMs,
-  error: result.error,
-}, null, 2));
+console.log("=== Validation Summary ===");
+console.log(
+  JSON.stringify(
+    {
+      success: result.success,
+      entryPointCount: result.entryPointCount,
+      candidateCount: result.candidateCount,
+      relationCount: result.relationCount,
+      groupCount: result.groupCount,
+      executionTimeMs: result.executionTimeMs,
+      error: result.error,
+    },
+    null,
+    2,
+  ),
+);
 
 if (result.candidates.length > 0) {
-  console.log('\n=== Candidates ===');
+  console.log("\n=== Candidates ===");
   for (const c of result.candidates) {
     console.log(`\nCandidate: ${c.candidateId}`);
     console.log(`  AnchorTable: ${c.anchorTable}`);
@@ -39,14 +46,14 @@ if (result.candidates.length > 0) {
 }
 
 if (result.relations.length > 0) {
-  console.log('\n=== Relations ===');
+  console.log("\n=== Relations ===");
   for (const r of result.relations) {
     console.log(`\nRelation: ${r.candidateIdA} <-> ${r.candidateIdB}`);
-    console.log(`  SharedTables: ${r.sharedTables.join(', ') || 'none'}`);
-    console.log(`  SharedServices: ${r.sharedServices.join(', ') || 'none'}`);
-    console.log(`  SharedMappers: ${r.sharedMappers.join(', ') || 'none'}`);
+    console.log(`  SharedTables: ${r.sharedTables.join(", ") || "none"}`);
+    console.log(`  SharedServices: ${r.sharedServices.join(", ") || "none"}`);
+    console.log(`  SharedMappers: ${r.sharedMappers.join(", ") || "none"}`);
     console.log(`  ForeignKeyRelation: ${r.hasForeignKeyRelation}`);
   }
 }
 
-console.log('\n========== Validation Complete ==========');
+console.log("\n========== Validation Complete ==========");

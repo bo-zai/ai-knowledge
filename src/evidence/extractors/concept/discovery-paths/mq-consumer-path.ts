@@ -5,14 +5,11 @@
  * @RocketMQMessageListener -> Service -> Mapper -> Table -> Entity
  */
 
-import type {
-  LanguageAdapter,
-  EntryPointInfo,
-} from '../types.js';
+import type { LanguageAdapter, EntryPointInfo } from "../types.js";
 import {
   BasePathDiscovery,
   type BasePathDiscoveryConfig,
-} from './base-path-discovery.js';
+} from "./base-path-discovery.js";
 
 /**
  * MQ Consumer 路径发现配置
@@ -26,8 +23,8 @@ export type MqConsumerPathDiscoveryConfig = BasePathDiscoveryConfig;
  * 最终到达数据表和实体类。
  */
 export class MqConsumerPathDiscovery extends BasePathDiscovery {
-  protected readonly pathway = 'mq_consumer' as const;
-  protected readonly entryPointKind = 'mq_consumer' as const;
+  protected readonly pathway = "mq_consumer" as const;
+  protected readonly entryPointKind = "mq_consumer" as const;
 
   /**
    * 格式化入口点名称用于错误信息

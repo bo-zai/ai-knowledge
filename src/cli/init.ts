@@ -4,11 +4,11 @@
  * 此命令独立执行图数据初始化，与 generate 命令复用相同的 initGraphData 逻辑。
  */
 
-import path from 'path';
-import { logger, setLogLevel, closeLogFile } from '../shared/logger.js';
-import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
-import { initGraphData } from '../query/prepare-generation.js';
-import { closeAllLbugResources } from '../engine/lbug/pool-adapter.js';
+import path from "path";
+import { logger, setLogLevel, closeLogFile } from "../shared/logger.js";
+import { resolveTargetRepo } from "../shared/resolve-target-repo.js";
+import { initGraphData } from "../query/prepare-generation.js";
+import { closeAllLbugResources } from "../engine/lbug/pool-adapter.js";
 
 interface InitOptions {
   repo?: string;
@@ -19,7 +19,7 @@ interface InitOptions {
 
 export async function runInit(options: InitOptions): Promise<void> {
   if (options.verbose) {
-    setLogLevel('debug');
+    setLogLevel("debug");
   }
 
   // 解析目标仓库路径
@@ -55,3 +55,5 @@ export async function runInit(options: InitOptions): Promise<void> {
   // 所有 Node.js 层面的资源已正确清理，可以安全强制退出。
   process.exit(0);
 }
+test;
+test;

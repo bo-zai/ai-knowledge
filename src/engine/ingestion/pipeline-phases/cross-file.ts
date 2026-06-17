@@ -30,11 +30,11 @@
  * disposes on the failure path). Do not silently rely on the GC.
  */
 
-import type { PipelinePhase, PipelineContext, PhaseResult } from './types.js';
-import { getPhaseOutput } from './types.js';
-import type { ParseOutput } from './parse.js';
-import { runCrossFileBindingPropagation } from './cross-file-impl.js';
-import { isDev } from '../utils/env.js';
+import type { PipelinePhase, PipelineContext, PhaseResult } from "./types.js";
+import { getPhaseOutput } from "./types.js";
+import type { ParseOutput } from "./parse.js";
+import { runCrossFileBindingPropagation } from "./cross-file-impl.js";
+import { isDev } from "../utils/env.js";
 
 export interface CrossFileOutput {
   /** Number of files re-processed during cross-file propagation. */
@@ -42,15 +42,20 @@ export interface CrossFileOutput {
 }
 
 export const crossFilePhase: PipelinePhase<CrossFileOutput> = {
-  name: 'crossFile',
-  deps: ['parse', 'routes', 'tools', 'orm'],
+  name: "crossFile",
+  deps: ["parse", "routes", "tools", "orm"],
 
   async execute(
     ctx: PipelineContext,
     deps: ReadonlyMap<string, PhaseResult<unknown>>,
   ): Promise<CrossFileOutput> {
-    const { exportedTypeMap, allPathSet, totalFiles, bindingAccumulator, resolutionContext } =
-      getPhaseOutput<ParseOutput>(deps, 'parse');
+    const {
+      exportedTypeMap,
+      allPathSet,
+      totalFiles,
+      bindingAccumulator,
+      resolutionContext,
+    } = getPhaseOutput<ParseOutput>(deps, "parse");
 
     try {
       // Telemetry must run BEFORE dispose: totalBindings, fileCount, and
@@ -58,7 +63,9 @@ export const crossFilePhase: PipelinePhase<CrossFileOutput> = {
       // internal maps.
       if (isDev) {
         if (bindingAccumulator.totalBindings > 0) {
-          const memKB = Math.round(bindingAccumulator.estimateMemoryBytes() / 1024);
+          const memKB = Math.round(
+            bindingAccumulator.estimateMemoryBytes() / 1024,
+          );
           console.log(
             `📦 BindingAccumulator: ${bindingAccumulator.totalBindings} bindings across ${bindingAccumulator.fileCount} files (~${memKB} KB)`,
           );

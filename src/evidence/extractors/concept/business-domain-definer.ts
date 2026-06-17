@@ -9,7 +9,13 @@
  * - 表关联 -> 业务域合并
  */
 
-import type { TableAnchor, ConceptCandidate, BusinessDomain, GitCommitEvidence, RelatedTableInfo } from './types.js';
+import type {
+  TableAnchor,
+  ConceptCandidate,
+  BusinessDomain,
+  GitCommitEvidence,
+  RelatedTableInfo,
+} from "./types.js";
 
 /**
  * 业务域定义器配置
@@ -49,7 +55,10 @@ export class BusinessDomainDefinerImpl {
     const initialDomains = this.createInitialDomains(tableAnchors, candidates);
 
     // 2. 根据表关联关系合并业务域
-    const mergedDomains = this.mergeDomainsByRelation(initialDomains, tableAnchors);
+    const mergedDomains = this.mergeDomainsByRelation(
+      initialDomains,
+      tableAnchors,
+    );
 
     // 3. 补充域名称和模块信息
     const finalizedDomains = this.finalizeDomains(mergedDomains);
@@ -73,7 +82,7 @@ export class BusinessDomainDefinerImpl {
 
       // 获取与该表相关的候选
       const relatedCandidates = candidates.filter(
-        c => c.tableAnchor.tableName === anchor.tableName,
+        (c) => c.tableAnchor.tableName === anchor.tableName,
       );
 
       // 合并所有候选的 Git commit 信息
@@ -142,7 +151,7 @@ export class BusinessDomainDefinerImpl {
         mergeGroups.push(group);
 
         // 标记为已处理
-        group.forEach(t => processedTables.add(t));
+        group.forEach((t) => processedTables.add(t));
       } else {
         // 单独的表，标记为已处理
         processedTables.add(anchor.tableName);
@@ -237,9 +246,11 @@ export class BusinessDomainDefinerImpl {
       // 合并覆盖模块
       for (const module of otherDomain.coveredModules) {
         // 去重添加
-        if (!primaryDomain.coveredModules.some(
-          m => m.moduleName === module.moduleName,
-        )) {
+        if (
+          !primaryDomain.coveredModules.some(
+            (m) => m.moduleName === module.moduleName,
+          )
+        ) {
           primaryDomain.coveredModules.push(module);
         }
       }
@@ -256,7 +267,9 @@ export class BusinessDomainDefinerImpl {
     }
 
     // 重新计算相关表列表
-    const allCoreTables = new Set(primaryDomain.coreTables.map(t => t.tableName));
+    const allCoreTables = new Set(
+      primaryDomain.coreTables.map((t) => t.tableName),
+    );
     primaryDomain.relatedTables = [];
 
     for (const coreTable of primaryDomain.coreTables) {
@@ -265,15 +278,18 @@ export class BusinessDomainDefinerImpl {
         for (const related of anchor.relatedTables) {
           // 相关表不在核心表列表中才添加
           if (!allCoreTables.has(related.tableName)) {
-            primaryDomain.relatedTables.push(anchorMap.get(related.tableName) || {
-              tableName: related.tableName,
-              columns: [],
-              traceSources: [],
-              isCrossModule: false,
-              moduleCount: 0,
-              moduleNames: [],
-              aggregatedConfidence: 0,
-            } as TableAnchor);
+            primaryDomain.relatedTables.push(
+              anchorMap.get(related.tableName) ||
+                ({
+                  tableName: related.tableName,
+                  columns: [],
+                  traceSources: [],
+                  isCrossModule: false,
+                  moduleCount: 0,
+                  moduleNames: [],
+                  aggregatedConfidence: 0,
+                } as TableAnchor),
+            );
           }
         }
       }
@@ -296,8 +312,8 @@ export class BusinessDomainDefinerImpl {
 
       // 对覆盖模块排序（primary 在前）
       domain.coveredModules.sort((a, b) => {
-        if (a.role === 'primary' && b.role !== 'primary') return -1;
-        if (a.role !== 'primary' && b.role === 'primary') return 1;
+        if (a.role === "primary" && b.role !== "primary") return -1;
+        if (a.role !== "primary" && b.role === "primary") return 1;
         return b.entryPointCount - a.entryPointCount;
       });
 
@@ -350,8 +366,10 @@ export class BusinessDomainDefinerImpl {
    *
    * 从表锚点的 traceSources 提取模块信息
    */
-  private buildCoveredModules(anchor: TableAnchor): BusinessDomain['coveredModules'] {
-    const modules: BusinessDomain['coveredModules'] = [];
+  private buildCoveredModules(
+    anchor: TableAnchor,
+  ): BusinessDomain["coveredModules"] {
+    const modules: BusinessDomain["coveredModules"] = [];
     const processedModules = new Set<string>();
 
     // 收集所有涉及模块
@@ -366,7 +384,7 @@ export class BusinessDomainDefinerImpl {
       processedModules.add(moduleName);
 
       // 第一个模块为主模块，其他为辅助模块
-      const role = i === 0 ? 'primary' : 'supporting';
+      const role = i === 0 ? "primary" : "supporting";
 
       modules.push({
         moduleName,
@@ -386,159 +404,162 @@ export class BusinessDomainDefinerImpl {
    */
   private inferDomainName(tableName: string): string {
     // 去除常见后缀
-    const baseName = tableName.replace(/_(?:order|info|detail|record|log|config|setting|data)$/i, '');
+    const baseName = tableName.replace(
+      /_(?:order|info|detail|record|log|config|setting|data)$/i,
+      "",
+    );
 
     // 转换为中文描述
     // snake_case -> 中文描述
-    const parts = baseName.split('_');
+    const parts = baseName.split("_");
 
     // 业务术语中英文映射表（按领域分类）
     const nameMap: Record<string, string> = {
       // === 电商领域 ===
-      'brand': '品牌',
-      'cart': '购物车',
-      'category': '分类',
-      'coupon': '优惠券',
-      'delivery': '配送',
-      'distributor': '分销商',
-      'flash': '闪购',
-      'inventory': '库存',
-      'order': '订单',
-      'product': '商品',
-      'promotion': '促销',
-      'refund': '退款',
-      'retailer': '零售商',
-      'return': '退货',
-      'review': '评价',
-      'shipping': '发货',
-      'sku': '规格',
-      'spec': '规格',
-      'stock': '库存',
-      'supplier': '供应商',
-      'warehouse': '仓库',
-      'wishlist': '心愿单',
+      brand: "品牌",
+      cart: "购物车",
+      category: "分类",
+      coupon: "优惠券",
+      delivery: "配送",
+      distributor: "分销商",
+      flash: "闪购",
+      inventory: "库存",
+      order: "订单",
+      product: "商品",
+      promotion: "促销",
+      refund: "退款",
+      retailer: "零售商",
+      return: "退货",
+      review: "评价",
+      shipping: "发货",
+      sku: "规格",
+      spec: "规格",
+      stock: "库存",
+      supplier: "供应商",
+      warehouse: "仓库",
+      wishlist: "心愿单",
       // === 教育领域 ===
-      'assignment': '作业',
-      'certificate': '证书',
-      'chapter': '章节',
-      'classroom': '教室',
-      'course': '课程',
-      'curriculum': '课程体系',
-      'diploma': '毕业证',
-      'enrollment': '报名',
-      'exam': '考试',
-      'grade': '成绩',
-      'homework': '家庭作业',
-      'lesson': '课时',
-      'quiz': '测验',
-      'schedule': '课表',
-      'scholarship': '奖学金',
-      'score': '分数',
-      'section': '小节',
-      'semester': '学期',
-      'student': '学生',
-      'syllabus': '教学大纲',
-      'teacher': '教师',
-      'tuition': '学费',
+      assignment: "作业",
+      certificate: "证书",
+      chapter: "章节",
+      classroom: "教室",
+      course: "课程",
+      curriculum: "课程体系",
+      diploma: "毕业证",
+      enrollment: "报名",
+      exam: "考试",
+      grade: "成绩",
+      homework: "家庭作业",
+      lesson: "课时",
+      quiz: "测验",
+      schedule: "课表",
+      scholarship: "奖学金",
+      score: "分数",
+      section: "小节",
+      semester: "学期",
+      student: "学生",
+      syllabus: "教学大纲",
+      teacher: "教师",
+      tuition: "学费",
       // === 金融领域 ===
-      'account': '账户',
-      'asset': '资产',
-      'audit': '审计',
-      'balance': '余额',
-      'bill': '账单',
-      'budget': '预算',
-      'charge': '收费',
-      'credit': '信用',
-      'debit': '借记',
-      'deposit': '存款',
-      'equity': '权益',
-      'expense': '支出',
-      'fee': '手续费',
-      'interest': '利息',
-      'invoice': '发票',
-      'liability': '负债',
-      'loan': '贷款',
-      'loss': '亏损',
-      'payment': '支付',
-      'profit': '利润',
-      'rate': '费率',
-      'receipt': '收据',
-      'revenue': '收入',
-      'tax': '税务',
-      'transaction': '交易',
-      'withdraw': '取款',
+      account: "账户",
+      asset: "资产",
+      audit: "审计",
+      balance: "余额",
+      bill: "账单",
+      budget: "预算",
+      charge: "收费",
+      credit: "信用",
+      debit: "借记",
+      deposit: "存款",
+      equity: "权益",
+      expense: "支出",
+      fee: "手续费",
+      interest: "利息",
+      invoice: "发票",
+      liability: "负债",
+      loan: "贷款",
+      loss: "亏损",
+      payment: "支付",
+      profit: "利润",
+      rate: "费率",
+      receipt: "收据",
+      revenue: "收入",
+      tax: "税务",
+      transaction: "交易",
+      withdraw: "取款",
       // === 医疗领域 ===
-      'appointment': '预约',
-      'claim': '理赔',
-      'clinic': '诊所',
-      'diagnosis': '诊断',
-      'doctor': '医生',
-      'hospital': '医院',
-      'insurance': '保险',
-      'medication': '药物',
-      'nurse': '护士',
-      'patient': '患者',
-      'pharmacy': '药房',
-      'prescription': '处方',
-      'record': '病历',
-      'report': '报告',
-      'surgery': '手术',
-      'treatment': '治疗',
+      appointment: "预约",
+      claim: "理赔",
+      clinic: "诊所",
+      diagnosis: "诊断",
+      doctor: "医生",
+      hospital: "医院",
+      insurance: "保险",
+      medication: "药物",
+      nurse: "护士",
+      patient: "患者",
+      pharmacy: "药房",
+      prescription: "处方",
+      record: "病历",
+      report: "报告",
+      surgery: "手术",
+      treatment: "治疗",
       // === 物流领域 ===
-      'carrier': '承运商',
-      'clearance': '清关',
-      'container': '集装箱',
-      'customs': '海关',
-      'dispatch': '调度',
-      'freight': '运费',
-      'manifest': '货运单',
-      'package': '包裹',
-      'pallet': '托盘',
-      'parcel': '包裹',
-      'port': '港口',
-      'receive': '收货',
-      'route': '路线',
-      'shipment': '货物',
-      'terminal': '终端',
-      'tracking': '追踪',
-      'transfer': '转运',
+      carrier: "承运商",
+      clearance: "清关",
+      container: "集装箱",
+      customs: "海关",
+      dispatch: "调度",
+      freight: "运费",
+      manifest: "货运单",
+      package: "包裹",
+      pallet: "托盘",
+      parcel: "包裹",
+      port: "港口",
+      receive: "收货",
+      route: "路线",
+      shipment: "货物",
+      terminal: "终端",
+      tracking: "追踪",
+      transfer: "转运",
       // === 通用业务 ===
-      'address': '地址',
-      'analytics': '分析',
-      'backup': '备份',
-      'chat': '聊天',
-      'comment': '评论',
-      'config': '配置',
-      'dashboard': '仪表盘',
-      'export': '导出',
-      'feedback': '反馈',
-      'filter': '筛选',
-      'import': '导入',
-      'label': '标签',
-      'log': '日志',
-      'member': '会员',
-      'message': '消息',
-      'metric': '指标',
-      'notification': '通知',
-      'paginate': '分页',
-      'rating': '评分',
-      'restore': '恢复',
-      'search': '搜索',
-      'setting': '设置',
-      'sort': '排序',
-      'statistic': '统计',
-      'sync': '同步',
-      'tag': '标签',
-      'user': '用户',
+      address: "地址",
+      analytics: "分析",
+      backup: "备份",
+      chat: "聊天",
+      comment: "评论",
+      config: "配置",
+      dashboard: "仪表盘",
+      export: "导出",
+      feedback: "反馈",
+      filter: "筛选",
+      import: "导入",
+      label: "标签",
+      log: "日志",
+      member: "会员",
+      message: "消息",
+      metric: "指标",
+      notification: "通知",
+      paginate: "分页",
+      rating: "评分",
+      restore: "恢复",
+      search: "搜索",
+      setting: "设置",
+      sort: "排序",
+      statistic: "统计",
+      sync: "同步",
+      tag: "标签",
+      user: "用户",
     };
 
     // 拼接名称
-    const chineseParts = parts.map(part => {
+    const chineseParts = parts.map((part) => {
       const lower = part.toLowerCase();
       return nameMap[lower] || this.capitalizeFirst(part);
     });
 
-    return `${chineseParts.join('')}管理域`;
+    return `${chineseParts.join("")}管理域`;
   }
 
   /**
@@ -553,7 +574,7 @@ export class BusinessDomainDefinerImpl {
 
     // 多表域：使用主表名称 + "聚合域"
     const primaryTable = domain.coreTables[0].tableName;
-    const baseName = this.inferDomainName(primaryTable).replace('管理域', '');
+    const baseName = this.inferDomainName(primaryTable).replace("管理域", "");
 
     // 如果涉及跨模块，添加标记
     if (domain.isCrossModuleDomain) {

@@ -17,22 +17,35 @@
  * generalization plan.
  */
 
-import type { ParsedFile, Reference, ScopeId, SymbolDefinition } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { SemanticModel } from '../../model/semantic-model.js';
-import type { WorkspaceResolutionIndex } from '../workspace-index.js';
-import type { GraphNodeLookup } from '../graph-bridge/node-lookup.js';
-import { resolveCallerGraphId, resolveDefGraphId } from '../graph-bridge/ids.js';
-import { findCallableBindingInScope, findClassBindingInScope } from '../scope/walkers.js';
-import { narrowOverloadCandidates } from './overload-narrowing.js';
+import type {
+  ParsedFile,
+  Reference,
+  ScopeId,
+  SymbolDefinition,
+} from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import type { SemanticModel } from "../../model/semantic-model.js";
+import type { WorkspaceResolutionIndex } from "../workspace-index.js";
+import type { GraphNodeLookup } from "../graph-bridge/node-lookup.js";
+import {
+  resolveCallerGraphId,
+  resolveDefGraphId,
+} from "../graph-bridge/ids.js";
+import {
+  findCallableBindingInScope,
+  findClassBindingInScope,
+} from "../scope/walkers.js";
+import { narrowOverloadCandidates } from "./overload-narrowing.js";
 
 export function emitFreeCallFallback(
   graph: KnowledgeGraph,
   scopes: ScopeResolutionIndexes,
   parsedFiles: readonly ParsedFile[],
   nodeLookup: GraphNodeLookup,
-  _referenceIndex: { readonly bySourceScope: ReadonlyMap<ScopeId, readonly Reference[]> },
+  _referenceIndex: {
+    readonly bySourceScope: ReadonlyMap<ScopeId, readonly Reference[]>;
+  },
   handledSites: Set<string>,
   model: SemanticModel,
   workspaceIndex: WorkspaceResolutionIndex,
@@ -43,7 +56,7 @@ export function emitFreeCallFallback(
 
   for (const parsed of parsedFiles) {
     for (const site of parsed.referenceSites) {
-      if (site.kind !== 'call') continue;
+      if (site.kind !== "call") continue;
       if (site.explicitReceiver !== undefined) continue;
 
       // Constructor form (`new User(...)`): resolve the class, then
@@ -51,8 +64,12 @@ export function emitFreeCallFallback(
       // to the Class node itself (implicit constructor). Legacy emits
       // the same two targets; see test expectations.
       let fnDef: SymbolDefinition | undefined;
-      if (site.callForm === 'constructor') {
-        const classDef = findClassBindingInScope(site.inScope, site.name, scopes);
+      if (site.callForm === "constructor") {
+        const classDef = findClassBindingInScope(
+          site.inScope,
+          site.name,
+          scopes,
+        );
         if (classDef !== undefined) {
           fnDef = pickConstructorOrClass(classDef, workspaceIndex);
         }
@@ -76,14 +93,20 @@ export function emitFreeCallFallback(
         fnDef = pickUniqueGlobalCallable(site.name, model, scopes);
       }
       if (fnDef === undefined) continue;
-      const callerGraphId = resolveCallerGraphId(site.inScope, scopes, nodeLookup);
+      const callerGraphId = resolveCallerGraphId(
+        site.inScope,
+        scopes,
+        nodeLookup,
+      );
       if (callerGraphId === undefined) continue;
       const tgtGraphId = resolveDefGraphId(fnDef.filePath, fnDef, nodeLookup);
       if (tgtGraphId === undefined) continue;
       // Always mark the site as handled — even when the dedup-collapse
       // means we don't add a new edge — so `emit-references` skips its
       // potentially-wrong fallback for the same site.
-      handledSites.add(`${parsed.filePath}:${site.atRange.startLine}:${site.atRange.startCol}`);
+      handledSites.add(
+        `${parsed.filePath}:${site.atRange.startLine}:${site.atRange.startCol}`,
+      );
       const relId = `rel:CALLS:${callerGraphId}->${tgtGraphId}`;
       if (seen.has(relId)) continue;
       seen.add(relId);
@@ -91,11 +114,12 @@ export function emitFreeCallFallback(
         id: relId,
         sourceId: callerGraphId,
         targetId: tgtGraphId,
-        type: 'CALLS',
+        type: "CALLS",
         confidence: 0.85,
         // Match legacy DAG's reason convention so consumers that
         // assert `reason === 'import-resolved'` keep working.
-        reason: fnDef.filePath !== parsed.filePath ? 'import-resolved' : 'local-call',
+        reason:
+          fnDef.filePath !== parsed.filePath ? "import-resolved" : "local-call",
       });
       emitted++;
     }
@@ -111,9 +135,14 @@ function pickUniqueGlobalCallable(
   const scopeDefs: SymbolDefinition[] = [];
   const scopeSeen = new Set<string>();
   for (const def of scopes.defs.byId.values()) {
-    const simple = def.qualifiedName?.split('.').pop() ?? def.qualifiedName;
+    const simple = def.qualifiedName?.split(".").pop() ?? def.qualifiedName;
     if (simple !== name) continue;
-    if (def.type !== 'Function' && def.type !== 'Method' && def.type !== 'Constructor') continue;
+    if (
+      def.type !== "Function" &&
+      def.type !== "Method" &&
+      def.type !== "Constructor"
+    )
+      continue;
     const key = logicalCallableKey(def);
     if (scopeSeen.has(key)) continue;
     scopeSeen.add(key);
@@ -141,11 +170,11 @@ function pickUniqueGlobalCallable(
 function logicalCallableKey(def: SymbolDefinition): string {
   return [
     def.filePath,
-    def.qualifiedName ?? '',
+    def.qualifiedName ?? "",
     def.type,
-    def.parameterCount ?? '',
-    def.parameterTypes?.join(',') ?? '',
-  ].join('\0');
+    def.parameterCount ?? "",
+    def.parameterTypes?.join(",") ?? "",
+  ].join("\0");
 }
 
 /** For a constructor call `new X(...)`, return the X class's explicit
@@ -160,7 +189,7 @@ function pickConstructorOrClass(
   const classScope = workspaceIndex.classScopeByDefId.get(classDef.nodeId);
   if (classScope === undefined) return classDef;
   for (const def of classScope.ownedDefs) {
-    if (def.type === 'Constructor') return def;
+    if (def.type === "Constructor") return def;
   }
   return classDef;
 }
@@ -187,7 +216,7 @@ function pickImplicitThisOverload(
   while (curId !== null) {
     const sc = scopes.scopeTree.getScope(curId);
     if (sc === undefined) break;
-    if (sc.kind === 'Class') {
+    if (sc.kind === "Class") {
       classScopeId = sc.id;
       break;
     }
@@ -203,6 +232,10 @@ function pickImplicitThisOverload(
   if (overloads.length === 0) return undefined;
   if (overloads.length === 1) return overloads[0];
 
-  const candidates = narrowOverloadCandidates(overloads, site.arity, site.argumentTypes);
+  const candidates = narrowOverloadCandidates(
+    overloads,
+    site.arity,
+    site.argumentTypes,
+  );
   return candidates[0];
 }

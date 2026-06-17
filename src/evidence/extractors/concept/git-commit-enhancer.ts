@@ -10,8 +10,12 @@
  * - 返回前 10 条最相关 commit
  */
 
-import { execa } from 'execa';
-import type { TableAnchor, GitCommitEvidence, TableTraceSource } from './types.js';
+import { execa } from "execa";
+import type {
+  TableAnchor,
+  GitCommitEvidence,
+  TableTraceSource,
+} from "./types.js";
 
 /**
  * Git Commit 增强器配置
@@ -98,7 +102,7 @@ export class GitCommitEnhancerImpl {
     const rawCommits = await this.fetchGitLog(filePaths, repoPath);
 
     // 3. 计算每个 commit 的相关度并排序
-    const scoredCommits = rawCommits.map(commit =>
+    const scoredCommits = rawCommits.map((commit) =>
       this.scoreCommit(commit, anchor.tableName, anchor.traceSources),
     );
 
@@ -153,7 +157,7 @@ export class GitCommitEnhancerImpl {
     // 构建日期范围参数
     const sinceDate = new Date();
     sinceDate.setDate(sinceDate.getDate() - this.config.historyDays);
-    const sinceStr = sinceDate.toISOString().split('T')[0];
+    const sinceStr = sinceDate.toISOString().split("T")[0];
 
     // 使用 git log 获取所有相关文件的 commit
     // 注意：--all-match 确保同时匹配多个条件
@@ -165,13 +169,14 @@ export class GitCommitEnhancerImpl {
 
         // 执行 git log
         const { stdout } = await execa(
-          'git',
+          "git",
           [
-            'log',
-            '--all',
-            '--since', sinceStr,
-            '--pretty=format:%H%n%s%n%ad%n%an%n---COMMIT_END---',
-            '--date=short',
+            "log",
+            "--all",
+            "--since",
+            sinceStr,
+            "--pretty=format:%H%n%s%n%ad%n%an%n---COMMIT_END---",
+            "--date=short",
             ...batch,
           ],
           {
@@ -204,15 +209,17 @@ export class GitCommitEnhancerImpl {
    * 输出格式：%H%n%s%n%ad%n%an%n---COMMIT_END---
    */
   private parseGitLogOutput(output: string): RawGitCommit[] {
-    if (!output || output.trim() === '') {
+    if (!output || output.trim() === "") {
       return [];
     }
 
     const commits: RawGitCommit[] = [];
-    const commitBlocks = output.split('---COMMIT_END---').filter(block => block.trim());
+    const commitBlocks = output
+      .split("---COMMIT_END---")
+      .filter((block) => block.trim());
 
     for (const block of commitBlocks) {
-      const lines = block.trim().split('\n');
+      const lines = block.trim().split("\n");
       if (lines.length >= 4) {
         commits.push({
           hash: lines[0],
@@ -244,7 +251,11 @@ export class GitCommitEnhancerImpl {
 
     // 1. 检查 commit message 是否包含表名
     const tableNamePatterns = this.getTableNames(tableName);
-    if (tableNamePatterns.some(pattern => commit.message.toLowerCase().includes(pattern.toLowerCase()))) {
+    if (
+      tableNamePatterns.some((pattern) =>
+        commit.message.toLowerCase().includes(pattern.toLowerCase()),
+      )
+    ) {
       score += this.config.tableNameBonus;
     }
 
@@ -253,17 +264,28 @@ export class GitCommitEnhancerImpl {
     const msgLower = commit.message.toLowerCase();
 
     // Entity 相关关键词
-    if (msgLower.includes('entity') || msgLower.includes(tableNamePatterns[0])) {
+    if (
+      msgLower.includes("entity") ||
+      msgLower.includes(tableNamePatterns[0])
+    ) {
       score += this.config.entityBonus;
     }
 
     // Mapper/DAO 相关关键词
-    if (msgLower.includes('mapper') || msgLower.includes('dao') || msgLower.includes('sql')) {
+    if (
+      msgLower.includes("mapper") ||
+      msgLower.includes("dao") ||
+      msgLower.includes("sql")
+    ) {
       score += this.config.mapperBonus;
     }
 
     // Controller/API 相关关键词
-    if (msgLower.includes('controller') || msgLower.includes('api') || msgLower.includes('endpoint')) {
+    if (
+      msgLower.includes("controller") ||
+      msgLower.includes("api") ||
+      msgLower.includes("endpoint")
+    ) {
       score += this.config.controllerBonus;
     }
 
@@ -313,26 +335,32 @@ export class GitCommitEnhancerImpl {
   private inferChangedFiles(
     commit: RawGitCommit,
     traceSources: TableTraceSource[],
-  ): GitCommitEvidence['changedFiles'] {
-    const changedFiles: GitCommitEvidence['changedFiles'] = [];
+  ): GitCommitEvidence["changedFiles"] {
+    const changedFiles: GitCommitEvidence["changedFiles"] = [];
     const msgLower = commit.message.toLowerCase();
 
     for (const source of traceSources) {
       // Entity 文件
-      if (source.entityFilePath && this.isLikelyChanged(source.entityClassName, msgLower)) {
+      if (
+        source.entityFilePath &&
+        this.isLikelyChanged(source.entityClassName, msgLower)
+      ) {
         changedFiles.push({
           filePath: source.entityFilePath,
           moduleName: source.moduleName,
-          changeType: 'modified',
+          changeType: "modified",
         });
       }
 
       // Mapper 文件
-      if (source.mapperFilePath && this.isLikelyChanged(source.mapperClassName, msgLower)) {
+      if (
+        source.mapperFilePath &&
+        this.isLikelyChanged(source.mapperClassName, msgLower)
+      ) {
         changedFiles.push({
           filePath: source.mapperFilePath,
           moduleName: source.moduleName,
-          changeType: 'modified',
+          changeType: "modified",
         });
       }
 
@@ -342,7 +370,7 @@ export class GitCommitEnhancerImpl {
           changedFiles.push({
             filePath: ep.filePath,
             moduleName: ep.moduleName,
-            changeType: 'modified',
+            changeType: "modified",
           });
         }
       }
@@ -366,7 +394,10 @@ export class GitCommitEnhancerImpl {
     }
 
     // 部分匹配（去除后缀）
-    const baseName = classLower.replace(/(?:service|controller|mapper|dao|entity|impl)$/i, '');
+    const baseName = classLower.replace(
+      /(?:service|controller|mapper|dao|entity|impl)$/i,
+      "",
+    );
     if (baseName && msgLower.includes(baseName)) {
       return true;
     }
@@ -384,13 +415,16 @@ export class GitCommitEnhancerImpl {
 
     // snake_case -> CamelCase
     const camelCase = tableName
-      .split('_')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join('');
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join("");
     variants.push(camelCase);
 
     // 去除常见后缀
-    const cleanName = tableName.replace(/_(?:order|info|detail|record|log|config|setting|data)$/i, '');
+    const cleanName = tableName.replace(
+      /_(?:order|info|detail|record|log|config|setting|data)$/i,
+      "",
+    );
     if (cleanName !== tableName) {
       variants.push(cleanName);
     }

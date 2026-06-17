@@ -1,12 +1,17 @@
-import { z } from 'zod';
-import { commonObjectSchema } from './common.js';
+import { z } from "zod";
+import { commonObjectSchema } from "./common.js";
 
 /**
  * 实体角色类型
  *
  * 定义实体在聚合中的角色。
  */
-export const entityRoleSchema = z.enum(['aggregate_root', 'sub_entity', 'associated_entity', 'relation_table']);
+export const entityRoleSchema = z.enum([
+  "aggregate_root",
+  "sub_entity",
+  "associated_entity",
+  "relation_table",
+]);
 
 export type EntityRole = z.infer<typeof entityRoleSchema>;
 
@@ -44,14 +49,14 @@ export type AggregateEntity = z.infer<typeof aggregateEntitySchema>;
  * 实体关系类型
  */
 export const entityRelationTypeSchema = z.enum([
-  'one_to_one',
-  'one_to_many',
-  'many_to_one',
-  'many_to_many',
-  'composition',
-  'aggregation',
-  'extends',
-  'implements',
+  "one_to_one",
+  "one_to_many",
+  "many_to_one",
+  "many_to_many",
+  "composition",
+  "aggregation",
+  "extends",
+  "implements",
 ]);
 
 export type EntityRelationType = z.infer<typeof entityRelationTypeSchema>;
@@ -96,7 +101,9 @@ export const crossAggregateReferenceSchema = z.object({
   reference_field: z.string().min(1),
 });
 
-export type CrossAggregateReference = z.infer<typeof crossAggregateReferenceSchema>;
+export type CrossAggregateReference = z.infer<
+  typeof crossAggregateReferenceSchema
+>;
 
 /**
  * DATA_MODEL 知识 Schema（聚合级别）
@@ -105,7 +112,7 @@ export type CrossAggregateReference = z.infer<typeof crossAggregateReferenceSche
  * 一个聚合对应一个知识条目，包含多个实体及其关系。
  */
 export const dataModelObjectSchema = commonObjectSchema.extend({
-  type: z.literal('DATA_MODEL'),
+  type: z.literal("DATA_MODEL"),
 
   /** 聚合名称（业务化） */
   aggregate_name: z.string().min(1),
@@ -126,7 +133,10 @@ export const dataModelObjectSchema = commonObjectSchema.extend({
   entity_relations: z.array(entityRelationSchema).min(1),
 
   /** 跨聚合引用：引用其他聚合中的实体（可选） */
-  cross_references: z.array(crossAggregateReferenceSchema).optional().default([]),
+  cross_references: z
+    .array(crossAggregateReferenceSchema)
+    .optional()
+    .default([]),
 
   /** 所属模块（多模块项目时使用） */
   module: z.string().optional(),

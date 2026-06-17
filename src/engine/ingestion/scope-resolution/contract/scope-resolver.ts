@@ -255,12 +255,12 @@ import type {
   ScopeId,
   SupportedLanguages,
   SymbolDefinition,
-} from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { GraphNodeLookup } from '../graph-bridge/node-lookup.js';
-import { LanguageProvider } from '../../language-provider.js';
-import { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { SemanticModel } from '../../model/semantic-model.js';
+} from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type { GraphNodeLookup } from "../graph-bridge/node-lookup.js";
+import { LanguageProvider } from "../../language-provider.js";
+import { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import type { SemanticModel } from "../../model/semantic-model.js";
 
 /** A LinearizeStrategy receives the full ancestor map so C3-style
  *  algorithms (which need to merge each parent's MRO) can implement
@@ -273,7 +273,7 @@ export type LinearizeStrategy = (
 ) => string[];
 
 /** Result of `ScopeResolver.arityCompatibility` — mirrors `RegistryProviders.arityCompatibility`. */
-export type ArityVerdict = 'compatible' | 'unknown' | 'incompatible';
+export type ArityVerdict = "compatible" | "unknown" | "incompatible";
 
 export interface ScopeResolver {
   /** Identity for telemetry + per-language flag check. */
@@ -545,7 +545,7 @@ export interface ScopeResolver {
   readonly mirrorNamespaceTypeBindings?: (
     parsedFiles: readonly ParsedFile[],
     indexes: ScopeResolutionIndexes,
-    workspaceIndex: import('../../scope-resolution/workspace-index.js').WorkspaceResolutionIndex,
+    workspaceIndex: import("../../scope-resolution/workspace-index.js").WorkspaceResolutionIndex,
   ) => void;
 
   /**

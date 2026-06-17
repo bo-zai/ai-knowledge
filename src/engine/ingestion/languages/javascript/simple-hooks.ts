@@ -17,13 +17,18 @@
  * infrastructure (DoD.md §2.2).
  */
 
-import type { CaptureMatch, Scope, ScopeId, ScopeTree } from '../../../shared/index.js';
-import { tsBindingScopeFor, walkToScope } from '../typescript/simple-hooks.js';
+import type {
+  CaptureMatch,
+  Scope,
+  ScopeId,
+  ScopeTree,
+} from "../../../shared/index.js";
+import { tsBindingScopeFor, walkToScope } from "../typescript/simple-hooks.js";
 
 export {
   tsImportOwningScope as jsImportOwningScope,
   tsReceiverBinding as jsReceiverBinding,
-} from '../typescript/simple-hooks.js';
+} from "../typescript/simple-hooks.js";
 
 /**
  * Like `tsBindingScopeFor` but additionally hoists
@@ -41,8 +46,8 @@ export function jsBindingScopeFor(
   innermost: Scope,
   tree: ScopeTree,
 ): ScopeId | null {
-  if (decl['@type-binding.class-field'] !== undefined) {
-    return walkToScope(innermost, tree, 'Class');
+  if (decl["@type-binding.class-field"] !== undefined) {
+    return walkToScope(innermost, tree, "Class");
   }
   return tsBindingScopeFor(decl, innermost, tree);
 }

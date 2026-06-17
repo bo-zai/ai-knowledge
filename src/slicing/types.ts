@@ -1,4 +1,4 @@
-export type SliceKind = 'route' | 'process' | 'tool' | 'community' | 'database';
+export type SliceKind = "route" | "process" | "tool" | "community" | "database";
 
 export interface SliceSeed {
   id: string;
@@ -8,7 +8,7 @@ export interface SliceSeed {
 }
 
 export interface DiscoveryGap {
-  kind: 'route' | 'process' | 'tool' | 'community' | 'table';
+  kind: "route" | "process" | "tool" | "community" | "table";
   reason: string;
   raw_line?: string;
 }

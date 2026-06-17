@@ -28,7 +28,7 @@
  * dispatch resolver).
  */
 
-import type { DefId } from './types.js';
+import type { DefId } from "./types.js";
 
 // ─── Public contracts ───────────────────────────────────────────────────────
 
@@ -85,7 +85,9 @@ export interface MethodDispatchInput {
 
 // ─── Builder ────────────────────────────────────────────────────────────────
 
-export function buildMethodDispatchIndex(input: MethodDispatchInput): MethodDispatchIndex {
+export function buildMethodDispatchIndex(
+  input: MethodDispatchInput,
+): MethodDispatchIndex {
   const mroByOwnerDefId = new Map<DefId, readonly DefId[]>();
   const implsBuilding = new Map<DefId, DefId[]>();
   const implsSeen = new Map<DefId, Set<DefId>>();

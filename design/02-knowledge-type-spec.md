@@ -11,6 +11,7 @@
 所有知识条目中的证据引用应至少包含文件路径，建议包含足以定位到具体代码位置的信息（如行号、函数名或类名）。
 
 引用格式不做硬性规定，但应满足：
+
 - 能唯一标识一处代码位置
 - 能让 Agent 通过文件路径和定位信息直接找到对应代码
 - 同一个知识库内的引用格式保持一致
@@ -94,20 +95,20 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 用业务语言命名，不用代码类名或技术术语。
 
-| 反面 | 正面 | 为什么 |
-|------|------|--------|
-| CoursewareTypeEnum | 课件类型 | Agent 看到"课件类型"能立刻判断与需求的相关性 |
-| OrderStatusEnum | 订单状态 | "订单状态"是需求文档中会使用的术语 |
-| UserService.bind | 学生绑定老师 | 用业务动作命名，不用方法名 |
+| 反面               | 正面         | 为什么                                       |
+| ------------------ | ------------ | -------------------------------------------- |
+| CoursewareTypeEnum | 课件类型     | Agent 看到"课件类型"能立刻判断与需求的相关性 |
+| OrderStatusEnum    | 订单状态     | "订单状态"是需求文档中会使用的术语           |
+| UserService.bind   | 学生绑定老师 | 用业务动作命名，不用方法名                   |
 
 #### 2. 一句话定位
 
 条目开头应有一句话说明"这是什么业务场景下的什么"，帮助 Agent 快速判断是否需要深入。
 
-| 反面 | 正面 |
-|------|------|
-| 课件类型枚举，定义了课件的分类方式 | 课表中每个练习任务的分类标识，决定了数据来源和属性结构的不同处理路径 |
-| 订单状态枚举 | 订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等） |
+| 反面                               | 正面                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| 课件类型枚举，定义了课件的分类方式 | 课表中每个练习任务的分类标识，决定了数据来源和属性结构的不同处理路径       |
+| 订单状态枚举                       | 订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等） |
 
 反面的问题：只是翻译了代码名称，没有增加信息量。正面说明了这个概念在什么场景下起作用、它影响什么。
 
@@ -115,8 +116,8 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 解释业务含义，不是翻译代码。Agent 自己能读代码，知识库的价值是提供代码无法直接告诉它的业务理解。
 
-| 反面 | 正面 |
-|------|------|
+| 反面                                                                                                        | 正面                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 系统中定义了六种用户角色：STUDENT、NORMAL_TEACHER、SENIOR_TEACHER、PROVINCE_PROXY、CITY_PROXY、SECOND_LEVEL | 用户角色决定用户可以登录哪个端和执行哪些操作。学生只能登录学生端；普通教师和高级教师可以登录教师端，高级教师拥有查看名下所有学生统计数据的额外权限；省代和市代用于区域管理。注意：角色不是互斥的，一个用户可能同时拥有多个角色 |
 
 反面的问题：Agent 读 `RoleTypeEnum` 的源码就能得到相同信息。正面提供了"角色影响什么"、"角色是否互斥"这些需要跨多个文件综合理解才能得到的信息。
@@ -127,8 +128,8 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 当存在容易混淆的近似概念时，应明确指出区别。不是所有条目都需要，只在存在混淆风险时提供。
 
-| 反面（缺少区分） | 正面（有关键区分） |
-|----------------|-------------------|
+| 反面（缺少区分）                          | 正面（有关键区分）                                                                                                                                              |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 会员：通过 MemberLogDO 判断用户是否是会员 | 会员：通过 MemberLogDO 的 dateBegin/dateEnd 时间范围判断，不是 UserDO 上的标记字段。会员到期后自动失效，不需要显式取消。注意：会员 ≠ 用户角色，教师也可以是会员 |
 
 #### 5. 适用范围
@@ -137,19 +138,19 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 适用范围不需要长篇说明，一两句话足够：
 
-| 知识条目 | 适用范围 |
-|---------|---------|
-| 订单状态流转约束 | 仅适用于主订单流程，退款流程有独立的状态机（当前未实现） |
-| 微信支付集成 | 仅适用于中国大陆地区的微信支付，不支持境外支付 |
-| 课表制定规则 | 仅适用于教师为学生制定周课表的场景，学生自主练习不受此约束 |
+| 知识条目         | 适用范围                                                   |
+| ---------------- | ---------------------------------------------------------- |
+| 订单状态流转约束 | 仅适用于主订单流程，退款流程有独立的状态机（当前未实现）   |
+| 微信支付集成     | 仅适用于中国大陆地区的微信支付，不支持境外支付             |
+| 课表制定规则     | 仅适用于教师为学生制定周课表的场景，学生自主练习不受此约束 |
 
 #### 6. 代码入口
 
 证据字段应提供足够的导航信息，使 Agent 知道从哪个文件、哪个方法开始读代码。
 
-| 反面 | 正面 |
-|------|------|
-| 证据：UserService.java | 证据：UserService.java#bind — 绑定逻辑主入口，关键判断在第 437 行的时间比较 |
+| 反面                    | 正面                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| 证据：UserService.java  | 证据：UserService.java#bind — 绑定逻辑主入口，关键判断在第 437 行的时间比较                         |
 | 证据：OrderService.java | 证据：OrderService.java#submit — 订单创建主流程，涉及库存扣减（第 540 行）和优惠券核销（第 443 行） |
 
 #### 7. 关联引用
@@ -164,9 +165,9 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 "每条知识"的粒度对应知识库中的一个独立文件。对于能力目录，标签同时出现在两个层级：能力域标签出现在 `_index.md` 中（用于快速筛选域），操作标签出现在域文件内部的操作条目中（用于 Agent 精确定位操作）。
 
-| 反面 | 正面 | 为什么 |
-|------|------|--------|
-| OrderService, submit, POST | 订单、交易、购买 | Agent 匹配业务需求时用业务术语，不用代码名称 |
+| 反面                         | 正面             | 为什么                                       |
+| ---------------------------- | ---------------- | -------------------------------------------- |
+| OrderService, submit, POST   | 订单、交易、购买 | Agent 匹配业务需求时用业务术语，不用代码名称 |
 | 教学, 管理, 系统, 功能, 模块 | 课表、课件、教学 | 标签过多等于没有标签，每个标签应反映核心主题 |
 
 ### 模块归属（多模块项目）
@@ -322,24 +323,24 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 以下类型的代码元素绝对不作为概念知识候选：
 
-| 过滤规则 | 说明 |
-|---------|------|
-| gitignore 文件 | 被 `.gitignore` 配置排除的文件及其目录下的所有文件，包括 IDE 配置、构建输出、日志、临时文件等 |
-| 测试代码 | 文件路径包含 `test/`、`Test.java`、`Tests.java` 等，测试类不承载业务概念 |
+| 过滤规则        | 说明                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| gitignore 文件  | 被 `.gitignore` 配置排除的文件及其目录下的所有文件，包括 IDE 配置、构建输出、日志、临时文件等                |
+| 测试代码        | 文件路径包含 `test/`、`Test.java`、`Tests.java` 等，测试类不承载业务概念                                     |
 | 工具/基础设施类 | 类名包含 `Util`、`Helper`、`Common`、`Base`、`Abstract`、`Factory`、`Builder`、`Adapter`、`Wrapper`、`Proxy` |
-| 框架层代码 | 文件路径包含 `framework/`、`infrastructure/`、`util/`、`common/` |
-| 启动/入口类 | 类名包含 `Application`、`Main`、`Bootstrap`、`Config`（纯技术配置类） |
-| 简单异常类 | 类名以 `Exception` 结尾且无业务错误码定义的异常 |
+| 框架层代码      | 文件路径包含 `framework/`、`infrastructure/`、`util/`、`common/`                                             |
+| 启动/入口类     | 类名包含 `Application`、`Main`、`Bootstrap`、`Config`（纯技术配置类）                                        |
+| 简单异常类      | 类名以 `Exception` 结尾且无业务错误码定义的异常                                                              |
 
 #### 第二层：软标记（识别可疑候选）
 
 以下类型的代码元素可能不值得生成概念知识，需要后续 LLM 语义判断确认：
 
-| 标记类型 | 匹配规则 | 说明 |
-|---------|---------|------|
+| 标记类型             | 匹配规则                                                                      | 说明                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `transmission_class` | 类名包含 `VO`、`DTO`、`Request`、`Response`、`Param`、`Query`、`Form`、`Data` | 传输类通常字段含义显而易见，但某些可能承载业务概念（如 `OrderStatusEnum` 以 `Enum` 结尾但实际是传输类的变体命名） |
-| `config_class` | 类名包含 `Config`、`Configuration`、`Properties`、`Settings` | 配置类通常是技术层，但某些涉及外部系统集成的配置（如 `WxpayConfig`）可能承载业务含义 |
-| `simple_enum` | 枚举值数量少于 3 个且命名自解释 | 简单枚举（如 `GenderEnum: MALE, FEMALE`）Agent 读源码即可理解 |
+| `config_class`       | 类名包含 `Config`、`Configuration`、`Properties`、`Settings`                  | 配置类通常是技术层，但某些涉及外部系统集成的配置（如 `WxpayConfig`）可能承载业务含义                              |
+| `simple_enum`        | 枚举值数量少于 3 个且命名自解释                                               | 简单枚举（如 `GenderEnum: MALE, FEMALE`）Agent 读源码即可理解                                                     |
 
 软标记的作用是提示后续 LLM 筛选阶段重点关注这些候选，而非直接排除。
 
@@ -350,18 +351,21 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 **筛选标准：**
 
 值得生成的情况：
+
 - 枚举值含义非显而易见（如状态码 `101`、`201` 需要解释业务含义）
 - 字段/类涉及业务规则（如 `coursewareType=3` 走特殊处理路径）
 - 需要跨文件综合理解（如"师徒绑定一年一次"需要读 Service 判断逻辑）
 - 配置类承载外部系统业务含义（如 `WxpayConfig` 涉及微信支付商户认证）
 
 不值得生成的情况：
+
 - 字段含义显而易见（如 `UserVO.name` = 用户名）
 - 纯技术配置（如 `RedisConfig` 只是配置 Redis 连接参数）
 - 简单传输对象（字段名已表达含义，无需额外解释）
 - 通用概念（任何同类项目都有，如分页参数）
 
 **LLM 筛选输入：**
+
 ```
 类名：{className}
 可疑标记：{suspiciousMark（如有）}
@@ -369,6 +373,7 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 ```
 
 **LLM 筛选输出：**
+
 ```json
 {
   "keep": true/false,
@@ -383,16 +388,17 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 **分组优先级：**
 
-| 优先级 | 规则 | 是否调用 LLM |
-|-------|------|-------------|
-| 1 | 同一文件中的多个候选 | 不调用，直接合并 |
-| 2 | 同一包路径 + `businessConcept` 名称相似度 > 0.7 | 不调用，直接合并 |
-| 3 | 跨包路径但名称高度相似 | 调用 LLM 确认是否同一概念 |
-| 4 | 名称明显不同 | 不合并，各自独立生成 |
+| 优先级 | 规则                                            | 是否调用 LLM              |
+| ------ | ----------------------------------------------- | ------------------------- |
+| 1      | 同一文件中的多个候选                            | 不调用，直接合并          |
+| 2      | 同一包路径 + `businessConcept` 名称相似度 > 0.7 | 不调用，直接合并          |
+| 3      | 跨包路径但名称高度相似                          | 调用 LLM 确认是否同一概念 |
+| 4      | 名称明显不同                                    | 不合并，各自独立生成      |
 
 **LLM 分组确认（仅对跨包路径且名称相似的候选）：**
 
 输入：
+
 ```
 以下多个代码元素被识别为可能属于同一业务概念：
 - {className1}（{filePath1}）：业务概念建议="{businessConcept1}"
@@ -401,6 +407,7 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 ```
 
 输出：
+
 ```json
 {
   "shouldMerge": true/false,
@@ -414,11 +421,13 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 对分组后的每个业务概念，调用 LLM 生成完整的概念知识条目。
 
 **生成输入：**
+
 - 合并后的代码元素列表（类名、文件路径、代码片段）
 - 前序阶段输出的 `finalConceptName`（如有合并）
 - 已生成的概念名称列表（用于关联引用）
 
 **生成约束：**
+
 - 业务含义描述应说明"这个概念在什么场景下起作用、它影响什么"
 - 值说明：5 个值以内逐值解释，6~15 个只解释非显而易见的值，15 个以上描述分类逻辑
 - 不推断代码中不可见的业务背景
@@ -912,10 +921,10 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 架构概览是**包级元知识**，与业务领域知识（能力目录、概念知识等）分工不同：
 
-| 知识类型 | 回答的问题 |
-|---------|-----------|
+| 知识类型     | 回答的问题                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------- |
 | **架构概览** | 项目整体是什么样的？技术栈是什么？分包模式是什么？新 Controller/Service 放哪？哪些目录要忽略？ |
-| **能力目录** | 这个项目有哪些业务领域？某个领域的代码在哪？核心类是什么？ |
+| **能力目录** | 这个项目有哪些业务领域？某个领域的代码在哪？核心类是什么？                                     |
 
 架构概览提供**全局技术视图和编码定位指南**，能力目录提供**业务领域导航**。Agent 先通过架构概览理解项目整体形态和代码组织方式，再通过能力目录定位具体业务代码。
 
@@ -927,31 +936,31 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 
 **主类型（按执行模型）**
 
-| 类型 | 定义 | 证据信号 |
-|------|------|---------|
-| backend-service | HTTP/RPC 服务，有业务逻辑 | Controller 注解、router 定义、数据库连接 |
-| frontend-app | SPA/MPA 前端应用 | components 目录、vite/webpack 配置、React/Vue 依赖 |
-| cli-tool | 命令行工具 | bin 目录、cli 入口、commander/yargs 依赖 |
-| library | 可导入的库/SDK | 无业务入口、有 package.json 导出配置 |
-| mobile-app | 移动应用 | android/ios 目录、React Native/Flutter 配置 |
+| 类型            | 定义                      | 证据信号                                           |
+| --------------- | ------------------------- | -------------------------------------------------- |
+| backend-service | HTTP/RPC 服务，有业务逻辑 | Controller 注解、router 定义、数据库连接           |
+| frontend-app    | SPA/MPA 前端应用          | components 目录、vite/webpack 配置、React/Vue 依赖 |
+| cli-tool        | 命令行工具                | bin 目录、cli 入口、commander/yargs 依赖           |
+| library         | 可导入的库/SDK            | 无业务入口、有 package.json 导出配置               |
+| mobile-app      | 移动应用                  | android/ios 目录、React Native/Flutter 配置        |
 
 **复合类型（多类型共存）**
 
-| 类型 | 定义 | 证据信号 |
-|------|------|---------|
-| fullstack | 单仓库同时有前后端 | Next.js API routes + pages、前后端目录并存 |
-| multi-module | 多模块项目，多个子模块共享构建配置 | 根 pom.xml 含 modules 声明、settings.gradle 含多 include |
-| monorepo | 多包仓库 | packages/ 或 apps/ 目录、workspaces 配置 |
-| microservices | 多服务仓库 | docker-compose.yml、多入口服务 |
+| 类型          | 定义                               | 证据信号                                                 |
+| ------------- | ---------------------------------- | -------------------------------------------------------- |
+| fullstack     | 单仓库同时有前后端                 | Next.js API routes + pages、前后端目录并存               |
+| multi-module  | 多模块项目，多个子模块共享构建配置 | 根 pom.xml 含 modules 声明、settings.gradle 含多 include |
+| monorepo      | 多包仓库                           | packages/ 或 apps/ 目录、workspaces 配置                 |
+| microservices | 多服务仓库                         | docker-compose.yml、多入口服务                           |
 
 **特殊类型**
 
-| 类型 | 定义 | 证据信号 |
-|------|------|---------|
-| config-only | 纯配置项目 | Terraform/Ansible/K8s manifests、无源代码 |
-| api-definition | API 定义项目 | OpenAPI/GraphQL schema、无实现代码 |
-| static-site | 静态文档站点 | docs/ 或 content/ 目录、Markdown 内容 |
-| test-only | 测试/基准项目 | 只有测试 fixtures、无业务代码 |
+| 类型           | 定义          | 证据信号                                  |
+| -------------- | ------------- | ----------------------------------------- |
+| config-only    | 纯配置项目    | Terraform/Ansible/K8s manifests、无源代码 |
+| api-definition | API 定义项目  | OpenAPI/GraphQL schema、无实现代码        |
+| static-site    | 静态文档站点  | docs/ 或 content/ 目录、Markdown 内容     |
+| test-only      | 测试/基准项目 | 只有测试 fixtures、无业务代码             |
 
 ### 分包模式
 
@@ -960,6 +969,7 @@ LLM 生成的知识条目中，部分内容属于直接事实（如枚举值列�
 **按层分包（Layer-based）**
 
 所有同类型代码放在同一包/目录下：
+
 ```
 com.xxx.app/
 ├── controller/      ← 所有 Controller
@@ -972,6 +982,7 @@ com.xxx.app/
 ```
 
 编码指导：
+
 - 新 Controller → `com.xxx.app.controller/`
 - 新 Service → `com.xxx.app.service/`
 - 新 Mapper → `com.xxx.app.mapper/`
@@ -979,6 +990,7 @@ com.xxx.app/
 **按领域分包（Domain-based）**
 
 每个业务领域独立一个包，包内包含该领域的所有分层：
+
 ```
 com.xxx/
 ├── user/
@@ -994,6 +1006,7 @@ com.xxx/
 ```
 
 编码指导：
+
 - 新领域 → 创建 `com.xxx.<domain>/` 包
 - 新 Controller → `com.xxx.<domain>.controller/`
 - 新 Service → `com.xxx.<domain>.service/`
@@ -1001,6 +1014,7 @@ com.xxx/
 **混合分包**
 
 部分领域独立分包，部分公共代码按层组织：
+
 ```
 com.xxx/
 ├── app/             ← 公共/跨领域代码（按层）
@@ -1060,20 +1074,20 @@ Spring Boot、MyBatis、MySQL、Lombok
 
 ## 分层包路径
 
-| 分层 | 包路径 | 编码时 |
-|------|--------|--------|
+| 分层       | 包路径                             | 编码时                                           |
+| ---------- | ---------------------------------- | ------------------------------------------------ |
 | Controller | com.education.music.app.controller | 新 Controller 放在此包，如 CourseController.java |
-| Service | com.education.music.app.service | 新 Service 放在此包，如 CourseService.java |
-| Mapper | com.education.music.app.mapper | 新 Mapper 放在此包，如 CourseMapper.java |
-| Entity | com.education.music.app.entity | 新实体类放在此包，DTO/VO/req 子目录分类存放 |
+| Service    | com.education.music.app.service    | 新 Service 放在此包，如 CourseService.java       |
+| Mapper     | com.education.music.app.mapper     | 新 Mapper 放在此包，如 CourseMapper.java         |
+| Entity     | com.education.music.app.entity     | 新实体类放在此包，DTO/VO/req 子目录分类存放      |
 
 ## 目录结构
 
-| 目录 | 用途 | 编码时 |
-|------|------|--------|
-| src/main/java/ | Java 源代码 | 分层包已在上方列出 |
-| src/main/resources/ | 配置文件 | application.yml 配置数据库、OSS；mappers/ 放 MyBatis XML |
-| src/test/java/ | 测试代码 | 单元测试、集成测试 |
+| 目录                | 用途        | 编码时                                                   |
+| ------------------- | ----------- | -------------------------------------------------------- |
+| src/main/java/      | Java 源代码 | 分层包已在上方列出                                       |
+| src/main/resources/ | 配置文件    | application.yml 配置数据库、OSS；mappers/ 放 MyBatis XML |
+| src/test/java/      | 测试代码    | 单元测试、集成测试                                       |
 
 ## 忽略目录
 
@@ -1086,19 +1100,22 @@ Spring Boot、MyBatis、MySQL、Lombok
 
 ## 编码约定
 
-- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Mapper 以 *Mapper 结尾
+- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Mapper 以 \*Mapper 结尾
 - **分层职责**：Controller 处理 HTTP 请求和参数校验，Service 处理业务逻辑，Mapper 处理数据访问
 - **实体分类**：DTO 用于数据传输，VO 用于视图输出，req 用于请求参数
 
 ## 业务领域全景
 
 核心域（直接承载主营业务）：
+
 - 课程管理：课程 CRUD、课程发布、课件管理
 
 支撑域（为核心域提供基础能力）：
+
 - 用户管理：用户认证、权限管理、师徒关系
 
 辅助域（增值功能）：
+
 - 学习记录：学习进度跟踪、打卡记录、学习统计
 
 域间主要交互：用户管理 → 课程管理（教师权限校验）、课程管理 → 学习记录（学习进度写入）
@@ -1107,10 +1124,10 @@ Spring Boot、MyBatis、MySQL、Lombok
 
 ## 调试入口
 
-| 类型 | 位置 | 说明 |
-|------|------|------|
-| 启动类 | MusicEducationApplication.java | Spring Boot 启动入口 |
-| HTTP | com.education.music.app.controller | 主要 API 入口参见能力目录 |
+| 类型   | 位置                               | 说明                      |
+| ------ | ---------------------------------- | ------------------------- |
+| 启动类 | MusicEducationApplication.java     | Spring Boot 启动入口      |
+| HTTP   | com.education.music.app.controller | 主要 API 入口参见能力目录 |
 
 ## 证据
 
@@ -1142,20 +1159,20 @@ Spring Boot、JPA、PostgreSQL
 
 ## 分层包路径
 
-| 分层 | 包路径模板 | 编码时 |
-|------|-----------|--------|
+| 分层       | 包路径模板                       | 编码时                                 |
+| ---------- | -------------------------------- | -------------------------------------- |
 | Controller | com.ordermgr.<domain>.controller | 如 user/controller/UserController.java |
-| Service | com.ordermgr.<domain>.service | 如 user/service/UserService.java |
+| Service    | com.ordermgr.<domain>.service    | 如 user/service/UserService.java       |
 | Repository | com.ordermgr.<domain>.repository | 如 user/repository/UserRepository.java |
-| Entity | com.ordermgr.<domain>.entity | 如 user/entity/User.java |
+| Entity     | com.ordermgr.<domain>.entity     | 如 user/entity/User.java               |
 
 ## 目录结构
 
-| 目录 | 用途 | 编码时 |
-|------|------|--------|
-| src/main/java/com/ordermgr/ | 业务代码根目录 | 新领域创建 com.ordermgr.<domain> 包 |
-| src/main/java/com/ordermgr/common/ | 公共代码 | 跨领域共享的工具类、异常类 |
-| src/main/resources/ | 配置文件 | application.yml 配置数据库等 |
+| 目录                               | 用途           | 编码时                              |
+| ---------------------------------- | -------------- | ----------------------------------- |
+| src/main/java/com/ordermgr/        | 业务代码根目录 | 新领域创建 com.ordermgr.<domain> 包 |
+| src/main/java/com/ordermgr/common/ | 公共代码       | 跨领域共享的工具类、异常类          |
+| src/main/resources/                | 配置文件       | application.yml 配置数据库等        |
 
 ## 忽略目录
 
@@ -1165,19 +1182,22 @@ Spring Boot、JPA、PostgreSQL
 
 ## 编码约定
 
-- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Repository 以 *Repository 结尾
+- **命名约定**：Controller 以 *Controller 结尾，Service 以 *Service 结尾，Repository 以 \*Repository 结尾
 - **领域边界**：每个领域包内聚，领域间通过 Service 接口调用，不直接访问其他领域的 Repository
 
 ## 业务领域全景
 
 核心域：
+
 - 订单管理：订单创建、支付、取消、查询
 - 商品管理：商品信息维护、分类管理、库存管理
 
 支撑域：
+
 - 用户管理：用户注册、登录、权限控制
 
 辅助域：
+
 - 数据统计：销售报表、用户活跃度分析
 
 域间主要交互：商品管理 → 订单管理（商品引用和库存扣减）、用户管理 → 订单管理（用户身份和权限校验）
@@ -1186,10 +1206,10 @@ Spring Boot、JPA、PostgreSQL
 
 ## 调试入口
 
-| 类型 | 位置 | 说明 |
-|------|------|------|
-| 启动类 | OrderApplication.java | Spring Boot 启动入口 |
-| HTTP | 各领域 controller 子包 | 主要 API 入口参见能力目录 |
+| 类型   | 位置                   | 说明                      |
+| ------ | ---------------------- | ------------------------- |
+| 启动类 | OrderApplication.java  | Spring Boot 启动入口      |
+| HTTP   | 各领域 controller 子包 | 主要 API 入口参见能力目录 |
 
 ## 证据
 
@@ -1220,22 +1240,22 @@ feature-based：每个业务功能独立目录，包含组件、hooks、slice。
 
 ## 分层包路径
 
-| 分层 | 目录路径 | 编码时 |
-|------|---------|--------|
-| Feature | src/features/<feature>/ | 新功能创建目录，如 src/features/order/ |
-| 组件 | src/features/<feature>/components/ | 功能内组件，如 OrderList.tsx |
-| Hooks | src/features/<feature>/hooks/ | 功能内 hooks，如 useOrderList.ts |
-| Slice | src/features/<feature>/slice.ts | Redux 状态定义 |
-| 通用组件 | src/components/ | 跨 feature 共享组件 |
+| 分层     | 目录路径                           | 编码时                                 |
+| -------- | ---------------------------------- | -------------------------------------- |
+| Feature  | src/features/<feature>/            | 新功能创建目录，如 src/features/order/ |
+| 组件     | src/features/<feature>/components/ | 功能内组件，如 OrderList.tsx           |
+| Hooks    | src/features/<feature>/hooks/      | 功能内 hooks，如 useOrderList.ts       |
+| Slice    | src/features/<feature>/slice.ts    | Redux 状态定义                         |
+| 通用组件 | src/components/                    | 跨 feature 共享组件                    |
 
 ## 目录结构
 
-| 目录 | 用途 | 编码时 |
-|------|------|--------|
-| src/features/ | 业务功能模块 | 新功能在此创建 feature 目录 |
-| src/components/ | 通用 UI 组件 | 跨 feature 共享的组件 |
-| src/hooks/ | 通用 hooks | 跨 feature 共享的逻辑封装 |
-| src/store/ | Redux 配置 | 全局 store 配置 |
+| 目录            | 用途         | 编码时                      |
+| --------------- | ------------ | --------------------------- |
+| src/features/   | 业务功能模块 | 新功能在此创建 feature 目录 |
+| src/components/ | 通用 UI 组件 | 跨 feature 共享的组件       |
+| src/hooks/      | 通用 hooks   | 跨 feature 共享的逻辑封装   |
+| src/store/      | Redux 配置   | 全局 store 配置             |
 
 ## 忽略目录
 
@@ -1252,10 +1272,12 @@ feature-based：每个业务功能独立目录，包含组件、hooks、slice。
 ## 业务领域全景
 
 核心域：
+
 - 订单管理：订单列表、订单详情、订单操作
 - 用户管理：用户列表、角色分配、权限控制
 
 支撑域：
+
 - 仪表盘：数据概览、快捷操作入口
 
 域间主要交互：仪表盘 → 订单管理/用户管理（快捷跳转和数据概览）
@@ -1264,10 +1286,10 @@ feature-based：每个业务功能独立目录，包含组件、hooks、slice。
 
 ## 调试入口
 
-| 类型 | 位置 | 说明 |
-|------|------|------|
-| 应用入口 | src/main.tsx | Vite 启动入口 |
-| 路由入口 | src/App.tsx | React Router 配置 |
+| 类型     | 位置         | 说明              |
+| -------- | ------------ | ----------------- |
+| 应用入口 | src/main.tsx | Vite 启动入口     |
+| 路由入口 | src/App.tsx  | React Router 配置 |
 
 ## 证据
 
@@ -1290,18 +1312,18 @@ multi-module (backend-service × 3 + shared × 3)
 
 ## 模块拓扑
 
-| 模块 | 角色 | 类型 | 说明 |
-|------|------|------|------|
-| mall-admin | 可部署服务 | backend-service | 后台管理 API，提供商品、订单、用户管理 |
-| mall-portal | 可部署服务 | backend-service | 前台商城 API，提供商品浏览、购物车、下单 |
-| mall-search | 可部署服务 | backend-service | 搜索服务，基于 Elasticsearch 的商品搜索 |
-| mall-mbg | 共享模块 | library | 数据访问层，MyBatis Generator 生成的实体类和 Mapper |
-| mall-common | 共享模块 | library | 公共工具，通用响应封装、异常处理 |
-| mall-security | 共享模块 | library | 安全组件，JWT 认证和 Spring Security 配置 |
+| 模块          | 角色       | 类型            | 说明                                                |
+| ------------- | ---------- | --------------- | --------------------------------------------------- |
+| mall-admin    | 可部署服务 | backend-service | 后台管理 API，提供商品、订单、用户管理              |
+| mall-portal   | 可部署服务 | backend-service | 前台商城 API，提供商品浏览、购物车、下单            |
+| mall-search   | 可部署服务 | backend-service | 搜索服务，基于 Elasticsearch 的商品搜索             |
+| mall-mbg      | 共享模块   | library         | 数据访问层，MyBatis Generator 生成的实体类和 Mapper |
+| mall-common   | 共享模块   | library         | 公共工具，通用响应封装、异常处理                    |
+| mall-security | 共享模块   | library         | 安全组件，JWT 认证和 Spring Security 配置           |
 
 ## 模块依赖关系
 
-mall-admin  → mall-common, mall-mbg, mall-security
+mall-admin → mall-common, mall-mbg, mall-security
 mall-portal → mall-common, mall-mbg, mall-security
 mall-search → mall-common, mall-mbg
 
@@ -1341,16 +1363,19 @@ mall-search → mall-common, mall-mbg
 ## 业务领域全景
 
 核心域：
+
 - 商品管理（mall-admin）：商品 CRUD、分类管理、品牌管理
 - 订单管理（mall-portal + mall-admin）：前台下单、后台订单处理
 - 购物车（mall-portal）：购物车操作、结算
 
 支撑域：
+
 - 用户管理（mall-admin + mall-portal）：后台用户管理、前台会员体系
 - 优惠券管理（mall-admin + mall-portal）：优惠券发放和核销
 - 支付管理（mall-portal）：支付宝、微信支付集成
 
 辅助域：
+
 - 商品搜索（mall-search）：基于 ES 的商品检索
 - 营销管理（mall-admin）：营销活动、限时秒杀
 
@@ -1360,11 +1385,11 @@ mall-search → mall-common, mall-mbg
 
 ## 调试入口
 
-| 模块 | 启动类 | 说明 |
-|------|--------|------|
-| mall-admin | MallAdminApplication | 后台管理服务启动入口 |
+| 模块        | 启动类                | 说明                 |
+| ----------- | --------------------- | -------------------- |
+| mall-admin  | MallAdminApplication  | 后台管理服务启动入口 |
 | mall-portal | MallPortalApplication | 前台商城服务启动入口 |
-| mall-search | MallSearchApplication | 搜索服务启动入口 |
+| mall-search | MallSearchApplication | 搜索服务启动入口     |
 
 ## 证据
 

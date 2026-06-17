@@ -85,18 +85,25 @@
  * overall architecture.
  */
 
-import type { NodeLabel } from '../../shared/index.js';
-import type { TypeRegistry, MutableTypeRegistry } from './type-registry.js';
-import type { MethodRegistry, MutableMethodRegistry } from './method-registry.js';
-import type { FieldRegistry, MutableFieldRegistry } from './field-registry.js';
-import { createTypeRegistry } from './type-registry.js';
-import { createMethodRegistry } from './method-registry.js';
-import { createFieldRegistry } from './field-registry.js';
-import type { SymbolDefinition } from '../../shared/index.js';
-import type { SymbolTableReader, SymbolTableWriter, AddMetadata } from './symbol-table.js';
-import { createSymbolTable } from './symbol-table.js';
-import { createRegistrationTable } from './registration-table.js';
-import type { ScopeResolutionIndexes } from './scope-resolution-indexes.js';
+import type { NodeLabel } from "../../shared/index.js";
+import type { TypeRegistry, MutableTypeRegistry } from "./type-registry.js";
+import type {
+  MethodRegistry,
+  MutableMethodRegistry,
+} from "./method-registry.js";
+import type { FieldRegistry, MutableFieldRegistry } from "./field-registry.js";
+import { createTypeRegistry } from "./type-registry.js";
+import { createMethodRegistry } from "./method-registry.js";
+import { createFieldRegistry } from "./field-registry.js";
+import type { SymbolDefinition } from "../../shared/index.js";
+import type {
+  SymbolTableReader,
+  SymbolTableWriter,
+  AddMetadata,
+} from "./symbol-table.js";
+import { createSymbolTable } from "./symbol-table.js";
+import { createRegistrationTable } from "./registration-table.js";
+import type { ScopeResolutionIndexes } from "./scope-resolution-indexes.js";
 
 // ---------------------------------------------------------------------------
 // Public read-only interface
@@ -206,7 +213,7 @@ export const createSemanticModel = (): MutableSemanticModel => {
     // method, Kotlin companion method) routes as Method. Keeps the
     // dispatch table single-purpose.
     const dispatchKey: NodeLabel =
-      type === 'Function' && metadata?.ownerId !== undefined ? 'Method' : type;
+      type === "Function" && metadata?.ownerId !== undefined ? "Method" : type;
 
     const hook = dispatchTable.get(dispatchKey);
     if (hook) {
@@ -225,7 +232,8 @@ export const createSemanticModel = (): MutableSemanticModel => {
   const attachScopeIndexes = (indexes: ScopeResolutionIndexes): void => {
     if (attachedScopes !== undefined) {
       throw new Error(
-        'SemanticModel: scope indexes already attached. ' + 'Call `clear()` before re-attaching.',
+        "SemanticModel: scope indexes already attached. " +
+          "Call `clear()` before re-attaching.",
       );
     }
     attachedScopes = Object.freeze(indexes);

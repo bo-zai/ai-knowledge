@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildVerEvidence(input: {
   componentName: string;
@@ -9,16 +9,16 @@ export function buildVerEvidence(input: {
   return {
     slice: {
       id: `version:${input.componentName}`,
-      kind: 'tool',
+      kind: "tool",
       title: `Version: ${input.componentName}`,
       scope: input.componentName,
       seed: input.componentName,
     },
     facts: [
       {
-        id: 'F-001',
+        id: "F-001",
         claim: `${input.componentName} version is ${input.version}`,
-        source_kind: 'analysis-runtime',
+        source_kind: "analysis-runtime",
         refs: [{ file: input.componentName }],
       },
     ],

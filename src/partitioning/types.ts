@@ -6,8 +6,14 @@
 
 // ========== 表信息 ==========
 
-export type TableRole = 'primary' | 'related' | 'shard' | 'junction_table' | 'view_reference' | 'config_table';
-export type TableType = 'table' | 'view';
+export type TableRole =
+  | "primary"
+  | "related"
+  | "shard"
+  | "junction_table"
+  | "view_reference"
+  | "config_table";
+export type TableType = "table" | "view";
 
 export interface JunctionBetween {
   leftTable: string;
@@ -39,12 +45,12 @@ export interface CrossDomainCall {
 
 // ========== 调用链节点 ==========
 
-export type CallChainRole = 'core_logic' | 'data_layer' | 'cross_domain_call';
+export type CallChainRole = "core_logic" | "data_layer" | "cross_domain_call";
 
 export interface CallChainNode {
   className: string;
   interfaceName?: string;
-  implementationType?: 'impl' | 'abstract' | 'delegate';
+  implementationType?: "impl" | "abstract" | "delegate";
   filePath: string;
   role: CallChainRole;
   crossDomainHint?: string;
@@ -52,8 +58,8 @@ export interface CallChainNode {
 
 // ========== 入口点 ==========
 
-export type EntryPointKind = 'controller' | 'scheduled' | 'mq_consumer';
-export type ClientType = 'web' | 'app' | 'admin' | 'api';
+export type EntryPointKind = "controller" | "scheduled" | "mq_consumer";
+export type ClientType = "web" | "app" | "admin" | "api";
 
 export interface EntryPoint {
   kind: EntryPointKind;
@@ -73,7 +79,7 @@ export interface EntryPoint {
 
 // ========== 共享资源 ==========
 
-export type EntityRole = 'canonical' | 'dto' | 'vo' | 'po' | 'do';
+export type EntityRole = "canonical" | "dto" | "vo" | "po" | "do";
 
 export interface ServiceInfo {
   className: string;
@@ -108,7 +114,11 @@ export interface SharedResources {
 
 // ========== 后端模块 ==========
 
-export type BackendModuleRole = 'entry_and_logic_provider' | 'entry_provider' | 'logic_provider' | 'data_provider';
+export type BackendModuleRole =
+  | "entry_and_logic_provider"
+  | "entry_provider"
+  | "logic_provider"
+  | "data_provider";
 
 export interface BackendModule {
   name: string;
@@ -118,7 +128,7 @@ export interface BackendModule {
 
 // ========== 前端 ==========
 
-export type FrontendFramework = 'vue' | 'react' | 'angular' | 'svelte';
+export type FrontendFramework = "vue" | "react" | "angular" | "svelte";
 
 export interface FrontendApiCall {
   backendApiId: string;
@@ -144,7 +154,7 @@ export interface FrontendInfo {
 
 // ========== 前后端关联 ==========
 
-export type LinkType = 'page_to_api';
+export type LinkType = "page_to_api";
 
 export interface FrontendBackendLink {
   frontendPageName: string;
@@ -155,7 +165,7 @@ export interface FrontendBackendLink {
 
 // ========== 无入口点表 ==========
 
-export type NoEntryTableType = 'config_table' | 'dict_table' | 'system_table';
+export type NoEntryTableType = "config_table" | "dict_table" | "system_table";
 
 export interface NoEntryTable {
   tableName: string;
@@ -165,7 +175,10 @@ export interface NoEntryTable {
 
 // ========== 跨域引用 ==========
 
-export type CrossDomainRelationType = 'service_call' | 'frontend_component' | 'shared_table';
+export type CrossDomainRelationType =
+  | "service_call"
+  | "frontend_component"
+  | "shared_table";
 
 export interface CrossDomainRef {
   targetDomain: string;
@@ -323,7 +336,7 @@ export interface PartitionCandidate {
     filePath: string;
     xmlPath?: string;
     /** 预提取的 SQL 操作类型 */
-    operations?: ('select' | 'insert' | 'update' | 'delete')[];
+    operations?: ("select" | "insert" | "update" | "delete")[];
     tablesOperated: string[];
   }[];
 
@@ -531,7 +544,7 @@ export interface IncrementalUpdateResult {
   /** 是否需要重新运行分析 */
   needsReanalysis: boolean;
   /** 更新类型 */
-  updateType: 'none' | 'content_change' | 'structure_change';
+  updateType: "none" | "content_change" | "structure_change";
   /** 变化的候选 ID 列表 */
   changedCandidateIds: string[];
   /** 新增的候选 ID 列表 */

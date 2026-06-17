@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildTermEvidence(input: {
   term: string;
@@ -8,16 +8,16 @@ export function buildTermEvidence(input: {
   return {
     slice: {
       id: `term:${input.term}`,
-      kind: 'community',
+      kind: "community",
       title: input.term,
       scope: input.term,
       seed: input.term,
     },
     facts: [
       {
-        id: 'F-001',
+        id: "F-001",
         claim: `Term ${input.term} means: ${input.definition}`,
-        source_kind: 'analysis-runtime',
+        source_kind: "analysis-runtime",
         refs: [],
       },
     ],

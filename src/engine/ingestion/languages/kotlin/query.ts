@@ -1,5 +1,5 @@
-import Parser from 'tree-sitter';
-import Kotlin from 'tree-sitter-kotlin';
+import Parser from "tree-sitter";
+import Kotlin from "tree-sitter-kotlin";
 
 const KOTLIN_SCOPE_QUERY = `
 ;; Scopes
@@ -149,14 +149,17 @@ let query: Parser.Query | null = null;
 export function getKotlinParser(): Parser {
   if (parser === null) {
     parser = new Parser();
-    parser.setLanguage(Kotlin as Parameters<Parser['setLanguage']>[0]);
+    parser.setLanguage(Kotlin as Parameters<Parser["setLanguage"]>[0]);
   }
   return parser;
 }
 
 export function getKotlinScopeQuery(): Parser.Query {
   if (query === null) {
-    query = new Parser.Query(Kotlin as Parameters<Parser['setLanguage']>[0], KOTLIN_SCOPE_QUERY);
+    query = new Parser.Query(
+      Kotlin as Parameters<Parser["setLanguage"]>[0],
+      KOTLIN_SCOPE_QUERY,
+    );
   }
   return query;
 }

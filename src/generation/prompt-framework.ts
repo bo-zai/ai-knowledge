@@ -13,26 +13,29 @@
  * - concept-filter.md: 第三层筛选提示词
  */
 
-import type { AllObjectType, KnowledgeType } from '../knowledge/type-directory-map.js';
-import { PromptLoader } from '../shared/prompt-loader.js';
+import type {
+  AllObjectType,
+  KnowledgeType,
+} from "../knowledge/type-directory-map.js";
+import { PromptLoader } from "../shared/prompt-loader.js";
 
 /**
  * 类型名称到提示词模板名称的映射
  */
 const TYPE_RULES_MAP: Record<string, string> = {
-  CAPABILITY: 'rules-capability',
-  CONCEPT: 'rules-concept',
-  BOUNDARY: 'rules-boundary',
-  EXTERNAL: 'rules-external',
-  CONSTRAINT: 'rules-constraint',
-  RELATION: 'rules-relation',
-  DATA_MODEL: 'rules-data-model',
-  WORKFLOW: 'rules-workflow',
+  CAPABILITY: "rules-capability",
+  CONCEPT: "rules-concept",
+  BOUNDARY: "rules-boundary",
+  EXTERNAL: "rules-external",
+  CONSTRAINT: "rules-constraint",
+  RELATION: "rules-relation",
+  DATA_MODEL: "rules-data-model",
+  WORKFLOW: "rules-workflow",
   // 兼容旧类型
-  TERM: 'rules-concept',
-  DB: 'rules-data-model',
-  FLOW: 'rules-workflow',
-  OPEN: 'rules-boundary',
+  TERM: "rules-concept",
+  DB: "rules-data-model",
+  FLOW: "rules-workflow",
+  OPEN: "rules-boundary",
 };
 
 /**
@@ -43,10 +46,10 @@ export interface PromptConfig {
   objectType: AllObjectType | KnowledgeType;
 
   /** Generation strategy */
-  strategy: 'bootstrap' | 'refine' | 'validate';
+  strategy: "bootstrap" | "refine" | "validate";
 
   /** Generation phase (for ordering) */
-  phase: 'concept' | 'data_model' | 'capability' | 'parallel';
+  phase: "concept" | "data_model" | "capability" | "parallel";
 
   /** Dependencies from previous phases */
   dependencies?: {
@@ -87,7 +90,7 @@ export interface PromptFramework {
  */
 export function getBaseSystemPrompt(): string {
   try {
-    return PromptLoader.load('base-system').raw;
+    return PromptLoader.load("base-system").raw;
   } catch {
     // 模板加载失败时返回硬编码默认值（向后兼容）
     return `你是一个代码知识提取专家。你必须生成符合 Schema 的 JSON 输出。`;
@@ -111,34 +114,34 @@ export const BASE_SYSTEM_PROMPT = getBaseSystemPrompt();
  */
 export const TYPE_SPECIFIC_RULES: Record<string, string> = {
   // 能力目录
-  CAPABILITY: loadTypeRules('rules-capability'),
+  CAPABILITY: loadTypeRules("rules-capability"),
 
   // 概念知识
-  CONCEPT: loadTypeRules('rules-concept'),
+  CONCEPT: loadTypeRules("rules-concept"),
 
   // 边界知识
-  BOUNDARY: loadTypeRules('rules-boundary'),
+  BOUNDARY: loadTypeRules("rules-boundary"),
 
   // 外部系统交互
-  EXTERNAL: loadTypeRules('rules-external'),
+  EXTERNAL: loadTypeRules("rules-external"),
 
   // 约束知识
-  CONSTRAINT: loadTypeRules('rules-constraint'),
+  CONSTRAINT: loadTypeRules("rules-constraint"),
 
   // 能力关系
-  RELATION: loadTypeRules('rules-relation'),
+  RELATION: loadTypeRules("rules-relation"),
 
   // 数据模型
-  DATA_MODEL: loadTypeRules('rules-data-model'),
+  DATA_MODEL: loadTypeRules("rules-data-model"),
 
   // 跨域业务流程
-  WORKFLOW: loadTypeRules('rules-workflow'),
+  WORKFLOW: loadTypeRules("rules-workflow"),
 
   // 兼容旧类型
-  TERM: loadTypeRules('rules-concept'), // TERM 对应 CONCEPT
-  DB: loadTypeRules('rules-data-model'), // DB 对应 DATA_MODEL
-  FLOW: loadTypeRules('rules-workflow'), // FLOW 对应 WORKFLOW
-  OPEN: loadTypeRules('rules-boundary'), // OPEN 对应 BOUNDARY
+  TERM: loadTypeRules("rules-concept"), // TERM 对应 CONCEPT
+  DB: loadTypeRules("rules-data-model"), // DB 对应 DATA_MODEL
+  FLOW: loadTypeRules("rules-workflow"), // FLOW 对应 WORKFLOW
+  OPEN: loadTypeRules("rules-boundary"), // OPEN 对应 BOUNDARY
 };
 
 /**
@@ -149,7 +152,7 @@ function loadTypeRules(templateName: string): string {
     return PromptLoader.load(templateName).raw;
   } catch {
     // 模板加载失败时返回空（保持向后兼容）
-    return '';
+    return "";
   }
 }
 
@@ -165,11 +168,11 @@ function loadTypeRules(templateName: string): string {
  * - 阶段 2: 其他类型并行生成
  */
 export function buildPhaseContext(
-  phase: 'concept' | 'data_model' | 'capability' | 'parallel',
-  dependencies?: PromptConfig['dependencies']
+  phase: "concept" | "data_model" | "capability" | "parallel",
+  dependencies?: PromptConfig["dependencies"],
 ): string {
-  if (!dependencies || phase === 'concept') {
-    return ''; // Concept phase has no dependencies
+  if (!dependencies || phase === "concept") {
+    return ""; // Concept phase has no dependencies
   }
 
   const lines: string[] = [];
@@ -180,29 +183,29 @@ export function buildPhaseContext(
 
   if (conceptNames && conceptNames.length > 0) {
     lines.push(`## 已生成的概念名称（必须使用这些名称作为引用）`);
-    lines.push(conceptNames.map(n => `- ${n}`).join('\n'));
+    lines.push(conceptNames.map((n) => `- ${n}`).join("\n"));
   }
 
-  if (phase !== 'data_model' && dataModelNames && dataModelNames.length > 0) {
+  if (phase !== "data_model" && dataModelNames && dataModelNames.length > 0) {
     lines.push(`## 已生成的数据模型名称`);
-    lines.push(dataModelNames.map(n => `- ${n}`).join('\n'));
+    lines.push(dataModelNames.map((n) => `- ${n}`).join("\n"));
   }
 
-  if (phase === 'parallel' && capabilityNames && capabilityNames.length > 0) {
+  if (phase === "parallel" && capabilityNames && capabilityNames.length > 0) {
     lines.push(`## 已生成的能力域名称（必须使用这些名称作为引用）`);
-    lines.push(capabilityNames.map(n => `- ${n}`).join('\n'));
+    lines.push(capabilityNames.map((n) => `- ${n}`).join("\n"));
   }
 
   if (tagPool && tagPool.length > 0) {
     lines.push(`## 已有标签池（优先使用这些标签保持一致性）`);
     const displayTags = tagPool.slice(0, 20);
-    lines.push(displayTags.map(t => `- ${t}`).join('\n'));
+    lines.push(displayTags.map((t) => `- ${t}`).join("\n"));
     if (tagPool.length > 20) {
       lines.push(`- ... (共 ${tagPool.length} 个标签)`);
     }
   }
 
-  return lines.join('\n\n');
+  return lines.join("\n\n");
 }
 
 // ============================================================================
@@ -251,18 +254,18 @@ export function buildPromptFramework(config: PromptConfig): PromptFramework {
   const baseSystem = BASE_SYSTEM_PROMPT;
 
   // Layer 2: Type specific rules
-  const typeSpecific = TYPE_SPECIFIC_RULES[objectType] ?? '';
+  const typeSpecific = TYPE_SPECIFIC_RULES[objectType] ?? "";
 
   // Layer 3: Phase context
   const phaseContext = buildPhaseContext(phase, dependencies);
 
   // Layer 4: Strategy modifier
-  const strategyModifier = STRATEGY_MODIFIERS[strategy] ?? '';
+  const strategyModifier = STRATEGY_MODIFIERS[strategy] ?? "";
 
   // Combine all layers into system prompt
   const systemParts = [baseSystem, typeSpecific, phaseContext, strategyModifier]
-    .filter(p => p.length > 0)
-    .join('\n\n---\n\n');
+    .filter((p) => p.length > 0)
+    .join("\n\n---\n\n");
 
   const system = systemParts;
 
@@ -294,5 +297,5 @@ function buildUserPrompt(config: PromptConfig): string {
  * 获取类型特定规则（单独使用）
  */
 export function getTypeSpecificRules(objectType: string): string {
-  return TYPE_SPECIFIC_RULES[objectType] ?? '';
+  return TYPE_SPECIFIC_RULES[objectType] ?? "";
 }

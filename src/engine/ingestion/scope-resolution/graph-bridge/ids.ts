@@ -17,10 +17,18 @@
  * migrate.
  */
 
-import type { NodeLabel, ScopeId, SymbolDefinition } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { generateId } from '../../../lib/utils.js';
-import { qualifiedKey, simpleKey, type GraphNodeLookup } from '../graph-bridge/node-lookup.js';
+import type {
+  NodeLabel,
+  ScopeId,
+  SymbolDefinition,
+} from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { generateId } from "../../../lib/utils.js";
+import {
+  qualifiedKey,
+  simpleKey,
+  type GraphNodeLookup,
+} from "../graph-bridge/node-lookup.js";
 /**
  * Labels that may legitimately ANCHOR a CALLS/ACCESSES edge as the
  * source ("caller"). A Variable / Property can be the TARGET of an
@@ -42,13 +50,13 @@ import { qualifiedKey, simpleKey, type GraphNodeLookup } from '../graph-bridge/n
  */
 function isCallerAnchorLabel(label: NodeLabel): boolean {
   return (
-    label === 'Function' ||
-    label === 'Method' ||
-    label === 'Constructor' ||
-    label === 'Class' ||
-    label === 'Interface' ||
-    label === 'Struct' ||
-    label === 'Enum'
+    label === "Function" ||
+    label === "Method" ||
+    label === "Constructor" ||
+    label === "Class" ||
+    label === "Interface" ||
+    label === "Struct" ||
+    label === "Enum"
   );
 }
 
@@ -71,7 +79,11 @@ function isCallerAnchorLabel(label: NodeLabel): boolean {
  */
 export function resolveDefGraphId(
   filePath: string,
-  def: { qualifiedName?: string; type?: NodeLabel; parameterTypes?: readonly string[] },
+  def: {
+    qualifiedName?: string;
+    type?: NodeLabel;
+    parameterTypes?: readonly string[];
+  },
   nodeLookup: GraphNodeLookup,
 ): string | undefined {
   const qn = def.qualifiedName;
@@ -81,18 +93,23 @@ export function resolveDefGraphId(
     // try the parameter-typed key first so same-name same-arity
     // overloads route to their distinct graph nodes.
     if (
-      def.type === 'Method' &&
+      def.type === "Method" &&
       def.parameterTypes !== undefined &&
       def.parameterTypes.length > 0
     ) {
-      const pKey = qualifiedKey(filePath, def.type, `${qn}~${def.parameterTypes.join(',')}`);
+      const pKey = qualifiedKey(
+        filePath,
+        def.type,
+        `${qn}~${def.parameterTypes.join(",")}`,
+      );
       const pHit = nodeLookup.get(pKey);
       if (pHit !== undefined) return pHit;
     }
     const qualifiedHit = nodeLookup.get(qualifiedKey(filePath, def.type, qn));
     if (qualifiedHit !== undefined) return qualifiedHit;
   }
-  const simpleName = qn.lastIndexOf('.') === -1 ? qn : qn.slice(qn.lastIndexOf('.') + 1);
+  const simpleName =
+    qn.lastIndexOf(".") === -1 ? qn : qn.slice(qn.lastIndexOf(".") + 1);
   return nodeLookup.get(simpleKey(filePath, simpleName));
 }
 
@@ -100,7 +117,7 @@ export function resolveDefGraphId(
 export function simpleQualifiedName(def: SymbolDefinition): string | undefined {
   const q = def.qualifiedName;
   if (q === undefined || q.length === 0) return undefined;
-  const dot = q.lastIndexOf('.');
+  const dot = q.lastIndexOf(".");
   return dot === -1 ? q : q.slice(dot + 1);
 }
 
@@ -134,7 +151,10 @@ export function resolveCallerGraphId(
     // Class/Interface/Struct/Enum. Variable/Property are NOT valid
     // caller anchors — see `isCallerAnchorLabel` for why.
     const fnDef = scope.ownedDefs.find(
-      (d) => d.type === 'Function' || d.type === 'Method' || d.type === 'Constructor',
+      (d) =>
+        d.type === "Function" ||
+        d.type === "Method" ||
+        d.type === "Constructor",
     );
     if (fnDef !== undefined) {
       const id = resolveDefGraphId(scope.filePath, fnDef, nodeLookup);
@@ -149,7 +169,7 @@ export function resolveCallerGraphId(
   }
   // Module-level calls — fall back to the File node for the scope's filePath.
   if (lastFilePath !== undefined) {
-    return generateId('File', lastFilePath);
+    return generateId("File", lastFilePath);
   }
   return undefined;
 }

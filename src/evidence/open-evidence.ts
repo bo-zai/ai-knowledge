@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildOpenEvidence(input: {
   questionId: string;
@@ -10,7 +10,7 @@ export function buildOpenEvidence(input: {
   return {
     slice: {
       id: `open:${input.questionId}`,
-      kind: 'community',
+      kind: "community",
       title: input.question,
       scope: input.questionId,
       seed: input.questionId,
@@ -23,8 +23,8 @@ export function buildOpenEvidence(input: {
     tests: [],
     gaps: [
       {
-        id: 'G-001',
-        kind: 'open-question',
+        id: "G-001",
+        kind: "open-question",
         question: input.question,
         reason: input.reason,
       },

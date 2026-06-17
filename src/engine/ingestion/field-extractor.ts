@@ -1,8 +1,12 @@
 // gitnexus/src/core/ingestion/field-extractor.ts
 
-import type { SyntaxNode } from './utils/ast-helpers.js';
-import { SupportedLanguages } from '../shared';
-import type { FieldExtractorContext, ExtractedFields, FieldVisibility } from './field-types.js';
+import type { SyntaxNode } from "./utils/ast-helpers.js";
+import { SupportedLanguages } from "../shared";
+import type {
+  FieldExtractorContext,
+  ExtractedFields,
+  FieldVisibility,
+} from "./field-types.js";
 
 /**
  * Language-specific field extractor
@@ -14,7 +18,10 @@ export interface FieldExtractor {
   /**
    * Extract fields from a class/struct/interface declaration
    */
-  extract(node: SyntaxNode, context: FieldExtractorContext): ExtractedFields | null;
+  extract(
+    node: SyntaxNode,
+    context: FieldExtractorContext,
+  ): ExtractedFields | null;
 
   /**
    * Check if this node represents a type declaration with fields
@@ -28,15 +35,21 @@ export interface FieldExtractor {
 export abstract class BaseFieldExtractor implements FieldExtractor {
   abstract language: SupportedLanguages;
 
-  abstract extract(node: SyntaxNode, context: FieldExtractorContext): ExtractedFields | null;
+  abstract extract(
+    node: SyntaxNode,
+    context: FieldExtractorContext,
+  ): ExtractedFields | null;
   abstract isTypeDeclaration(node: SyntaxNode): boolean;
 
   protected normalizeType(type: string | null): string | null {
     if (!type) return null;
-    return type.trim().replace(/\s+/g, ' ');
+    return type.trim().replace(/\s+/g, " ");
   }
 
-  protected resolveType(typeName: string, context: FieldExtractorContext): string | null {
+  protected resolveType(
+    typeName: string,
+    context: FieldExtractorContext,
+  ): string | null {
     const { typeEnv, symbolTable, filePath } = context;
 
     // Try to find in type environment (check file scope first)

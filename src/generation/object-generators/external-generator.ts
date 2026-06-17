@@ -8,7 +8,7 @@
  * - 可见交互范围
  */
 
-import type { EvidenceBundle } from '../../evidence/evidence-bundle-schema.js';
+import type { EvidenceBundle } from "../../evidence/evidence-bundle-schema.js";
 
 interface ExternalPromptInput {
   /** 证据包 */
@@ -24,7 +24,10 @@ interface ExternalPromptInput {
 /**
  * Build EXTERNAL generation prompt.
  */
-export function buildExternalPrompt(input: ExternalPromptInput): { system: string; user: string } {
+export function buildExternalPrompt(input: ExternalPromptInput): {
+  system: string;
+  user: string;
+} {
   const system = `You must generate only JSON. Return exactly one JSON object that matches output_schema. Do not wrap the result in markdown, code fences, explanations, or additional text. You may only use supplied evidence. You may not invent external systems or interactions. All output must be Chinese except code identifiers.
 
 CRITICAL RULES:
@@ -54,7 +57,7 @@ REPOSITORY ROLE MEANINGS:
 
   const user = JSON.stringify(
     {
-      task: { object_type: 'EXTERNAL', generation_mode: 'bootstrap' },
+      task: { object_type: "EXTERNAL", generation_mode: "bootstrap" },
       evidence,
       context: {
         repo_name: input.repoName,
@@ -62,19 +65,19 @@ REPOSITORY ROLE MEANINGS:
         capability_names: input.capability_names ?? [],
       },
       output_schema: {
-        id: 'string (EXTERNAL-{external_system_name})',
-        type: 'EXTERNAL',
-        external_system_name: 'string (外部系统名称)',
-        interaction_purpose_zh: 'string (交互目的)',
-        interaction_method: 'sdk | http_api | callback | data_exchange | rpc',
-        repository_role: 'caller | callee | data_producer | data_consumer',
-        interaction_entry: 'string (optional - 交互入口代码位置)',
-        visible_interaction_scope: 'array of strings (可见交互操作列表)',
-        name_zh: 'string (中文显示名称)',
-        summary_zh: 'string (一句话定位)',
-        applicable_scope: 'string (适用范围)',
-        tags: 'array of 1-3 strings',
-        evidence: 'array of file paths',
+        id: "string (EXTERNAL-{external_system_name})",
+        type: "EXTERNAL",
+        external_system_name: "string (外部系统名称)",
+        interaction_purpose_zh: "string (交互目的)",
+        interaction_method: "sdk | http_api | callback | data_exchange | rpc",
+        repository_role: "caller | callee | data_producer | data_consumer",
+        interaction_entry: "string (optional - 交互入口代码位置)",
+        visible_interaction_scope: "array of strings (可见交互操作列表)",
+        name_zh: "string (中文显示名称)",
+        summary_zh: "string (一句话定位)",
+        applicable_scope: "string (适用范围)",
+        tags: "array of 1-3 strings",
+        evidence: "array of file paths",
       },
     },
     null,
@@ -87,7 +90,9 @@ REPOSITORY ROLE MEANINGS:
 /**
  * Build structured evidence from EvidenceBundle.
  */
-function buildEvidenceFromBundle(bundle: EvidenceBundle | undefined): Record<string, unknown> {
+function buildEvidenceFromBundle(
+  bundle: EvidenceBundle | undefined,
+): Record<string, unknown> {
   if (!bundle) {
     return { evidence_bundle: null };
   }

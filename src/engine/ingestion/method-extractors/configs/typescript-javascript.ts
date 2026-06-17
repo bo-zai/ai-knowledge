@@ -1,21 +1,25 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/typescript-javascript.ts
 // Verified against tree-sitter-typescript ^0.23.2, tree-sitter-javascript ^0.23.0
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { hasKeyword } from '../../field-extractors/configs/helpers.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import { hasKeyword } from "../../field-extractors/configs/helpers.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // TS/JS helpers
 // ---------------------------------------------------------------------------
 
-const VISIBILITY_KEYWORDS = new Set<MethodVisibility>(['public', 'private', 'protected']);
+const VISIBILITY_KEYWORDS = new Set<MethodVisibility>([
+  "public",
+  "private",
+  "protected",
+]);
 
 /**
  * Extract parameters from formal_parameters.
@@ -25,7 +29,7 @@ const VISIBILITY_KEYWORDS = new Set<MethodVisibility>(['public', 'private', 'pro
  * parameters (object_pattern, array_pattern) in both grammars.
  */
 function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return [];
   const params: ParameterInfo[] = [];
 
@@ -34,24 +38,24 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
     if (!param) continue;
 
     switch (param.type) {
-      case 'required_parameter': {
-        const patternNode = param.childForFieldName('pattern');
+      case "required_parameter": {
+        const patternNode = param.childForFieldName("pattern");
         if (!patternNode) break;
 
         // Skip TS `this` parameter — it's a compile-time type constraint, not a real param
-        if (patternNode.type === 'this') break;
+        if (patternNode.type === "this") break;
 
         // Rest parameter: pattern is a rest_pattern (...args) — extract inner identifier
-        const isRest = patternNode.type === 'rest_pattern';
+        const isRest = patternNode.type === "rest_pattern";
         const nameNode = isRest ? patternNode.firstNamedChild : patternNode;
         if (!nameNode) break;
 
         // type field is a type_annotation — unwrap to get the inner type node
-        const typeAnnotation = param.childForFieldName('type');
+        const typeAnnotation = param.childForFieldName("type");
         const typeNode = typeAnnotation?.firstNamedChild;
 
         // Default value: presence of a 'value' field means isOptional
-        const hasDefault = !!param.childForFieldName('value');
+        const hasDefault = !!param.childForFieldName("value");
 
         params.push({
           name: nameNode.text,
@@ -64,10 +68,10 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         });
         break;
       }
-      case 'optional_parameter': {
-        const nameNode = param.childForFieldName('pattern');
+      case "optional_parameter": {
+        const nameNode = param.childForFieldName("pattern");
         if (!nameNode) break;
-        const typeAnnotation = param.childForFieldName('type');
+        const typeAnnotation = param.childForFieldName("type");
         const typeNode = typeAnnotation?.firstNamedChild;
         params.push({
           name: nameNode.text,
@@ -80,10 +84,10 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         });
         break;
       }
-      case 'rest_parameter': {
-        const nameNode = param.childForFieldName('pattern');
+      case "rest_parameter": {
+        const nameNode = param.childForFieldName("pattern");
         if (!nameNode) break;
-        const typeAnnotation = param.childForFieldName('type');
+        const typeAnnotation = param.childForFieldName("type");
         const typeNode = typeAnnotation?.firstNamedChild;
         params.push({
           name: nameNode.text,
@@ -96,7 +100,7 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         });
         break;
       }
-      case 'identifier': {
+      case "identifier": {
         // JS: bare parameter name, no type info
         params.push({
           name: param.text,
@@ -107,9 +111,9 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         });
         break;
       }
-      case 'assignment_pattern': {
+      case "assignment_pattern": {
         // JS: param = defaultValue — the left side is the name, isOptional = true
-        const left = param.childForFieldName('left');
+        const left = param.childForFieldName("left");
         if (left) {
           params.push({
             name: left.text,
@@ -121,7 +125,7 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'rest_pattern': {
+      case "rest_pattern": {
         // JS: ...args
         const inner = param.firstNamedChild;
         if (inner) {
@@ -135,8 +139,8 @@ function extractTsJsParameters(node: SyntaxNode): ParameterInfo[] {
         }
         break;
       }
-      case 'object_pattern':
-      case 'array_pattern': {
+      case "object_pattern":
+      case "array_pattern": {
         // Destructured parameter — use full text as name
         params.push({
           name: param.text,
@@ -163,11 +167,11 @@ const JSDOC_RETURN_RE = /@returns?\s*\{([^}]+)\}/;
 function sanitizeJsDocReturnType(raw: string): string | undefined {
   let type = raw.trim();
   // Strip JSDoc nullable/non-nullable prefixes: ?User → User, !User → User
-  if (type.startsWith('?') || type.startsWith('!')) type = type.slice(1);
+  if (type.startsWith("?") || type.startsWith("!")) type = type.slice(1);
   // Strip module: prefix — module:models.User → models.User
-  if (type.startsWith('module:')) type = type.slice(7);
+  if (type.startsWith("module:")) type = type.slice(7);
   // Reject unions (ambiguous)
-  if (type.includes('|')) return undefined;
+  if (type.includes("|")) return undefined;
   if (!type) return undefined;
   return type;
 }
@@ -180,10 +184,10 @@ function sanitizeJsDocReturnType(raw: string): string | undefined {
 function extractJsDocReturnType(node: SyntaxNode): string | undefined {
   let sibling = node.previousSibling;
   while (sibling) {
-    if (sibling.type === 'comment') {
+    if (sibling.type === "comment") {
       const match = JSDOC_RETURN_RE.exec(sibling.text);
       if (match) return sanitizeJsDocReturnType(match[1]);
-    } else if (sibling.isNamed && sibling.type !== 'decorator') break;
+    } else if (sibling.isNamed && sibling.type !== "decorator") break;
     sibling = sibling.previousSibling;
   }
   return undefined;
@@ -197,9 +201,9 @@ function extractJsDocReturnType(node: SyntaxNode): string | undefined {
  * The return_type field points to a type_annotation node that must be unwrapped.
  */
 function extractTsJsReturnType(node: SyntaxNode): string | undefined {
-  const returnType = node.childForFieldName('return_type');
+  const returnType = node.childForFieldName("return_type");
   if (returnType) {
-    if (returnType.type === 'type_annotation') {
+    if (returnType.type === "type_annotation") {
       const inner = returnType.firstNamedChild;
       if (inner) return inner.text?.trim();
     }
@@ -220,18 +224,20 @@ function extractTsJsVisibility(node: SyntaxNode): MethodVisibility {
   // Pass 1: check for accessibility_modifier named child (TS-specific)
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child && child.type === 'accessibility_modifier') {
+    if (child && child.type === "accessibility_modifier") {
       const t = child.text.trim();
-      if (VISIBILITY_KEYWORDS.has(t as MethodVisibility)) return t as MethodVisibility;
+      if (VISIBILITY_KEYWORDS.has(t as MethodVisibility))
+        return t as MethodVisibility;
     }
   }
   // Pass 2: ES2022 private methods (#name) are inherently private
-  const nameNode = node.childForFieldName('name');
-  if (nameNode && nameNode.type === 'private_property_identifier') return 'private';
+  const nameNode = node.childForFieldName("name");
+  if (nameNode && nameNode.type === "private_property_identifier")
+    return "private";
   // No accessibility_modifier found — default to public.
   // Note: tree-sitter-typescript does not wrap modifiers in a 'modifiers' node
   // (unlike JVM), so there is no wrapper to scan.
-  return 'public';
+  return "public";
 }
 
 /**
@@ -246,7 +252,7 @@ function extractTsJsDecorators(node: SyntaxNode): string[] {
   // Walk backwards via previousNamedSibling to collect consecutive decorator siblings.
   // This avoids the O(N) index-finding scan through the parent's children.
   let sibling = node.previousNamedSibling;
-  while (sibling && sibling.type === 'decorator') {
+  while (sibling && sibling.type === "decorator") {
     const name = extractDecoratorName(sibling);
     if (name) decorators.unshift(name);
     sibling = sibling.previousNamedSibling;
@@ -257,12 +263,12 @@ function extractTsJsDecorators(node: SyntaxNode): string[] {
 function extractDecoratorName(decorator: SyntaxNode): string | undefined {
   const expr = decorator.firstNamedChild;
   if (!expr) return undefined;
-  if (expr.type === 'call_expression') {
-    const fn = expr.childForFieldName('function');
-    return fn ? '@' + fn.text : undefined;
+  if (expr.type === "call_expression") {
+    const fn = expr.childForFieldName("function");
+    return fn ? "@" + fn.text : undefined;
   }
-  if (expr.type === 'identifier') return '@' + expr.text;
-  if (expr.type === 'member_expression') return '@' + expr.text;
+  if (expr.type === "identifier") return "@" + expr.text;
+  if (expr.type === "member_expression") return "@" + expr.text;
   return undefined;
 }
 
@@ -278,11 +284,11 @@ function extractDecoratorName(decorator: SyntaxNode): string | undefined {
 // Note: TS and JS share a method config but NOT a field extractor because the TS field
 // extractor needs a hand-written class for type_alias_declaration object literals and
 // nested type discovery. Methods have no such requirement.
-const shared: Omit<MethodExtractionConfig, 'language'> = {
+const shared: Omit<MethodExtractionConfig, "language"> = {
   typeDeclarationNodes: [
-    'class_declaration',
-    'abstract_class_declaration',
-    'interface_declaration',
+    "class_declaration",
+    "abstract_class_declaration",
+    "interface_declaration",
   ],
   // Note: TS constructors are method_definition nodes (name = 'constructor'), so no
   // explicit constructor_declaration entry is needed (unlike JVM/C# configs).
@@ -294,17 +300,17 @@ const shared: Omit<MethodExtractionConfig, 'language'> = {
   //   - declare module / declare global augmentations — methods inside ambient_module_declaration
   //     wrappers are not surfaced because the top-level walker doesn't descend into them.
   methodNodeTypes: [
-    'method_definition',
-    'method_signature',
-    'abstract_method_signature',
-    'function_declaration',
-    'generator_function_declaration',
-    'function_signature',
+    "method_definition",
+    "method_signature",
+    "abstract_method_signature",
+    "function_declaration",
+    "generator_function_declaration",
+    "function_signature",
   ],
-  bodyNodeTypes: ['class_body', 'interface_body'],
+  bodyNodeTypes: ["class_body", "interface_body"],
 
   extractName(node) {
-    const nameNode = node.childForFieldName('name');
+    const nameNode = node.childForFieldName("name");
     return nameNode?.text;
   },
 
@@ -313,15 +319,15 @@ const shared: Omit<MethodExtractionConfig, 'language'> = {
   extractVisibility: extractTsJsVisibility,
 
   isStatic(node) {
-    return hasKeyword(node, 'static');
+    return hasKeyword(node, "static");
   },
 
   isAbstract(node, ownerNode) {
     // Explicit abstract keyword on the method itself
-    if (hasKeyword(node, 'abstract')) return true;
+    if (hasKeyword(node, "abstract")) return true;
     // Interface methods are implicitly abstract — TS interfaces never have method bodies
     // (unlike Java default methods), so no !body check needed
-    if (ownerNode.type === 'interface_declaration') return true;
+    if (ownerNode.type === "interface_declaration") return true;
     return false;
   },
 
@@ -332,11 +338,11 @@ const shared: Omit<MethodExtractionConfig, 'language'> = {
   extractAnnotations: extractTsJsDecorators,
 
   isAsync(node) {
-    return hasKeyword(node, 'async');
+    return hasKeyword(node, "async");
   },
 
   isOverride(node) {
-    return hasKeyword(node, 'override');
+    return hasKeyword(node, "override");
   },
 };
 

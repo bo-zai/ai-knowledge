@@ -1,8 +1,8 @@
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { extractPackagePath, groupByPackagePath } from './shared.js';
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { extractPackagePath, groupByPackagePath } from "./shared.js";
 
 /**
  * CONSTRAINT: Query exceptions and throws grouped by package.
@@ -12,8 +12,8 @@ export async function queryConstraintEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : '';
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const targetFilter = target ? `AND c.name CONTAINS '${target.value}'` : "";
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   const exceptionCypher = `
     MATCH (c:Class) WHERE c.name =~ '(?i).*(Exception|Error)$' ${targetFilter}
@@ -30,8 +30,8 @@ export async function queryConstraintEvidenceByPackage(
   const throwResults = await executeQuery(throwCypher);
 
   const allResults = [
-    ...exceptionResults.map(r => ({ ...r, verb: 'define' })),
-    ...throwResults.map(r => ({ ...r, verb: 'throw' })),
+    ...exceptionResults.map((r) => ({ ...r, verb: "define" })),
+    ...throwResults.map((r) => ({ ...r, verb: "throw" })),
   ] as Array<{ name: string; filePath: string; verb: string }>;
 
   if (allResults.length === 0) {
@@ -43,15 +43,18 @@ export async function queryConstraintEvidenceByPackage(
   const groups: EvidenceGroup[] = [];
 
   for (const [packagePath, rows] of packageGroups.entries()) {
-    const groupId = `CONSTRAINT-${packagePath.replace(/[\/]/g, '-')}`;
-    const bundleId = `BUNDLE-CONSTRAINT-${packagePath.replace(/[\/]/g, '-')}`.toUpperCase();
+    const groupId = `CONSTRAINT-${packagePath.replace(/[\/]/g, "-")}`;
+    const bundleId =
+      `BUNDLE-CONSTRAINT-${packagePath.replace(/[\/]/g, "-")}`.toUpperCase();
 
-    const behaviorSlices: EvidenceBundle['behaviorSlices'] = rows.map((row, idx) => ({
-      ref: `evidence://behavior/BEH-${String(idx + 1).padStart(3, '0')}`,
-      location: row.filePath,
-      verb: row.verb,
-      object: row.name,
-    }));
+    const behaviorSlices: EvidenceBundle["behaviorSlices"] = rows.map(
+      (row, idx) => ({
+        ref: `evidence://behavior/BEH-${String(idx + 1).padStart(3, "0")}`,
+        location: row.filePath,
+        verb: row.verb,
+        object: row.name,
+      }),
+    );
 
     groups.push({
       groupId,

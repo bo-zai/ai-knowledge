@@ -4,35 +4,35 @@
  * Type definitions for the embedding generation and semantic search system.
  */
 
-export const LABEL_FUNCTION = 'Function' as const;
-export const LABEL_METHOD = 'Method' as const;
-export const LABEL_CONSTRUCTOR = 'Constructor' as const;
-export const LABEL_CLASS = 'Class' as const;
-export const LABEL_INTERFACE = 'Interface' as const;
-export const LABEL_STRUCT = 'Struct' as const;
-export const LABEL_ENUM = 'Enum' as const;
-export const LABEL_TRAIT = 'Trait' as const;
-export const LABEL_IMPL = 'Impl' as const;
-export const LABEL_MACRO = 'Macro' as const;
-export const LABEL_NAMESPACE = 'Namespace' as const;
-export const LABEL_TYPE_ALIAS = 'TypeAlias' as const;
-export const LABEL_TYPEDEF = 'Typedef' as const;
-export const LABEL_CONST = 'Const' as const;
-export const LABEL_PROPERTY = 'Property' as const;
-export const LABEL_RECORD = 'Record' as const;
-export const LABEL_UNION = 'Union' as const;
-export const LABEL_STATIC = 'Static' as const;
-export const LABEL_VARIABLE = 'Variable' as const;
-export const LABEL_CODE_ELEMENT = 'CodeElement' as const;
+export const LABEL_FUNCTION = "Function" as const;
+export const LABEL_METHOD = "Method" as const;
+export const LABEL_CONSTRUCTOR = "Constructor" as const;
+export const LABEL_CLASS = "Class" as const;
+export const LABEL_INTERFACE = "Interface" as const;
+export const LABEL_STRUCT = "Struct" as const;
+export const LABEL_ENUM = "Enum" as const;
+export const LABEL_TRAIT = "Trait" as const;
+export const LABEL_IMPL = "Impl" as const;
+export const LABEL_MACRO = "Macro" as const;
+export const LABEL_NAMESPACE = "Namespace" as const;
+export const LABEL_TYPE_ALIAS = "TypeAlias" as const;
+export const LABEL_TYPEDEF = "Typedef" as const;
+export const LABEL_CONST = "Const" as const;
+export const LABEL_PROPERTY = "Property" as const;
+export const LABEL_RECORD = "Record" as const;
+export const LABEL_UNION = "Union" as const;
+export const LABEL_STATIC = "Static" as const;
+export const LABEL_VARIABLE = "Variable" as const;
+export const LABEL_CODE_ELEMENT = "CodeElement" as const;
 
-export const CHUNK_MODE_AST_FUNCTION = 'ast-function' as const;
-export const CHUNK_MODE_AST_DECLARATION = 'ast-declaration' as const;
+export const CHUNK_MODE_AST_FUNCTION = "ast-function" as const;
+export const CHUNK_MODE_AST_DECLARATION = "ast-declaration" as const;
 // CHUNK_MODE_CHARACTER exists for type completeness but is a no-op in CHUNKING_RULES —
 // omit the entry entirely to get character fallback via chunker.ts dispatch.
-export const CHUNK_MODE_CHARACTER = 'character' as const;
+export const CHUNK_MODE_CHARACTER = "character" as const;
 
-export const STRUCTURAL_TEXT_MODE_NONE = 'none' as const;
-export const STRUCTURAL_TEXT_MODE_DECLARATION = 'declaration' as const;
+export const STRUCTURAL_TEXT_MODE_NONE = "none" as const;
+export const STRUCTURAL_TEXT_MODE_DECLARATION = "declaration" as const;
 
 export interface ChunkingRule {
   mode:
@@ -42,7 +42,9 @@ export interface ChunkingRule {
   includePrefix: boolean;
   includeSuffix: boolean;
   groupFields: boolean;
-  structuralTextMode: typeof STRUCTURAL_TEXT_MODE_NONE | typeof STRUCTURAL_TEXT_MODE_DECLARATION;
+  structuralTextMode:
+    | typeof STRUCTURAL_TEXT_MODE_NONE
+    | typeof STRUCTURAL_TEXT_MODE_DECLARATION;
 }
 
 /**
@@ -79,7 +81,10 @@ export const SHORT_LABELS = [
 /**
  * All embeddable labels (union of CHUNKABLE + SHORT)
  */
-export const EMBEDDABLE_LABELS = [...CHUNKABLE_LABELS, ...SHORT_LABELS] as const;
+export const EMBEDDABLE_LABELS = [
+  ...CHUNKABLE_LABELS,
+  ...SHORT_LABELS,
+] as const;
 
 export type EmbeddableLabel = (typeof EMBEDDABLE_LABELS)[number];
 
@@ -129,7 +134,9 @@ export const LABELS_WITH_EXPORTED = new Set([
  * plus generateCodeBodyText (for example Enum/Trait/Impl/Macro/Namespace).
  */
 type ChunkableLabel = (typeof CHUNKABLE_LABELS)[number];
-export const CHUNKING_RULES: Readonly<Partial<Record<ChunkableLabel, ChunkingRule>>> = {
+export const CHUNKING_RULES: Readonly<
+  Partial<Record<ChunkableLabel, ChunkingRule>>
+> = {
   [LABEL_FUNCTION]: {
     mode: CHUNK_MODE_AST_FUNCTION,
     includePrefix: true,
@@ -178,12 +185,12 @@ export const CHUNKING_RULES: Readonly<Partial<Record<ChunkableLabel, ChunkingRul
  * Embedding pipeline phases
  */
 export type EmbeddingPhase =
-  | 'idle'
-  | 'loading-model'
-  | 'embedding'
-  | 'indexing'
-  | 'ready'
-  | 'error';
+  | "idle"
+  | "loading-model"
+  | "embedding"
+  | "indexing"
+  | "ready"
+  | "error";
 
 /**
  * Progress information for the embedding pipeline
@@ -214,7 +221,7 @@ export interface EmbeddingConfig {
   /** Embedding vector dimensions */
   dimensions: number;
   /** Device to use for inference: 'auto' tries GPU first (DirectML on Windows, CUDA on Linux), falls back to CPU */
-  device: 'auto' | 'dml' | 'cuda' | 'cpu' | 'wasm';
+  device: "auto" | "dml" | "cuda" | "cpu" | "wasm";
   /** Maximum characters of code snippet to include */
   maxSnippetLength: number;
   /** Maximum code chunk size in characters (for chunking long code) */
@@ -231,12 +238,12 @@ export interface EmbeddingConfig {
  * Tries WebGPU first (fast), user can choose WASM fallback if unavailable
  */
 export const DEFAULT_EMBEDDING_CONFIG: EmbeddingConfig = {
-  modelId: 'Snowflake/snowflake-arctic-embed-xs',
+  modelId: "Snowflake/snowflake-arctic-embed-xs",
   batchSize: 16,
   subBatchSize: 8,
   threads: 2,
   dimensions: 384,
-  device: 'auto',
+  device: "auto",
   maxSnippetLength: 500,
   chunkSize: 1200,
   overlap: 120,
@@ -301,7 +308,7 @@ export interface EmbeddingContext {
  * Model download progress from transformers.js
  */
 export interface ModelProgress {
-  status: 'initiate' | 'download' | 'progress' | 'done' | 'ready';
+  status: "initiate" | "download" | "progress" | "done" | "ready";
   file?: string;
   progress?: number;
   loaded?: number;
@@ -362,7 +369,10 @@ export const collectBestChunks = async (
 ): Promise<Map<string, BestChunkMatch>> => {
   if (limit <= 0) return new Map();
 
-  let fetchLimit = Math.max(limit * DEFAULT_FETCH_MULTIPLIER, limit + DEFAULT_FETCH_BUFFER);
+  let fetchLimit = Math.max(
+    limit * DEFAULT_FETCH_MULTIPLIER,
+    limit + DEFAULT_FETCH_BUFFER,
+  );
   let previousFetchLimit = 0;
 
   while (fetchLimit > previousFetchLimit) {
@@ -374,7 +384,10 @@ export const collectBestChunks = async (
     }
 
     previousFetchLimit = fetchLimit;
-    fetchLimit = fetchLimit >= maxFetch ? fetchLimit * 2 : Math.min(maxFetch, fetchLimit * 2);
+    fetchLimit =
+      fetchLimit >= maxFetch
+        ? fetchLimit * 2
+        : Math.min(maxFetch, fetchLimit * 2);
   }
 
   return new Map();

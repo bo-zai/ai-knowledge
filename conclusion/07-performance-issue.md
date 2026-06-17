@@ -21,6 +21,7 @@ CodeGraph explore OrderService
 ```
 
 → 看到 queryOrderList() 方法体：
+
 1. OrderMapper.selectList(query) → 查主表
 2. 对每个订单：OrderGoodsMapper.selectByOrderId(orderId) → 查商品
 3. 对每个订单：UserService.getUser(order.userId) → 查用户
@@ -35,15 +36,19 @@ Grep "selectByOrderId" glob="*OrderGoods*Mapper.xml"
 ```
 
 → OrderMapper.selectList：
+
 ```sql
 SELECT * FROM order WHERE user_id = #{userId} ORDER BY create_time DESC
 ```
+
 没有 LIMIT，全量查询
 
 → OrderGoodsMapper.selectByOrderId：
+
 ```sql
 SELECT * FROM order_goods WHERE order_id = #{orderId}
 ```
+
 每个订单一次查询
 
 ### 第四步：评估数据量
@@ -88,18 +93,19 @@ AskUserQuestion:
 **几乎没有。** 性能排查完全是"读代码 + 读 SQL"的过程，CodeGraph 的 explore + grep XML 覆盖了全部需求。
 
 知识库可能在以下时刻有微小价值：
+
 - 如果约束知识告诉我"订单列表必须展示商品名称和用户昵称"，我知道不能简单移除 JOIN
 - 但这个信息从 Controller 的返回 VO 字段也能推断
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| API 入口 | CodeGraph context | 无 |
-| 查询逻辑 | CodeGraph explore | 无 |
-| N+1 问题 | 读 Service 源码 | 无 |
-| SQL 详情 | Grep XML | 无 |
-| 分页有无 | 读 SQL | 无 |
-| 列表展示字段 | 读 VO 类 | 无 |
+| 信息需求     | 实际获取方式      | 知识库的增量价值 |
+| ------------ | ----------------- | :--------------: |
+| API 入口     | CodeGraph context |        无        |
+| 查询逻辑     | CodeGraph explore |        无        |
+| N+1 问题     | 读 Service 源码   |        无        |
+| SQL 详情     | Grep XML          |        无        |
+| 分页有无     | 读 SQL            |        无        |
+| 列表展示字段 | 读 VO 类          |        无        |
 
 性能优化场景下知识库 ROI 接近零。和重构并列，是知识库价值最低的场景。

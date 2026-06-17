@@ -1,36 +1,40 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { tool } from '@langchain/core/tools';
-import { z } from 'zod';
-import type { BudgetState } from './context-budget.js';
-import { recordToolCall, recordToolResult, truncateToolResult } from './context-budget.js';
-import type { TraceCollector } from './trace.js';
+import fs from "fs/promises";
+import path from "path";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+import type { BudgetState } from "./context-budget.js";
+import {
+  recordToolCall,
+  recordToolResult,
+  truncateToolResult,
+} from "./context-budget.js";
+import type { TraceCollector } from "./trace.js";
 
-import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
+import { DEFAULT_KNOWLEDGE_DIR } from "../config/defaults.js";
 
 const SKIPPED_SEARCH_DIRS = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  'coverage',
-  '.knowledge',
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "coverage",
+  ".knowledge",
   DEFAULT_KNOWLEDGE_DIR,
 ]);
 
 const SKIPPED_BINARY_EXTENSIONS = new Set([
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-  '.ico',
-  '.pdf',
-  '.zip',
-  '.gz',
-  '.exe',
-  '.dll',
-  '.wasm',
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".ico",
+  ".pdf",
+  ".zip",
+  ".gz",
+  ".exe",
+  ".dll",
+  ".wasm",
 ]);
 
 interface LocalReadToolInput {
@@ -40,14 +44,30 @@ interface LocalReadToolInput {
 }
 
 export interface LocalReadToolHandlers {
-  readFileWindow(input: { path: string; startLine: number; endLine: number }): Promise<string>;
+  readFileWindow(input: {
+    path: string;
+    startLine: number;
+    endLine: number;
+  }): Promise<string>;
   searchRepoText(input: { query: string; limit?: number }): Promise<string>;
-  readSymbolDefinition(input: { symbol: string; limit?: number }): Promise<string>;
-  readSymbolReferences(input: { symbol: string; limit?: number }): Promise<string>;
-  readRelatedTests(input: { path?: string; symbol?: string; limit?: number }): Promise<string>;
+  readSymbolDefinition(input: {
+    symbol: string;
+    limit?: number;
+  }): Promise<string>;
+  readSymbolReferences(input: {
+    symbol: string;
+    limit?: number;
+  }): Promise<string>;
+  readRelatedTests(input: {
+    path?: string;
+    symbol?: string;
+    limit?: number;
+  }): Promise<string>;
 }
 
-export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalReadToolHandlers {
+export function createLocalReadToolHandlers(
+  input: LocalReadToolInput,
+): LocalReadToolHandlers {
   const runTool = async <T extends Record<string, unknown>>(
     toolName: string,
     args: T,
@@ -56,21 +76,24 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
     const started = new Date();
     const callBudget = recordToolCall(input.budget);
     if (!callBudget.allowed) {
-      return callBudget.message ?? 'tool call budget exceeded';
+      return callBudget.message ?? "tool call budget exceeded";
     }
 
-    let output = '';
+    let output = "";
     let acceptedBudgetChars = 0;
     let error: string | undefined;
     try {
       const raw = await handler();
-      const truncated = truncateToolResult(raw, input.budget.limits.maxToolResultChars);
+      const truncated = truncateToolResult(
+        raw,
+        input.budget.limits.maxToolResultChars,
+      );
       const totalBudget = recordToolResult(input.budget, truncated.text);
       if (totalBudget.allowed) {
         acceptedBudgetChars = truncated.text.length;
         output = truncated.text;
       } else {
-        output = totalBudget.message ?? 'total tool result budget exceeded';
+        output = totalBudget.message ?? "total tool result budget exceeded";
       }
       return output;
     } catch (err) {
@@ -87,7 +110,7 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
         durationMs: finished.getTime() - started.getTime(),
         returnedChars: output.length,
         acceptedBudgetChars,
-        truncated: output.endsWith('[truncated]'),
+        truncated: output.endsWith("[truncated]"),
         ...(error ? { error } : {}),
       });
     }
@@ -107,21 +130,27 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
     return target;
   };
 
-  const readFileWindowRaw = async (relativePath: string, startLine: number, endLine: number): Promise<string> => {
+  const readFileWindowRaw = async (
+    relativePath: string,
+    startLine: number,
+    endLine: number,
+  ): Promise<string> => {
     if (startLine < 1 || endLine < startLine) {
       throw new Error(`invalid line window: ${startLine}-${endLine}`);
     }
     const lineCount = endLine - startLine + 1;
     if (lineCount > input.budget.limits.maxFileWindowLines) {
-      throw new Error(`line window exceeds limit: ${input.budget.limits.maxFileWindowLines}`);
+      throw new Error(
+        `line window exceeds limit: ${input.budget.limits.maxFileWindowLines}`,
+      );
     }
     const target = await resolveRepoFile(relativePath);
-    const text = await fs.readFile(target, 'utf8');
+    const text = await fs.readFile(target, "utf8");
     const lines = text.split(/\r?\n/);
     return lines
       .slice(startLine - 1, endLine)
       .map((line, index) => `${startLine + index} | ${line}`)
-      .join('\n');
+      .join("\n");
   };
 
   const walkFiles = async (dir: string): Promise<string[]> => {
@@ -133,7 +162,7 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
         if (SKIPPED_SEARCH_DIRS.has(entry.name)) {
           continue;
         }
-        files.push(...await walkFiles(fullPath));
+        files.push(...(await walkFiles(fullPath)));
       } else if (entry.isFile()) {
         files.push(fullPath);
       }
@@ -152,31 +181,42 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
     return true;
   };
 
-  const searchRaw = async (query: string, limit?: number, onlyTests = false): Promise<string> => {
+  const searchRaw = async (
+    query: string,
+    limit?: number,
+    onlyTests = false,
+  ): Promise<string> => {
     const normalized = query.trim();
     if (!normalized) {
-      throw new Error('query is required');
+      throw new Error("query is required");
     }
-    const max = Math.min(limit ?? input.budget.limits.searchResultLimit, input.budget.limits.searchResultLimit);
+    const max = Math.min(
+      limit ?? input.budget.limits.searchResultLimit,
+      input.budget.limits.searchResultLimit,
+    );
     const root = path.resolve(input.repoPath);
     const files = await walkFiles(root);
     const matches: string[] = [];
     for (const file of files) {
-      const relative = path.relative(root, file).replace(/\\/g, '/');
-      if (onlyTests && !relative.includes('test') && !relative.includes('spec')) {
+      const relative = path.relative(root, file).replace(/\\/g, "/");
+      if (
+        onlyTests &&
+        !relative.includes("test") &&
+        !relative.includes("spec")
+      ) {
         continue;
       }
       if (!(await isSearchableTextFile(file))) {
         continue;
       }
-      let text = '';
+      let text = "";
       try {
-        text = await fs.readFile(file, 'utf8');
+        text = await fs.readFile(file, "utf8");
       } catch {
         continue;
       }
       // 检查是否包含空字符（二进制文件标志）
-      if (text.includes('\0')) {
+      if (text.includes("\0")) {
         continue;
       }
       const lines = text.split(/\r?\n/);
@@ -184,33 +224,43 @@ export function createLocalReadToolHandlers(input: LocalReadToolInput): LocalRea
         if (line.includes(normalized)) {
           matches.push(`${relative}:${index + 1}: ${line.trim()}`);
           if (matches.length >= max) {
-            return matches.join('\n');
+            return matches.join("\n");
           }
         }
       }
     }
     if (matches.length > 0) {
-      return matches.join('\n');
+      return matches.join("\n");
     }
     return `no matches for "${normalized}"`;
   };
 
   return {
     readFileWindow(args) {
-      return runTool('read_file_window', args, () => readFileWindowRaw(args.path, args.startLine, args.endLine));
+      return runTool("read_file_window", args, () =>
+        readFileWindowRaw(args.path, args.startLine, args.endLine),
+      );
     },
     searchRepoText(args) {
-      return runTool('search_repo_text', args, () => searchRaw(args.query, args.limit));
+      return runTool("search_repo_text", args, () =>
+        searchRaw(args.query, args.limit),
+      );
     },
     readSymbolDefinition(args) {
-      return runTool('read_symbol_definition', args, () => searchRaw(`function ${args.symbol}`, args.limit));
+      return runTool("read_symbol_definition", args, () =>
+        searchRaw(`function ${args.symbol}`, args.limit),
+      );
     },
     readSymbolReferences(args) {
-      return runTool('read_symbol_references', args, () => searchRaw(args.symbol, args.limit));
+      return runTool("read_symbol_references", args, () =>
+        searchRaw(args.symbol, args.limit),
+      );
     },
     readRelatedTests(args) {
-      const query = args.symbol ?? args.path ?? '';
-      return runTool('read_related_tests', args, () => searchRaw(query, args.limit, true));
+      const query = args.symbol ?? args.path ?? "";
+      return runTool("read_related_tests", args, () =>
+        searchRaw(query, args.limit, true),
+      );
     },
   };
 }
@@ -220,8 +270,9 @@ export function createLocalReadTools(input: LocalReadToolInput) {
 
   return [
     tool(handlers.readFileWindow, {
-      name: 'read_file_window',
-      description: 'Read a bounded line window from a file under the target repository.',
+      name: "read_file_window",
+      description:
+        "Read a bounded line window from a file under the target repository.",
       schema: z.object({
         path: z.string(),
         startLine: z.number().int().positive(),
@@ -229,32 +280,34 @@ export function createLocalReadTools(input: LocalReadToolInput) {
       }),
     }),
     tool(handlers.searchRepoText, {
-      name: 'search_repo_text',
-      description: 'Search literal text in the repository and return matching file lines.',
+      name: "search_repo_text",
+      description:
+        "Search literal text in the repository and return matching file lines.",
       schema: z.object({
         query: z.string(),
         limit: z.number().int().positive().optional(),
       }),
     }),
     tool(handlers.readSymbolDefinition, {
-      name: 'read_symbol_definition',
-      description: 'Find likely definition lines for a symbol by literal search.',
+      name: "read_symbol_definition",
+      description:
+        "Find likely definition lines for a symbol by literal search.",
       schema: z.object({
         symbol: z.string(),
         limit: z.number().int().positive().optional(),
       }),
     }),
     tool(handlers.readSymbolReferences, {
-      name: 'read_symbol_references',
-      description: 'Find likely references for a symbol by literal search.',
+      name: "read_symbol_references",
+      description: "Find likely references for a symbol by literal search.",
       schema: z.object({
         symbol: z.string(),
         limit: z.number().int().positive().optional(),
       }),
     }),
     tool(handlers.readRelatedTests, {
-      name: 'read_related_tests',
-      description: 'Find likely test anchors related to a path or symbol.',
+      name: "read_related_tests",
+      description: "Find likely test anchors related to a path or symbol.",
       schema: z.object({
         path: z.string().optional(),
         symbol: z.string().optional(),

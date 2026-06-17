@@ -1,8 +1,8 @@
-import type { KnowledgeObject } from '../knowledge/capability-object-assembler.js';
-import { buildCapabilityDocModel } from '../knowledge/capability-doc-model.js';
-import { renderCapabilityMarkdown } from './capability-markdown-renderer.js';
-import { TYPE_TO_DIR } from '../knowledge/type-directory-map.js';
-import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
+import type { KnowledgeObject } from "../knowledge/capability-object-assembler.js";
+import { buildCapabilityDocModel } from "../knowledge/capability-doc-model.js";
+import { renderCapabilityMarkdown } from "./capability-markdown-renderer.js";
+import { TYPE_TO_DIR } from "../knowledge/type-directory-map.js";
+import { DEFAULT_KNOWLEDGE_DIR } from "../config/defaults.js";
 
 export interface EvidenceIndexItem {
   ref: string;
@@ -16,15 +16,15 @@ export interface EvidenceIndexItem {
 }
 
 export interface CapabilityGenerationReport {
-  mode: 'skeleton' | 'llm';
-  capabilityGenerationMode?: 'single';
+  mode: "skeleton" | "llm";
+  capabilityGenerationMode?: "single";
   selectedCandidateId?: string;
   candidateCount?: number;
   llmRequested: boolean;
   llmRequired: boolean;
   llmCalled: boolean;
   llmSucceeded: boolean;
-  llmRuntime?: 'direct' | 'langgraph';
+  llmRuntime?: "direct" | "langgraph";
   model?: string;
   graph?: {
     attempts: number;
@@ -81,9 +81,19 @@ function buildFunctionMarkdown(input: {
   evidenceIndex: EvidenceIndexItem[];
   capabilityModel: ReturnType<typeof buildCapabilityDocModel>;
 }): string {
-  const { capabilityId, capabilityTitle, flowObject, evidenceIndex, capabilityModel } = input;
-  const orderedSteps = Array.isArray(flowObject.metadata.orderedSteps) ? flowObject.metadata.orderedSteps : [];
-  const evidenceSteps = Array.isArray(flowObject.metadata.evidenceSteps) ? flowObject.metadata.evidenceSteps : [];
+  const {
+    capabilityId,
+    capabilityTitle,
+    flowObject,
+    evidenceIndex,
+    capabilityModel,
+  } = input;
+  const orderedSteps = Array.isArray(flowObject.metadata.orderedSteps)
+    ? flowObject.metadata.orderedSteps
+    : [];
+  const evidenceSteps = Array.isArray(flowObject.metadata.evidenceSteps)
+    ? flowObject.metadata.evidenceSteps
+    : [];
   const flowEvidenceRefs = new Set([
     ...flowObject.evidencePrimary,
     ...flowObject.evidenceSupporting,
@@ -91,96 +101,103 @@ function buildFunctionMarkdown(input: {
 
   const lines: string[] = [];
   lines.push(`# ${flowObject.id}`);
-  lines.push('');
+  lines.push("");
   lines.push(`> 所属 capability：${capabilityTitle} (${capabilityId})`);
   lines.push(`> 生成时间：${new Date().toISOString()}`);
-  lines.push('');
+  lines.push("");
 
-  lines.push('## 1. 功能定位');
-  lines.push('');
+  lines.push("## 1. 功能定位");
+  lines.push("");
   lines.push(flowObject.description);
-  lines.push('');
+  lines.push("");
 
-  lines.push('## 2. 关联入口');
-  lines.push('');
+  lines.push("## 2. 关联入口");
+  lines.push("");
   if (capabilityModel.codeAnchors.length === 0) {
-    lines.push('- 当前知识包没有稳定入口锚点。');
+    lines.push("- 当前知识包没有稳定入口锚点。");
   } else {
     for (const anchor of capabilityModel.codeAnchors) {
       lines.push(`- ${anchor.symbolOrRoute} @ ${anchor.path}`);
     }
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('## 3. 关键步骤');
-  lines.push('');
+  lines.push("## 3. 关键步骤");
+  lines.push("");
   if (orderedSteps.length > 0) {
     orderedSteps.forEach((step, index) => {
-      if (!step || typeof step !== 'object') return;
-      const action = typeof step.action === 'string' ? step.action : '';
-      const evidenceRef = typeof step.evidenceRef === 'string' ? step.evidenceRef : '';
+      if (!step || typeof step !== "object") return;
+      const action = typeof step.action === "string" ? step.action : "";
+      const evidenceRef =
+        typeof step.evidenceRef === "string" ? step.evidenceRef : "";
       if (action) {
-        lines.push(`${index + 1}. ${action}${evidenceRef ? ` (${evidenceRef})` : ''}`);
+        lines.push(
+          `${index + 1}. ${action}${evidenceRef ? ` (${evidenceRef})` : ""}`,
+        );
       }
     });
   } else if (evidenceSteps.length > 0) {
     evidenceSteps.forEach((step, index) => {
-      if (!step || typeof step !== 'object') return;
-      const action = typeof step.action === 'string' ? step.action : '';
+      if (!step || typeof step !== "object") return;
+      const action = typeof step.action === "string" ? step.action : "";
       if (action) {
         lines.push(`${index + 1}. ${action}`);
       }
     });
   } else {
-    lines.push('- 当前 FLOW 对象没有稳定步骤，只能把它视为功能占位。');
+    lines.push("- 当前 FLOW 对象没有稳定步骤，只能把它视为功能占位。");
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('## 4. 入口与证据');
-  lines.push('');
-  const relatedEvidence = evidenceIndex.filter(item => flowEvidenceRefs.has(item.ref));
+  lines.push("## 4. 入口与证据");
+  lines.push("");
+  const relatedEvidence = evidenceIndex.filter((item) =>
+    flowEvidenceRefs.has(item.ref),
+  );
   if (relatedEvidence.length === 0) {
-    lines.push('- 当前功能没有单独绑定证据索引条目。');
+    lines.push("- 当前功能没有单独绑定证据索引条目。");
   } else {
-    lines.push('| 证据 | 类型 | 位置 | 说明 |');
-    lines.push('| --- | --- | --- | --- |');
+    lines.push("| 证据 | 类型 | 位置 | 说明 |");
+    lines.push("| --- | --- | --- | --- |");
     for (const item of relatedEvidence) {
-      lines.push(`| ${item.ref} | ${item.kind} | ${item.location ?? '-'} | ${item.summary ?? item.name ?? '-'} |`);
+      lines.push(
+        `| ${item.ref} | ${item.kind} | ${item.location ?? "-"} | ${item.summary ?? item.name ?? "-"} |`,
+      );
     }
   }
-  lines.push('');
+  lines.push("");
 
-  lines.push('## 5. 相关数据与约束');
-  lines.push('');
+  lines.push("## 5. 相关数据与约束");
+  lines.push("");
   if (capabilityModel.dataContracts.length === 0) {
-    lines.push('- 当前知识包没有稳定契约对象。');
+    lines.push("- 当前知识包没有稳定契约对象。");
   } else {
     for (const contract of capabilityModel.dataContracts) {
       lines.push(`- ${contract.subject} (${contract.kind})`);
     }
   }
   if (capabilityModel.unknowns.length > 0) {
-    lines.push('');
-    lines.push('待确认：');
+    lines.push("");
+    lines.push("待确认：");
     for (const unknown of capabilityModel.unknowns) {
       lines.push(`- ${unknown.question}`);
     }
   }
   if (capabilityModel.validation.length > 0) {
-    lines.push('');
-    lines.push('验证关注点：');
+    lines.push("");
+    lines.push("验证关注点：");
     for (const validation of capabilityModel.validation) {
       lines.push(`- ${validation.goal}`);
     }
   }
-  lines.push('');
+  lines.push("");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function buildObjectYaml(object: KnowledgeObject): string {
   const domain = inferDomainFromObject(object);
-  const owner = (object.metadata.owner as string | undefined) ?? '';
+  const owner = (object.metadata.owner as string | undefined) ?? "";
   const taskTriggers = inferTaskTriggers(object.type, object.metadata);
   const staleIf = inferStaleIf(object.type);
 
@@ -230,19 +247,21 @@ function buildObjectYaml(object: KnowledgeObject): string {
 
   lines.push(`metadata:`);
   for (const [key, value] of Object.entries(object.metadata)) {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       lines.push(`  ${key}: ${value}`);
     } else if (Array.isArray(value)) {
       lines.push(`  ${key}:`);
       for (const item of value) {
-        lines.push(`    - ${typeof item === 'object' ? JSON.stringify(item) : item}`);
+        lines.push(
+          `    - ${typeof item === "object" ? JSON.stringify(item) : item}`,
+        );
       }
     } else {
       lines.push(`  ${key}: ${JSON.stringify(value)}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function inferDomainFromObject(object: KnowledgeObject): string {
@@ -253,48 +272,53 @@ function inferDomainFromObject(object: KnowledgeObject): string {
   // Infer from rootPath or subject
   const rootPath = object.metadata.rootPath as string | undefined;
   if (rootPath) {
-    const parts = rootPath.split('/').filter(Boolean);
+    const parts = rootPath.split("/").filter(Boolean);
     if (parts.length > 0) return parts[0];
   }
 
   const subject = object.metadata.subject as string | undefined;
-  if (subject) return subject.toLowerCase().split(' ')[0];
+  if (subject) return subject.toLowerCase().split(" ")[0];
 
   // Default from ID
-  const idParts = object.id.split('-');
-  return idParts.length > 1 ? idParts.slice(1, -1).join('-').toLowerCase() : 'unknown';
+  const idParts = object.id.split("-");
+  return idParts.length > 1
+    ? idParts.slice(1, -1).join("-").toLowerCase()
+    : "unknown";
 }
 
-function inferTaskTriggers(objType: string, metadata: Record<string, unknown>): string[] {
+function inferTaskTriggers(
+  objType: string,
+  metadata: Record<string, unknown>,
+): string[] {
   const triggers: string[] = [];
   switch (objType) {
-    case 'CAP':
-      triggers.push('Adding new business feature');
-      triggers.push('Changing capability scope or non-goals');
+    case "CAP":
+      triggers.push("Adding new business feature");
+      triggers.push("Changing capability scope or non-goals");
       break;
-    case 'TERM':
-      triggers.push('Business vocabulary changes');
-      triggers.push('Introducing new domain concept');
+    case "TERM":
+      triggers.push("Business vocabulary changes");
+      triggers.push("Introducing new domain concept");
       break;
-    case 'FLOW':
-      triggers.push('Changing business process order');
-      triggers.push('Adding failure branch or compensation');
+    case "FLOW":
+      triggers.push("Changing business process order");
+      triggers.push("Adding failure branch or compensation");
       break;
-    case 'MOD':
-      triggers.push('Adding new API endpoint or method');
-      triggers.push('Changing module boundary or responsibility');
+    case "MOD":
+      triggers.push("Adding new API endpoint or method");
+      triggers.push("Changing module boundary or responsibility");
       break;
-    case 'CON':
-      triggers.push('Changing API request/response contract');
-      triggers.push('Modifying data schema or field semantics');
+    case "CON":
+      triggers.push("Changing API request/response contract");
+      triggers.push("Modifying data schema or field semantics");
       break;
-    case 'VER':
-      triggers.push('Changing acceptance criteria');
-      triggers.push('Adding new validation scenario');
+    case "VER":
+      triggers.push("Changing acceptance criteria");
+      triggers.push("Adding new validation scenario");
       break;
-    case 'OPEN':
-      triggers.push('New evidence resolves the unknown');
-      triggers.push('Decision becomes unblocked');
+    case "OPEN":
+      triggers.push("New evidence resolves the unknown");
+      triggers.push("Decision becomes unblocked");
       break;
   }
   return triggers;
@@ -302,26 +326,29 @@ function inferTaskTriggers(objType: string, metadata: Record<string, unknown>): 
 
 function inferStaleIf(objType: string): string[] {
   switch (objType) {
-    case 'CAP':
-      return ['Business goal changes', 'Capability scope changes'];
-    case 'TERM':
-      return ['Business vocabulary evolves', 'New aliases discovered'];
-    case 'FLOW':
-      return ['Business process changes', 'New failure scenarios identified'];
-    case 'MOD':
-      return ['File structure changes', 'Module responsibility changes'];
-    case 'CON':
-      return ['API contract changes', 'Schema evolution'];
-    case 'VER':
-      return ['Test suite changes', 'Acceptance criteria updated'];
-    case 'OPEN':
-      return ['New evidence becomes available', 'Decision is resolved'];
+    case "CAP":
+      return ["Business goal changes", "Capability scope changes"];
+    case "TERM":
+      return ["Business vocabulary evolves", "New aliases discovered"];
+    case "FLOW":
+      return ["Business process changes", "New failure scenarios identified"];
+    case "MOD":
+      return ["File structure changes", "Module responsibility changes"];
+    case "CON":
+      return ["API contract changes", "Schema evolution"];
+    case "VER":
+      return ["Test suite changes", "Acceptance criteria updated"];
+    case "OPEN":
+      return ["New evidence becomes available", "Decision is resolved"];
     default:
-      return ['Related code changes'];
+      return ["Related code changes"];
   }
 }
 
-function buildCatalogYaml(objects: KnowledgeObject[], capabilityId: string): string {
+function buildCatalogYaml(
+  objects: KnowledgeObject[],
+  capabilityId: string,
+): string {
   const lines = [
     `version: 1`,
     ``,
@@ -367,10 +394,12 @@ function buildCatalogYaml(objects: KnowledgeObject[], capabilityId: string): str
   for (const obj of objects) {
     lines.push(`  ${obj.id}:`);
     lines.push(`    type: ${obj.type}`);
-    lines.push(`    path: objects/${TYPE_TO_DIR[obj.type] || 'unknown'}/${obj.id}.yaml`);
+    lines.push(
+      `    path: objects/${TYPE_TO_DIR[obj.type] || "unknown"}/${obj.id}.yaml`,
+    );
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 function objectLine(obj: KnowledgeObject): string {
@@ -382,12 +411,16 @@ export function buildCapabilityView(
   capabilityId: string,
   evidenceIndex?: EvidenceIndexItem[],
 ): string {
-  const model = buildCapabilityDocModel({ objects, capabilityId, evidenceIndex });
+  const model = buildCapabilityDocModel({
+    objects,
+    capabilityId,
+    evidenceIndex,
+  });
   return renderCapabilityMarkdown(model);
 }
 
 function buildEvidenceIndexJsonl(evidenceIndex: EvidenceIndexItem[]): string {
-  return evidenceIndex.map(item => JSON.stringify(item)).join('\n') + '\n';
+  return evidenceIndex.map((item) => JSON.stringify(item)).join("\n") + "\n";
 }
 
 export function buildCapabilityKnowledgeFiles(input: {
@@ -402,13 +435,13 @@ export function buildCapabilityKnowledgeFiles(input: {
 
   // 生成 catalog.yaml
   files.push({
-    path: 'catalog.yaml',
+    path: "catalog.yaml",
     content: buildCatalogYaml(objects, capabilityId),
   });
 
   // 生成每个对象的 YAML 文件
   for (const obj of objects) {
-    const dir = TYPE_TO_DIR[obj.type] || 'unknown';
+    const dir = TYPE_TO_DIR[obj.type] || "unknown";
     files.push({
       path: `objects/${dir}/${obj.id}.yaml`,
       content: buildObjectYaml(obj),
@@ -416,12 +449,16 @@ export function buildCapabilityKnowledgeFiles(input: {
   }
 
   // 生成 capability markdown（主入口）
-  const capabilityModel = buildCapabilityDocModel({ objects, capabilityId, evidenceIndex });
+  const capabilityModel = buildCapabilityDocModel({
+    objects,
+    capabilityId,
+    evidenceIndex,
+  });
   const capabilityMarkdown = renderCapabilityMarkdown(capabilityModel, {
-    functionLinkPrefix: '../functions',
+    functionLinkPrefix: "../functions",
   });
   const compatibilityViewMarkdown = renderCapabilityMarkdown(capabilityModel, {
-    functionLinkPrefix: '../../functions',
+    functionLinkPrefix: "../../functions",
   });
 
   // 生成主 capability Markdown
@@ -436,7 +473,7 @@ export function buildCapabilityKnowledgeFiles(input: {
     content: compatibilityViewMarkdown,
   });
 
-  for (const flowObject of objects.filter(obj => obj.type === 'FLOW')) {
+  for (const flowObject of objects.filter((obj) => obj.type === "FLOW")) {
     files.push({
       path: `functions/${flowObject.id}.md`,
       content: buildFunctionMarkdown({
@@ -452,7 +489,7 @@ export function buildCapabilityKnowledgeFiles(input: {
   // 生成 evidence index
   if (evidenceIndex && evidenceIndex.length > 0) {
     files.push({
-      path: 'evidence/index.jsonl',
+      path: "evidence/index.jsonl",
       content: buildEvidenceIndexJsonl(evidenceIndex),
     });
   }
@@ -460,23 +497,23 @@ export function buildCapabilityKnowledgeFiles(input: {
   // 生成 report
   if (report) {
     files.push({
-      path: 'reports/capability-generation.json',
-      content: JSON.stringify(report, null, 2) + '\n',
+      path: "reports/capability-generation.json",
+      content: JSON.stringify(report, null, 2) + "\n",
     });
   }
 
   // 生成 debug files
   if (debug?.request) {
     files.push({
-      path: 'debug/capability-llm-request.json',
-      content: JSON.stringify(debug.request, null, 2) + '\n',
+      path: "debug/capability-llm-request.json",
+      content: JSON.stringify(debug.request, null, 2) + "\n",
     });
   }
 
   if (debug?.response) {
     files.push({
-      path: 'debug/capability-llm-response.json',
-      content: JSON.stringify(debug.response, null, 2) + '\n',
+      path: "debug/capability-llm-response.json",
+      content: JSON.stringify(debug.response, null, 2) + "\n",
     });
   }
 
@@ -491,10 +528,11 @@ export async function writeCapabilityKnowledgePackage(input: {
   report?: CapabilityGenerationReport;
   debug?: CapabilityLlmDebug;
 }): Promise<void> {
-  const fs = await import('fs/promises');
-  const path = await import('path');
+  const fs = await import("fs/promises");
+  const path = await import("path");
 
-  const { outputRoot, objects, capabilityId, evidenceIndex, report, debug } = input;
+  const { outputRoot, objects, capabilityId, evidenceIndex, report, debug } =
+    input;
 
   // 安全清理 ai-knowledge 目录
   const packageRoot = path.resolve(outputRoot, DEFAULT_KNOWLEDGE_DIR);
@@ -506,11 +544,17 @@ export async function writeCapabilityKnowledgePackage(input: {
   await fs.rm(packageRoot, { recursive: true, force: true });
   await fs.mkdir(packageRoot, { recursive: true });
 
-  const files = buildCapabilityKnowledgeFiles({ objects, capabilityId, evidenceIndex, report, debug });
+  const files = buildCapabilityKnowledgeFiles({
+    objects,
+    capabilityId,
+    evidenceIndex,
+    report,
+    debug,
+  });
 
   for (const file of files) {
     const fullPath = path.join(packageRoot, file.path);
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, file.content, 'utf-8');
+    await fs.writeFile(fullPath, file.content, "utf-8");
   }
 }

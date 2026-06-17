@@ -8,24 +8,37 @@
  *   const result = await extractClassCode(filePath, className, { dbPath });
  */
 
-import { SupportedLanguages, getLanguageFromFilename } from '../engine/shared/index.js';
+import {
+  SupportedLanguages,
+  getLanguageFromFilename,
+} from "../engine/shared/index.js";
 import type {
   ExtractedClassCode,
   ExtractOptions,
   LanguageExtractorStrategy,
   BatchExtractResult,
-} from './types.js';
-import { queryClassNode, queryClassProperties, queryClassMethods, batchQueryGraphData } from './graph-querier.js';
-import { javaExtractorStrategy } from './languages/java.js';
-import { extractFromFileWithGraphLines } from './file-parser.js';
-import lbug from '@ladybugdb/core';
-import { openLbugConnection, closeLbugConnection } from '../engine/lbug/lbug-config.js';
-import path from 'node:path';
+} from "./types.js";
+import {
+  queryClassNode,
+  queryClassProperties,
+  queryClassMethods,
+  batchQueryGraphData,
+} from "./graph-querier.js";
+import { javaExtractorStrategy } from "./languages/java.js";
+import { extractFromFileWithGraphLines } from "./file-parser.js";
+import lbug from "@ladybugdb/core";
+import {
+  openLbugConnection,
+  closeLbugConnection,
+} from "../engine/lbug/lbug-config.js";
+import path from "node:path";
 
 /**
  * 语言策略注册表
  */
-const STRATEGY_REGISTRY: Partial<Record<SupportedLanguages, LanguageExtractorStrategy>> = {
+const STRATEGY_REGISTRY: Partial<
+  Record<SupportedLanguages, LanguageExtractorStrategy>
+> = {
   [SupportedLanguages.Java]: javaExtractorStrategy,
   // [SupportedLanguages.TypeScript]: typescriptExtractorStrategy, // 待实现
   // [SupportedLanguages.Python]: pythonExtractorStrategy, // 待实现
@@ -37,7 +50,9 @@ const STRATEGY_REGISTRY: Partial<Record<SupportedLanguages, LanguageExtractorStr
  * @param language - 语言标识
  * @returns 语言策略，或 undefined 表示未实现
  */
-export function getExtractorStrategy(language: SupportedLanguages): LanguageExtractorStrategy | undefined {
+export function getExtractorStrategy(
+  language: SupportedLanguages,
+): LanguageExtractorStrategy | undefined {
   return STRATEGY_REGISTRY[language];
 }
 
@@ -165,7 +180,10 @@ export async function extractClassCodes(
     if (strategy.needsFallback?.(data.classNode, data.properties)) {
       // Fallback 到文件解析
       const absoluteFilePath = path.join(repoPath, candidate.filePath);
-      const extracted = await extractFromFileWithGraphLines(absoluteFilePath, data.classNode);
+      const extracted = await extractFromFileWithGraphLines(
+        absoluteFilePath,
+        data.classNode,
+      );
       if (extracted) {
         results.set(key, extracted);
         fallbackCount++;
@@ -177,7 +195,11 @@ export async function extractClassCodes(
     }
 
     // 从图节点提取
-    const extracted = strategy.extractFromGraphNodes(data.classNode, data.properties, data.methods);
+    const extracted = strategy.extractFromGraphNodes(
+      data.classNode,
+      data.properties,
+      data.methods,
+    );
     if (extracted) {
       results.set(key, extracted);
       successCount++;

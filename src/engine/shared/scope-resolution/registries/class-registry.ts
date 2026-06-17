@@ -14,9 +14,9 @@
  *     argument counts at lookup time).
  */
 
-import type { Resolution, ScopeId } from '../types.js';
-import { lookupCore, type CoreLookupParams } from './lookup-core.js';
-import { CLASS_KINDS, type RegistryContext } from './context.js';
+import type { Resolution, ScopeId } from "../types.js";
+import { lookupCore, type CoreLookupParams } from "./lookup-core.js";
+import { CLASS_KINDS, type RegistryContext } from "./context.js";
 
 export interface ClassRegistry {
   /**

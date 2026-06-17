@@ -32,7 +32,7 @@ export type {
   // Task 7 新增类型
   RelatedTableInfo,
   ServiceCluster,
-} from './types.js';
+} from "./types.js";
 
 // 主入口：并行发现运行器
 export {
@@ -47,7 +47,7 @@ export {
   type ServiceCallCluster,
   type GitCommitEnhancer,
   type BusinessDomainDefiner,
-} from './parallel-discovery-runner.js';
+} from "./parallel-discovery-runner.js";
 
 // 语言适配器
 export {
@@ -56,9 +56,12 @@ export {
   getSupportedLanguages,
   SUPPORTED_LANGUAGES,
   type SupportedLanguage,
-} from './language-adapters/index.js';
+} from "./language-adapters/index.js";
 
-export { createJavaAdapter, JavaAdapter } from './language-adapters/java-adapter.js';
+export {
+  createJavaAdapter,
+  JavaAdapter,
+} from "./language-adapters/java-adapter.js";
 
 // 路径发现
 export {
@@ -71,37 +74,37 @@ export {
   MqConsumerPathDiscovery,
   createMqConsumerPathDiscovery,
   type MqConsumerPathDiscoveryConfig,
-} from './discovery-paths/index.js';
+} from "./discovery-paths/index.js";
 
 // 表锚点聚合器
 export {
   TableAnchorAggregator,
   createTableAnchorAggregator,
   type TableAnchorAggregatorConfig,
-} from './table-anchor-aggregator.js';
+} from "./table-anchor-aggregator.js";
 
 // Task 7: 表关联补充器和 Service 调用链聚类器
 export {
   TableRelationSupplementImpl,
   createTableRelationSupplement,
   type TableRelationSupplementConfig,
-} from './table-relation-supplement.js';
+} from "./table-relation-supplement.js";
 
 export {
   ServiceCallClusterImpl,
   createServiceCallCluster,
   type ServiceCallClusterConfig,
-} from './service-call-cluster.js';
+} from "./service-call-cluster.js";
 
 // Task 8: Git Commit 增强器和业务域定义器
 export {
   GitCommitEnhancerImpl,
   createGitCommitEnhancer,
   type GitCommitEnhancerConfig,
-} from './git-commit-enhancer.js';
+} from "./git-commit-enhancer.js";
 
 export {
   BusinessDomainDefinerImpl,
   createBusinessDomainDefiner,
   type BusinessDomainDefinerConfig,
-} from './business-domain-definer.js';
+} from "./business-domain-definer.js";

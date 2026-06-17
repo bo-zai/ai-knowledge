@@ -54,9 +54,9 @@ import type {
   Scope,
   ScopeId,
   SymbolDefinition,
-} from '../shared';
-import type { KnowledgeGraph } from '../graph/types.js';
-import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
+} from "../shared";
+import type { KnowledgeGraph } from "../graph/types.js";
+import type { ScopeResolutionIndexes } from "./model/scope-resolution-indexes.js";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ export interface EmitReferencesInput {
  */
 export function emitReferencesToGraph(input: EmitReferencesInput): EmitStats {
   const { graph, scopes, referenceIndex } = input;
-  const sourceLabel = input.sourceLabel ?? 'scope-resolution';
+  const sourceLabel = input.sourceLabel ?? "scope-resolution";
 
   let edgesEmitted = 0;
   let skippedNoCaller = 0;
@@ -107,7 +107,9 @@ export function emitReferencesToGraph(input: EmitReferencesInput): EmitStats {
         skippedNoCaller++;
         continue;
       }
-      graph.addRelationship(buildRelationship(ref, callerId, targetDef, sourceLabel));
+      graph.addRelationship(
+        buildRelationship(ref, callerId, targetDef, sourceLabel),
+      );
       edgesEmitted++;
     }
   }
@@ -136,14 +138,14 @@ export function emitScopeGraph(input: {
   for (const scope of scopes.scopeTree.byId.values()) {
     graph.addNode({
       id: scope.id,
-      label: 'CodeElement' as NodeLabel, // the generic bucket for non-symbol graph nodes
+      label: "CodeElement" as NodeLabel, // the generic bucket for non-symbol graph nodes
       properties: {
         name: scope.kind,
         filePath: scope.filePath,
         startLine: scope.range.startLine,
         endLine: scope.range.endLine,
         description: `Scope: ${scope.kind}`,
-      } as unknown as Parameters<KnowledgeGraph['addNode']>[0]['properties'],
+      } as unknown as Parameters<KnowledgeGraph["addNode"]>[0]["properties"],
     });
     scopeNodesEmitted++;
 
@@ -152,9 +154,9 @@ export function emitScopeGraph(input: {
         id: `rel:contains:${scope.parent}->${scope.id}`,
         sourceId: scope.parent,
         targetId: scope.id,
-        type: 'CONTAINS',
+        type: "CONTAINS",
         confidence: 1,
-        reason: 'scope-tree parent/child',
+        reason: "scope-tree parent/child",
       });
       scopeEdgesEmitted++;
     }
@@ -164,9 +166,9 @@ export function emitScopeGraph(input: {
         id: `rel:defines:${scope.id}->${def.nodeId}`,
         sourceId: scope.id,
         targetId: def.nodeId,
-        type: 'DEFINES',
+        type: "DEFINES",
         confidence: 1,
-        reason: 'scope.ownedDefs',
+        reason: "scope.ownedDefs",
       });
       scopeEdgesEmitted++;
     }
@@ -179,8 +181,8 @@ export function emitScopeGraph(input: {
         id: `rel:imports:${scopeId}->${edge.targetModuleScope}:${edge.localName}`,
         sourceId: scopeId,
         targetId: edge.targetModuleScope,
-        type: 'IMPORTS',
-        confidence: edge.linkStatus === 'unresolved' ? 0.5 : 1,
+        type: "IMPORTS",
+        confidence: edge.linkStatus === "unresolved" ? 0.5 : 1,
         reason: `import ${edge.kind} ${edge.localName}`,
       });
       scopeEdgesEmitted++;
@@ -193,10 +195,10 @@ export function emitScopeGraph(input: {
 // ─── Internal ───────────────────────────────────────────────────────────────
 
 /** Accepted truthy values for `INGESTION_EMIT_SCOPES`. */
-const TRUTHY: ReadonlySet<string> = new Set(['true', '1', 'yes']);
+const TRUTHY: ReadonlySet<string> = new Set(["true", "1", "yes"]);
 
 function isScopeEmissionEnabled(): boolean {
-  const raw = process.env['INGESTION_EMIT_SCOPES'];
+  const raw = process.env["INGESTION_EMIT_SCOPES"];
   if (raw === undefined) return false;
   return TRUTHY.has(raw.trim().toLowerCase());
 }
@@ -239,7 +241,7 @@ function resolveCallerNodeId(
 }
 
 function isFunctionLike(type: NodeLabel): boolean {
-  return type === 'Function' || type === 'Method' || type === 'Constructor';
+  return type === "Function" || type === "Method" || type === "Constructor";
 }
 
 function buildRelationship(
@@ -247,12 +249,12 @@ function buildRelationship(
   callerId: string,
   targetDef: SymbolDefinition,
   sourceLabel: string,
-): Parameters<KnowledgeGraph['addRelationship']>[0] {
+): Parameters<KnowledgeGraph["addRelationship"]>[0] {
   const type = mapKindToType(ref.kind);
   const reason = `${sourceLabel}: ${ref.kind} | confidence ${ref.confidence.toFixed(3)}`;
   // `step` encodes read/write discriminator for ACCESSES edges (1=read, 2=write).
   // Other kinds omit `step`.
-  const step = ref.kind === 'read' ? 1 : ref.kind === 'write' ? 2 : undefined;
+  const step = ref.kind === "read" ? 1 : ref.kind === "write" ? 2 : undefined;
   return {
     id: `rel:${type}:${callerId}->${targetDef.nodeId}:${ref.atRange.startLine}:${ref.atRange.startCol}`,
     sourceId: callerId,
@@ -271,18 +273,18 @@ function buildRelationship(
  * into `USES`. This keeps the graph schema additive — no new
  * RelationshipType values are introduced by this module.
  */
-function mapKindToType(kind: Reference['kind']): RelationshipType {
+function mapKindToType(kind: Reference["kind"]): RelationshipType {
   switch (kind) {
-    case 'call':
-      return 'CALLS';
-    case 'read':
-    case 'write':
-      return 'ACCESSES';
-    case 'inherits':
-      return 'INHERITS';
-    case 'type-reference':
-    case 'import-use':
-      return 'USES';
+    case "call":
+      return "CALLS";
+    case "read":
+    case "write":
+      return "ACCESSES";
+    case "inherits":
+      return "INHERITS";
+    case "type-reference":
+    case "import-use":
+      return "USES";
   }
 }
 

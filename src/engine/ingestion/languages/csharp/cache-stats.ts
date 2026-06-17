@@ -7,7 +7,7 @@
  * the hot path in `captures.ts` stays branch-free.
  */
 
-const PROF = process.env.PROF_SCOPE_RESOLUTION === '1';
+const PROF = process.env.PROF_SCOPE_RESOLUTION === "1";
 
 let CACHE_HITS = 0;
 let CACHE_MISSES = 0;

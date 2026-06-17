@@ -8,23 +8,23 @@
  * 4. Run `tsc --noEmit` to verify
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
-import type { LanguageProvider } from '../language-provider.js';
+import { SupportedLanguages } from "../../shared/index.js";
+import type { LanguageProvider } from "../language-provider.js";
 
-import { typescriptProvider, javascriptProvider } from './typescript.js';
-import { pythonProvider } from './python.js';
-import { javaProvider } from './java.js';
-import { kotlinProvider } from './kotlin.js';
-import { goProvider } from './go.js';
-import { rustProvider } from './rust.js';
-import { csharpProvider } from './csharp.js';
-import { cProvider, cppProvider } from './c-cpp.js';
-import { phpProvider } from './php.js';
-import { rubyProvider } from './ruby.js';
-import { swiftProvider } from './swift.js';
-import { dartProvider } from './dart.js';
-import { vueProvider } from './vue.js';
-import { cobolProvider } from './cobol.js';
+import { typescriptProvider, javascriptProvider } from "./typescript.js";
+import { pythonProvider } from "./python.js";
+import { javaProvider } from "./java.js";
+import { kotlinProvider } from "./kotlin.js";
+import { goProvider } from "./go.js";
+import { rustProvider } from "./rust.js";
+import { csharpProvider } from "./csharp.js";
+import { cProvider, cppProvider } from "./c-cpp.js";
+import { phpProvider } from "./php.js";
+import { rubyProvider } from "./ruby.js";
+import { swiftProvider } from "./swift.js";
+import { dartProvider } from "./dart.js";
+import { vueProvider } from "./vue.js";
+import { cobolProvider } from "./cobol.js";
 
 export const providers = {
   [SupportedLanguages.JavaScript]: javascriptProvider,
@@ -61,9 +61,9 @@ for (const provider of Object.values(providers)) {
 /** Look up a language provider from a file path by extension.
  *  Returns null if the file extension is not recognized. */
 export function getProviderForFile(filePath: string): LanguageProvider | null {
-  const lastDot = filePath.lastIndexOf('.');
-  const ext = lastDot >= 0 ? filePath.slice(lastDot).toLowerCase() : '';
-  const basename = filePath.slice(filePath.lastIndexOf('/') + 1);
+  const lastDot = filePath.lastIndexOf(".");
+  const ext = lastDot >= 0 ? filePath.slice(lastDot).toLowerCase() : "";
+  const basename = filePath.slice(filePath.lastIndexOf("/") + 1);
   return extensionMap.get(ext) ?? extensionMap.get(basename) ?? null;
 }
 
@@ -73,6 +73,6 @@ export const providersWithImplicitWiring = Object.values(providers).filter(
   (
     p,
   ): p is LanguageProvider & {
-    implicitImportWirer: NonNullable<LanguageProvider['implicitImportWirer']>;
+    implicitImportWirer: NonNullable<LanguageProvider["implicitImportWirer"]>;
   } => p.implicitImportWirer != null,
 );

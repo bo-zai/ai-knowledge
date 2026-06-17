@@ -11,8 +11,8 @@ import {
   SystemMessage,
   ToolMessage,
   type BaseMessage,
-} from '@langchain/core/messages';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+} from "@langchain/core/messages";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 /**
  * 统一消息类型
@@ -21,7 +21,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
  */
 export interface LlmMessage {
   /** 消息角色 */
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: "system" | "user" | "assistant" | "tool";
   /** 消息内容 */
   content: string;
   /** 工具消息名称（可选） */
@@ -66,7 +66,7 @@ export interface LlmCallResult {
  */
 export interface NormalizedLlmInput {
   /** 调用模式 */
-  mode: 'legacy' | 'messages';
+  mode: "legacy" | "messages";
   /** Legacy 模式：系统提示词 */
   systemPrompt?: string;
   /** Legacy 模式：用户提示词 */
@@ -83,17 +83,17 @@ export interface NormalizedLlmInput {
  */
 export function toLangChainMessage(msg: LlmMessage): BaseMessage {
   switch (msg.role) {
-    case 'system':
+    case "system":
       return new SystemMessage(msg.content);
-    case 'user':
+    case "user":
       return new HumanMessage(msg.content);
-    case 'assistant':
+    case "assistant":
       return new AIMessage(msg.content);
-    case 'tool':
+    case "tool":
       return new ToolMessage({
         content: msg.content,
-        name: msg.name ?? 'unknown_tool',
-        tool_call_id: msg.tool_call_id ?? '',
+        name: msg.name ?? "unknown_tool",
+        tool_call_id: msg.tool_call_id ?? "",
       });
     default:
       throw new Error(`Unknown message role: ${msg.role}`);
@@ -118,17 +118,17 @@ export function toLangChainMessages(messages: LlmMessage[]): BaseMessage[] {
  */
 export function toOpenAiMessage(msg: LlmMessage): ChatCompletionMessageParam {
   switch (msg.role) {
-    case 'system':
-      return { role: 'system', content: msg.content };
-    case 'user':
-      return { role: 'user', content: msg.content };
-    case 'assistant':
-      return { role: 'assistant', content: msg.content };
-    case 'tool':
+    case "system":
+      return { role: "system", content: msg.content };
+    case "user":
+      return { role: "user", content: msg.content };
+    case "assistant":
+      return { role: "assistant", content: msg.content };
+    case "tool":
       return {
-        role: 'tool',
+        role: "tool",
         content: msg.content,
-        tool_call_id: msg.tool_call_id ?? '',
+        tool_call_id: msg.tool_call_id ?? "",
       };
     default:
       throw new Error(`Unknown message role: ${msg.role}`);
@@ -141,7 +141,9 @@ export function toOpenAiMessage(msg: LlmMessage): ChatCompletionMessageParam {
  * @param messages - LlmMessage 数组
  * @returns OpenAI ChatCompletionMessageParam 数组
  */
-export function toOpenAiMessages(messages: LlmMessage[]): ChatCompletionMessageParam[] {
+export function toOpenAiMessages(
+  messages: LlmMessage[],
+): ChatCompletionMessageParam[] {
   return messages.map(toOpenAiMessage);
 }
 
@@ -158,7 +160,7 @@ export function normalizeLlmInput(input: LlmCallInput): NormalizedLlmInput {
   // Message 数组模式优先
   if (input.messages && input.messages.length > 0) {
     return {
-      mode: 'messages',
+      mode: "messages",
       messages: input.messages,
     };
   }
@@ -166,7 +168,7 @@ export function normalizeLlmInput(input: LlmCallInput): NormalizedLlmInput {
   // Legacy 模式
   if (input.systemPrompt !== undefined && input.userPrompt !== undefined) {
     return {
-      mode: 'legacy',
+      mode: "legacy",
       systemPrompt: input.systemPrompt,
       userPrompt: input.userPrompt,
     };
@@ -174,7 +176,7 @@ export function normalizeLlmInput(input: LlmCallInput): NormalizedLlmInput {
 
   // 无效输入
   throw new Error(
-    'Invalid LlmCallInput: must provide either messages array or both systemPrompt and userPrompt'
+    "Invalid LlmCallInput: must provide either messages array or both systemPrompt and userPrompt",
   );
 }
 
@@ -184,8 +186,10 @@ export function normalizeLlmInput(input: LlmCallInput): NormalizedLlmInput {
  * @param messages - LlmMessage 数组
  * @returns 系统提示词或 undefined
  */
-export function extractSystemPrompt(messages: LlmMessage[]): string | undefined {
-  const systemMsg = messages.find((m) => m.role === 'system');
+export function extractSystemPrompt(
+  messages: LlmMessage[],
+): string | undefined {
+  const systemMsg = messages.find((m) => m.role === "system");
   return systemMsg?.content;
 }
 
@@ -195,8 +199,10 @@ export function extractSystemPrompt(messages: LlmMessage[]): string | undefined 
  * @param messages - LlmMessage 数组
  * @returns 最后一个用户提示词或 undefined
  */
-export function extractLastUserPrompt(messages: LlmMessage[]): string | undefined {
-  const userMsgs = messages.filter((m) => m.role === 'user');
+export function extractLastUserPrompt(
+  messages: LlmMessage[],
+): string | undefined {
+  const userMsgs = messages.filter((m) => m.role === "user");
   return userMsgs[userMsgs.length - 1]?.content;
 }
 
@@ -209,9 +215,12 @@ export function extractLastUserPrompt(messages: LlmMessage[]): string | undefine
  * @param userPrompt - 用户提示词
  * @returns LlmMessage 数组
  */
-export function legacyToMessages(systemPrompt: string, userPrompt: string): LlmMessage[] {
+export function legacyToMessages(
+  systemPrompt: string,
+  userPrompt: string,
+): LlmMessage[] {
   return [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
   ];
 }

@@ -4,8 +4,8 @@
  * 验证 Concept 证据提取对 mall-group 和 music-education 项目的实际运行效果
  */
 
-import { ParallelDiscoveryRunner } from './concept/index.js';
-import type { ParallelDiscoveryResult } from './concept/types.js';
+import { ParallelDiscoveryRunner } from "./concept/index.js";
+import type { ParallelDiscoveryResult } from "./concept/types.js";
 
 interface ProjectVerificationResult {
   project: string;
@@ -30,16 +30,16 @@ async function verifyProject(
 ): Promise<ProjectVerificationResult> {
   console.log(`\n=== 验证项目: ${project} ===`);
   console.log(`路径: ${repoPath}`);
-  console.log(`模块: ${modulePaths.join(', ')}`);
+  console.log(`模块: ${modulePaths.join(", ")}`);
 
   // 检查知识图谱是否存在
-  const fs = await import('fs/promises');
-  const path = await import('path');
+  const fs = await import("fs/promises");
+  const path = await import("path");
   for (const modulePath of modulePaths) {
     const fullModulePath = path.join(repoPath, modulePath);
-    const knowledgePath = path.join(fullModulePath, '.knowledge', 'lbug');
-    const gitnexusPath = path.join(fullModulePath, '.gitnexus', 'lbug');
-    const repoKnowledgePath = path.join(repoPath, '.knowledge', 'lbug');
+    const knowledgePath = path.join(fullModulePath, ".knowledge", "lbug");
+    const gitnexusPath = path.join(fullModulePath, ".gitnexus", "lbug");
+    const repoKnowledgePath = path.join(repoPath, ".knowledge", "lbug");
 
     console.log(`检查模块 ${modulePath}:`);
     try {
@@ -56,8 +56,8 @@ async function verifyProject(
     const runner = new ParallelDiscoveryRunner({
       repoPath,
       modulePaths,
-      language: 'java',
-      pathways: ['controller', 'scheduled', 'mq_consumer'],
+      language: "java",
+      pathways: ["controller", "scheduled", "mq_consumer"],
       enableTableRelation: true,
       enableGitEnhancement: false,
       enableDomainDefinition: false,
@@ -82,7 +82,8 @@ async function verifyProject(
       durationMs,
       tableCount: result.tableAnchors.length,
       candidateCount: result.candidates.length,
-      crossModuleCount: result.tableAnchors.filter(a => a.isCrossModule).length,
+      crossModuleCount: result.tableAnchors.filter((a) => a.isCrossModule)
+        .length,
       entryPointCount: result.allEntryPoints.length,
       errorCount: result.errors.length,
     };
@@ -98,7 +99,9 @@ async function verifyProject(
     if (result.tableAnchors.length > 0) {
       console.log(`\n--- 表锚点列表 ---`);
       for (const anchor of result.tableAnchors.slice(0, 5)) {
-        console.log(`  ${anchor.tableName}: ${anchor.isCrossModule ? '跨模块' : '单模块'} (${anchor.moduleCount} 模块, 置信度 ${anchor.aggregatedConfidence.toFixed(2)})`);
+        console.log(
+          `  ${anchor.tableName}: ${anchor.isCrossModule ? "跨模块" : "单模块"} (${anchor.moduleCount} 模块, 置信度 ${anchor.aggregatedConfidence.toFixed(2)})`,
+        );
       }
       if (result.tableAnchors.length > 5) {
         console.log(`  ... 还有 ${result.tableAnchors.length - 5} 个表`);
@@ -144,44 +147,53 @@ async function verifyProject(
 }
 
 async function main(): Promise<void> {
-  console.log('========================================');
-  console.log('Concept 证据提取 - 真实项目验证');
-  console.log('========================================');
+  console.log("========================================");
+  console.log("Concept 证据提取 - 真实项目验证");
+  console.log("========================================");
 
   const projects: { name: string; path: string; modules: string[] }[] = [
     {
-      name: 'mall-group',
-      path: 'D:/workspace/mall-group',
-      modules: ['D:/workspace/mall-group'], // 使用项目根路径
+      name: "mall-group",
+      path: "D:/workspace/mall-group",
+      modules: ["D:/workspace/mall-group"], // 使用项目根路径
     },
     {
-      name: 'music-education',
-      path: 'D:/workspace/other_project/music-education-app',
-      modules: ['D:/workspace/other_project/music-education-app'], // 使用项目根路径
+      name: "music-education",
+      path: "D:/workspace/other_project/music-education-app",
+      modules: ["D:/workspace/other_project/music-education-app"], // 使用项目根路径
     },
   ];
 
   const results: ProjectVerificationResult[] = [];
 
   for (const project of projects) {
-    const result = await verifyProject(project.name, project.path, project.modules);
+    const result = await verifyProject(
+      project.name,
+      project.path,
+      project.modules,
+    );
     results.push(result);
   }
 
   // 汇总报告
-  console.log('\n========================================');
-  console.log('验证汇总');
-  console.log('========================================');
+  console.log("\n========================================");
+  console.log("验证汇总");
+  console.log("========================================");
 
   for (const result of results) {
-    const status = result.error ? '失败' : '成功';
+    const status = result.error ? "失败" : "成功";
     console.log(`${result.project}: ${status}`);
-    console.log(`  表数: ${result.stats.tableCount}, 跨模块: ${result.stats.crossModuleCount}, 入口点: ${result.stats.entryPointCount}`);
+    console.log(
+      `  表数: ${result.stats.tableCount}, 跨模块: ${result.stats.crossModuleCount}, 入口点: ${result.stats.entryPointCount}`,
+    );
   }
 
-  const totalSuccess = results.filter(r => !r.error).length;
+  const totalSuccess = results.filter((r) => !r.error).length;
   const totalTables = results.reduce((sum, r) => sum + r.stats.tableCount, 0);
-  const totalCrossModule = results.reduce((sum, r) => sum + r.stats.crossModuleCount, 0);
+  const totalCrossModule = results.reduce(
+    (sum, r) => sum + r.stats.crossModuleCount,
+    0,
+  );
 
   console.log(`\n总计: ${totalSuccess}/${results.length} 成功`);
   console.log(`发现表: ${totalTables} 个`);

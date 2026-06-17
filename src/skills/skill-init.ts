@@ -4,9 +4,13 @@
  * 提供 skill 初始化功能，支持多个 AI Agent
  */
 
-import { logger } from '../shared/logger.js';
-import type { Agent, SkillInitConfig, SkillInitResult } from './agents/types.js';
-import { ALL_AGENTS, DEFAULT_AGENTS, getAgentsByIds } from './agents/index.js';
+import { logger } from "../shared/logger.js";
+import type {
+  Agent,
+  SkillInitConfig,
+  SkillInitResult,
+} from "./agents/types.js";
+import { ALL_AGENTS, DEFAULT_AGENTS, getAgentsByIds } from "./agents/index.js";
 
 /**
  * Skill 初始化结果汇总
@@ -40,12 +44,10 @@ export async function initializeSkills(
   agentIds?: string[],
 ): Promise<SkillInitSummary> {
   // 确定要初始化的 Agent
-  const agents = agentIds
-    ? getAgentsByIds(agentIds)
-    : DEFAULT_AGENTS;
+  const agents = agentIds ? getAgentsByIds(agentIds) : DEFAULT_AGENTS;
 
   if (agents.length === 0) {
-    logger.warn('No agents to initialize');
+    logger.warn("No agents to initialize");
     return {
       agentCount: 0,
       results: [],
@@ -55,7 +57,9 @@ export async function initializeSkills(
     };
   }
 
-  logger.info(`Initializing skills for ${agents.length} agents: ${agents.map(a => a.name).join(', ')}`);
+  logger.info(
+    `Initializing skills for ${agents.length} agents: ${agents.map((a) => a.name).join(", ")}`,
+  );
 
   const results: SkillInitResult[] = [];
   let agentsMdUpdated = false;
@@ -100,10 +104,12 @@ export async function initializeSkills(
     }
   }
 
-  const succeeded = results.filter(r => r.success).length;
-  const failed = results.filter(r => !r.success).length;
+  const succeeded = results.filter((r) => r.success).length;
+  const failed = results.filter((r) => !r.success).length;
 
-  logger.info(`Skill initialization complete: ${succeeded} succeeded, ${failed} failed`);
+  logger.info(
+    `Skill initialization complete: ${succeeded} succeeded, ${failed} failed`,
+  );
 
   return {
     agentCount: agents.length,
@@ -125,9 +131,7 @@ export async function needsSkillInitialization(
   repoPath: string,
   agentIds?: string[],
 ): Promise<boolean> {
-  const agents = agentIds
-    ? getAgentsByIds(agentIds)
-    : DEFAULT_AGENTS;
+  const agents = agentIds ? getAgentsByIds(agentIds) : DEFAULT_AGENTS;
 
   for (const agent of agents) {
     const isInitialized = await agent.isInitialized(repoPath);
@@ -143,5 +147,5 @@ export async function needsSkillInitialization(
  * 获取所有支持的 Agent ID
  */
 export function getSupportedAgentIds(): string[] {
-  return ALL_AGENTS.map(a => a.id);
+  return ALL_AGENTS.map((a) => a.id);
 }

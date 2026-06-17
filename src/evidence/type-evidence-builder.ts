@@ -1,12 +1,12 @@
-import type { KnowledgeType } from '../schemas/knowledge-type.js';
-import type { EvidenceBundle } from './evidence-bundle-schema.js';
-import type { GraphStatus } from '../query/prepare-generation.js';
-import type { GenerateTarget } from '../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../engine/lbug/read-only-session.js';
-import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
-import { getStoragePaths } from '../engine/storage/repo-manager.js';
-import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
-import { logger } from '../shared/logger.js';
+import type { KnowledgeType } from "../schemas/knowledge-type.js";
+import type { EvidenceBundle } from "./evidence-bundle-schema.js";
+import type { GraphStatus } from "../query/prepare-generation.js";
+import type { GenerateTarget } from "../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../engine/lbug/read-only-session.js";
+import type { LlmClaimsProvider } from "../generation/knowledge-generator.js";
+import { getStoragePaths } from "../engine/storage/repo-manager.js";
+import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
+import { logger } from "../shared/logger.js";
 import {
   queryConceptEvidenceByPackage,
   queryDataModelEvidenceByPackage,
@@ -16,8 +16,12 @@ import {
   queryConstraintEvidenceByPackage,
   queryRelationEvidenceByPackage,
   queryWorkflowEvidenceByPackage,
-} from './extractors/index.js';
-import { assessGap, executeLlmSupplement, mergeEvidenceGroups } from './extractors/hybrid/index.js';
+} from "./extractors/index.js";
+import {
+  assessGap,
+  executeLlmSupplement,
+  mergeEvidenceGroups,
+} from "./extractors/hybrid/index.js";
 
 export interface BuildEvidenceInput {
   repoPath: string;
@@ -49,12 +53,12 @@ const LOCK_RETRY_DELAY_MS = 1000;
 function isDbBusyError(err: unknown): boolean {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
   return (
-    msg.includes('busy') ||
-    msg.includes('lock') ||
-    msg.includes('already in use') ||
-    msg.includes('cannot read from file') ||
-    msg.includes('access is denied') ||
-    msg.includes('another process has locked')
+    msg.includes("busy") ||
+    msg.includes("lock") ||
+    msg.includes("already in use") ||
+    msg.includes("cannot read from file") ||
+    msg.includes("access is denied") ||
+    msg.includes("another process has locked")
   );
 }
 
@@ -75,31 +79,40 @@ export async function buildEvidenceBundlesByPackage(
 
   for (let attempt = 1; attempt <= LOCK_RETRY_ATTEMPTS; attempt++) {
     try {
-      logger.info(`Opening graph for ${type} evidence: ${lbugPath} (attempt ${attempt})`);
-      const staticGroups = await withReadOnlyLbug(lbugPath, async query => {
+      logger.info(
+        `Opening graph for ${type} evidence: ${lbugPath} (attempt ${attempt})`,
+      );
+      const staticGroups = await withReadOnlyLbug(lbugPath, async (query) => {
         switch (type) {
-          case 'CONCEPT':
-            return queryConceptEvidenceByPackage(repoPath, lbugPath, target, query);
-          case 'DATA_MODEL':
+          case "CONCEPT":
+            return queryConceptEvidenceByPackage(
+              repoPath,
+              lbugPath,
+              target,
+              query,
+            );
+          case "DATA_MODEL":
             return queryDataModelEvidenceByPackage(repoPath, target, query);
-          case 'CAPABILITY':
+          case "CAPABILITY":
             return queryCapabilityEvidenceByPackage(repoPath, target, query);
-          case 'BOUNDARY':
+          case "BOUNDARY":
             return queryBoundaryEvidenceByPackage(repoPath, target, query);
-          case 'EXTERNAL':
+          case "EXTERNAL":
             return queryExternalEvidenceByPackage(repoPath, target, query);
-          case 'CONSTRAINT':
+          case "CONSTRAINT":
             return queryConstraintEvidenceByPackage(repoPath, target, query);
-          case 'RELATION':
+          case "RELATION":
             return queryRelationEvidenceByPackage(repoPath, target, query);
-          case 'WORKFLOW':
+          case "WORKFLOW":
             return queryWorkflowEvidenceByPackage(repoPath, target, query);
           default:
             return [];
         }
       });
 
-      logger.info(`Static extraction: ${staticGroups.length} evidence groups for ${type}`);
+      logger.info(
+        `Static extraction: ${staticGroups.length} evidence groups for ${type}`,
+      );
 
       // Hybrid extraction: check gaps and supplement with LLM if needed
       if (claimsProvider) {
@@ -113,8 +126,13 @@ export async function buildEvidenceBundlesByPackage(
             claimsProvider,
           );
 
-          const mergedGroups = mergeEvidenceGroups(staticGroups, supplementResult.groups);
-          logger.info(`Hybrid result: ${mergedGroups.length} groups (${staticGroups.length} static + ${supplementResult.groups.length} LLM)`);
+          const mergedGroups = mergeEvidenceGroups(
+            staticGroups,
+            supplementResult.groups,
+          );
+          logger.info(
+            `Hybrid result: ${mergedGroups.length} groups (${staticGroups.length} static + ${supplementResult.groups.length} LLM)`,
+          );
           return mergedGroups;
         }
       }
@@ -129,12 +147,18 @@ export async function buildEvidenceBundlesByPackage(
         return [];
       }
 
-      logger.warn(`Database lock detected for ${type}, retrying (${attempt}/${LOCK_RETRY_ATTEMPTS})...`);
-      await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_DELAY_MS * attempt));
+      logger.warn(
+        `Database lock detected for ${type}, retrying (${attempt}/${LOCK_RETRY_ATTEMPTS})...`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, LOCK_RETRY_DELAY_MS * attempt),
+      );
     }
   }
 
-  logger.warn(`Graph query failed for ${type} after ${LOCK_RETRY_ATTEMPTS} retries`);
+  logger.warn(
+    `Graph query failed for ${type} after ${LOCK_RETRY_ATTEMPTS} retries`,
+  );
   return [];
 }
 
@@ -155,17 +179,25 @@ export async function buildMinimalEvidenceBundle(
   return mergeGroupsToBundle(groups, input.type, input.target);
 }
 
-function createEmptyBundle(type: KnowledgeType, target?: GenerateTarget): EvidenceBundle {
-  const targetId = target ? `-${target.value.toLowerCase().replace(/\s+/g, '-')}` : '';
+function createEmptyBundle(
+  type: KnowledgeType,
+  target?: GenerateTarget,
+): EvidenceBundle {
+  const targetId = target
+    ? `-${target.value.toLowerCase().replace(/\s+/g, "-")}`
+    : "";
   const bundleId = `BUNDLE-${type}${targetId}`.toUpperCase();
 
   return {
     bundleId,
     candidateId: `CAND-${type}`,
-    repoProfile: { name: 'unknown' },
+    repoProfile: { name: "unknown" },
     confidence: 0.3,
-    risks: ['no_evidence_found'],
-    capabilityHints: { nameCandidates: target ? [target.value] : [], relatedTerms: [] },
+    risks: ["no_evidence_found"],
+    capabilityHints: {
+      nameCandidates: target ? [target.value] : [],
+      relatedTerms: [],
+    },
     entryPoints: [],
     behaviorSlices: [],
     dataContracts: [],
@@ -179,30 +211,42 @@ function createEmptyBundle(type: KnowledgeType, target?: GenerateTarget): Eviden
   };
 }
 
-function mergeGroupsToBundle(groups: EvidenceGroup[], type: KnowledgeType, target?: GenerateTarget): EvidenceBundle {
-  const targetId = target ? `-${target.value.toLowerCase().replace(/\s+/g, '-')}` : '';
+function mergeGroupsToBundle(
+  groups: EvidenceGroup[],
+  type: KnowledgeType,
+  target?: GenerateTarget,
+): EvidenceBundle {
+  const targetId = target
+    ? `-${target.value.toLowerCase().replace(/\s+/g, "-")}`
+    : "";
   const bundleId = `BUNDLE-${type}${targetId}`.toUpperCase();
 
   const merged: EvidenceBundle = {
     bundleId,
     candidateId: `CAND-${type}`,
-    repoProfile: { name: groups[0]?.bundle.repoProfile?.name || 'unknown' },
-    confidence: Math.max(...groups.map(g => g.bundle.confidence)),
-    risks: groups.flatMap(g => g.bundle.risks),
+    repoProfile: { name: groups[0]?.bundle.repoProfile?.name || "unknown" },
+    confidence: Math.max(...groups.map((g) => g.bundle.confidence)),
+    risks: groups.flatMap((g) => g.bundle.risks),
     capabilityHints: {
-      nameCandidates: groups.flatMap(g => g.bundle.capabilityHints?.nameCandidates || []),
-      relatedTerms: groups.flatMap(g => g.bundle.capabilityHints?.relatedTerms || []),
+      nameCandidates: groups.flatMap(
+        (g) => g.bundle.capabilityHints?.nameCandidates || [],
+      ),
+      relatedTerms: groups.flatMap(
+        (g) => g.bundle.capabilityHints?.relatedTerms || [],
+      ),
     },
-    entryPoints: groups.flatMap(g => g.bundle.entryPoints || []),
-    behaviorSlices: groups.flatMap(g => g.bundle.behaviorSlices || []),
-    dataContracts: groups.flatMap(g => g.bundle.dataContracts || []),
-    validationAnchors: groups.flatMap(g => g.bundle.validationAnchors || []),
-    moduleSurfaces: groups.flatMap(g => g.bundle.moduleSurfaces || []),
-    flowTraces: groups.flatMap(g => g.bundle.flowTraces || []),
-    docs: groups.flatMap(g => g.bundle.docs || []),
-    negativeEvidence: groups.flatMap(g => g.bundle.negativeEvidence || []),
-    openQuestions: groups.flatMap(g => g.bundle.openQuestions || []),
-    functionCandidates: groups.flatMap(g => g.bundle.functionCandidates || []),
+    entryPoints: groups.flatMap((g) => g.bundle.entryPoints || []),
+    behaviorSlices: groups.flatMap((g) => g.bundle.behaviorSlices || []),
+    dataContracts: groups.flatMap((g) => g.bundle.dataContracts || []),
+    validationAnchors: groups.flatMap((g) => g.bundle.validationAnchors || []),
+    moduleSurfaces: groups.flatMap((g) => g.bundle.moduleSurfaces || []),
+    flowTraces: groups.flatMap((g) => g.bundle.flowTraces || []),
+    docs: groups.flatMap((g) => g.bundle.docs || []),
+    negativeEvidence: groups.flatMap((g) => g.bundle.negativeEvidence || []),
+    openQuestions: groups.flatMap((g) => g.bundle.openQuestions || []),
+    functionCandidates: groups.flatMap(
+      (g) => g.bundle.functionCandidates || [],
+    ),
   };
 
   return merged;

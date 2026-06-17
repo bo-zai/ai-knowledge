@@ -20,8 +20,11 @@
  * `tsconfigPaths` is null.
  */
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import { resolveTsTarget, type TsResolveContext } from '../typescript/import-target.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import {
+  resolveTsTarget,
+  type TsResolveContext,
+} from "../typescript/import-target.js";
 
 export type JsResolveContext = TsResolveContext;
 

@@ -41,7 +41,7 @@ import type {
   ScopeId,
   SymbolDefinition,
   WorkspaceIndex,
-} from '../shared';
+} from "../shared";
 import {
   buildDefIndex,
   buildMethodDispatchIndex,
@@ -49,8 +49,8 @@ import {
   buildQualifiedNameIndex,
   buildScopeTree,
   finalize,
-} from '../shared';
-import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
+} from "../shared";
+import type { ScopeResolutionIndexes } from "./model/scope-resolution-indexes.js";
 
 // ─── Public entry point ─────────────────────────────────────────────────────
 
@@ -111,7 +111,10 @@ export function finalizeScopeModel(
   for (const file of parsedFiles) {
     for (const s of file.scopes) allScopes.push(s);
     for (const d of file.localDefs) allDefs.push(d);
-    moduleEntries.push({ filePath: file.filePath, moduleScopeId: file.moduleScope });
+    moduleEntries.push({
+      filePath: file.filePath,
+      moduleScopeId: file.moduleScope,
+    });
   }
 
   const scopeTree = buildScopeTree(allScopes);
@@ -167,7 +170,7 @@ function toFinalizeFile(file: ParsedFile): FinalizeFile {
 /** Flatten every file's reference sites into one list. Order reflects
  *  input-file order, then capture order inside each file. Deterministic. */
 function collectReferenceSites(parsedFiles: readonly ParsedFile[]) {
-  const out: ParsedFile['referenceSites'][number][] = [];
+  const out: ParsedFile["referenceSites"][number][] = [];
   for (const file of parsedFiles) {
     for (const site of file.referenceSites) out.push(site);
   }

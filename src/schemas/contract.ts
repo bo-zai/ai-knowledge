@@ -1,8 +1,14 @@
-import { z } from 'zod';
-import { commonObjectSchema } from './common.js';
+import { z } from "zod";
+import { commonObjectSchema } from "./common.js";
 
 // Interface kind - 定义契约的类型
-export const interfaceKindSchema = z.enum(['route', 'tool', 'api', 'method', 'event']);
+export const interfaceKindSchema = z.enum([
+  "route",
+  "tool",
+  "api",
+  "method",
+  "event",
+]);
 
 // Input/Output shape - 定义输入输出的结构
 export const fieldShapeSchema = z.object({
@@ -10,7 +16,7 @@ export const fieldShapeSchema = z.object({
   type: z.string().min(1),
   required: z.boolean(),
   description_zh: z.string().min(1),
-  description_source: z.enum(['comment', 'inferred']),
+  description_source: z.enum(["comment", "inferred"]),
 });
 
 // Error shape - 定义错误响应结构
@@ -22,7 +28,7 @@ export const errorShapeSchema = z.object({
 
 // Contract object schema - 真正的契约对象
 export const conObjectSchema = commonObjectSchema.extend({
-  type: z.literal('CON'),
+  type: z.literal("CON"),
 
   // Interface summary
   interface_kind: interfaceKindSchema,

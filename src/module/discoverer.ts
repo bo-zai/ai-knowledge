@@ -5,10 +5,18 @@
  * 提供独立的模块发现接口
  */
 
-import { logger } from '../shared/logger.js';
-import { ModuleDiscoveryCoordinator } from '../architecture/module-discovery/index.js';
-import type { ModuleDiscoveryResult, RepoType } from '../architecture/module-discovery/types.js';
-import type { ModuleTopology, ModuleInfo, CouplingMode, SignalDetectionResult } from './types.js';
+import { logger } from "../shared/logger.js";
+import { ModuleDiscoveryCoordinator } from "../architecture/module-discovery/index.js";
+import type {
+  ModuleDiscoveryResult,
+  RepoType,
+} from "../architecture/module-discovery/types.js";
+import type {
+  ModuleTopology,
+  ModuleInfo,
+  CouplingMode,
+  SignalDetectionResult,
+} from "./types.js";
 
 /**
  * 模块发现器
@@ -28,7 +36,10 @@ export class ModuleDiscoverer {
    * @param repoPath 仓库路径
    * @param maxDepth 最大递归深度（默认 3）
    */
-  async discover(repoPath: string, maxDepth = 3): Promise<ModuleDiscoveryResult> {
+  async discover(
+    repoPath: string,
+    maxDepth = 3,
+  ): Promise<ModuleDiscoveryResult> {
     logger.info(`Starting module discovery for: ${repoPath}`);
     return this.coordinator.discover(repoPath, maxDepth);
   }
@@ -46,8 +57,12 @@ export class ModuleDiscoverer {
    * 获取发现结果摘要
    */
   getSummary(discoveryResult: ModuleDiscoveryResult): ModuleDiscoverySummary {
-    const deployableCount = discoveryResult.modules.filter(m => m.role === 'deployable').length;
-    const sharedCount = discoveryResult.modules.filter(m => m.role === 'shared').length;
+    const deployableCount = discoveryResult.modules.filter(
+      (m) => m.role === "deployable",
+    ).length;
+    const sharedCount = discoveryResult.modules.filter(
+      (m) => m.role === "shared",
+    ).length;
 
     return {
       moduleCount: discoveryResult.moduleCount,
@@ -55,7 +70,7 @@ export class ModuleDiscoverer {
       couplingMode: discoveryResult.couplingMode,
       deployableCount,
       sharedCount,
-      modules: discoveryResult.modules.map(m => ({
+      modules: discoveryResult.modules.map((m) => ({
         name: m.name,
         role: m.role,
         type: m.type,

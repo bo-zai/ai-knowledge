@@ -7,32 +7,35 @@
  * attr_reader/attr_writer (property definitions) as call expressions.
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
-import type { NodeLabel } from '../../shared/index.js';
-import { createClassExtractor } from '../class-extractors/generic.js';
-import { rubyClassConfig } from '../class-extractors/configs/ruby.js';
-import { defineLanguage } from '../language-provider.js';
-import type { AstFrameworkPatternConfig } from '../language-provider.js';
-import type { SyntaxNode } from '../utils/ast-helpers.js';
-import { typeConfig as rubyConfig } from '../type-extractors/ruby.js';
-import { routeRubyCall } from '../call-routing.js';
-import { rubyExportChecker } from '../export-detection.js';
-import { createImportResolver } from '../import-resolvers/resolver-factory.js';
-import { rubyImportConfig } from '../import-resolvers/configs/ruby.js';
-import { RUBY_QUERIES } from '../tree-sitter-queries.js';
-import { createFieldExtractor } from '../field-extractors/generic.js';
-import { rubyConfig as rubyFieldConfig } from '../field-extractors/configs/ruby.js';
-import { createMethodExtractor } from '../method-extractors/generic.js';
-import { rubyMethodConfig } from '../method-extractors/configs/ruby.js';
-import { createVariableExtractor } from '../variable-extractors/generic.js';
-import { rubyVariableConfig } from '../variable-extractors/configs/ruby.js';
-import { createCallExtractor } from '../call-extractors/generic.js';
-import { rubyCallConfig } from '../call-extractors/configs/ruby.js';
-import { createHeritageExtractor } from '../heritage-extractors/generic.js';
-import { rubyHeritageConfig } from '../heritage-extractors/configs/ruby.js';
-import { maybeRewriteRubyBareCallToSelf } from '../utils/ruby-self-call.js';
-import { findEnclosingClassInfo } from '../utils/ast-helpers.js';
-import type { DispatchDecision, ImplicitReceiverOverride } from '../call-types.js';
+import { SupportedLanguages } from "../../shared/index.js";
+import type { NodeLabel } from "../../shared/index.js";
+import { createClassExtractor } from "../class-extractors/generic.js";
+import { rubyClassConfig } from "../class-extractors/configs/ruby.js";
+import { defineLanguage } from "../language-provider.js";
+import type { AstFrameworkPatternConfig } from "../language-provider.js";
+import type { SyntaxNode } from "../utils/ast-helpers.js";
+import { typeConfig as rubyConfig } from "../type-extractors/ruby.js";
+import { routeRubyCall } from "../call-routing.js";
+import { rubyExportChecker } from "../export-detection.js";
+import { createImportResolver } from "../import-resolvers/resolver-factory.js";
+import { rubyImportConfig } from "../import-resolvers/configs/ruby.js";
+import { RUBY_QUERIES } from "../tree-sitter-queries.js";
+import { createFieldExtractor } from "../field-extractors/generic.js";
+import { rubyConfig as rubyFieldConfig } from "../field-extractors/configs/ruby.js";
+import { createMethodExtractor } from "../method-extractors/generic.js";
+import { rubyMethodConfig } from "../method-extractors/configs/ruby.js";
+import { createVariableExtractor } from "../variable-extractors/generic.js";
+import { rubyVariableConfig } from "../variable-extractors/configs/ruby.js";
+import { createCallExtractor } from "../call-extractors/generic.js";
+import { rubyCallConfig } from "../call-extractors/configs/ruby.js";
+import { createHeritageExtractor } from "../heritage-extractors/generic.js";
+import { rubyHeritageConfig } from "../heritage-extractors/configs/ruby.js";
+import { maybeRewriteRubyBareCallToSelf } from "../utils/ruby-self-call.js";
+import { findEnclosingClassInfo } from "../utils/ast-helpers.js";
+import type {
+  DispatchDecision,
+  ImplicitReceiverOverride,
+} from "../call-types.js";
 
 /**
  * Ruby label override. Applied to:
@@ -46,8 +49,11 @@ import type { DispatchDecision, ImplicitReceiverOverride } from '../call-types.j
  *
  * Returning `null` means "skip this definition"; we never do that here.
  */
-const rubyLabelOverride = (_node: SyntaxNode, defaultLabel: NodeLabel): NodeLabel | null => {
-  if (defaultLabel === 'Module') return 'Trait';
+const rubyLabelOverride = (
+  _node: SyntaxNode,
+  defaultLabel: NodeLabel,
+): NodeLabel | null => {
+  if (defaultLabel === "Module") return "Trait";
   return defaultLabel;
 };
 
@@ -55,77 +61,77 @@ const rubyLabelOverride = (_node: SyntaxNode, defaultLabel: NodeLabel): NodeLabe
 const rubyExtractFunctionName = (
   node: SyntaxNode,
 ): { funcName: string | null; label: NodeLabel } | null => {
-  if (node.type !== 'method' && node.type !== 'singleton_method') return null;
+  if (node.type !== "method" && node.type !== "singleton_method") return null;
 
-  let nameNode = node.childForFieldName?.('name');
+  let nameNode = node.childForFieldName?.("name");
   if (!nameNode) {
     for (let i = 0; i < node.childCount; i++) {
       const c = node.child(i);
-      if (c?.type === 'identifier') {
+      if (c?.type === "identifier") {
         nameNode = c;
         break;
       }
     }
   }
-  return { funcName: nameNode?.text ?? null, label: 'Method' };
+  return { funcName: nameNode?.text ?? null, label: "Method" };
 };
 
 const BUILT_INS: ReadonlySet<string> = new Set([
-  'puts',
-  'p',
-  'pp',
-  'raise',
-  'fail',
-  'require',
-  'require_relative',
-  'load',
-  'autoload',
-  'include',
-  'extend',
-  'prepend',
-  'attr_accessor',
-  'attr_reader',
-  'attr_writer',
-  'public',
-  'private',
-  'protected',
-  'module_function',
-  'lambda',
-  'proc',
-  'block_given?',
-  'nil?',
-  'is_a?',
-  'kind_of?',
-  'instance_of?',
-  'respond_to?',
-  'freeze',
-  'frozen?',
-  'dup',
-  'tap',
-  'yield_self',
-  'each',
-  'select',
-  'reject',
-  'detect',
-  'collect',
-  'inject',
-  'flat_map',
-  'each_with_object',
-  'each_with_index',
-  'any?',
-  'all?',
-  'none?',
-  'count',
-  'first',
-  'last',
-  'sort_by',
-  'min_by',
-  'max_by',
-  'group_by',
-  'partition',
-  'compact',
-  'flatten',
-  'uniq',
+  "puts",
+  "p",
+  "pp",
+  "raise",
+  "fail",
+  "require",
+  "require_relative",
+  "load",
+  "autoload",
+  "include",
+  "extend",
+  "prepend",
+  "attr_accessor",
+  "attr_reader",
+  "attr_writer",
+  "public",
+  "private",
+  "protected",
+  "module_function",
+  "lambda",
+  "proc",
+  "block_given?",
+  "nil?",
+  "is_a?",
+  "kind_of?",
+  "instance_of?",
+  "respond_to?",
+  "freeze",
+  "frozen?",
+  "dup",
+  "tap",
+  "yield_self",
+  "each",
+  "select",
+  "reject",
+  "detect",
+  "collect",
+  "inject",
+  "flat_map",
+  "each_with_object",
+  "each_with_index",
+  "any?",
+  "all?",
+  "none?",
+  "count",
+  "first",
+  "last",
+  "sort_by",
+  "min_by",
+  "max_by",
+  "group_by",
+  "partition",
+  "compact",
+  "flatten",
+  "uniq",
 ]);
 
 /**
@@ -136,10 +142,10 @@ const BUILT_INS: ReadonlySet<string> = new Set([
  * All other container types are returned as-is.
  */
 const rubyResolveEnclosingOwner = (node: SyntaxNode): SyntaxNode | null => {
-  if (node.type === 'singleton_class') {
+  if (node.type === "singleton_class") {
     let ancestor = node.parent;
     while (ancestor) {
-      if (ancestor.type === 'class' || ancestor.type === 'module') {
+      if (ancestor.type === "class" || ancestor.type === "module") {
         return ancestor;
       }
       ancestor = ancestor.parent;
@@ -151,30 +157,30 @@ const rubyResolveEnclosingOwner = (node: SyntaxNode): SyntaxNode | null => {
 
 export const rubyProvider = defineLanguage({
   id: SupportedLanguages.Ruby,
-  extensions: ['.rb', '.rake', '.gemspec'],
+  extensions: [".rb", ".rake", ".gemspec"],
   entryPointPatterns: [/^call$/, /^perform$/, /^execute$/],
   astFrameworkPatterns: [
     {
-      framework: 'rails',
+      framework: "rails",
       entryPointMultiplier: 3.0,
-      reason: 'rails-pattern',
+      reason: "rails-pattern",
       patterns: [
-        'ApplicationController',
-        'ApplicationRecord',
-        'ActiveRecord::Base',
-        'before_action',
-        'after_action',
-        'has_many',
-        'belongs_to',
-        'has_one',
-        'validates',
+        "ApplicationController",
+        "ApplicationRecord",
+        "ActiveRecord::Base",
+        "before_action",
+        "after_action",
+        "has_many",
+        "belongs_to",
+        "has_one",
+        "validates",
       ],
     },
     {
-      framework: 'sinatra',
+      framework: "sinatra",
       entryPointMultiplier: 2.8,
-      reason: 'sinatra-pattern',
-      patterns: ['Sinatra::Base', 'Sinatra::Application'],
+      reason: "sinatra-pattern",
+      patterns: ["Sinatra::Base", "Sinatra::Application"],
     },
   ] satisfies AstFrameworkPatternConfig[],
   treeSitterQueries: RUBY_QUERIES,
@@ -182,7 +188,7 @@ export const rubyProvider = defineLanguage({
   exportChecker: rubyExportChecker,
   importResolver: createImportResolver(rubyImportConfig),
   callRouter: routeRubyCall,
-  importSemantics: 'wildcard-leaf',
+  importSemantics: "wildcard-leaf",
   callExtractor: createCallExtractor(rubyCallConfig),
   resolveEnclosingOwner: rubyResolveEnclosingOwner,
   fieldExtractor: createFieldExtractor(rubyFieldConfig),
@@ -197,7 +203,7 @@ export const rubyProvider = defineLanguage({
   // Ruby MRO is kind-aware: prepend providers beat the class's own method,
   // which in turn beats include providers. See `lookupMethodByOwnerWithMRO`
   // in `model/resolve.ts` for the walk order.
-  mroStrategy: 'ruby-mixin',
+  mroStrategy: "ruby-mixin",
 
   // ── DAG hooks ────────────────────────────────────────────────────
   //
@@ -214,20 +220,24 @@ export const rubyProvider = defineLanguage({
   }): ImplicitReceiverOverride | null => {
     // Only fire when no receiver has been resolved already.
     if (receiverName || receiverTypeName) return null;
-    const enclosing = findEnclosingClassInfo(callNode, filePath, rubyResolveEnclosingOwner);
+    const enclosing = findEnclosingClassInfo(
+      callNode,
+      filePath,
+      rubyResolveEnclosingOwner,
+    );
     const rewrite = maybeRewriteRubyBareCallToSelf(
       calledName,
       callForm,
       callNode,
       enclosing?.className ?? null,
-      { isBuiltInName: (n) => BUILT_INS.has(n), mroStrategy: 'ruby-mixin' },
+      { isBuiltInName: (n) => BUILT_INS.has(n), mroStrategy: "ruby-mixin" },
     );
     if (!rewrite) return null;
     return {
       callForm: rewrite.callForm,
       receiverName: rewrite.receiverName,
       receiverTypeName: rewrite.receiverTypeName,
-      receiverSource: 'implicit-self',
+      receiverSource: "implicit-self",
       hint: rewrite.dispatchKind, // 'instance' | 'singleton'
     };
   },
@@ -236,22 +246,22 @@ export const rubyProvider = defineLanguage({
   //   implicit-self: MRO walk first, fallback to free-arity-narrowed on miss.
   //   class-as-receiver: singleton ancestry (extend providers only); miss null-routes.
   selectDispatch: ({ receiverSource, hint }): DispatchDecision | null => {
-    if (receiverSource === 'implicit-self') {
+    if (receiverSource === "implicit-self") {
       // hint='instance' → instance ancestry (prepend→direct→include, see mro-strategy.ts § 'ruby-mixin')
       // hint='singleton' → singleton ancestry (extend providers only; miss null-routes)
-      const ancestryView: 'instance' | 'singleton' =
-        hint === 'singleton' ? 'singleton' : 'instance';
+      const ancestryView: "instance" | "singleton" =
+        hint === "singleton" ? "singleton" : "instance";
       return {
-        primary: 'owner-scoped',
-        fallback: 'free-arity-narrowed',
+        primary: "owner-scoped",
+        fallback: "free-arity-narrowed",
         ancestryView,
       };
     }
-    if (receiverSource === 'class-as-receiver') {
+    if (receiverSource === "class-as-receiver") {
       // Class constant receiver (e.g. Account.log): singleton ancestry only; miss null-routes.
       return {
-        primary: 'owner-scoped',
-        ancestryView: 'singleton',
+        primary: "owner-scoped",
+        ancestryView: "singleton",
       };
     }
     return null;

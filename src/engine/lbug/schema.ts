@@ -10,10 +10,15 @@
  */
 
 // Import from shared package (single source of truth) — used in DDL templates below
-import { NODE_TABLES, REL_TABLE_NAME, REL_TYPES, EMBEDDING_TABLE_NAME } from '../shared';
+import {
+  NODE_TABLES,
+  REL_TABLE_NAME,
+  REL_TYPES,
+  EMBEDDING_TABLE_NAME,
+} from "../shared";
 // Re-export so downstream consumers keep the same import path
 export { NODE_TABLES, REL_TABLE_NAME, REL_TYPES, EMBEDDING_TABLE_NAME };
-export type { NodeTableName, RelType } from '../shared';
+export type { NodeTableName, RelType } from "../shared";
 
 // ============================================================================
 // NODE TABLE SCHEMAS
@@ -160,25 +165,25 @@ CREATE NODE TABLE \`${name}\` (
   PRIMARY KEY (id)
 )`;
 
-export const STRUCT_SCHEMA = CODE_ELEMENT_BASE('Struct');
-export const ENUM_SCHEMA = CODE_ELEMENT_BASE('Enum');
-export const MACRO_SCHEMA = CODE_ELEMENT_BASE('Macro');
-export const TYPEDEF_SCHEMA = CODE_ELEMENT_BASE('Typedef');
-export const UNION_SCHEMA = CODE_ELEMENT_BASE('Union');
-export const NAMESPACE_SCHEMA = CODE_ELEMENT_BASE('Namespace');
-export const TRAIT_SCHEMA = CODE_ELEMENT_BASE('Trait');
-export const IMPL_SCHEMA = CODE_ELEMENT_BASE('Impl');
-export const TYPE_ALIAS_SCHEMA = CODE_ELEMENT_BASE('TypeAlias');
-export const CONST_SCHEMA = CODE_ELEMENT_BASE('Const');
-export const STATIC_SCHEMA = CODE_ELEMENT_BASE('Static');
-export const VARIABLE_SCHEMA = CODE_ELEMENT_BASE('Variable');
-export const PROPERTY_SCHEMA = CODE_ELEMENT_BASE('Property');
-export const RECORD_SCHEMA = CODE_ELEMENT_BASE('Record');
-export const DELEGATE_SCHEMA = CODE_ELEMENT_BASE('Delegate');
-export const ANNOTATION_SCHEMA = CODE_ELEMENT_BASE('Annotation');
-export const CONSTRUCTOR_SCHEMA = CODE_ELEMENT_BASE('Constructor');
-export const TEMPLATE_SCHEMA = CODE_ELEMENT_BASE('Template');
-export const MODULE_SCHEMA = CODE_ELEMENT_BASE('Module');
+export const STRUCT_SCHEMA = CODE_ELEMENT_BASE("Struct");
+export const ENUM_SCHEMA = CODE_ELEMENT_BASE("Enum");
+export const MACRO_SCHEMA = CODE_ELEMENT_BASE("Macro");
+export const TYPEDEF_SCHEMA = CODE_ELEMENT_BASE("Typedef");
+export const UNION_SCHEMA = CODE_ELEMENT_BASE("Union");
+export const NAMESPACE_SCHEMA = CODE_ELEMENT_BASE("Namespace");
+export const TRAIT_SCHEMA = CODE_ELEMENT_BASE("Trait");
+export const IMPL_SCHEMA = CODE_ELEMENT_BASE("Impl");
+export const TYPE_ALIAS_SCHEMA = CODE_ELEMENT_BASE("TypeAlias");
+export const CONST_SCHEMA = CODE_ELEMENT_BASE("Const");
+export const STATIC_SCHEMA = CODE_ELEMENT_BASE("Static");
+export const VARIABLE_SCHEMA = CODE_ELEMENT_BASE("Variable");
+export const PROPERTY_SCHEMA = CODE_ELEMENT_BASE("Property");
+export const RECORD_SCHEMA = CODE_ELEMENT_BASE("Record");
+export const DELEGATE_SCHEMA = CODE_ELEMENT_BASE("Delegate");
+export const ANNOTATION_SCHEMA = CODE_ELEMENT_BASE("Annotation");
+export const CONSTRUCTOR_SCHEMA = CODE_ELEMENT_BASE("Constructor");
+export const TEMPLATE_SCHEMA = CODE_ELEMENT_BASE("Template");
+export const MODULE_SCHEMA = CODE_ELEMENT_BASE("Module");
 // API route endpoints (Next.js, Express, etc.)
 export const ROUTE_SCHEMA = `
 CREATE NODE TABLE Route (
@@ -437,7 +442,7 @@ CREATE REL TABLE ${REL_TABLE_NAME} (
 // ============================================================================
 
 /** Embedding vector dimensions. Default 384 (snowflake-arctic-embed-xs). */
-const _rawDims = parseInt(process.env.GITNEXUS_EMBEDDING_DIMS ?? '384', 10);
+const _rawDims = parseInt(process.env.GITNEXUS_EMBEDDING_DIMS ?? "384", 10);
 if (Number.isNaN(_rawDims) || _rawDims <= 0) {
   throw new Error(
     `GITNEXUS_EMBEDDING_DIMS must be a positive integer, got "${process.env.GITNEXUS_EMBEDDING_DIMS}"`,
@@ -446,13 +451,13 @@ if (Number.isNaN(_rawDims) || _rawDims <= 0) {
 export const EMBEDDING_DIMS = _rawDims;
 
 /** HNSW vector index name for the CodeEmbedding table. */
-export const EMBEDDING_INDEX_NAME = 'code_embedding_idx';
+export const EMBEDDING_INDEX_NAME = "code_embedding_idx";
 
 /**
  * Sentinel value for "no content hash available" — used in legacy DBs and null rows.
  * Nodes with this hash are always treated as stale and re-embedded.
  */
-export const STALE_HASH_SENTINEL = '';
+export const STALE_HASH_SENTINEL = "";
 
 export const EMBEDDING_SCHEMA = `
 CREATE NODE TABLE ${EMBEDDING_TABLE_NAME} (
@@ -519,4 +524,8 @@ export const NODE_SCHEMA_QUERIES = [
 
 export const REL_SCHEMA_QUERIES = [RELATION_SCHEMA];
 
-export const SCHEMA_QUERIES = [...NODE_SCHEMA_QUERIES, ...REL_SCHEMA_QUERIES, EMBEDDING_SCHEMA];
+export const SCHEMA_QUERIES = [
+  ...NODE_SCHEMA_QUERIES,
+  ...REL_SCHEMA_QUERIES,
+  EMBEDDING_SCHEMA,
+];

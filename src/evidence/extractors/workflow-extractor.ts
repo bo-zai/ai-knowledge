@@ -1,8 +1,8 @@
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { extractPackagePath } from './shared.js';
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { extractPackagePath } from "./shared.js";
 
 /**
  * WORKFLOW: Query Controller->Service chains grouped by Controller.
@@ -12,7 +12,7 @@ export async function queryWorkflowEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   const workflowCypher = `
     MATCH (c:Class) WHERE c.name =~ '(?i).*Controller$'
@@ -32,13 +32,16 @@ export async function queryWorkflowEvidenceByPackage(
   }
 
   // Group by Controller
-  const controllerGroups = new Map<string, Array<{
-    controller: string;
-    service: string;
-    controllerMethod: string;
-    serviceMethod: string;
-    filePath: string;
-  }>>();
+  const controllerGroups = new Map<
+    string,
+    Array<{
+      controller: string;
+      service: string;
+      controllerMethod: string;
+      serviceMethod: string;
+      filePath: string;
+    }>
+  >();
 
   for (const row of workflowResults) {
     const controller = row.controller as string;
@@ -55,10 +58,13 @@ export async function queryWorkflowEvidenceByPackage(
     const groupId = `WORKFLOW-${controllerName}`;
     const bundleId = `BUNDLE-WORKFLOW-${controllerName}`.toUpperCase();
 
-    const flowTraces: EvidenceBundle['flowTraces'] = flows.map((f, idx) => ({
-      ref: `evidence://flow/FLOW-${String(idx + 1).padStart(3, '0')}`,
+    const flowTraces: EvidenceBundle["flowTraces"] = flows.map((f, idx) => ({
+      ref: `evidence://flow/FLOW-${String(idx + 1).padStart(3, "0")}`,
       steps: [
-        { action: `${f.controller}.${f.controllerMethod}`, location: f.filePath },
+        {
+          action: `${f.controller}.${f.controllerMethod}`,
+          location: f.filePath,
+        },
         { action: `${f.service}.${f.serviceMethod}` },
       ],
     }));

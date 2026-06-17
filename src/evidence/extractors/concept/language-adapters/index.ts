@@ -4,13 +4,13 @@
  * 提供统一的语言适配器工厂函数，用于创建不同语言的适配器实例。
  */
 
-import type { LanguageAdapter } from '../types.js';
-import { createJavaAdapter } from './java-adapter.js';
+import type { LanguageAdapter } from "../types.js";
+import { createJavaAdapter } from "./java-adapter.js";
 
 /**
  * 支持的语言列表
  */
-export const SUPPORTED_LANGUAGES = ['java'] as const;
+export const SUPPORTED_LANGUAGES = ["java"] as const;
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
@@ -20,12 +20,14 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
  * @param language - 语言标识（java, typescript, python 等）
  * @returns 语言适配器实例，如果语言不支持则返回 null
  */
-export function createLanguageAdapter(language: string): LanguageAdapter | null {
+export function createLanguageAdapter(
+  language: string,
+): LanguageAdapter | null {
   const normalizedLanguage = language.toLowerCase();
 
   switch (normalizedLanguage) {
-    case 'java':
-    case 'kotlin':  // Kotlin 也使用 Java 适配器
+    case "java":
+    case "kotlin": // Kotlin 也使用 Java 适配器
       return createJavaAdapter();
 
     // 未来扩展：
@@ -48,7 +50,9 @@ export function createLanguageAdapter(language: string): LanguageAdapter | null 
  * @returns 是否支持该语言
  */
 export function isLanguageSupported(language: string): boolean {
-  return SUPPORTED_LANGUAGES.includes(language.toLowerCase() as SupportedLanguage);
+  return SUPPORTED_LANGUAGES.includes(
+    language.toLowerCase() as SupportedLanguage,
+  );
 }
 
 /**
@@ -59,4 +63,4 @@ export function getSupportedLanguages(): string[] {
 }
 
 // 导出适配器创建函数
-export { createJavaAdapter } from './java-adapter.js';
+export { createJavaAdapter } from "./java-adapter.js";

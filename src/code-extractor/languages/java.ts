@@ -7,7 +7,7 @@
  * - 方法签名（不含方法体）
  */
 
-import { SupportedLanguages } from '../../engine/shared/index.js';
+import { SupportedLanguages } from "../../engine/shared/index.js";
 import type {
   LanguageExtractorStrategy,
   GraphClassNode,
@@ -16,7 +16,7 @@ import type {
   ExtractedClassCode,
   ExtractedField,
   ExtractedMethod,
-} from '../types.js';
+} from "../types.js";
 
 /**
  * Java 提取策略
@@ -47,7 +47,7 @@ export const javaExtractorStrategy: LanguageExtractorStrategy = {
       type: extractFieldTypeFromContent(p.content),
       modifiers: extractModifiersFromContent(p.content),
       line: p.startLine,
-      content: p.content ?? '',
+      content: p.content ?? "",
     }));
 
     // 提取方法签名
@@ -56,13 +56,17 @@ export const javaExtractorStrategy: LanguageExtractorStrategy = {
       returnType: m.returnType,
       parameters: m.parameterCount,
       modifiers: extractModifiersFromContent(m.content),
-      signature: extractMethodSignature(m.content ?? ''),
+      signature: extractMethodSignature(m.content ?? ""),
       startLine: m.startLine,
       endLine: m.endLine,
     }));
 
     // 构建精简片段
-    const compactSnippet = buildCompactSnippet(classDeclaration, fields, extractedMethods);
+    const compactSnippet = buildCompactSnippet(
+      classDeclaration,
+      fields,
+      extractedMethods,
+    );
 
     return {
       className: classNode.name,
@@ -81,17 +85,20 @@ export const javaExtractorStrategy: LanguageExtractorStrategy = {
   /**
    * 判断是否需要 Fallback
    */
-  needsFallback(classNode: GraphClassNode, properties: GraphPropertyNode[]): boolean {
+  needsFallback(
+    classNode: GraphClassNode,
+    properties: GraphPropertyNode[],
+  ): boolean {
     // 类内容缺失或过短
     if (!classNode.content || classNode.content.length < 50) {
       return true;
     }
     // 截断标记（超过 5000 字符的大型类）
-    if (classNode.content.includes('... [truncated]')) {
+    if (classNode.content.includes("... [truncated]")) {
       return true;
     }
     // 没有字段信息（可能图解析不完整）
-    if (properties.length === 0 && classNode.content.includes('field')) {
+    if (properties.length === 0 && classNode.content.includes("field")) {
       return true;
     }
     return false;
@@ -102,29 +109,29 @@ export const javaExtractorStrategy: LanguageExtractorStrategy = {
  * 提取 Java 类声明（第一行到第一个 {）
  */
 function extractJavaClassDeclaration(content: string): string {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const declarationLines: string[] = [];
 
   for (const line of lines) {
     declarationLines.push(line);
-    if (line.includes('{')) {
+    if (line.includes("{")) {
       break;
     }
   }
 
-  return declarationLines.join('\n').trim();
+  return declarationLines.join("\n").trim();
 }
 
 /**
  * 找到类声明的行号范围
  */
 function findDeclarationLines(content: string): { start: number; end: number } {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   let start = 1;
   let end = 1;
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('{')) {
+    if (lines[i].includes("{")) {
       end = i + 1;
       break;
     }
@@ -141,7 +148,9 @@ function extractFieldTypeFromContent(content?: string): string | undefined {
 
   // Java 字段格式: [modifiers] Type name [= value];
   // 尝试匹配类型部分
-  const match = content.match(/^\s*(?:public|private|protected|static|final|transient|volatile)?\s+(\w+(?:<[^>]+>)?)\s+\w+/);
+  const match = content.match(
+    /^\s*(?:public|private|protected|static|final|transient|volatile)?\s+(\w+(?:<[^>]+>)?)\s+\w+/,
+  );
   return match ? match[1] : undefined;
 }
 
@@ -152,7 +161,19 @@ function extractModifiersFromContent(content?: string): string[] {
   if (!content) return [];
 
   const modifiers: string[] = [];
-  const modifierKeywords = ['public', 'private', 'protected', 'static', 'final', 'abstract', 'synchronized', 'volatile', 'transient', 'native', 'strictfp'];
+  const modifierKeywords = [
+    "public",
+    "private",
+    "protected",
+    "static",
+    "final",
+    "abstract",
+    "synchronized",
+    "volatile",
+    "transient",
+    "native",
+    "strictfp",
+  ];
 
   for (const keyword of modifierKeywords) {
     if (content.includes(keyword)) {
@@ -168,10 +189,10 @@ function extractModifiersFromContent(content?: string): string[] {
  */
 function extractMethodSignature(content: string): string {
   // 找到方法体的开始（第一个 {）
-  const braceIndex = content.indexOf('{');
+  const braceIndex = content.indexOf("{");
   if (braceIndex > 0) {
     // 签名部分 + 分号（若方法体被截断）
-    return content.slice(0, braceIndex).trim() + ';';
+    return content.slice(0, braceIndex).trim() + ";";
   }
   // 若没有方法体（抽象方法或接口方法），返回完整内容
   return content.trim();
@@ -189,7 +210,7 @@ function buildCompactSnippet(
 
   // 类声明
   lines.push(classDeclaration);
-  lines.push('');
+  lines.push("");
 
   // 字段声明（清理上下文注释，只保留字段定义）
   if (fields.length > 0) {
@@ -200,7 +221,7 @@ function buildCompactSnippet(
         lines.push(`  ${cleanedField}`);
       }
     }
-    lines.push('');
+    lines.push("");
   }
 
   // 方法签名（清理多余的 }）
@@ -213,9 +234,9 @@ function buildCompactSnippet(
   }
 
   // 类结尾
-  lines.push('}');
+  lines.push("}");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -230,9 +251,9 @@ function buildCompactSnippet(
  * 2. 无关的注释 - 与当前字段无关
  */
 function cleanFieldContent(content: string): string {
-  if (!content) return '';
+  if (!content) return "";
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const cleanedLines: string[] = [];
   const pendingCommentLines: string[] = [];
   let inJavadoc = false;
@@ -241,7 +262,7 @@ function cleanFieldContent(content: string): string {
     const trimmed = line.trim();
 
     // 检测 Javadoc 开始
-    if (trimmed.startsWith('/**')) {
+    if (trimmed.startsWith("/**")) {
       inJavadoc = true;
       pendingCommentLines.push(trimmed);
       continue;
@@ -250,20 +271,24 @@ function cleanFieldContent(content: string): string {
     // Javadoc 中间行或结束
     if (inJavadoc) {
       pendingCommentLines.push(trimmed);
-      if (trimmed.endsWith('*/')) {
+      if (trimmed.endsWith("*/")) {
         inJavadoc = false;
       }
       continue;
     }
 
     // 单行注释（//）
-    if (trimmed.startsWith('//')) {
+    if (trimmed.startsWith("//")) {
       pendingCommentLines.push(trimmed);
       continue;
     }
 
     // Java 字段特征：修饰符 + 类型 + 名称
-    if (/^(private|protected|public|static|final|transient|volatile)\s+/.test(trimmed)) {
+    if (
+      /^(private|protected|public|static|final|transient|volatile)\s+/.test(
+        trimmed,
+      )
+    ) {
       // 如果有 pendingCommentLines，先添加注释
       if (pendingCommentLines.length > 0) {
         cleanedLines.push(...pendingCommentLines);
@@ -277,26 +302,26 @@ function cleanFieldContent(content: string): string {
     }
   }
 
-  return cleanedLines.join('\n');
+  return cleanedLines.join("\n");
 }
 
 /**
  * 清理方法签名：去掉多余的 }
  */
 function cleanMethodSignature(signature: string): string {
-  if (!signature) return '';
+  if (!signature) return "";
 
   // 方法签名应该以 ; 结尾，去掉多余的 }
   let cleaned = signature.trim();
 
   // 如果末尾有多余的 }，去掉
-  while (cleaned.endsWith('}') && !cleaned.includes('{')) {
+  while (cleaned.endsWith("}") && !cleaned.includes("{")) {
     cleaned = cleaned.slice(0, -1).trim();
   }
 
   // 确保以 ; 结尾
-  if (!cleaned.endsWith(';')) {
-    cleaned = cleaned + ';';
+  if (!cleaned.endsWith(";")) {
+    cleaned = cleaned + ";";
   }
 
   return cleaned;

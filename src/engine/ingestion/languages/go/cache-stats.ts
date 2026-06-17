@@ -8,7 +8,10 @@ export function recordGoCacheMiss(): void {
   misses++;
 }
 
-export function getGoCaptureCacheStats(): { readonly hits: number; readonly misses: number } {
+export function getGoCaptureCacheStats(): {
+  readonly hits: number;
+  readonly misses: number;
+} {
   return { hits, misses };
 }
 

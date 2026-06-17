@@ -3,9 +3,9 @@
  * Both use standard resolution for #include directives.
  */
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { ImportResolutionConfig } from '../types.js';
-import { createStandardStrategy } from '../standard.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { ImportResolutionConfig } from "../types.js";
+import { createStandardStrategy } from "../standard.js";
 
 export const cImportConfig: ImportResolutionConfig = {
   language: SupportedLanguages.C,

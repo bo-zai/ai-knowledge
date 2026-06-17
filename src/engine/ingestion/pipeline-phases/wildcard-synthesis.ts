@@ -13,30 +13,33 @@
  * @module
  */
 
-import type { KnowledgeGraph } from '../../graph/types.js';
-import type { createResolutionContext } from '../model/resolution-context.js';
-import { getLanguageFromFilename } from '../../shared/index.js';
-import type { SupportedLanguages } from '../../shared/index.js';
-import { providers, getProviderForFile } from '../languages/index.js';
-import type { LanguageProvider, ImportSemantics } from '../language-provider.js';
+import type { KnowledgeGraph } from "../../graph/types.js";
+import type { createResolutionContext } from "../model/resolution-context.js";
+import { getLanguageFromFilename } from "../../shared/index.js";
+import type { SupportedLanguages } from "../../shared/index.js";
+import { providers, getProviderForFile } from "../languages/index.js";
+import type {
+  LanguageProvider,
+  ImportSemantics,
+} from "../language-provider.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 /** Node labels that represent top-level importable symbols. */
 const IMPORTABLE_SYMBOL_LABELS = new Set([
-  'Function',
-  'Class',
-  'Interface',
-  'Struct',
-  'Enum',
-  'Trait',
-  'TypeAlias',
-  'Const',
-  'Static',
-  'Record',
-  'Union',
-  'Typedef',
-  'Macro',
+  "Function",
+  "Class",
+  "Interface",
+  "Struct",
+  "Enum",
+  "Trait",
+  "TypeAlias",
+  "Const",
+  "Static",
+  "Record",
+  "Union",
+  "Typedef",
+  "Macro",
 ]);
 
 /** Max synthetic bindings per importing file — prevents memory bloat
@@ -56,11 +59,12 @@ const MAX_TRANSITIVE_CLOSURE_SIZE = 5000;
  *  no provider uses it yet, but it goes through the same leaf-style synthesis
  *  path today because a re-exporter is still an importer; only the extra DAG
  *  walk to surface re-exported symbols is missing (future work). */
-const WILDCARD_SEMANTICS: ReadonlySet<ImportSemantics> = new Set<ImportSemantics>([
-  'wildcard-transitive',
-  'wildcard-leaf',
-  'explicit-reexport',
-]);
+const WILDCARD_SEMANTICS: ReadonlySet<ImportSemantics> =
+  new Set<ImportSemantics>([
+    "wildcard-transitive",
+    "wildcard-leaf",
+    "explicit-reexport",
+  ]);
 
 /** Languages with whole-module import semantics (derived from providers at module load). */
 const WILDCARD_LANGUAGES = new Set(
@@ -72,7 +76,7 @@ const WILDCARD_LANGUAGES = new Set(
 /** Languages that need binding synthesis before call resolution. */
 const SYNTHESIS_LANGUAGES = new Set(
   Object.values(providers)
-    .filter((p) => p.importSemantics !== 'named')
+    .filter((p) => p.importSemantics !== "named")
     .map((p) => p.id),
 );
 
@@ -184,7 +188,10 @@ export function synthesizeWildcardImportBindings(
   ctx: ReturnType<typeof createResolutionContext>,
 ): number {
   // Build exported symbols index from graph nodes (single pass)
-  const exportedSymbolsByFile = new Map<string, { name: string; filePath: string }[]>();
+  const exportedSymbolsByFile = new Map<
+    string,
+    { name: string; filePath: string }[]
+  >();
   graph.forEachNode((node) => {
     if (!node.properties?.isExported) return;
     if (!IMPORTABLE_SYMBOL_LABELS.has(node.label)) return;
@@ -202,11 +209,15 @@ export function synthesizeWildcardImportBindings(
   if (exportedSymbolsByFile.size === 0) return 0;
 
   // Collect graph-level IMPORTS edges for wildcard languages missing from ctx.importMap
-  const FILE_PREFIX = 'File:';
+  const FILE_PREFIX = "File:";
   const graphImports = new Map<string, Set<string>>();
   graph.forEachRelationship((rel) => {
-    if (rel.type !== 'IMPORTS') return;
-    if (!rel.sourceId.startsWith(FILE_PREFIX) || !rel.targetId.startsWith(FILE_PREFIX)) return;
+    if (rel.type !== "IMPORTS") return;
+    if (
+      !rel.sourceId.startsWith(FILE_PREFIX) ||
+      !rel.targetId.startsWith(FILE_PREFIX)
+    )
+      return;
     const srcFile = rel.sourceId.slice(FILE_PREFIX.length);
     const tgtFile = rel.targetId.slice(FILE_PREFIX.length);
     const lang = getLanguageFromFilename(srcFile);
@@ -222,7 +233,10 @@ export function synthesizeWildcardImportBindings(
 
   let totalSynthesized = 0;
 
-  const synthesizeForFile = (filePath: string, importedFiles: Iterable<string>) => {
+  const synthesizeForFile = (
+    filePath: string,
+    importedFiles: Iterable<string>,
+  ) => {
     let fileBindings = ctx.namedImportMap.get(filePath);
     let fileCount = fileBindings?.size ?? 0;
 
@@ -274,18 +288,22 @@ export function synthesizeWildcardImportBindings(
     provider: LanguageProvider,
   ) => {
     switch (provider.importSemantics) {
-      case 'wildcard-transitive':
+      case "wildcard-transitive":
         synthesizeForFile(
           filePath,
-          expandTransitiveIncludeClosure(importedFiles, ctx.importMap, graphImports),
+          expandTransitiveIncludeClosure(
+            importedFiles,
+            ctx.importMap,
+            graphImports,
+          ),
         );
         return;
-      case 'wildcard-leaf':
-      case 'explicit-reexport':
+      case "wildcard-leaf":
+      case "explicit-reexport":
         synthesizeForFile(filePath, importedFiles);
         return;
-      case 'namespace':
-      case 'named':
+      case "namespace":
+      case "named":
         return;
       default: {
         const _exhaustive: never = provider.importSemantics;
@@ -316,7 +334,7 @@ export function synthesizeWildcardImportBindings(
   // Enables `models.User()` to resolve without ambiguous symbol expansion.
   for (const [filePath, importedFiles] of ctx.importMap) {
     const provider = getProviderForFile(filePath);
-    if (!provider || provider.importSemantics !== 'namespace') continue;
+    if (!provider || provider.importSemantics !== "namespace") continue;
     buildPythonModuleAliasForFile(ctx, filePath, importedFiles);
   }
 
@@ -331,9 +349,10 @@ function buildPythonModuleAliasForFile(
 ): void {
   let aliasMap = ctx.moduleAliasMap.get(callerFile);
   for (const importedFile of importedFiles) {
-    const lastSlash = importedFile.lastIndexOf('/');
-    const base = lastSlash >= 0 ? importedFile.slice(lastSlash + 1) : importedFile;
-    const dot = base.lastIndexOf('.');
+    const lastSlash = importedFile.lastIndexOf("/");
+    const base =
+      lastSlash >= 0 ? importedFile.slice(lastSlash + 1) : importedFile;
+    const dot = base.lastIndexOf(".");
     const stem = dot >= 0 ? base.slice(0, dot) : base;
     if (!stem) continue;
     if (!aliasMap) {

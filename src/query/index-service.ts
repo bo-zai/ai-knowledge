@@ -9,11 +9,14 @@
  * database-only generation paths.
  */
 
-import type { AnalyzeResult } from '../engine/analyze/run-analyze.js';
-import { getDatabase } from '../engine/lbug/lbug-adapter.js';
-import { initReadOnlyLbugWithDb, withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
-import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
-import { logger } from '../shared/logger.js';
+import type { AnalyzeResult } from "../engine/analyze/run-analyze.js";
+import { getDatabase } from "../engine/lbug/lbug-adapter.js";
+import {
+  initReadOnlyLbugWithDb,
+  withReadOnlyLbug,
+} from "../engine/lbug/read-only-session.js";
+import { getStoragePaths, loadMeta } from "../engine/storage/repo-manager.js";
+import { logger } from "../shared/logger.js";
 
 /**
  * Check if repo has an index.
@@ -32,7 +35,10 @@ export async function hasIndex(repoPath: string): Promise<boolean> {
  * Ensure embedded analysis index exists.
  * Runs analysis if no index is present.
  */
-export async function ensureIndex(repoPath: string, options?: { force?: boolean }): Promise<void> {
+export async function ensureIndex(
+  repoPath: string,
+  options?: { force?: boolean },
+): Promise<void> {
   const indexed = await hasIndex(repoPath);
   if (indexed && !options?.force) return;
   await runAnalysis(repoPath, options);
@@ -42,9 +48,12 @@ export async function ensureIndex(repoPath: string, options?: { force?: boolean 
  * Run embedded analysis.
  * Lazy-loads the full analysis runtime to avoid startup dependency on Leiden.
  */
-export async function runAnalysis(repoPath: string, options?: { force?: boolean }): Promise<AnalyzeResult> {
+export async function runAnalysis(
+  repoPath: string,
+  options?: { force?: boolean },
+): Promise<AnalyzeResult> {
   // Lazy-load full analysis to avoid pulling in Leiden at module load time
-  const { runFullAnalysis } = await import('../engine/analyze/run-analyze.js');
+  const { runFullAnalysis } = await import("../engine/analyze/run-analyze.js");
   const result = await runFullAnalysis(
     repoPath,
     {
@@ -86,20 +95,22 @@ export interface DiscoveryResult {
  * Run slice discovery query.
  * Returns structured discovery result (not stdout text).
  */
-export async function discoverSlices(repoPath: string): Promise<DiscoveryResult> {
+export async function discoverSlices(
+  repoPath: string,
+): Promise<DiscoveryResult> {
   const { lbugPath } = getStoragePaths(repoPath);
   logger.info(`Opening analysis index for slice discovery: ${lbugPath}`);
-  return withReadOnlyLbug(lbugPath, async executeQuery => {
+  return withReadOnlyLbug(lbugPath, async (executeQuery) => {
     // Query each node label for slice discovery
-    const routes: DiscoveryResult['routes'] = [];
-    const processes: DiscoveryResult['processes'] = [];
-    const tools: DiscoveryResult['tools'] = [];
-    const communities: DiscoveryResult['communities'] = [];
-    const tables: DiscoveryResult['tables'] = [];
+    const routes: DiscoveryResult["routes"] = [];
+    const processes: DiscoveryResult["processes"] = [];
+    const tools: DiscoveryResult["tools"] = [];
+    const communities: DiscoveryResult["communities"] = [];
+    const tables: DiscoveryResult["tables"] = [];
 
     // For now, query known patterns for routes/processes/tools
     // Route pattern: functions/methods matching route handler signatures
-    logger.info('Running route slice discovery query');
+    logger.info("Running route slice discovery query");
     const routeCypher = `
       MATCH (n:Function) WHERE n.name =~ '(?i).*(route|handler|controller).*'
       RETURN n.name as name, n.filePath as filePath
@@ -120,7 +131,7 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
     logger.info(`Route slice discovery returned ${routes.length} slices`);
 
     // Process pattern: functions with specific naming
-    logger.info('Running process slice discovery query');
+    logger.info("Running process slice discovery query");
     const processCypher = `
       MATCH (n:Function) WHERE n.name =~ '(?i).*(process|workflow|flow).*'
       RETURN n.name as name, n.filePath as filePath
@@ -136,7 +147,7 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
     logger.info(`Process slice discovery returned ${processes.length} slices`);
 
     // Tool pattern: utility classes/functions
-    logger.info('Running tool slice discovery query');
+    logger.info("Running tool slice discovery query");
     const toolCypher = `
       MATCH (n:Class) WHERE n.name =~ '(?i).*(tool|util|helper|service).*'
       RETURN n.name as name, n.filePath as filePath
@@ -152,7 +163,7 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
     logger.info(`Tool slice discovery returned ${tools.length} slices`);
 
     // Community pattern: modules/packages
-    logger.info('Running community slice discovery query');
+    logger.info("Running community slice discovery query");
     const communityCypher = `
       MATCH (n:Community) RETURN n.name as name, n.members as members
     `;
@@ -164,10 +175,12 @@ export async function discoverSlices(repoPath: string): Promise<DiscoveryResult>
         name,
       });
     }
-    logger.info(`Community slice discovery returned ${communities.length} slices`);
+    logger.info(
+      `Community slice discovery returned ${communities.length} slices`,
+    );
 
     // Table pattern: database-related classes
-    logger.info('Running table slice discovery query');
+    logger.info("Running table slice discovery query");
     const tableCypher = `
       MATCH (n:Class) WHERE n.name =~ '(?i).*(table|entity|dao|mapper).*'
       RETURN n.name as name
@@ -209,17 +222,24 @@ export async function initQueryService(repoPath: string): Promise<void> {
 /**
  * Execute a Cypher query against the embedded runtime.
  */
-export async function runCypherQuery(repoPath: string, cypher: string, limit?: number): Promise<any[]> {
+export async function runCypherQuery(
+  repoPath: string,
+  cypher: string,
+  limit?: number,
+): Promise<any[]> {
   const { lbugPath } = getStoragePaths(repoPath);
 
   const query = limit ? `${cypher} LIMIT ${limit}` : cypher;
-  return withReadOnlyLbug(lbugPath, executeQuery => executeQuery(query));
+  return withReadOnlyLbug(lbugPath, (executeQuery) => executeQuery(query));
 }
 
 /**
  * Find all database table references in the code.
  */
-export async function findDbTables(repoPath: string, limit?: number): Promise<DbTableNode[]> {
+export async function findDbTables(
+  repoPath: string,
+  limit?: number,
+): Promise<DbTableNode[]> {
   const cypher = `
     MATCH (n:Class) WHERE n.name =~ '(?i).*(table|entity|dao)$'
     RETURN n.tableName as tableName, n.name as name, n.filePath as filePath, 'Class' as kind
@@ -248,14 +268,17 @@ export interface DbTableNode {
 /**
  * Get context for a specific database table (related code, queries, etc).
  */
-export async function getDbTableContext(repoPath: string, tableName: string): Promise<DbTableContext> {
+export async function getDbTableContext(
+  repoPath: string,
+  tableName: string,
+): Promise<DbTableContext> {
   // LadybugDB doesn't support `Function|Method` syntax; query each label separately
   const callers: Array<{ name: string; filePath: string }> = [];
   const classes: Array<{ name: string; filePath: string }> = [];
   const fields: string[] = [];
 
   // Find methods that reference this table
-  for (const label of ['Function', 'Method']) {
+  for (const label of ["Function", "Method"]) {
     const cypher = `
       MATCH (f:${label})-[:ACCESSES]->(t)
       WHERE t.name = '${tableName.replace(/'/g, "''")}'
@@ -288,9 +311,17 @@ export interface DbTableContext {
  * Find mapper.xml files that reference a table.
  * Uses statement-scoped table extraction.
  */
-export async function findMapperFilesForTable(repoPath: string, tableName: string): Promise<string[]> {
+export async function findMapperFilesForTable(
+  repoPath: string,
+  tableName: string,
+): Promise<string[]> {
   // Use MyBatis parser for mapper discovery with statement-scoped extraction
-  const { findMapperFiles, parseMapperFile, resolveStatementSql, extractTablesFromSql } = await import('../mybatis/index.js');
+  const {
+    findMapperFiles,
+    parseMapperFile,
+    resolveStatementSql,
+    extractTablesFromSql,
+  } = await import("../mybatis/index.js");
   const mapperFiles = await findMapperFiles(repoPath);
   const matchingFiles: string[] = [];
 

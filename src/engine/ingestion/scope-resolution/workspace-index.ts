@@ -39,8 +39,8 @@
  * Build cost is O(totalScopes). Read-only after construction.
  */
 
-import type { ParsedFile, Scope, ScopeId } from '../../shared/index.js';
-import { isClassLike } from './scope/walkers.js';
+import type { ParsedFile, Scope, ScopeId } from "../../shared/index.js";
+import { isClassLike } from "./scope/walkers.js";
 
 export interface WorkspaceResolutionIndex {
   /** Class def `nodeId` → that class's `Scope`. */
@@ -63,11 +63,12 @@ export function buildWorkspaceResolutionIndex(
   const moduleScopeByFile = new Map<string, Scope>();
 
   for (const parsed of parsedFiles) {
-    const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
-    if (moduleScope !== undefined) moduleScopeByFile.set(parsed.filePath, moduleScope);
+    const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
+    if (moduleScope !== undefined)
+      moduleScopeByFile.set(parsed.filePath, moduleScope);
 
     for (const scope of parsed.scopes) {
-      if (scope.kind !== 'Class') continue;
+      if (scope.kind !== "Class") continue;
       const cd = scope.ownedDefs.find((d) => isClassLike(d.type));
       if (cd !== undefined) {
         classScopeByDefId.set(cd.nodeId, scope);

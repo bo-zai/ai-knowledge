@@ -8,30 +8,30 @@
 /**
  * 模型层级
  */
-export type ModelTier = 'premium' | 'economy';
+export type ModelTier = "premium" | "economy";
 
 /**
  * 任务来源类型
  */
 export type TaskSource =
-  | 'chat'
-  | 'heartbeat'
-  | 'scheduler_reminder'
-  | 'scheduler_action'
-  | 'memory_summarize'
-  | 'optimizer'
-  | 'knowledge_read'
-  | 'knowledge_generate';
+  | "chat"
+  | "heartbeat"
+  | "scheduler_reminder"
+  | "scheduler_action"
+  | "memory_summarize"
+  | "optimizer"
+  | "knowledge_read"
+  | "knowledge_generate";
 
 /**
  * 路由模式
  */
-export type RoutingMode = 'auto' | 'pinned';
+export type RoutingMode = "auto" | "pinned";
 
 /**
  * 继续类型（用于恢复/中断继续）
  */
-export type ContinuationType = 'resume' | 'interrupt';
+export type ContinuationType = "resume" | "interrupt";
 
 /**
  * 路由上下文
@@ -54,7 +54,7 @@ export interface RoutingContext {
 /**
  * 路由结果层级
  */
-export type RoutingLayer = 'pinned' | 'layer1' | 'thread' | 'layer2' | 'layer3';
+export type RoutingLayer = "pinned" | "layer1" | "thread" | "layer2" | "layer3";
 
 /**
  * 路由结果
@@ -85,7 +85,7 @@ export interface RoutingFeedback {
   /** 使用的模型 ID */
   resolvedModelId: string;
   /** 运行结果 */
-  outcome: 'success' | 'error' | 'cancelled';
+  outcome: "success" | "error" | "cancelled";
   /** 工具调用次数 */
   toolCallCount: number;
   /** 工具错误次数 */
@@ -107,7 +107,7 @@ export interface ThreadRoutingState {
   /** 上次路由时间 */
   lastRoutedAt?: number;
   /** 上次运行结果 */
-  lastRunOutcome?: 'success' | 'error' | 'cancelled';
+  lastRunOutcome?: "success" | "error" | "cancelled";
   /** 上次工具调用次数 */
   lastToolCallCount?: number;
   /** 上次工具错误次数 */
@@ -126,7 +126,7 @@ export interface ThreadRoutingState {
 /**
  * Layer 2 规则匹配结果
  */
-export type Layer2Result = 'premium' | 'economy' | 'uncertain';
+export type Layer2Result = "premium" | "economy" | "uncertain";
 
 /**
  * Layer 2 规则详情
@@ -175,11 +175,11 @@ export interface Layer3Result {
  */
 export interface RoutingLayerRecord {
   /** 层级名称 */
-  layer: RoutingLayer | 'thread';
+  layer: RoutingLayer | "thread";
   /** 持续时间（毫秒） */
   durationMs: number;
   /** 路由结果 */
-  result: ModelTier | 'uncertain' | 'reuse';
+  result: ModelTier | "uncertain" | "reuse";
   /** 路由原因 */
   reason: string;
   /** 详细信息 */

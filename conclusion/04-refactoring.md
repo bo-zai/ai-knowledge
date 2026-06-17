@@ -13,6 +13,7 @@ CodeGraph search "Order" kind=class
 ```
 
 → 返回所有 Order 相关类及其包路径：
+
 - com.app.controller.OrderController
 - com.app.service.OrderService
 - com.app.service.impl.OrderServiceImpl
@@ -20,7 +21,7 @@ CodeGraph search "Order" kind=class
 - com.app.entity.OrderDO、OrderGoodsDO、OrderRecordDO
 - com.app.entity.dto.OrderDTO、OrderVO
 
-确认是按层分包。目标包路径：com.app.order.*
+确认是按层分包。目标包路径：com.app.order.\*
 
 ### 第二步：找所有需要移动的类
 
@@ -32,6 +33,7 @@ Grep "import com\.app\.mapper\.Order" glob="*.java"
 ```
 
 → 找到所有引用了订单类的文件，包括跨域引用：
+
 - CartService 引用了 OrderService
 - PaymentService 引用了 OrderService
 - CouponService 引用了 OrderDO
@@ -52,7 +54,7 @@ Grep "com.app.service.Order\|com.app.controller.Order" glob="*.yml"
 
 ### 第四步：执行重构
 
-1. 创建 com.app.order.* 包结构
+1. 创建 com.app.order.\* 包结构
 2. 移动所有 Order 相关类
 3. 更新 package 声明
 4. 更新所有 Java 文件中的 import
@@ -76,12 +78,12 @@ Grep "com.app.service.Order\|com.app.controller.Order" glob="*.yml"
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| 当前分包模式 | CodeGraph search 看包路径 | 无 |
-| 需要移动的类清单 | Grep import | 无 |
-| 跨域引用 | Grep import | 无 |
-| XML namespace | Grep | 无 |
-| Spring 配置引用 | Grep | 无 |
+| 信息需求         | 实际获取方式              | 知识库的增量价值 |
+| ---------------- | ------------------------- | :--------------: |
+| 当前分包模式     | CodeGraph search 看包路径 |        无        |
+| 需要移动的类清单 | Grep import               |        无        |
+| 跨域引用         | Grep import               |        无        |
+| XML namespace    | Grep                      |        无        |
+| Spring 配置引用  | Grep                      |        无        |
 
 重构场景下知识库 ROI 为零。

@@ -4,9 +4,9 @@
  * Vue delegates to TypeScript's resolver.
  */
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { ImportResolutionConfig } from '../types.js';
-import { createStandardStrategy } from '../standard.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { ImportResolutionConfig } from "../types.js";
+import { createStandardStrategy } from "../standard.js";
 
 export const typescriptImportConfig: ImportResolutionConfig = {
   language: SupportedLanguages.TypeScript,

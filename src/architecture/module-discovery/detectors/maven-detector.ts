@@ -5,10 +5,18 @@
  * 支持递归探测嵌套多模块
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { BaseDetector, type DetectionOptions, type DetectionResult } from './detector-interface.js';
-import type { ModuleInfo, ModuleRole, ModuleType } from '../../../schemas/module.js';
+import fs from "node:fs/promises";
+import path from "node:path";
+import {
+  BaseDetector,
+  type DetectionOptions,
+  type DetectionResult,
+} from "./detector-interface.js";
+import type {
+  ModuleInfo,
+  ModuleRole,
+  ModuleType,
+} from "../../../schemas/module.js";
 
 /**
  * Maven 根目录探测器
@@ -16,20 +24,20 @@ import type { ModuleInfo, ModuleRole, ModuleType } from '../../../schemas/module
  * 检测根 pom.xml 是否声明了多模块
  */
 export class MavenRootDetector extends BaseDetector {
-  readonly name = 'maven-root';
+  readonly name = "maven-root";
   readonly priority = 1;
-  readonly layer = 'root-build-system' as const;
+  readonly layer = "root-build-system" as const;
 
   /**
    * 检查根目录是否有 pom.xml 且包含 <modules>
    */
   async canDetect(repoPath: string): Promise<boolean> {
-    const pomPath = path.join(repoPath, 'pom.xml');
+    const pomPath = path.join(repoPath, "pom.xml");
 
     try {
-      const content = await fs.readFile(pomPath, 'utf-8');
+      const content = await fs.readFile(pomPath, "utf-8");
       // 检查是否有 <modules> 块
-      return content.includes('<modules>');
+      return content.includes("<modules>");
     } catch {
       return false;
     }
@@ -38,11 +46,14 @@ export class MavenRootDetector extends BaseDetector {
   /**
    * 解析根 pom.xml，提取模块列表
    */
-  async detect(repoPath: string, options?: DetectionOptions): Promise<DetectionResult> {
-    const pomPath = path.join(repoPath, 'pom.xml');
+  async detect(
+    repoPath: string,
+    options?: DetectionOptions,
+  ): Promise<DetectionResult> {
+    const pomPath = path.join(repoPath, "pom.xml");
 
     try {
-      const content = await fs.readFile(pomPath, 'utf-8');
+      const content = await fs.readFile(pomPath, "utf-8");
 
       // 检查是否是多模块项目
       const modulesMatch = content.match(/<modules>([\s\S]*?)<\/modules>/);
@@ -69,13 +80,22 @@ export class MavenRootDetector extends BaseDetector {
         discoveredPaths.add(modulePath);
 
         // 分析单个模块
-        const moduleInfo = await this.analyzeModule(repoPath, moduleName, modulePath, content);
+        const moduleInfo = await this.analyzeModule(
+          repoPath,
+          moduleName,
+          modulePath,
+          content,
+        );
         if (moduleInfo) {
           modules.push(moduleInfo);
 
           // 递归探测嵌套模块（如果模块本身是聚合模块）
           if (options?.maxDepth && options.maxDepth > 1) {
-            const nestedModules = await this.detectNestedModules(modulePath, discoveredPaths, options.maxDepth - 1);
+            const nestedModules = await this.detectNestedModules(
+              modulePath,
+              discoveredPaths,
+              options.maxDepth - 1,
+            );
             modules.push(...nestedModules);
           }
         }
@@ -100,8 +120,8 @@ export class MavenRootDetector extends BaseDetector {
     }
 
     return matches
-      .map(m => m.replace('<module>', '').replace('</module>', '').trim())
-      .filter(name => name.length > 0);
+      .map((m) => m.replace("<module>", "").replace("</module>", "").trim())
+      .filter((name) => name.length > 0);
   }
 
   /**
@@ -117,32 +137,35 @@ export class MavenRootDetector extends BaseDetector {
       await fs.access(modulePath);
 
       // 解析模块 pom.xml
-      const modulePomPath = path.join(modulePath, 'pom.xml');
-      const content = await fs.readFile(modulePomPath, 'utf-8');
+      const modulePomPath = path.join(modulePath, "pom.xml");
+      const content = await fs.readFile(modulePomPath, "utf-8");
 
       // 判断角色
       const role = await this.detectRole(content, modulePath);
 
       // 判断是否是聚合模块（有子模块）
-      const isAggregator = content.includes('<modules>');
+      const isAggregator = content.includes("<modules>");
 
       // 提取描述
-      const descriptionMatch = content.match(/<description>([^<]*)<\/description>/);
+      const descriptionMatch = content.match(
+        /<description>([^<]*)<\/description>/,
+      );
       const description = descriptionMatch?.[1]?.trim();
 
       // 提取包根路径
       const packageRoot = this.extractPackageRoot(content);
 
       // 提取入口文件
-      const entryPoint = role === 'deployable' && !isAggregator
-        ? await this.findEntryPoint(modulePath, packageRoot)
-        : undefined;
+      const entryPoint =
+        role === "deployable" && !isAggregator
+          ? await this.findEntryPoint(modulePath, packageRoot)
+          : undefined;
 
       return {
         name: moduleName,
-        path: moduleName + '/',
-        type: 'java-maven-module',
-        role: isAggregator ? 'shared' : role, // 聚合模块标记为 shared
+        path: moduleName + "/",
+        type: "java-maven-module",
+        role: isAggregator ? "shared" : role, // 聚合模块标记为 shared
         description,
         dependencies: [],
         usedBy: [],
@@ -157,67 +180,97 @@ export class MavenRootDetector extends BaseDetector {
   /**
    * 检测模块角色
    */
-  private async detectRole(pomContent: string, modulePath: string): Promise<ModuleRole> {
+  private async detectRole(
+    pomContent: string,
+    modulePath: string,
+  ): Promise<ModuleRole> {
     // 1. Spring Boot 插件 → deployable
-    if (pomContent.includes('spring-boot-maven-plugin')) {
-      return 'deployable';
+    if (pomContent.includes("spring-boot-maven-plugin")) {
+      return "deployable";
     }
 
     // 2. 打包类型为 pom → shared（聚合模块）
     const packagingMatch = pomContent.match(/<packaging>([^<]+)<\/packaging>/);
-    if (packagingMatch && packagingMatch[1] === 'pom') {
-      return 'shared';
+    if (packagingMatch && packagingMatch[1] === "pom") {
+      return "shared";
     }
 
     // 3. 有主类配置 → deployable
-    if (pomContent.includes('<mainClass>')) {
-      return 'deployable';
+    if (pomContent.includes("<mainClass>")) {
+      return "deployable";
     }
 
     // 4. 有 Application.java → deployable
     try {
-      const srcPath = path.join(modulePath, 'src/main/java');
-      const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
+      const srcPath = path.join(modulePath, "src/main/java");
+      const entries = await fs.readdir(srcPath, {
+        recursive: true,
+        withFileTypes: true,
+      });
       const hasApplication = entries.some(
-        e => e.isFile() && (e.name.endsWith('Application.java') || e.name.includes('App.java'))
+        (e) =>
+          e.isFile() &&
+          (e.name.endsWith("Application.java") || e.name.includes("App.java")),
       );
       if (hasApplication) {
-        return 'deployable';
+        return "deployable";
       }
     } catch {
       // 无源码目录
     }
 
     // 5. 项目名暗示判断
-    const artifactIdMatch = pomContent.match(/<artifactId>([^<]+)<\/artifactId>/);
+    const artifactIdMatch = pomContent.match(
+      /<artifactId>([^<]+)<\/artifactId>/,
+    );
     if (artifactIdMatch) {
       const artifactId = artifactIdMatch[1];
       if (this.isDeployableByName(artifactId)) {
-        return 'deployable';
+        return "deployable";
       }
       if (this.isSharedByName(artifactId)) {
-        return 'shared';
+        return "shared";
       }
     }
 
     // 默认：shared（库模块）
-    return 'shared';
+    return "shared";
   }
 
   /**
    * 根据项目名判断是否可部署
    */
   private isDeployableByName(name: string): boolean {
-    const deployablePatterns = ['admin', 'portal', 'api', 'server', 'web', 'app', 'service', 'backend', 'frontend'];
-    return deployablePatterns.some(p => name.toLowerCase().includes(p));
+    const deployablePatterns = [
+      "admin",
+      "portal",
+      "api",
+      "server",
+      "web",
+      "app",
+      "service",
+      "backend",
+      "frontend",
+    ];
+    return deployablePatterns.some((p) => name.toLowerCase().includes(p));
   }
 
   /**
    * 根据项目名判断是否共享模块
    */
   private isSharedByName(name: string): boolean {
-    const sharedPatterns = ['common', 'util', 'lib', 'core', 'shared', 'mbg', 'model', 'dao', 'security'];
-    return sharedPatterns.some(p => name.toLowerCase().includes(p));
+    const sharedPatterns = [
+      "common",
+      "util",
+      "lib",
+      "core",
+      "shared",
+      "mbg",
+      "model",
+      "dao",
+      "security",
+    ];
+    return sharedPatterns.some((p) => name.toLowerCase().includes(p));
   }
 
   /**
@@ -228,37 +281,50 @@ export class MavenRootDetector extends BaseDetector {
     if (!groupIdMatch) {
       return undefined;
     }
-    return groupIdMatch[1].replace(/\./g, '/');
+    return groupIdMatch[1].replace(/\./g, "/");
   }
 
   /**
    * 查找入口文件
    */
-  private async findEntryPoint(modulePath: string, packageRoot?: string): Promise<string | undefined> {
+  private async findEntryPoint(
+    modulePath: string,
+    packageRoot?: string,
+  ): Promise<string | undefined> {
     try {
-      const srcPath = path.join(modulePath, 'src/main/java');
+      const srcPath = path.join(modulePath, "src/main/java");
 
       if (packageRoot) {
         // 在包根目录下查找
         const packagePath = path.join(srcPath, packageRoot);
         const entries = await fs.readdir(packagePath, { withFileTypes: true });
         const appFile = entries.find(
-          e => e.isFile() && (e.name.endsWith('Application.java') || e.name.includes('App.java'))
+          (e) =>
+            e.isFile() &&
+            (e.name.endsWith("Application.java") ||
+              e.name.includes("App.java")),
         );
         if (appFile) {
-          return path.join('src/main/java', packageRoot, appFile.name);
+          return path.join("src/main/java", packageRoot, appFile.name);
         }
       }
 
       // 递归查找
-      const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
+      const entries = await fs.readdir(srcPath, {
+        recursive: true,
+        withFileTypes: true,
+      });
       const appFile = entries.find(
-        e => e.isFile() && (e.name.endsWith('Application.java') || e.name.includes('App.java'))
+        (e) =>
+          e.isFile() &&
+          (e.name.endsWith("Application.java") || e.name.includes("App.java")),
       );
       if (appFile) {
         // parentPath 是绝对路径，转换为相对路径
-        const relativeParent = appFile.parentPath ? path.relative(srcPath, appFile.parentPath) : '';
-        return path.join('src/main/java', relativeParent, appFile.name);
+        const relativeParent = appFile.parentPath
+          ? path.relative(srcPath, appFile.parentPath)
+          : "";
+        return path.join("src/main/java", relativeParent, appFile.name);
       }
     } catch {
       // 无源码目录
@@ -275,10 +341,10 @@ export class MavenRootDetector extends BaseDetector {
     discoveredPaths: Set<string>,
     maxDepth: number,
   ): Promise<ModuleInfo[]> {
-    const pomPath = path.join(modulePath, 'pom.xml');
+    const pomPath = path.join(modulePath, "pom.xml");
 
     try {
-      const content = await fs.readFile(pomPath, 'utf-8');
+      const content = await fs.readFile(pomPath, "utf-8");
 
       // 检查是否有子模块
       const modulesMatch = content.match(/<modules>([\s\S]*?)<\/modules>/);
@@ -297,13 +363,22 @@ export class MavenRootDetector extends BaseDetector {
         }
         discoveredPaths.add(subModulePath);
 
-        const moduleInfo = await this.analyzeModule(modulePath, moduleName, subModulePath, content);
+        const moduleInfo = await this.analyzeModule(
+          modulePath,
+          moduleName,
+          subModulePath,
+          content,
+        );
         if (moduleInfo) {
           modules.push(moduleInfo);
 
           // 继续递归
           if (maxDepth > 1) {
-            const nested = await this.detectNestedModules(subModulePath, discoveredPaths, maxDepth - 1);
+            const nested = await this.detectNestedModules(
+              subModulePath,
+              discoveredPaths,
+              maxDepth - 1,
+            );
             modules.push(...nested);
           }
         }
@@ -318,31 +393,43 @@ export class MavenRootDetector extends BaseDetector {
   /**
    * 构建模块依赖关系
    */
-  private async buildDependencies(modules: ModuleInfo[], repoPath: string): Promise<void> {
-    const moduleNames = new Set(modules.map(m => m.name));
+  private async buildDependencies(
+    modules: ModuleInfo[],
+    repoPath: string,
+  ): Promise<void> {
+    const moduleNames = new Set(modules.map((m) => m.name));
 
     for (const module of modules) {
-      const modulePomPath = path.join(repoPath, module.path.slice(0, -1), 'pom.xml');
+      const modulePomPath = path.join(
+        repoPath,
+        module.path.slice(0, -1),
+        "pom.xml",
+      );
 
       try {
-        const content = await fs.readFile(modulePomPath, 'utf-8');
-        const depsMatch = content.match(/<dependencies>([\s\S]*?)<\/dependencies>/);
+        const content = await fs.readFile(modulePomPath, "utf-8");
+        const depsMatch = content.match(
+          /<dependencies>([\s\S]*?)<\/dependencies>/,
+        );
 
         if (!depsMatch) {
           continue;
         }
 
         // 提取依赖的 artifactId
-        const artifactIdMatches = depsMatch[1].match(/<artifactId>([^<]+)<\/artifactId>/g) ?? [];
+        const artifactIdMatches =
+          depsMatch[1].match(/<artifactId>([^<]+)<\/artifactId>/g) ?? [];
         const deps = artifactIdMatches
-          .map(m => m.replace('<artifactId>', '').replace('</artifactId>', ''))
-          .filter(dep => moduleNames.has(dep) && dep !== module.name);
+          .map((m) =>
+            m.replace("<artifactId>", "").replace("</artifactId>", ""),
+          )
+          .filter((dep) => moduleNames.has(dep) && dep !== module.name);
 
         module.dependencies = deps;
 
         // 更新被依赖关系
         for (const dep of deps) {
-          const depModule = modules.find(m => m.name === dep);
+          const depModule = modules.find((m) => m.name === dep);
           if (depModule && !depModule.usedBy.includes(module.name)) {
             depModule.usedBy.push(module.name);
           }

@@ -1,14 +1,17 @@
-import { logger } from '../shared/logger.js';
-import type { ResolvedGenerateScope, GenerateTarget } from './generate-scope.js';
-import { getGenerationOrder } from './generate-scope.js';
-import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
-import type { GraphStatus } from '../query/prepare-generation.js';
-import type { PackageLayout } from './init-directory.js';
-import type { KnowledgeType } from '../schemas/knowledge-type.js';
-import type { EvidenceGroup } from '../evidence/type-evidence-builder.js';
-import { buildEvidenceBundlesByPackage } from '../evidence/type-evidence-builder.js';
-import type { ModuleTopology } from '../schemas/module.js';
-import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
+import { logger } from "../shared/logger.js";
+import type {
+  ResolvedGenerateScope,
+  GenerateTarget,
+} from "./generate-scope.js";
+import { getGenerationOrder } from "./generate-scope.js";
+import type { KnowledgePackageContribution } from "../packaging/knowledge-package-contribution.js";
+import type { GraphStatus } from "../query/prepare-generation.js";
+import type { PackageLayout } from "./init-directory.js";
+import type { KnowledgeType } from "../schemas/knowledge-type.js";
+import type { EvidenceGroup } from "../evidence/type-evidence-builder.js";
+import { buildEvidenceBundlesByPackage } from "../evidence/type-evidence-builder.js";
+import type { ModuleTopology } from "../schemas/module.js";
+import type { LlmClaimsProvider } from "../generation/knowledge-generator.js";
 
 export interface GenerateOrchestrationInput {
   repoPath: string;
@@ -35,10 +38,12 @@ export interface GenerateOrchestrationInput {
  * runGeneratorForType now returns multiple contributions (one per evidence group).
  */
 export interface GenerateOrchestrationDeps {
-  runGeneratorForType: (input: GenerateTypeInput) => Promise<KnowledgePackageContribution[]>;
+  runGeneratorForType: (
+    input: GenerateTypeInput,
+  ) => Promise<KnowledgePackageContribution[]>;
   writePackage: (input: {
     layout: PackageLayout;
-    knowledge: ResolvedGenerateScope['knowledge'];
+    knowledge: ResolvedGenerateScope["knowledge"];
     target?: GenerateTarget;
     contributions: KnowledgePackageContribution[];
   }) => Promise<void>;
@@ -79,12 +84,21 @@ export async function runGenerateOrchestration(input: {
   input: GenerateOrchestrationInput;
   deps: GenerateOrchestrationDeps;
 }): Promise<{ contributions: KnowledgePackageContribution[] }> {
-  const { scope, repoPath, layout, graphStatus, verbose, llm, moduleTopology, claimsProvider } = input.input;
+  const {
+    scope,
+    repoPath,
+    layout,
+    graphStatus,
+    verbose,
+    llm,
+    moduleTopology,
+    claimsProvider,
+  } = input.input;
   const contributions: KnowledgePackageContribution[] = [];
 
   const types = scope.types;
   if (types.length === 0) {
-    logger.warn('No knowledge types to generate');
+    logger.warn("No knowledge types to generate");
     return { contributions };
   }
 
@@ -99,10 +113,12 @@ export async function runGenerateOrchestration(input: {
   };
   const tagPool: string[] = [];
 
-  logger.info(`Generating ${types.length} knowledge types in ${phases.length} phases`);
+  logger.info(
+    `Generating ${types.length} knowledge types in ${phases.length} phases`,
+  );
 
   for (const [phaseIndex, phaseTypes] of phases.entries()) {
-    logger.info(`Phase ${phaseIndex + 1}: ${phaseTypes.join(', ')}`);
+    logger.info(`Phase ${phaseIndex + 1}: ${phaseTypes.join(", ")}`);
 
     // Build dependencies from previous phases
     const dependencies = {
@@ -136,10 +152,15 @@ export async function runGenerateOrchestration(input: {
           }
 
           // Log summary for this type
-          const succeeded = typeContributions.filter(c => c.report.succeeded > 0).length;
-          const failed = typeContributions.filter(c => c.report.failed > 0).length;
-          logger.info(`${type}: ${succeeded} groups succeeded, ${failed} failed`);
-
+          const succeeded = typeContributions.filter(
+            (c) => c.report.succeeded > 0,
+          ).length;
+          const failed = typeContributions.filter(
+            (c) => c.report.failed > 0,
+          ).length;
+          logger.info(
+            `${type}: ${succeeded} groups succeeded, ${failed} failed`,
+          );
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           logger.error(`${type} generation failed: ${msg}`);
@@ -150,7 +171,10 @@ export async function runGenerateOrchestration(input: {
       // Phase 2: All types can run in parallel for LLM generation,
       // but evidence queries must be sequential to avoid database lock conflicts on Windows.
       // First, sequentially build evidence for all types
-      const evidenceResults: Array<{ type: KnowledgeType; groups: EvidenceGroup[] }> = [];
+      const evidenceResults: Array<{
+        type: KnowledgeType;
+        groups: EvidenceGroup[];
+      }> = [];
 
       for (const type of phaseTypes) {
         try {
@@ -163,7 +187,9 @@ export async function runGenerateOrchestration(input: {
             claimsProvider,
           });
           evidenceResults.push({ type, groups: evidenceGroups });
-          logger.info(`${type}: ${evidenceGroups.length} evidence groups prepared`);
+          logger.info(
+            `${type}: ${evidenceGroups.length} evidence groups prepared`,
+          );
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           logger.error(`${type} evidence preparation failed: ${msg}`);
@@ -176,19 +202,21 @@ export async function runGenerateOrchestration(input: {
         evidenceResults.map(({ type, groups }) => {
           if (groups.length === 0) {
             // Return failed contribution for empty evidence
-            return Promise.resolve([{
-              stage: type.toLowerCase(),
-              files: [],
-              objects: [],
-              report: {
+            return Promise.resolve([
+              {
                 stage: type.toLowerCase(),
-                ran: true,
-                succeeded: 0,
-                failed: 1,
-                details: { error: 'no_evidence_found' },
+                files: [],
+                objects: [],
+                report: {
+                  stage: type.toLowerCase(),
+                  ran: true,
+                  succeeded: 0,
+                  failed: 1,
+                  details: { error: "no_evidence_found" },
+                },
+                warnings: ["no_evidence_found"],
               },
-              warnings: ['no_evidence_found'],
-            }] as KnowledgePackageContribution[]);
+            ] as KnowledgePackageContribution[]);
           }
 
           // Run LLM generation with prepared evidence
@@ -210,13 +238,16 @@ export async function runGenerateOrchestration(input: {
 
       for (const [i, result] of typeResults.entries()) {
         const type = phaseTypes[i];
-        if (result.status === 'fulfilled') {
+        if (result.status === "fulfilled") {
           for (const contribution of result.value) {
             contributions.push(contribution);
             updateGeneratedNames(generatedNames, tagPool, contribution);
           }
         } else {
-          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          const msg =
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason);
           logger.error(`${type} generation failed: ${msg}`);
           // Add failed contribution
           contributions.push({
@@ -247,7 +278,7 @@ export async function runGenerateOrchestration(input: {
     contributions,
   });
 
-  logger.info('Package written successfully');
+  logger.info("Package written successfully");
 
   // Print summary
   printSummary(contributions);
@@ -263,11 +294,11 @@ function updateGeneratedNames(
   // Extract names from generated objects
   for (const obj of contribution.objects) {
     const name = obj.id;
-    if (obj.type === 'CONCEPT' || obj.type === 'TERM') {
+    if (obj.type === "CONCEPT" || obj.type === "TERM") {
       generatedNames.concept.push(name);
-    } else if (obj.type === 'DATA_MODEL' || obj.type === 'DB') {
+    } else if (obj.type === "DATA_MODEL" || obj.type === "DB") {
       generatedNames.dataModel.push(name);
-    } else if (obj.type === 'CAPABILITY' || obj.type === 'CAP') {
+    } else if (obj.type === "CAPABILITY" || obj.type === "CAP") {
       generatedNames.capability.push(name);
     }
   }
@@ -277,7 +308,7 @@ function updateGeneratedNames(
     const tags = (obj as unknown as Record<string, unknown>).tags;
     if (Array.isArray(tags)) {
       for (const tag of tags) {
-        if (typeof tag === 'string' && !tagPool.includes(tag)) {
+        if (typeof tag === "string" && !tagPool.includes(tag)) {
           tagPool.push(tag);
         }
       }
@@ -300,6 +331,8 @@ function printSummary(contributions: KnowledgePackageContribution[]): void {
   }
 
   for (const [stage, summary] of stageSummary.entries()) {
-    logger.info(`${stage} stage: ${summary.succeeded} succeeded, ${summary.failed} failed`);
+    logger.info(
+      `${stage} stage: ${summary.succeeded} succeeded, ${summary.failed} failed`,
+    );
   }
 }

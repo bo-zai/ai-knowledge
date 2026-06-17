@@ -1,5 +1,5 @@
-import type { SlicePlan, SliceSeed } from './types.js';
-import { discoverSlices, countByKind } from './discover-slices.js';
+import type { SlicePlan, SliceSeed } from "./types.js";
+import { discoverSlices, countByKind } from "./discover-slices.js";
 
 /**
  * Normalized slice discovery output structure.
@@ -11,7 +11,11 @@ export interface NormalizedSliceDiscovery {
   tools: Array<{ id: string; name: string }>;
   communities: Array<{ id: string; name: string }>;
   tables: Array<{ id: string; name: string }>;
-  gaps?: Array<{ kind: 'route' | 'process' | 'tool' | 'community' | 'table'; reason: string; raw_line?: string }>;
+  gaps?: Array<{
+    kind: "route" | "process" | "tool" | "community" | "table";
+    reason: string;
+    raw_line?: string;
+  }>;
 }
 
 export function buildSlicePlan(input: {
@@ -34,14 +38,16 @@ export function buildSlicePlan(input: {
  * Build slice plan from normalized discovery output.
  * This is the preferred entry point when using embedded runtime.
  */
-export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery): SlicePlan {
+export function buildSlicePlanFromNormalized(
+  discovery: NormalizedSliceDiscovery,
+): SlicePlan {
   const slices: SliceSeed[] = [];
 
   // Convert normalized routes to slice seeds
   for (const route of discovery.routes) {
     slices.push({
       id: route.id,
-      kind: 'route',
+      kind: "route",
       title: `${route.method} ${route.path}`,
     });
   }
@@ -50,7 +56,7 @@ export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery
   for (const process of discovery.processes) {
     slices.push({
       id: process.id,
-      kind: 'process',
+      kind: "process",
       title: process.name,
     });
   }
@@ -59,7 +65,7 @@ export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery
   for (const tool of discovery.tools) {
     slices.push({
       id: tool.id,
-      kind: 'tool',
+      kind: "tool",
       title: tool.name,
     });
   }
@@ -68,7 +74,7 @@ export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery
   for (const community of discovery.communities) {
     slices.push({
       id: community.id,
-      kind: 'community',
+      kind: "community",
       title: community.name,
     });
   }
@@ -77,7 +83,7 @@ export function buildSlicePlanFromNormalized(discovery: NormalizedSliceDiscovery
   for (const table of discovery.tables) {
     slices.push({
       id: table.id,
-      kind: 'database',
+      kind: "database",
       title: table.name,
     });
   }
@@ -103,7 +109,7 @@ export function extractSliceSeedsFromDiscoveryOutput(discoveryOutput: string): {
   communities: string[];
   tables: string[];
 } {
-  const lines = discoveryOutput.split('\n');
+  const lines = discoveryOutput.split("\n");
   const routes: string[] = [];
   const processes: string[] = [];
   const tools: string[] = [];
@@ -112,16 +118,16 @@ export function extractSliceSeedsFromDiscoveryOutput(discoveryOutput: string): {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('Route:')) {
-      routes.push(trimmed.replace('Route:', '').trim());
-    } else if (trimmed.startsWith('Process:')) {
-      processes.push(trimmed.replace('Process:', '').trim());
-    } else if (trimmed.startsWith('Tool:')) {
-      tools.push(trimmed.replace('Tool:', '').trim());
-    } else if (trimmed.startsWith('Community:')) {
-      communities.push(trimmed.replace('Community:', '').trim());
-    } else if (trimmed.startsWith('Table:')) {
-      tables.push(trimmed.replace('Table:', '').trim());
+    if (trimmed.startsWith("Route:")) {
+      routes.push(trimmed.replace("Route:", "").trim());
+    } else if (trimmed.startsWith("Process:")) {
+      processes.push(trimmed.replace("Process:", "").trim());
+    } else if (trimmed.startsWith("Tool:")) {
+      tools.push(trimmed.replace("Tool:", "").trim());
+    } else if (trimmed.startsWith("Community:")) {
+      communities.push(trimmed.replace("Community:", "").trim());
+    } else if (trimmed.startsWith("Table:")) {
+      tables.push(trimmed.replace("Table:", "").trim());
     }
   }
 

@@ -1,8 +1,8 @@
 // gitnexus/src/core/ingestion/field-extractors/configs/ruby.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { FieldExtractionConfig } from '../generic.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { FieldExtractionConfig } from "../generic.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 /**
  * Collect all field names declared by an `attr_accessor`, `attr_reader`, or
@@ -10,17 +10,17 @@ import type { SyntaxNode } from '../../utils/ast-helpers.js';
  *   attr_accessor :foo, :bar, :baz
  */
 function extractAttrNames(node: SyntaxNode): string[] {
-  const method = node.childForFieldName('method');
+  const method = node.childForFieldName("method");
   if (!method) return [];
   const methodName = method.text;
   if (
-    methodName !== 'attr_accessor' &&
-    methodName !== 'attr_reader' &&
-    methodName !== 'attr_writer'
+    methodName !== "attr_accessor" &&
+    methodName !== "attr_reader" &&
+    methodName !== "attr_writer"
   ) {
     return [];
   }
-  const args = node.childForFieldName('arguments');
+  const args = node.childForFieldName("arguments");
   if (!args) return [];
   const names: string[] = [];
   for (let i = 0; i < args.namedChildCount; i++) {
@@ -28,7 +28,7 @@ function extractAttrNames(node: SyntaxNode): string[] {
     if (!arg) continue;
     // simple_symbol text is :name — strip the leading colon
     const text = arg.text;
-    names.push(text.startsWith(':') ? text.slice(1) : text);
+    names.push(text.startsWith(":") ? text.slice(1) : text);
   }
   return names;
 }
@@ -49,10 +49,10 @@ function extractAttrNames(node: SyntaxNode): string[] {
  */
 export const rubyConfig: FieldExtractionConfig = {
   language: SupportedLanguages.Ruby,
-  typeDeclarationNodes: ['class'],
-  fieldNodeTypes: ['call'],
-  bodyNodeTypes: ['body_statement'],
-  defaultVisibility: 'public',
+  typeDeclarationNodes: ["class"],
+  fieldNodeTypes: ["call"],
+  bodyNodeTypes: ["body_statement"],
+  defaultVisibility: "public",
 
   extractName(node) {
     // Returns the first symbol name for interface compatibility.
@@ -72,7 +72,7 @@ export const rubyConfig: FieldExtractionConfig = {
   extractVisibility(_node) {
     // attr_accessor/attr_writer fields are effectively public
     // attr_reader fields are read-only from outside but still public
-    return 'public';
+    return "public";
   },
 
   isStatic(_node) {
@@ -80,7 +80,7 @@ export const rubyConfig: FieldExtractionConfig = {
   },
 
   isReadonly(node) {
-    const method = node.childForFieldName('method');
-    return method?.text === 'attr_reader';
+    const method = node.childForFieldName("method");
+    return method?.text === "attr_reader";
   },
 };

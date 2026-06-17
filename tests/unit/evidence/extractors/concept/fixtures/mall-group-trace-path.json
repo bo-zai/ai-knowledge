@@ -60,14 +60,28 @@
         "moduleName": "mall-admin",
         "modulePath": "mall-admin",
         "xmlPath": "mall-admin/src/main/resources/mapper/ProductMapper.xml",
-        "sqlIds": ["selectProductList", "selectProductById", "insertProduct", "updateProduct"]
+        "sqlIds": [
+          "selectProductList",
+          "selectProductById",
+          "insertProduct",
+          "updateProduct"
+        ]
       }
     ],
     "tables": [
       {
         "tableName": "pms_product",
         "schema": "mall",
-        "columns": ["id", "name", "category_id", "price", "stock", "status", "create_time", "update_time"]
+        "columns": [
+          "id",
+          "name",
+          "category_id",
+          "price",
+          "stock",
+          "status",
+          "create_time",
+          "update_time"
+        ]
       }
     ],
     "entities": [
@@ -76,7 +90,16 @@
         "filePath": "mall-admin/src/main/java/com/mall/admin/entity/Product.java",
         "moduleName": "mall-admin",
         "modulePath": "mall-admin",
-        "fields": ["id", "name", "categoryId", "price", "stock", "status", "createTime", "updateTime"],
+        "fields": [
+          "id",
+          "name",
+          "categoryId",
+          "price",
+          "stock",
+          "status",
+          "createTime",
+          "updateTime"
+        ],
         "startLine": 10
       }
     ]

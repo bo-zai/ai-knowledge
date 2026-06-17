@@ -15,11 +15,14 @@
  * disambiguates.
  */
 
-import type { NodeLabel } from '../../graph/types.js';
-import type { Resolution } from '../types.js';
-import { composeEvidence, confidenceFromEvidence } from './evidence.js';
-import { compareByConfidenceWithTiebreaks, type TieBreakKey } from './tie-breaks.js';
-import type { RegistryContext } from './context.js';
+import type { NodeLabel } from "../../graph/types.js";
+import type { Resolution } from "../types.js";
+import { composeEvidence, confidenceFromEvidence } from "./evidence.js";
+import {
+  compareByConfidenceWithTiebreaks,
+  type TieBreakKey,
+} from "./tie-breaks.js";
+import type { RegistryContext } from "./context.js";
 
 export interface LookupQualifiedParams {
   readonly acceptedKinds: readonly NodeLabel[];
@@ -52,13 +55,16 @@ export function lookupQualified(
     if (def === undefined) continue;
     if (!acceptedKinds.has(def.type)) continue;
 
-    const evidence = composeEvidence({ origin: 'global-qualified', kindMatch: true });
+    const evidence = composeEvidence({
+      origin: "global-qualified",
+      kindMatch: true,
+    });
     const confidence = confidenceFromEvidence(evidence);
     resolutions.push({ def, confidence, evidence });
     tieKeys.set(def.nodeId, {
       scopeDepth: 0,
       mroDepth: 0,
-      origin: 'global-qualified',
+      origin: "global-qualified",
     });
   }
 

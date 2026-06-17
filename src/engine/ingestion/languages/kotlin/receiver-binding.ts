@@ -1,22 +1,28 @@
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
-import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
-import { normalizeKotlinType } from './interpret.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
+import {
+  nodeToCapture,
+  syntheticCapture,
+  type SyntaxNode,
+} from "../../utils/ast-helpers.js";
+import { normalizeKotlinType } from "./interpret.js";
 
 const TYPE_DECL_NODE_TYPES = new Set([
-  'class_declaration',
-  'object_declaration',
-  'companion_object',
+  "class_declaration",
+  "object_declaration",
+  "companion_object",
 ]);
 
-export function synthesizeKotlinReceiverBinding(fnNode: SyntaxNode): CaptureMatch[] {
-  if (fnNode.type !== 'function_declaration') return [];
+export function synthesizeKotlinReceiverBinding(
+  fnNode: SyntaxNode,
+): CaptureMatch[] {
+  if (fnNode.type !== "function_declaration") return [];
 
   const anchorNode = findFunctionBody(fnNode);
   if (anchorNode === null) return [];
 
   const extensionReceiver = extensionReceiverType(fnNode);
   if (extensionReceiver !== null) {
-    return [buildReceiverMatch(anchorNode, 'this', extensionReceiver)];
+    return [buildReceiverMatch(anchorNode, "this", extensionReceiver)];
   }
 
   const enclosingType = findEnclosingTypeDeclaration(fnNode);
@@ -25,16 +31,17 @@ export function synthesizeKotlinReceiverBinding(fnNode: SyntaxNode): CaptureMatc
   const enclosingName = typeDeclarationName(enclosingType);
   if (enclosingName === null) return [];
 
-  const out = [buildReceiverMatch(anchorNode, 'this', enclosingName)];
+  const out = [buildReceiverMatch(anchorNode, "this", enclosingName)];
   const superName = firstSuperclassText(enclosingType);
-  if (superName !== null) out.push(buildReceiverMatch(anchorNode, 'super', superName));
+  if (superName !== null)
+    out.push(buildReceiverMatch(anchorNode, "super", superName));
   return out;
 }
 
 function findFunctionBody(fnNode: SyntaxNode): SyntaxNode | null {
   for (let i = 0; i < fnNode.namedChildCount; i++) {
     const child = fnNode.namedChild(i);
-    if (child?.type === 'function_body') return child;
+    if (child?.type === "function_body") return child;
   }
   return fnNode;
 }
@@ -43,8 +50,8 @@ function extensionReceiverType(fnNode: SyntaxNode): string | null {
   for (let i = 0; i < fnNode.namedChildCount; i++) {
     const child = fnNode.namedChild(i);
     if (child === null) continue;
-    if (child.type === 'simple_identifier') return null;
-    if (child.type === 'user_type' || child.type === 'nullable_type') {
+    if (child.type === "simple_identifier") return null;
+    if (child.type === "user_type" || child.type === "nullable_type") {
       return normalizeKotlinType(child.text);
     }
   }
@@ -61,21 +68,31 @@ function findEnclosingTypeDeclaration(node: SyntaxNode): SyntaxNode | null {
 }
 
 function typeDeclarationName(typeNode: SyntaxNode): string | null {
-  if (typeNode.type === 'companion_object') {
+  if (typeNode.type === "companion_object") {
     return (
-      typeNode.namedChildren.find((child) => child.type === 'type_identifier')?.text ??
+      typeNode.namedChildren.find((child) => child.type === "type_identifier")
+        ?.text ??
       enclosingNonCompanionTypeName(typeNode) ??
-      'Companion'
+      "Companion"
     );
   }
-  return typeNode.namedChildren.find((child) => child.type === 'type_identifier')?.text ?? null;
+  return (
+    typeNode.namedChildren.find((child) => child.type === "type_identifier")
+      ?.text ?? null
+  );
 }
 
 function enclosingNonCompanionTypeName(node: SyntaxNode): string | null {
   let current = node.parent;
   while (current !== null) {
-    if (current.type === 'class_declaration' || current.type === 'object_declaration') {
-      return current.namedChildren.find((child) => child.type === 'type_identifier')?.text ?? null;
+    if (
+      current.type === "class_declaration" ||
+      current.type === "object_declaration"
+    ) {
+      return (
+        current.namedChildren.find((child) => child.type === "type_identifier")
+          ?.text ?? null
+      );
     }
     current = current.parent;
   }
@@ -83,24 +100,40 @@ function enclosingNonCompanionTypeName(node: SyntaxNode): string | null {
 }
 
 function firstSuperclassText(typeNode: SyntaxNode): string | null {
-  if (typeNode.type !== 'class_declaration') return null;
+  if (typeNode.type !== "class_declaration") return null;
   for (const child of typeNode.namedChildren) {
-    if (child.type !== 'delegation_specifier') continue;
-    const ctor = child.namedChildren.find((n) => n.type === 'constructor_invocation');
+    if (child.type !== "delegation_specifier") continue;
+    const ctor = child.namedChildren.find(
+      (n) => n.type === "constructor_invocation",
+    );
     const userType =
-      ctor?.namedChildren.find((n) => n.type === 'user_type') ??
-      child.namedChildren.find((n) => n.type === 'user_type');
-    const name = userType?.namedChildren.find((n) => n.type === 'type_identifier')?.text;
+      ctor?.namedChildren.find((n) => n.type === "user_type") ??
+      child.namedChildren.find((n) => n.type === "user_type");
+    const name = userType?.namedChildren.find(
+      (n) => n.type === "type_identifier",
+    )?.text;
     if (name !== undefined) return normalizeKotlinType(name);
   }
   return null;
 }
 
-function buildReceiverMatch(anchorNode: SyntaxNode, name: string, typeText: string): CaptureMatch {
+function buildReceiverMatch(
+  anchorNode: SyntaxNode,
+  name: string,
+  typeText: string,
+): CaptureMatch {
   const out: Record<string, Capture> = {
-    '@type-binding.self': nodeToCapture('@type-binding.self', anchorNode),
-    '@type-binding.name': syntheticCapture('@type-binding.name', anchorNode, name),
-    '@type-binding.type': syntheticCapture('@type-binding.type', anchorNode, typeText),
+    "@type-binding.self": nodeToCapture("@type-binding.self", anchorNode),
+    "@type-binding.name": syntheticCapture(
+      "@type-binding.name",
+      anchorNode,
+      name,
+    ),
+    "@type-binding.type": syntheticCapture(
+      "@type-binding.type",
+      anchorNode,
+      typeText,
+    ),
   };
   return out;
 }

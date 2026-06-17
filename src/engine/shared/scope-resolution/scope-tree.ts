@@ -26,7 +26,7 @@
  * `Object.freeze`d; miss lookups return a shared frozen empty array.
  */
 
-import type { Scope, ScopeId, ScopeLookup, Range } from './types.js';
+import type { Scope, ScopeId, ScopeLookup, Range } from "./types.js";
 
 // ─── Public contract ────────────────────────────────────────────────────────
 
@@ -57,16 +57,16 @@ export interface ScopeTree extends ScopeLookup {
 export class ScopeTreeInvariantError extends Error {
   constructor(
     readonly invariant:
-      | 'non-module-requires-parent'
-      | 'parent-not-found'
-      | 'parent-must-contain-child'
-      | 'sibling-ranges-overlap'
-      | 'parent-must-share-filepath'
-      | 'duplicate-scope-id',
+      | "non-module-requires-parent"
+      | "parent-not-found"
+      | "parent-must-contain-child"
+      | "sibling-ranges-overlap"
+      | "parent-must-share-filepath"
+      | "duplicate-scope-id",
     message: string,
   ) {
     super(message);
-    this.name = 'ScopeTreeInvariantError';
+    this.name = "ScopeTreeInvariantError";
   }
 }
 
@@ -87,7 +87,7 @@ export function buildScopeTree(scopes: readonly Scope[]): ScopeTree {
   for (const scope of scopes) {
     if (byId.has(scope.id)) {
       throw new ScopeTreeInvariantError(
-        'duplicate-scope-id',
+        "duplicate-scope-id",
         `Two scopes share id '${scope.id}'. Scope ids must be unique per tree.`,
       );
     }
@@ -97,9 +97,9 @@ export function buildScopeTree(scopes: readonly Scope[]): ScopeTree {
   // ── Pass 2: validate parent pointers + build children buckets ─────────
   for (const scope of scopes) {
     if (scope.parent === null) {
-      if (scope.kind !== 'Module') {
+      if (scope.kind !== "Module") {
         throw new ScopeTreeInvariantError(
-          'non-module-requires-parent',
+          "non-module-requires-parent",
           `Scope '${scope.id}' has kind '${scope.kind}' but no parent. Only 'Module' scopes may be root-level.`,
         );
       }
@@ -109,19 +109,19 @@ export function buildScopeTree(scopes: readonly Scope[]): ScopeTree {
     const parent = byId.get(scope.parent);
     if (parent === undefined) {
       throw new ScopeTreeInvariantError(
-        'parent-not-found',
+        "parent-not-found",
         `Scope '${scope.id}' references parent '${scope.parent}' which is not part of this tree.`,
       );
     }
     if (parent.filePath !== scope.filePath) {
       throw new ScopeTreeInvariantError(
-        'parent-must-share-filepath',
+        "parent-must-share-filepath",
         `Scope '${scope.id}' (${scope.filePath}) has parent '${parent.id}' in a different file (${parent.filePath}). Parent/child scopes must share filePath.`,
       );
     }
     if (!canParentScope(parent.range, scope.range, parent.kind, scope.kind)) {
       throw new ScopeTreeInvariantError(
-        'parent-must-contain-child',
+        "parent-must-contain-child",
         `Parent scope '${parent.id}' at ${formatRange(parent.range)} does not contain child '${scope.id}' at ${formatRange(scope.range)} (allowed: strict containment, or equal-range Module-as-parent).`,
       );
     }
@@ -146,7 +146,7 @@ export function buildScopeTree(scopes: readonly Scope[]): ScopeTree {
       const curr = children[i]!;
       if (rangesOverlap(prev.range, curr.range)) {
         throw new ScopeTreeInvariantError(
-          'sibling-ranges-overlap',
+          "sibling-ranges-overlap",
           `Sibling scopes under parent '${parentId}' overlap: '${prev.id}' ${formatRange(prev.range)} and '${curr.id}' ${formatRange(curr.range)}.`,
         );
       }
@@ -263,11 +263,16 @@ function rangesEqual(a: Range, b: Range): boolean {
 export function canParentScope(
   outer: Range,
   inner: Range,
-  outerKind: Scope['kind'],
-  innerKind: Scope['kind'],
+  outerKind: Scope["kind"],
+  innerKind: Scope["kind"],
 ): boolean {
   if (rangeStrictlyContains(outer, inner)) return true;
-  if (outerKind === 'Module' && innerKind !== 'Module' && rangesEqual(outer, inner)) return true;
+  if (
+    outerKind === "Module" &&
+    innerKind !== "Module" &&
+    rangesEqual(outer, inner)
+  )
+    return true;
   return false;
 }
 
@@ -279,9 +284,11 @@ export function canParentScope(
  */
 function rangesOverlap(a: Range, b: Range): boolean {
   const aEndsBeforeB =
-    a.endLine < b.startLine || (a.endLine === b.startLine && a.endCol <= b.startCol);
+    a.endLine < b.startLine ||
+    (a.endLine === b.startLine && a.endCol <= b.startCol);
   const bEndsBeforeA =
-    b.endLine < a.startLine || (b.endLine === a.startLine && b.endCol <= a.startCol);
+    b.endLine < a.startLine ||
+    (b.endLine === a.startLine && b.endCol <= a.startCol);
   return !(aEndsBeforeB || bEndsBeforeA);
 }
 

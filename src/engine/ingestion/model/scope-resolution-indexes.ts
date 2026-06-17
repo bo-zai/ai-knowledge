@@ -52,7 +52,7 @@ import type {
   ReferenceSite,
   ScopeId,
   ScopeTree,
-} from '../../shared/index.js';
+} from "../../shared/index.js";
 
 export interface ScopeResolutionIndexes {
   readonly scopeTree: ScopeTree;
@@ -67,7 +67,10 @@ export interface ScopeResolutionIndexes {
    *  this channel is permanently immutable post-finalize. Consumers
    *  MUST read via `lookupBindingsAt` so the augmentation channel is
    *  consulted alongside. See I8 in `contract/scope-resolver.ts`. */
-  readonly bindings: ReadonlyMap<ScopeId, ReadonlyMap<string, readonly BindingRef[]>>;
+  readonly bindings: ReadonlyMap<
+    ScopeId,
+    ReadonlyMap<string, readonly BindingRef[]>
+  >;
   /** Append-only post-finalize augmentation channel. Populated by
    *  language hooks such as `populateNamespaceSiblings` for cross-file
    *  bindings synthesized after finalize (e.g. C# same-namespace
@@ -76,7 +79,10 @@ export interface ScopeResolutionIndexes {
    *  this map and `bindings` via `lookupBindingsAt`; finalized refs
    *  are returned first and win duplicate `def.nodeId` metadata, with
    *  unique augmentations appended after. See I8. */
-  readonly bindingAugmentations: ReadonlyMap<ScopeId, ReadonlyMap<string, readonly BindingRef[]>>;
+  readonly bindingAugmentations: ReadonlyMap<
+    ScopeId,
+    ReadonlyMap<string, readonly BindingRef[]>
+  >;
   /** Pre-resolution usage facts; consumed by the resolution phase. */
   readonly referenceSites: readonly ReferenceSite[];
   /** SCC condensation of the file-level import graph — callers that want

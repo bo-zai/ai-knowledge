@@ -1,16 +1,30 @@
-import { spawn } from 'child_process';
-import { fileURLToPath } from 'node:url';
-import fs from 'fs';
-import { dirname, resolve } from 'node:path';
-import { LBUG_MAX_DB_SIZE } from './lbug-config.js';
+import { spawn } from "child_process";
+import { fileURLToPath } from "node:url";
+import fs from "fs";
+import { dirname, resolve } from "node:path";
+import { LBUG_MAX_DB_SIZE } from "./lbug-config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Resolve script path - works from both src/ (3 levels up) and dist/cli/ (2 levels up)
-const scriptPathFromSrc = resolve(__dirname, '..', '..', '..', 'scripts', 'install-duckdb-extension.mjs');
-const scriptPathFromDist = resolve(__dirname, '..', 'scripts', 'install-duckdb-extension.mjs');
-const scriptPath = fs.existsSync(scriptPathFromDist) ? scriptPathFromDist : scriptPathFromSrc;
+const scriptPathFromSrc = resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "scripts",
+  "install-duckdb-extension.mjs",
+);
+const scriptPathFromDist = resolve(
+  __dirname,
+  "..",
+  "scripts",
+  "install-duckdb-extension.mjs",
+);
+const scriptPath = fs.existsSync(scriptPathFromDist)
+  ? scriptPathFromDist
+  : scriptPathFromSrc;
 
 const DEFAULT_EXTENSION_INSTALL_TIMEOUT_MS = 15_000;
 const EXTENSION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -25,7 +39,7 @@ const EXTENSION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
  * - `never`    — skip the extension entirely. Operators can use this to
  *                forcibly disable optional search features.
  */
-export type ExtensionInstallPolicy = 'auto' | 'load-only' | 'never';
+export type ExtensionInstallPolicy = "auto" | "load-only" | "never";
 
 export interface ExtensionInstallResult {
   success: boolean;
@@ -50,25 +64,30 @@ export interface ExtensionEnsureOptions {
 export interface ExtensionManagerOptions {
   policy?: ExtensionInstallPolicy;
   installTimeoutMs?: number;
-  installExtension?: (extensionName: string, timeoutMs: number) => Promise<ExtensionInstallResult>;
+  installExtension?: (
+    extensionName: string,
+    timeoutMs: number,
+  ) => Promise<ExtensionInstallResult>;
   warn?: (message: string) => void;
 }
 
 const alreadyAvailable = (message: string): boolean =>
-  message.includes('already loaded') ||
-  message.includes('already installed') ||
-  message.includes('already exists');
+  message.includes("already loaded") ||
+  message.includes("already installed") ||
+  message.includes("already exists");
 
 const resolvePolicyFromEnv = (): ExtensionInstallPolicy => {
   const raw = process.env.GITNEXUS_LBUG_EXTENSION_INSTALL;
-  if (raw === 'load-only' || raw === 'never' || raw === 'auto') return raw;
-  return 'auto';
+  if (raw === "load-only" || raw === "never" || raw === "auto") return raw;
+  return "auto";
 };
 
 export const getExtensionInstallTimeoutMs = (): number => {
   const raw = process.env.GITNEXUS_LBUG_EXTENSION_INSTALL_TIMEOUT_MS;
   const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXTENSION_INSTALL_TIMEOUT_MS;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_EXTENSION_INSTALL_TIMEOUT_MS;
 };
 
 export const getExtensionInstallChildProcessArgs = (
@@ -95,18 +114,22 @@ export const installDuckDbExtensionOutOfProcess = async (
   }
 
   return await new Promise<ExtensionInstallResult>((resolve) => {
-    const child = spawn(process.execPath, getExtensionInstallChildProcessArgs(extensionName), {
-      env: {
-        ...process.env,
-        GITNEXUS_LBUG_EXTENSION_NAME: extensionName,
+    const child = spawn(
+      process.execPath,
+      getExtensionInstallChildProcessArgs(extensionName),
+      {
+        env: {
+          ...process.env,
+          GITNEXUS_LBUG_EXTENSION_NAME: extensionName,
+        },
+        stdio: ["ignore", "ignore", "pipe"],
+        windowsHide: true,
       },
-      stdio: ['ignore', 'ignore', 'pipe'],
-      windowsHide: true,
-    });
+    );
 
-    let stderr = '';
-    child.stderr?.setEncoding('utf8');
-    child.stderr?.on('data', (chunk) => {
+    let stderr = "";
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk) => {
       stderr = (stderr + chunk).slice(-4000);
     });
 
@@ -114,7 +137,7 @@ export const installDuckDbExtensionOutOfProcess = async (
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
-      child.kill('SIGKILL');
+      child.kill("SIGKILL");
       resolve({
         success: false,
         timedOut: true,
@@ -122,14 +145,14 @@ export const installDuckDbExtensionOutOfProcess = async (
       });
     }, timeoutMs);
 
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve({ success: false, timedOut: false, message: err.message });
     });
 
-    child.on('exit', (code, signal) => {
+    child.on("exit", (code, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -139,7 +162,7 @@ export const installDuckDbExtensionOutOfProcess = async (
         message:
           code === 0
             ? `INSTALL ${extensionName} completed`
-            : `INSTALL ${extensionName} failed with ${signal ?? `exit code ${code}`}${stderr ? `: ${stderr.trim()}` : ''}`,
+            : `INSTALL ${extensionName} failed with ${signal ?? `exit code ${code}`}${stderr ? `: ${stderr.trim()}` : ""}`,
       });
     });
   });
@@ -196,11 +219,18 @@ export class ExtensionManager {
 
     const policy = opts.policy ?? this.options.policy ?? resolvePolicyFromEnv();
     const timeoutMs =
-      opts.installTimeoutMs ?? this.options.installTimeoutMs ?? getExtensionInstallTimeoutMs();
+      opts.installTimeoutMs ??
+      this.options.installTimeoutMs ??
+      getExtensionInstallTimeoutMs();
     const warn = this.options.warn ?? console.warn;
 
-    if (policy === 'never') {
-      this.markUnavailable(name, label, 'extension install policy is "never"', warn);
+    if (policy === "never") {
+      this.markUnavailable(
+        name,
+        label,
+        'extension install policy is "never"',
+        warn,
+      );
       return false;
     }
 
@@ -209,14 +239,20 @@ export class ExtensionManager {
       return true;
     }
 
-    if (policy === 'load-only') {
-      this.markUnavailable(name, label, 'load-only policy: extension not pre-installed', warn);
+    if (policy === "load-only") {
+      this.markUnavailable(
+        name,
+        label,
+        "load-only policy: extension not pre-installed",
+        warn,
+      );
       return false;
     }
 
     let install = this.installAttempted.get(name);
     if (!install) {
-      const installFn = this.options.installExtension ?? installDuckDbExtensionOutOfProcess;
+      const installFn =
+        this.options.installExtension ?? installDuckDbExtensionOutOfProcess;
       install = await installFn(name, timeoutMs);
       this.installAttempted.set(name, install);
     }
@@ -231,11 +267,19 @@ export class ExtensionManager {
       return true;
     }
 
-    this.markUnavailable(name, label, `LOAD ${name} failed after successful INSTALL`, warn);
+    this.markUnavailable(
+      name,
+      label,
+      `LOAD ${name} failed after successful INSTALL`,
+      warn,
+    );
     return false;
   }
 
-  private async tryLoad(query: (sql: string) => Promise<unknown>, name: string): Promise<boolean> {
+  private async tryLoad(
+    query: (sql: string) => Promise<unknown>,
+    name: string,
+  ): Promise<boolean> {
     try {
       await query(`LOAD EXTENSION ${name}`);
       return true;

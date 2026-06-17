@@ -20,25 +20,25 @@
  * still considered when no compatible candidate exists), per RFC §4.
  */
 
-import type { Callsite, SymbolDefinition } from '../../../shared/index.js';
+import type { Callsite, SymbolDefinition } from "../../../shared/index.js";
 
 export function csharpArityCompatibility(
   def: SymbolDefinition,
   callsite: Callsite,
-): 'compatible' | 'unknown' | 'incompatible' {
+): "compatible" | "unknown" | "incompatible" {
   const max = def.parameterCount;
   const min = def.requiredParameterCount;
-  if (max === undefined && min === undefined) return 'unknown';
+  if (max === undefined && min === undefined) return "unknown";
 
   const argCount = callsite.arity;
-  if (!Number.isFinite(argCount) || argCount < 0) return 'unknown';
+  if (!Number.isFinite(argCount) || argCount < 0) return "unknown";
 
   const hasVarArgs =
     def.parameterTypes !== undefined &&
-    def.parameterTypes.some((t) => t === 'params' || t.startsWith('params '));
+    def.parameterTypes.some((t) => t === "params" || t.startsWith("params "));
 
-  if (min !== undefined && argCount < min) return 'incompatible';
-  if (max !== undefined && argCount > max && !hasVarArgs) return 'incompatible';
+  if (min !== undefined && argCount < min) return "incompatible";
+  if (max !== undefined && argCount > max && !hasVarArgs) return "incompatible";
 
-  return 'compatible';
+  return "compatible";
 }

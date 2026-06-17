@@ -33,15 +33,17 @@ const readConfig = (): HttpConfig | null => {
   if (rawDims !== undefined) {
     const parsed = parseInt(rawDims, 10);
     if (Number.isNaN(parsed) || parsed <= 0) {
-      throw new Error(`GITNEXUS_EMBEDDING_DIMS must be a positive integer, got "${rawDims}"`);
+      throw new Error(
+        `GITNEXUS_EMBEDDING_DIMS must be a positive integer, got "${rawDims}"`,
+      );
     }
     dimensions = parsed;
   }
 
   return {
-    baseUrl: baseUrl.replace(/\/+$/, ''),
+    baseUrl: baseUrl.replace(/\/+$/, ""),
     model,
-    apiKey: process.env.GITNEXUS_EMBEDDING_API_KEY ?? 'unused',
+    apiKey: process.env.GITNEXUS_EMBEDDING_API_KEY ?? "unused",
     dimensions,
   };
 };
@@ -55,7 +57,8 @@ export const isHttpMode = (): boolean => readConfig() !== null;
  * Return the configured embedding dimensions for HTTP mode, or undefined
  * if HTTP mode is not active or no explicit dimensions are set.
  */
-export const getHttpDimensions = (): number | undefined => readConfig()?.dimensions;
+export const getHttpDimensions = (): number | undefined =>
+  readConfig()?.dimensions;
 
 /**
  * Return a safe representation of a URL for error messages.
@@ -66,7 +69,7 @@ const safeUrl = (url: string): string => {
     const u = new URL(url);
     return `${u.protocol}//${u.host}${u.pathname}`;
   } catch {
-    return '<invalid-url>';
+    return "<invalid-url>";
   }
 };
 
@@ -95,10 +98,10 @@ const httpEmbedBatch = async (
   let resp: Response;
   try {
     resp = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({ input: batch, model }),
@@ -106,7 +109,8 @@ const httpEmbedBatch = async (
   } catch (err) {
     // Timeouts should not be retried — the server is unresponsive.
     // AbortSignal.timeout() throws DOMException with name 'TimeoutError'.
-    const isTimeout = err instanceof DOMException && err.name === 'TimeoutError';
+    const isTimeout =
+      err instanceof DOMException && err.name === "TimeoutError";
     if (isTimeout) {
       throw new Error(
         `Embedding request timed out after ${HTTP_TIMEOUT_MS}ms (${safeUrl(url)}, batch ${batchIndex})`,
@@ -119,7 +123,9 @@ const httpEmbedBatch = async (
       return httpEmbedBatch(url, batch, model, apiKey, batchIndex, attempt + 1);
     }
     const reason = err instanceof Error ? err.message : String(err);
-    throw new Error(`Embedding request failed (${safeUrl(url)}, batch ${batchIndex}): ${reason}`);
+    throw new Error(
+      `Embedding request failed (${safeUrl(url)}, batch ${batchIndex}): ${reason}`,
+    );
   }
 
   if (!resp.ok) {
@@ -129,7 +135,9 @@ const httpEmbedBatch = async (
       await new Promise((r) => setTimeout(r, delay));
       return httpEmbedBatch(url, batch, model, apiKey, batchIndex, attempt + 1);
     }
-    throw new Error(`Embedding endpoint returned ${status} (${safeUrl(url)}, batch ${batchIndex})`);
+    throw new Error(
+      `Embedding endpoint returned ${status} (${safeUrl(url)}, batch ${batchIndex})`,
+    );
   }
 
   const data = (await resp.json()) as { data: EmbeddingItem[] };
@@ -147,7 +155,7 @@ export const httpEmbed = async (texts: string[]): Promise<Float32Array[]> => {
   if (texts.length === 0) return [];
 
   const config = readConfig();
-  if (!config) throw new Error('HTTP embedding not configured');
+  if (!config) throw new Error("HTTP embedding not configured");
 
   const url = `${config.baseUrl}/embeddings`;
   const allVectors: Float32Array[] = [];
@@ -155,7 +163,13 @@ export const httpEmbed = async (texts: string[]): Promise<Float32Array[]> => {
   for (let i = 0; i < texts.length; i += HTTP_BATCH_SIZE) {
     const batch = texts.slice(i, i + HTTP_BATCH_SIZE);
     const batchIndex = Math.floor(i / HTTP_BATCH_SIZE);
-    const items = await httpEmbedBatch(url, batch, config.model, config.apiKey, batchIndex);
+    const items = await httpEmbedBatch(
+      url,
+      batch,
+      config.model,
+      config.apiKey,
+      batchIndex,
+    );
 
     if (items.length !== batch.length) {
       throw new Error(
@@ -171,7 +185,7 @@ export const httpEmbed = async (texts: string[]): Promise<Float32Array[]> => {
       const expected = config.dimensions ?? DEFAULT_DIMS;
       if (vec.length !== expected) {
         const hint = config.dimensions
-          ? 'Update GITNEXUS_EMBEDDING_DIMS to match your model output.'
+          ? "Update GITNEXUS_EMBEDDING_DIMS to match your model output."
           : `Set GITNEXUS_EMBEDDING_DIMS=${vec.length} to match your model output.`;
         throw new Error(
           `Embedding dimension mismatch: endpoint returned ${vec.length}d vector, ` +
@@ -195,12 +209,14 @@ export const httpEmbed = async (texts: string[]): Promise<Float32Array[]> => {
  */
 export const httpEmbedQuery = async (text: string): Promise<number[]> => {
   const config = readConfig();
-  if (!config) throw new Error('HTTP embedding not configured');
+  if (!config) throw new Error("HTTP embedding not configured");
 
   const url = `${config.baseUrl}/embeddings`;
   const items = await httpEmbedBatch(url, [text], config.model, config.apiKey);
   if (!items.length) {
-    throw new Error(`Embedding endpoint returned empty response (${safeUrl(url)})`);
+    throw new Error(
+      `Embedding endpoint returned empty response (${safeUrl(url)})`,
+    );
   }
 
   const embedding = items[0].embedding;
@@ -209,7 +225,7 @@ export const httpEmbedQuery = async (text: string): Promise<number[]> => {
   const expected = config.dimensions ?? DEFAULT_DIMS;
   if (embedding.length !== expected) {
     const hint = config.dimensions
-      ? 'Update GITNEXUS_EMBEDDING_DIMS to match your model output.'
+      ? "Update GITNEXUS_EMBEDDING_DIMS to match your model output."
       : `Set GITNEXUS_EMBEDDING_DIMS=${embedding.length} to match your model output.`;
     throw new Error(
       `Embedding dimension mismatch: endpoint returned ${embedding.length}d vector, ` +

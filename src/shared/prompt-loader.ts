@@ -14,18 +14,18 @@
  * ```
  */
 
-import { readFile as readFileAsync } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { fileExists } from './fs.js';
+import { readFile as readFileAsync } from "node:fs/promises";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { fileExists } from "./fs.js";
 
 /**
  * 提示词模板目录 - 基于脚本所在目录而非运行时 cwd
  */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PROMPTS_DIR = join(__dirname, '..', 'prompts');
+const PROMPTS_DIR = join(__dirname, "..", "prompts");
 
 /**
  * 提示词模板类
@@ -63,8 +63,8 @@ export class PromptTemplate {
       /\{\{#(\w+)\}\}(.*?)\{\{\/(\w+)\}\}/gs,
       (_, key: string, content: string) => {
         const value = params[key];
-        if (value === undefined || value === null || value === '') {
-          return ''; // 无值，移除整个条件块
+        if (value === undefined || value === null || value === "") {
+          return ""; // 无值，移除整个条件块
         }
         // 有值，保留内容（内容内可能还有 {{key}} 需替换）
         return content;
@@ -76,12 +76,12 @@ export class PromptTemplate {
       /\{\{\^(\w+)\}\}(.*?)\{\{\/(\w+)\}\}/gs,
       (_, key: string, content: string) => {
         const value = params[key];
-        if (value === undefined || value === null || value === '') {
+        if (value === undefined || value === null || value === "") {
           // 无值，保留内容
           return content;
         }
         // 有值，移除整个条件块
-        return '';
+        return "";
       },
     );
 
@@ -89,10 +89,10 @@ export class PromptTemplate {
     result = result.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
       const value = params[key];
       if (value === undefined || value === null) {
-        return ''; // 无值替换为空
+        return ""; // 无值替换为空
       }
       if (Array.isArray(value)) {
-        return value.join('\n'); // 数组转为换行分隔
+        return value.join("\n"); // 数组转为换行分隔
       }
       return value;
     });
@@ -162,9 +162,11 @@ export class PromptLoader {
     let content: string;
     try {
       // 使用同步读取避免异步问题
-      content = readFileSync(filePath, 'utf-8');
+      content = readFileSync(filePath, "utf-8");
     } catch (error: any) {
-      throw new Error(`Failed to load prompt template "${name}" from ${filePath}: ${error.message}`);
+      throw new Error(
+        `Failed to load prompt template "${name}" from ${filePath}: ${error.message}`,
+      );
     }
 
     // 创建模板对象并缓存
@@ -193,7 +195,7 @@ export class PromptLoader {
       throw new Error(`Prompt template "${name}" not found at ${filePath}`);
     }
 
-    const content = await readFileAsync(filePath, 'utf-8');
+    const content = await readFileAsync(filePath, "utf-8");
 
     // 创建模板对象并缓存
     const template = new PromptTemplate(content);
@@ -210,10 +212,10 @@ export class PromptLoader {
 
     try {
       const files = readdirSync(dir);
-      const mdFiles = files.filter((f: string) => f.endsWith('.md'));
+      const mdFiles = files.filter((f: string) => f.endsWith(".md"));
 
       for (const file of mdFiles) {
-        const name = file.replace('.md', '');
+        const name = file.replace(".md", "");
         await this.loadAsync(name);
       }
     } catch {

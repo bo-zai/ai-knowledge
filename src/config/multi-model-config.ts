@@ -1,11 +1,11 @@
-import { fileExists, readText } from '../shared/fs.js';
-import { logger } from '../shared/logger.js';
+import { fileExists, readText } from "../shared/fs.js";
+import { logger } from "../shared/logger.js";
 
 /** 模型能力类型 */
-export type ModelCapability = 'generation' | 'analysis' | 'refinement';
+export type ModelCapability = "generation" | "analysis" | "refinement";
 
 /** 模型层级类型 */
-export type ModelTier = 'premium' | 'economy' | 'local';
+export type ModelTier = "premium" | "economy" | "local";
 
 /** 单个模型配置 */
 export interface MultiModelConfig {
@@ -84,11 +84,11 @@ const DEFAULT_MAX_TOKENS = 128000;
  */
 export function resolveApiKey(apiKey: string | undefined): string {
   if (!apiKey) {
-    return '';
+    return "";
   }
 
   // 如果不包含 ${} 格式，直接返回
-  if (!apiKey.includes('${')) {
+  if (!apiKey.includes("${")) {
     return apiKey;
   }
 
@@ -109,17 +109,17 @@ export function resolveApiKey(apiKey: string | undefined): string {
 function validateBaseUrl(baseUrl: string): { valid: boolean; error?: string } {
   const trimmed = baseUrl.trim();
   if (!trimmed) {
-    return { valid: false, error: 'baseUrl 不能为空' };
+    return { valid: false, error: "baseUrl 不能为空" };
   }
 
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { valid: false, error: 'baseUrl 必须以 http:// 或 https:// 开头' };
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { valid: false, error: "baseUrl 必须以 http:// 或 https:// 开头" };
     }
     return { valid: true };
   } catch {
-    return { valid: false, error: 'baseUrl 格式无效' };
+    return { valid: false, error: "baseUrl 格式无效" };
   }
 }
 
@@ -131,12 +131,15 @@ function validateMaxTokens(maxTokens: unknown): number {
     return DEFAULT_MAX_TOKENS;
   }
 
-  if (typeof maxTokens !== 'number' || !Number.isFinite(maxTokens)) {
+  if (typeof maxTokens !== "number" || !Number.isFinite(maxTokens)) {
     logger.warn(`maxTokens 必须是数字，使用默认值 ${DEFAULT_MAX_TOKENS}`);
     return DEFAULT_MAX_TOKENS;
   }
 
-  const clamped = Math.min(MAX_MAX_TOKENS, Math.max(MIN_MAX_TOKENS, Math.floor(maxTokens)));
+  const clamped = Math.min(
+    MAX_MAX_TOKENS,
+    Math.max(MIN_MAX_TOKENS, Math.floor(maxTokens)),
+  );
   if (clamped !== maxTokens) {
     logger.warn(`maxTokens ${maxTokens} 超出范围，调整为 ${clamped}`);
   }
@@ -146,20 +149,22 @@ function validateMaxTokens(maxTokens: unknown): number {
 /**
  * 验证单个模型配置
  */
-export function validateModelConfig(config: MultiModelConfig): ValidatedModelConfig {
+export function validateModelConfig(
+  config: MultiModelConfig,
+): ValidatedModelConfig {
   const errors: string[] = [];
 
   // 必填字段验证
   if (!config.id?.trim()) {
-    errors.push('id 不能为空');
+    errors.push("id 不能为空");
   }
 
   if (!config.name?.trim()) {
-    errors.push('name 不能为空');
+    errors.push("name 不能为空");
   }
 
   if (!config.model?.trim()) {
-    errors.push('model 不能为空');
+    errors.push("model 不能为空");
   }
 
   // baseUrl 验证
@@ -170,8 +175,8 @@ export function validateModelConfig(config: MultiModelConfig): ValidatedModelCon
 
   // apiKey 验证和解析
   const resolvedApiKey = resolveApiKey(config.apiKey);
-  if (!resolvedApiKey && config.tier !== 'local') {
-    errors.push('apiKey 不能为空（本地模型除外）');
+  if (!resolvedApiKey && config.tier !== "local") {
+    errors.push("apiKey 不能为空（本地模型除外）");
   }
 
   // maxTokens 验证
@@ -184,14 +189,16 @@ export function validateModelConfig(config: MultiModelConfig): ValidatedModelCon
     apiKey: resolvedApiKey,
     maxTokens: validMaxTokens,
     isValid,
-    validationError: isValid ? undefined : errors.join('; '),
+    validationError: isValid ? undefined : errors.join("; "),
   };
 }
 
 /**
  * 加载多模型配置文件
  */
-export async function loadMultiModelsFile(filePath: string): Promise<MultiModelsFile> {
+export async function loadMultiModelsFile(
+  filePath: string,
+): Promise<MultiModelsFile> {
   if (!(await fileExists(filePath))) {
     logger.warn(`多模型配置文件不存在: ${filePath}`);
     return { models: [] };
@@ -216,12 +223,14 @@ export async function loadMultiModelsFile(filePath: string): Promise<MultiModels
 /**
  * 获取验证后的模型列表
  */
-export function getValidatedModels(configFile: MultiModelsFile): ValidatedModelConfig[] {
+export function getValidatedModels(
+  configFile: MultiModelsFile,
+): ValidatedModelConfig[] {
   const validated = configFile.models.map(validateModelConfig);
 
   // 过滤有效模型
-  const validModels = validated.filter(m => m.isValid);
-  const invalidModels = validated.filter(m => !m.isValid);
+  const validModels = validated.filter((m) => m.isValid);
+  const invalidModels = validated.filter((m) => !m.isValid);
 
   if (invalidModels.length > 0) {
     logger.warn(`有 ${invalidModels.length} 个模型配置无效，已跳过`);
@@ -240,21 +249,25 @@ export function getValidatedModels(configFile: MultiModelsFile): ValidatedModelC
 export function selectModelForTask(
   configFile: MultiModelsFile,
   taskType: string,
-  validatedModels: ValidatedModelConfig[]
+  validatedModels: ValidatedModelConfig[],
 ): ValidatedModelConfig | null {
   if (validatedModels.length === 0) {
-    logger.warn('没有可用的验证模型');
+    logger.warn("没有可用的验证模型");
     return null;
   }
 
   const routing = configFile.routing;
 
   // 查找匹配的规则
-  const matchedRule = routing?.rules?.find(rule => rule.taskType === taskType);
+  const matchedRule = routing?.rules?.find(
+    (rule) => rule.taskType === taskType,
+  );
 
   // 优先使用指定模型 ID
   if (matchedRule?.preferredModelId) {
-    const model = validatedModels.find(m => m.id === matchedRule.preferredModelId);
+    const model = validatedModels.find(
+      (m) => m.id === matchedRule.preferredModelId,
+    );
     if (model) {
       logger.debug(`使用指定模型: ${model.id} (任务类型: ${taskType})`);
       return model;
@@ -265,7 +278,7 @@ export function selectModelForTask(
   // 按层级筛选
   const preferredTier = matchedRule?.preferredTier;
   if (preferredTier) {
-    const tierModels = validatedModels.filter(m => m.tier === preferredTier);
+    const tierModels = validatedModels.filter((m) => m.tier === preferredTier);
     if (tierModels.length > 0) {
       logger.debug(`使用层级 ${preferredTier} 的模型: ${tierModels[0].id}`);
       return tierModels[0];
@@ -274,7 +287,7 @@ export function selectModelForTask(
 
   // 使用默认模型
   if (routing?.defaultModel) {
-    const model = validatedModels.find(m => m.id === routing.defaultModel);
+    const model = validatedModels.find((m) => m.id === routing.defaultModel);
     if (model) {
       logger.debug(`使用默认模型: ${model.id}`);
       return model;
@@ -291,16 +304,18 @@ export function selectModelForTask(
  */
 export function getFallbackModel(
   configFile: MultiModelsFile,
-  validatedModels: ValidatedModelConfig[]
+  validatedModels: ValidatedModelConfig[],
 ): ValidatedModelConfig | null {
   const fallbackId = configFile.routing?.fallbackModel;
   if (fallbackId) {
-    const model = validatedModels.find(m => m.id === fallbackId);
+    const model = validatedModels.find((m) => m.id === fallbackId);
     if (model) {
       return model;
     }
   }
 
   // 返回最后一个有效模型（通常是最便宜的）
-  return validatedModels.length > 1 ? validatedModels[validatedModels.length - 1] : null;
+  return validatedModels.length > 1
+    ? validatedModels[validatedModels.length - 1]
+    : null;
 }

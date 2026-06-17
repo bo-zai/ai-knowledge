@@ -12,9 +12,9 @@
  * (include/extend/prepend expressed as method calls).
  */
 
-import type { SupportedLanguages } from '../shared';
-import type { SyntaxNode } from './utils/ast-helpers.js';
-import type { CaptureMap } from './language-provider.js';
+import type { SupportedLanguages } from "../shared";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
+import type { CaptureMap } from "./language-provider.js";
 
 // ---------------------------------------------------------------------------
 // Extracted result
@@ -55,7 +55,10 @@ export interface HeritageExtractor {
    * @param context     File path and language context
    * @returns Array of heritage records (may be empty if captures don't match)
    */
-  extract(captureMap: CaptureMap, context: HeritageExtractorContext): HeritageInfo[];
+  extract(
+    captureMap: CaptureMap,
+    context: HeritageExtractorContext,
+  ): HeritageInfo[];
 
   /**
    * Extract heritage from a call node (for languages where heritage is
@@ -99,6 +102,10 @@ export interface HeritageExtractionConfig {
    */
   callBasedHeritage?: {
     readonly callNames: ReadonlySet<string>;
-    extract(calledName: string, callNode: SyntaxNode, filePath: string): HeritageInfo[];
+    extract(
+      calledName: string,
+      callNode: SyntaxNode,
+      filePath: string,
+    ): HeritageInfo[];
   };
 }

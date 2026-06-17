@@ -25,45 +25,55 @@
  * Pure given the input source text. No I/O, no globals consulted.
  */
 
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
 import {
   findNodeAtRange,
   nodeToCapture,
   syntheticCapture,
   type SyntaxNode,
-} from '../../utils/ast-helpers.js';
-import { splitImportStatement } from './import-decomposer.js';
-import { getTsParser, getTsScopeQuery, tsCachedTreeMatchesGrammar } from './query.js';
-import { recordCacheHit, recordCacheMiss } from './cache-stats.js';
-import { synthesizeTsReceiverBinding } from './receiver-binding.js';
-import { computeTsArityMetadata } from './arity-metadata.js';
-import { getTreeSitterBufferSize } from '../../constants.js';
+} from "../../utils/ast-helpers.js";
+import { splitImportStatement } from "./import-decomposer.js";
+import {
+  getTsParser,
+  getTsScopeQuery,
+  tsCachedTreeMatchesGrammar,
+} from "./query.js";
+import { recordCacheHit, recordCacheMiss } from "./cache-stats.js";
+import { synthesizeTsReceiverBinding } from "./receiver-binding.js";
+import { computeTsArityMetadata } from "./arity-metadata.js";
+import { getTreeSitterBufferSize } from "../../constants.js";
 
 /** tree-sitter-typescript node types for function-like scopes that may
  *  carry a synthesized `this` binding. Kept in sync with the
  *  `@scope.function` patterns in `query.ts`. */
 const FUNCTION_NODE_TYPES = [
-  'method_definition',
-  'method_signature',
-  'abstract_method_signature',
-  'arrow_function',
-  'function_expression',
-  'function_declaration',
-  'generator_function_declaration',
-  'function_signature',
+  "method_definition",
+  "method_signature",
+  "abstract_method_signature",
+  "arrow_function",
+  "function_expression",
+  "function_declaration",
+  "generator_function_declaration",
+  "function_signature",
 ] as const;
 
 /** Declaration anchors that carry function-like arity metadata. */
-const FUNCTION_DECL_TAGS = ['@declaration.method', '@declaration.function'] as const;
+const FUNCTION_DECL_TAGS = [
+  "@declaration.method",
+  "@declaration.function",
+] as const;
 
 /** Callsite anchors that should carry `@reference.arity` + param types. */
 const CALL_TAGS = [
-  '@reference.call.free',
-  '@reference.call.member',
-  '@reference.call.constructor',
+  "@reference.call.free",
+  "@reference.call.member",
+  "@reference.call.constructor",
 ] as const;
 
-function pickFirstDefined(grouped: CaptureMatch, tags: readonly string[]): Capture | undefined {
+function pickFirstDefined(
+  grouped: CaptureMatch,
+  tags: readonly string[],
+): Capture | undefined {
   for (const tag of tags) {
     const cap = grouped[tag];
     if (cap !== undefined) return cap;
@@ -97,16 +107,16 @@ function shouldEmitReadMember(memberNode: SyntaxNode): boolean {
   const parent = memberNode.parent;
   if (parent === null) return true;
   switch (parent.type) {
-    case 'call_expression':
-      return parent.childForFieldName('function')?.id !== memberNode.id;
-    case 'new_expression':
-      return parent.childForFieldName('constructor')?.id !== memberNode.id;
-    case 'assignment_expression':
-    case 'augmented_assignment_expression':
-      return parent.childForFieldName('left')?.id !== memberNode.id;
-    case 'jsx_self_closing_element':
-    case 'jsx_opening_element':
-      return parent.childForFieldName('name')?.id !== memberNode.id;
+    case "call_expression":
+      return parent.childForFieldName("function")?.id !== memberNode.id;
+    case "new_expression":
+      return parent.childForFieldName("constructor")?.id !== memberNode.id;
+    case "assignment_expression":
+    case "augmented_assignment_expression":
+      return parent.childForFieldName("left")?.id !== memberNode.id;
+    case "jsx_self_closing_element":
+    case "jsx_opening_element":
+      return parent.childForFieldName("name")?.id !== memberNode.id;
     default:
       return true;
   }
@@ -129,7 +139,9 @@ export function emitTsScopeCaptures(
   // tree's grammar against the file extension and fall back to a
   // fresh parse if they disagree (e.g. a worker-mode parse landed
   // with the wrong grammar pinned).
-  let tree = cachedTree as ReturnType<ReturnType<typeof getTsParser>['parse']> | undefined;
+  let tree = cachedTree as
+    | ReturnType<ReturnType<typeof getTsParser>["parse"]>
+    | undefined;
   if (tree !== undefined && !tsCachedTreeMatchesGrammar(tree, filePath)) {
     tree = undefined;
   }
@@ -151,7 +163,7 @@ export function emitTsScopeCaptures(
     // (`@scope.`, `@declaration.`, …) work.
     const grouped: Record<string, Capture> = {};
     for (const c of m.captures) {
-      const tag = '@' + c.name;
+      const tag = "@" + c.name;
       grouped[tag] = nodeToCapture(tag, c.node);
     }
     if (Object.keys(grouped).length === 0) continue;
@@ -161,11 +173,11 @@ export function emitTsScopeCaptures(
     // it consumes. The raw query anchor carries only @import.statement.
     // Side-effect imports emit a non-binding marker so finalize can keep
     // the file-level dependency.
-    if (grouped['@import.statement'] !== undefined) {
-      const stmtCapture = grouped['@import.statement'];
+    if (grouped["@import.statement"] !== undefined) {
+      const stmtCapture = grouped["@import.statement"];
       const stmtNode =
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'import_statement') ??
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'export_statement');
+        findNodeAtRange(tree.rootNode, stmtCapture.range, "import_statement") ??
+        findNodeAtRange(tree.rootNode, stmtCapture.range, "export_statement");
       if (stmtNode !== null) {
         const decomposed = splitImportStatement(stmtNode);
         for (const d of decomposed) out.push(d);
@@ -180,9 +192,13 @@ export function emitTsScopeCaptures(
     // Dynamic imports — decompose via the same path. `@import.dynamic`
     // is anchored on a `call_expression`, which the decomposer's
     // `splitDynamicImport` branch consumes.
-    if (grouped['@import.dynamic'] !== undefined) {
-      const dynCapture = grouped['@import.dynamic'];
-      const callNode = findNodeAtRange(tree.rootNode, dynCapture.range, 'call_expression');
+    if (grouped["@import.dynamic"] !== undefined) {
+      const dynCapture = grouped["@import.dynamic"];
+      const callNode = findNodeAtRange(
+        tree.rootNode,
+        dynCapture.range,
+        "call_expression",
+      );
       if (callNode !== null) {
         const decomposed = splitImportStatement(callNode);
         for (const d of decomposed) out.push(d);
@@ -194,9 +210,13 @@ export function emitTsScopeCaptures(
     // us they are actually calls / writes / constructor invocations. The
     // tree-sitter pattern is context-free and matches every member_expression;
     // we rely on this emit-side filter so the query stays simple.
-    if (grouped['@reference.read.member'] !== undefined) {
-      const anchor = grouped['@reference.read.member'];
-      const memberNode = findNodeAtRange(tree.rootNode, anchor.range, 'member_expression');
+    if (grouped["@reference.read.member"] !== undefined) {
+      const anchor = grouped["@reference.read.member"];
+      const memberNode = findNodeAtRange(
+        tree.rootNode,
+        anchor.range,
+        "member_expression",
+      );
       if (memberNode === null || !shouldEmitReadMember(memberNode)) {
         continue;
       }
@@ -213,22 +233,22 @@ export function emitTsScopeCaptures(
       if (fnNode !== null) {
         const arity = computeTsArityMetadata(fnNode);
         if (arity.parameterCount !== undefined) {
-          grouped['@declaration.parameter-count'] = syntheticCapture(
-            '@declaration.parameter-count',
+          grouped["@declaration.parameter-count"] = syntheticCapture(
+            "@declaration.parameter-count",
             fnNode,
             String(arity.parameterCount),
           );
         }
         if (arity.requiredParameterCount !== undefined) {
-          grouped['@declaration.required-parameter-count'] = syntheticCapture(
-            '@declaration.required-parameter-count',
+          grouped["@declaration.required-parameter-count"] = syntheticCapture(
+            "@declaration.required-parameter-count",
             fnNode,
             String(arity.requiredParameterCount),
           );
         }
         if (arity.parameterTypes !== undefined) {
-          grouped['@declaration.parameter-types'] = syntheticCapture(
-            '@declaration.parameter-types',
+          grouped["@declaration.parameter-types"] = syntheticCapture(
+            "@declaration.parameter-types",
             fnNode,
             JSON.stringify(arity.parameterTypes),
           );
@@ -255,27 +275,27 @@ export function emitTsScopeCaptures(
     // synthesizer would need to count `jsx_attribute` children of the
     // opening tag instead of `arguments`.
     const callAnchor = pickFirstDefined(grouped, CALL_TAGS);
-    if (callAnchor !== undefined && grouped['@reference.arity'] === undefined) {
+    if (callAnchor !== undefined && grouped["@reference.arity"] === undefined) {
       const callNode =
-        findNodeAtRange(tree.rootNode, callAnchor.range, 'call_expression') ??
-        findNodeAtRange(tree.rootNode, callAnchor.range, 'new_expression');
+        findNodeAtRange(tree.rootNode, callAnchor.range, "call_expression") ??
+        findNodeAtRange(tree.rootNode, callAnchor.range, "new_expression");
       if (callNode !== null) {
-        const argList = callNode.childForFieldName('arguments');
+        const argList = callNode.childForFieldName("arguments");
         const args: SyntaxNode[] =
           argList === null
             ? []
             : argList.namedChildren.filter(
-                (c): c is SyntaxNode => c !== null && c.type !== 'comment',
+                (c): c is SyntaxNode => c !== null && c.type !== "comment",
               );
-        grouped['@reference.arity'] = syntheticCapture(
-          '@reference.arity',
+        grouped["@reference.arity"] = syntheticCapture(
+          "@reference.arity",
           callNode,
           String(args.length),
         );
 
         const argTypes = args.map((arg) => inferArgType(arg));
-        grouped['@reference.parameter-types'] = syntheticCapture(
-          '@reference.parameter-types',
+        grouped["@reference.parameter-types"] = syntheticCapture(
+          "@reference.parameter-types",
           callNode,
           JSON.stringify(argTypes),
         );
@@ -290,7 +310,7 @@ export function emitTsScopeCaptures(
     // signature, arrow/function-expression assigned to a class field).
     // Arrow functions nested inside method bodies rely on scope-chain
     // lookup instead of synthesis — covered by `tsReceiverBinding`.
-    const scopeFnAnchor = grouped['@scope.function'];
+    const scopeFnAnchor = grouped["@scope.function"];
     if (scopeFnAnchor !== undefined) {
       const fnNode = findFunctionNode(tree.rootNode, scopeFnAnchor.range);
       if (fnNode !== null) {
@@ -331,7 +351,10 @@ export function emitTsScopeCaptures(
  * walk catches the destructured identifier on a second fixpoint pass.
  * Left as a follow-up optimization.
  */
-function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeDestructuringBindings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -339,48 +362,56 @@ function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]):
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'variable_declarator') continue;
-    const nameNode = node.childForFieldName('name');
-    const valueNode = node.childForFieldName('value');
+    if (node.type !== "variable_declarator") continue;
+    const nameNode = node.childForFieldName("name");
+    const valueNode = node.childForFieldName("value");
     if (nameNode === null || valueNode === null) continue;
-    if (nameNode.type !== 'object_pattern') continue;
-    if (valueNode.type !== 'identifier') continue;
+    if (nameNode.type !== "object_pattern") continue;
+    if (valueNode.type !== "identifier") continue;
     const rhsName = valueNode.text;
     for (const fieldNode of nameNode.namedChildren) {
       if (fieldNode === null) continue;
-      if (fieldNode.type === 'shorthand_property_identifier_pattern') {
+      if (fieldNode.type === "shorthand_property_identifier_pattern") {
         // `const { address } = user`
         const localName = fieldNode.text;
         out.push({
-          '@type-binding.name': syntheticCapture('@type-binding.name', fieldNode, localName),
-          '@type-binding.type': syntheticCapture(
-            '@type-binding.type',
+          "@type-binding.name": syntheticCapture(
+            "@type-binding.name",
+            fieldNode,
+            localName,
+          ),
+          "@type-binding.type": syntheticCapture(
+            "@type-binding.type",
             fieldNode,
             `${rhsName}.${localName}`,
           ),
-          '@type-binding.destructured': syntheticCapture(
-            '@type-binding.destructured',
+          "@type-binding.destructured": syntheticCapture(
+            "@type-binding.destructured",
             fieldNode,
             fieldNode.text,
           ),
         });
-      } else if (fieldNode.type === 'pair_pattern') {
+      } else if (fieldNode.type === "pair_pattern") {
         // `const { address: addr } = user`
-        const key = fieldNode.childForFieldName('key');
-        const value = fieldNode.childForFieldName('value');
+        const key = fieldNode.childForFieldName("key");
+        const value = fieldNode.childForFieldName("value");
         if (key === null || value === null) continue;
-        if (value.type !== 'identifier') continue;
+        if (value.type !== "identifier") continue;
         const fieldName = key.text;
         const localName = value.text;
         out.push({
-          '@type-binding.name': syntheticCapture('@type-binding.name', value, localName),
-          '@type-binding.type': syntheticCapture(
-            '@type-binding.type',
+          "@type-binding.name": syntheticCapture(
+            "@type-binding.name",
+            value,
+            localName,
+          ),
+          "@type-binding.type": syntheticCapture(
+            "@type-binding.type",
             fieldNode,
             `${rhsName}.${fieldName}`,
           ),
-          '@type-binding.destructured': syntheticCapture(
-            '@type-binding.destructured',
+          "@type-binding.destructured": syntheticCapture(
+            "@type-binding.destructured",
             fieldNode,
             fieldNode.text,
           ),
@@ -395,7 +426,10 @@ function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]):
  * type bindings so `v` resolves like a `Map` iterator tuple element.
  * Uses sentinel `__MAP_TUPLE_i__:rhs` consumed by compound-receiver.
  */
-function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeForOfMapTupleBindings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -403,25 +437,29 @@ function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]):
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'for_in_statement') continue;
-    const left = node.childForFieldName('left');
-    const right = node.childForFieldName('right');
+    if (node.type !== "for_in_statement") continue;
+    const left = node.childForFieldName("left");
+    const right = node.childForFieldName("right");
     if (left === null || right === null) continue;
-    if (left.type !== 'array_pattern' || right.type !== 'identifier') continue;
+    if (left.type !== "array_pattern" || right.type !== "identifier") continue;
     const rhs = right.text;
     let slot = 0;
     for (const child of left.namedChildren) {
-      if (child === null || child.type !== 'identifier') continue;
+      if (child === null || child.type !== "identifier") continue;
       const localName = child.text;
       out.push({
-        '@type-binding.name': syntheticCapture('@type-binding.name', child, localName),
-        '@type-binding.type': syntheticCapture(
-          '@type-binding.type',
+        "@type-binding.name": syntheticCapture(
+          "@type-binding.name",
+          child,
+          localName,
+        ),
+        "@type-binding.type": syntheticCapture(
+          "@type-binding.type",
           child,
           `__MAP_TUPLE_${slot}__:${rhs}`,
         ),
-        '@type-binding.map-tuple-entry': syntheticCapture(
-          '@type-binding.map-tuple-entry',
+        "@type-binding.map-tuple-entry": syntheticCapture(
+          "@type-binding.map-tuple-entry",
           child,
           String(slot),
         ),
@@ -444,7 +482,10 @@ function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]):
  * type resolution covers the common case for those receivers via
  * declared types instead.
  */
-function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeInstanceofNarrowings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -452,29 +493,39 @@ function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): 
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'if_statement') continue;
-    const cond = node.childForFieldName('condition');
+    if (node.type !== "if_statement") continue;
+    const cond = node.childForFieldName("condition");
     if (cond === null) continue;
-    const inner = cond.type === 'parenthesized_expression' ? cond.namedChildren[0] : cond;
-    if (inner === null || inner.type !== 'binary_expression') continue;
-    const op = inner.childForFieldName('operator');
-    const left = inner.childForFieldName('left');
-    const right = inner.childForFieldName('right');
+    const inner =
+      cond.type === "parenthesized_expression" ? cond.namedChildren[0] : cond;
+    if (inner === null || inner.type !== "binary_expression") continue;
+    const op = inner.childForFieldName("operator");
+    const left = inner.childForFieldName("left");
+    const right = inner.childForFieldName("right");
     if (op === null || left === null || right === null) continue;
-    if (op.type !== 'instanceof') continue;
-    if (left.type !== 'identifier') continue;
-    if (right.type !== 'identifier' && right.type !== 'type_identifier') continue;
+    if (op.type !== "instanceof") continue;
+    if (left.type !== "identifier") continue;
+    if (right.type !== "identifier" && right.type !== "type_identifier")
+      continue;
     const varName = left.text;
     const typeName = right.text;
-    const cons = node.childForFieldName('consequence');
+    const cons = node.childForFieldName("consequence");
     if (cons === null) continue;
     out.push({
-      '@type-binding.name': syntheticCapture('@type-binding.name', cons, varName),
-      '@type-binding.type': syntheticCapture('@type-binding.type', right, typeName),
-      '@type-binding.instanceof-narrow': syntheticCapture(
-        '@type-binding.instanceof-narrow',
+      "@type-binding.name": syntheticCapture(
+        "@type-binding.name",
         cons,
-        '1',
+        varName,
+      ),
+      "@type-binding.type": syntheticCapture(
+        "@type-binding.type",
+        right,
+        typeName,
+      ),
+      "@type-binding.instanceof-narrow": syntheticCapture(
+        "@type-binding.instanceof-narrow",
+        cons,
+        "1",
       ),
     });
   }
@@ -486,30 +537,30 @@ function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): 
  *  any-match during overload narrowing. */
 function inferArgType(argNode: SyntaxNode): string {
   switch (argNode.type) {
-    case 'number':
-      return 'number';
-    case 'string':
-    case 'template_string':
-      return 'string';
-    case 'true':
-    case 'false':
-      return 'boolean';
-    case 'null':
-      return 'null';
-    case 'undefined':
-      return 'undefined';
-    case 'array':
-      return 'Array';
-    case 'object':
-      return 'object';
-    case 'regex':
-      return 'RegExp';
-    case 'new_expression': {
-      const ctor = argNode.childForFieldName('constructor');
-      return ctor?.text ?? '';
+    case "number":
+      return "number";
+    case "string":
+    case "template_string":
+      return "string";
+    case "true":
+    case "false":
+      return "boolean";
+    case "null":
+      return "null";
+    case "undefined":
+      return "undefined";
+    case "array":
+      return "Array";
+    case "object":
+      return "object";
+    case "regex":
+      return "RegExp";
+    case "new_expression": {
+      const ctor = argNode.childForFieldName("constructor");
+      return ctor?.text ?? "";
     }
     default:
-      return '';
+      return "";
   }
 }
 
@@ -517,7 +568,10 @@ function inferArgType(argNode: SyntaxNode): string {
  *  The `@scope.function` anchor range covers the whole node, but the
  *  tag alone doesn't identify which node type among the many TS
  *  function-likes. */
-function findFunctionNode(rootNode: SyntaxNode, range: Capture['range']): SyntaxNode | null {
+function findFunctionNode(
+  rootNode: SyntaxNode,
+  range: Capture["range"],
+): SyntaxNode | null {
   for (const nodeType of FUNCTION_NODE_TYPES) {
     const n = findNodeAtRange(rootNode, range, nodeType);
     if (n !== null) return n;

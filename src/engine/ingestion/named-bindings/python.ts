@@ -1,17 +1,19 @@
-import { findChild, type SyntaxNode } from '../utils/ast-helpers.js';
-import type { NamedBinding } from './types.js';
+import { findChild, type SyntaxNode } from "../utils/ast-helpers.js";
+import type { NamedBinding } from "./types.js";
 
-export function extractPythonNamedBindings(importNode: SyntaxNode): NamedBinding[] | undefined {
+export function extractPythonNamedBindings(
+  importNode: SyntaxNode,
+): NamedBinding[] | undefined {
   // Handle: from x import User, Repo as R
-  if (importNode.type === 'import_from_statement') {
+  if (importNode.type === "import_from_statement") {
     const bindings: NamedBinding[] = [];
     for (let i = 0; i < importNode.namedChildCount; i++) {
       const child = importNode.namedChild(i);
       if (!child) continue;
 
-      if (child.type === 'dotted_name') {
+      if (child.type === "dotted_name") {
         // Skip the module_name (first dotted_name is the source module)
-        const fieldName = importNode.childForFieldName?.('module_name');
+        const fieldName = importNode.childForFieldName?.("module_name");
         if (fieldName && child.startIndex === fieldName.startIndex) continue;
 
         // This is an imported name: from x import User
@@ -19,10 +21,10 @@ export function extractPythonNamedBindings(importNode: SyntaxNode): NamedBinding
         if (name) bindings.push({ local: name, exported: name });
       }
 
-      if (child.type === 'aliased_import') {
+      if (child.type === "aliased_import") {
         // from x import Repo as R
-        const dottedName = findChild(child, 'dotted_name');
-        const aliasIdent = findChild(child, 'identifier');
+        const dottedName = findChild(child, "dotted_name");
+        const aliasIdent = findChild(child, "identifier");
         if (dottedName && aliasIdent) {
           bindings.push({ local: aliasIdent.text, exported: dottedName.text });
         }
@@ -35,16 +37,20 @@ export function extractPythonNamedBindings(importNode: SyntaxNode): NamedBinding
   // Handle: import numpy as np  (import_statement with aliased_import child)
   // Tagged with isModuleAlias so applyImportResult routes these directly to
   // moduleAliasMap (e.g. "np" → "numpy.py") instead of namedImportMap.
-  if (importNode.type === 'import_statement') {
+  if (importNode.type === "import_statement") {
     const bindings: NamedBinding[] = [];
     for (let i = 0; i < importNode.namedChildCount; i++) {
       const child = importNode.namedChild(i);
-      if (!child || child.type !== 'aliased_import') continue;
+      if (!child || child.type !== "aliased_import") continue;
 
-      const dottedName = findChild(child, 'dotted_name');
-      const aliasIdent = findChild(child, 'identifier');
+      const dottedName = findChild(child, "dotted_name");
+      const aliasIdent = findChild(child, "identifier");
       if (dottedName && aliasIdent) {
-        bindings.push({ local: aliasIdent.text, exported: dottedName.text, isModuleAlias: true });
+        bindings.push({
+          local: aliasIdent.text,
+          exported: dottedName.text,
+          isModuleAlias: true,
+        });
       }
     }
 

@@ -88,6 +88,7 @@ ai-knowledge/
 ```
 
 `.meta` 文件的作用：
+
 - 增量更新时，通过 `lastCommitHash` 与当前分支 HEAD 对比，计算变更范围
 - `projectTypeIdentifiedAt` 记录项目类型识别时间，增量更新时判断是否需要重新识别（目录结构变更时重新识别）
 
@@ -113,52 +114,60 @@ index.md 的结构：
 
 ## 业务域导航
 
-| 业务域 | 能力 | 关键概念 | 约束 | 数据聚合 | 模块 |
-|--------|------|---------|------|---------|------|
-| 订单 | [前台订单](capabilities/portal-order.md)、[后台订单](capabilities/admin-order.md) | [订单状态](concepts/order-status.md) | [地址要求](constraints/address.md) | [订单聚合](data-model/order.md) | mall-portal, mall-admin |
-| 商品 | [商品管理](capabilities/product.md) | [商品类型](concepts/product-type.md) | — | [商品聚合](data-model/product.md) | mall-admin |
-| 用户 | [用户管理](capabilities/user.md) | [用户角色](concepts/user-role.md) | [绑定限制](constraints/bind-limit.md) | [用户聚合](data-model/user.md) | mall-admin, mall-portal |
+| 业务域 | 能力                                                                              | 关键概念                             | 约束                                  | 数据聚合                          | 模块                    |
+| ------ | --------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------- | --------------------------------- | ----------------------- |
+| 订单   | [前台订单](capabilities/portal-order.md)、[后台订单](capabilities/admin-order.md) | [订单状态](concepts/order-status.md) | [地址要求](constraints/address.md)    | [订单聚合](data-model/order.md)   | mall-portal, mall-admin |
+| 商品   | [商品管理](capabilities/product.md)                                               | [商品类型](concepts/product-type.md) | —                                     | [商品聚合](data-model/product.md) | mall-admin              |
+| 用户   | [用户管理](capabilities/user.md)                                                  | [用户角色](concepts/user-role.md)    | [绑定限制](constraints/bind-limit.md) | [用户聚合](data-model/user.md)    | mall-admin, mall-portal |
 
 ## 能力目录
-| 域名 | 描述 | 文件 |
-|------|------|------|
+
+| 域名     | 描述                         | 文件                                           |
+| -------- | ---------------------------- | ---------------------------------------------- |
 | 订单管理 | 商品购买的订单全生命周期管理 | [capabilities/order.md](capabilities/order.md) |
 | 教学管理 | 课表制定、课件练习、打分评价 | [capabilities/teach.md](capabilities/teach.md) |
 
 ## 概念知识
-| 概念 | 简要说明 | 文件 |
-|------|---------|------|
-| 用户角色 | 学生、教师、高级教师等六种角色 | [concepts/user-role.md](concepts/user-role.md) |
-| 课件类型 | 曲目课件和教学内容课件的区分 | [concepts/courseware-type.md](concepts/courseware-type.md) |
+
+| 概念     | 简要说明                       | 文件                                                       |
+| -------- | ------------------------------ | ---------------------------------------------------------- |
+| 用户角色 | 学生、教师、高级教师等六种角色 | [concepts/user-role.md](concepts/user-role.md)             |
+| 课件类型 | 曲目课件和教学内容课件的区分   | [concepts/courseware-type.md](concepts/courseware-type.md) |
 
 ## 边界知识
-| 边界 | 类型 | 文件 |
-|------|------|------|
+
+| 边界         | 类型   | 文件                                                             |
+| ------------ | ------ | ---------------------------------------------------------------- |
 | 支付渠道局限 | 局限性 | [boundaries/payment-channels.md](boundaries/payment-channels.md) |
 
 ## 外部系统交互
-| 外部系统 | 交互目的 | 文件 |
-|---------|---------|------|
+
+| 外部系统 | 交互目的 | 文件                                                             |
+| -------- | -------- | ---------------------------------------------------------------- |
 | 微信支付 | 在线支付 | [external-systems/wechat-pay.md](external-systems/wechat-pay.md) |
 
 ## 约束知识
-| 约束 | 类型 | 文件 |
-|------|------|------|
+
+| 约束             | 类型     | 文件                                                                   |
+| ---------------- | -------- | ---------------------------------------------------------------------- |
 | 学生绑定频率限制 | 业务规则 | [constraints/student-bind-limit.md](constraints/student-bind-limit.md) |
 
 ## 能力关系
-| 关系 | 类型 | 文件 |
-|------|------|------|
+
+| 关系             | 类型   | 文件                                                               |
+| ---------------- | ------ | ------------------------------------------------------------------ |
 | 课表制定触发积分 | 触发链 | [relations/timetable-integral.md](relations/timetable-integral.md) |
 
 ## 数据模型
-| 聚合 | 描述 | 文件 |
-|------|------|------|
+
+| 聚合 | 描述                     | 文件                                         |
+| ---- | ------------------------ | -------------------------------------------- |
 | 课表 | 周学习计划，含课程和课件 | [data-model/course.md](data-model/course.md) |
 
 ## 跨域业务流程
-| 流程 | 业务目标 | 文件 |
-|------|---------|------|
+
+| 流程           | 业务目标                       | 文件                                                     |
+| -------------- | ------------------------------ | -------------------------------------------------------- |
 | 商品购买全流程 | 从浏览商品到完成支付的购买路径 | [workflows/purchase-flow.md](workflows/purchase-flow.md) |
 ```
 
@@ -174,22 +183,22 @@ index.md 的生成约束：
 
 业务域导航表的设计意图：Agent 收到需求时，通常以业务域为入口（如"这个需求涉及订单"），需要快速找到该域相关的所有知识文件。业务域导航表将分散在 8 个按类型表格中的跨类型引用聚合为一张域级表格，使 Agent 无需逐表扫描即可定位相关知识的完整上下文。
 
-### _index.md：类型内部索引
+### \_index.md：类型内部索引
 
 各知识类型目录下的 `_index.md` 列出该类型下所有条目的名称、简要说明和文件路径。
 
 当 Agent 需要扫描某个类型下的全部条目时使用。
 
-_index.md 的结构以 capabilities 为例：
+\_index.md 的结构以 capabilities 为例：
 
 ```markdown
 # 能力目录索引
 
-| 域名 | 别名 | 描述 | 操作数 | 标签 | 文件 |
-|------|------|------|--------|------|------|
-| 订单管理 | 交易管理 | 商品购买的订单全生命周期管理 | 5 | 订单、交易、购买 | [order.md](order.md) |
-| 教学管理 | 教务管理 | 课表制定、课件练习、打分评价 | 8 | 课表、课件、教学 | [teach.md](teach.md) |
-| 用户管理 | — | 登录、注册、师徒绑定、会员管理 | 6 | 用户、登录、会员 | [user.md](user.md) |
+| 域名     | 别名     | 描述                           | 操作数 | 标签             | 文件                 |
+| -------- | -------- | ------------------------------ | ------ | ---------------- | -------------------- |
+| 订单管理 | 交易管理 | 商品购买的订单全生命周期管理   | 5      | 订单、交易、购买 | [order.md](order.md) |
+| 教学管理 | 教务管理 | 课表制定、课件练习、打分评价   | 8      | 课表、课件、教学 | [teach.md](teach.md) |
+| 用户管理 | —        | 登录、注册、师徒绑定、会员管理 | 6      | 用户、登录、会员 | [user.md](user.md)   |
 ```
 
 能力目录的 `_index.md` 包含别名列，记录该能力域在业务沟通中的常见其他叫法，帮助 Agent 匹配需求文档中的不同用语。别名由 LLM 在生成能力域时从域描述和代码上下文中提取，无别名时填"—"。
@@ -199,35 +208,35 @@ _index.md 的结构以 capabilities 为例：
 ```markdown
 # 约束知识索引
 
-| 约束 | 类型 | 描述 | 标签 | 文件 |
-|------|------|------|------|------|
-| 学生绑定频率限制 | 业务规则 | 同一学生一年只能绑定一次老师 | 师徒、绑定、频率限制 | [student-bind-limit.md](student-bind-limit.md) |
+| 约束             | 类型     | 描述                         | 标签                 | 文件                                                   |
+| ---------------- | -------- | ---------------------------- | -------------------- | ------------------------------------------------------ |
+| 学生绑定频率限制 | 业务规则 | 同一学生一年只能绑定一次老师 | 师徒、绑定、频率限制 | [student-bind-limit.md](student-bind-limit.md)         |
 | 实物商品地址要求 | 业务规则 | 实物商品订单必须提供收货地址 | 订单、地址、实物商品 | [physical-goods-address.md](physical-goods-address.md) |
 ```
 
-_index.md 的生成约束：
+\_index.md 的生成约束：
 
 - 每条简要说明不超过一句话
 - 包含条目数量等辅助信息（如能力域的操作数、聚合的实体数）
 - 标签列列出该条目的 1~3 个关键词标签，用于 Agent 快速匹配
 
-### _glossary.md：术语速查表
+### \_glossary.md：术语速查表
 
 `concepts/` 目录下额外生成一个 `_glossary.md` 文件，是概念知识条目的术语投影。Agent 在需求澄清阶段需要快速确认"需求文档中的某个术语在当前仓库中是什么意思"时，可以一次加载该文件完成术语匹配，无需逐条扫描概念知识详情。
 
-_glossary.md 的结构：
+\_glossary.md 的结构：
 
 ```markdown
 # 术语速查
 
-| 术语 | 定义 | 别名 | 详情 |
-|------|------|------|------|
-| 课表 | 按周组织的学习计划，包含课程和关联课件 | 课程表、Timetable | [timetable.md](timetable.md) |
-| 师徒关系 | 学生与教师之间的绑定指导关系 | 绑定、bind | [teacher-student-bind.md](teacher-student-bind.md) |
-| 课件类型 | 课件的分类标识，决定数据来源和属性结构 | 课件分类、CoursewareType | [courseware-type.md](courseware-type.md) |
+| 术语     | 定义                                   | 别名                     | 详情                                               |
+| -------- | -------------------------------------- | ------------------------ | -------------------------------------------------- |
+| 课表     | 按周组织的学习计划，包含课程和关联课件 | 课程表、Timetable        | [timetable.md](timetable.md)                       |
+| 师徒关系 | 学生与教师之间的绑定指导关系           | 绑定、bind               | [teacher-student-bind.md](teacher-student-bind.md) |
+| 课件类型 | 课件的分类标识，决定数据来源和属性结构 | 课件分类、CoursewareType | [courseware-type.md](courseware-type.md)           |
 ```
 
-_glossary.md 的生成约束：
+\_glossary.md 的生成约束：
 
 - 每行对应概念知识中的一个条目，术语和定义从概念知识中直接提取
 - 别名来自概念知识条目的"别名"字段
@@ -261,11 +270,11 @@ Spring Boot 2.7、MyBatis、MySQL
 
 ## 目录结构
 
-| 目录 | 用途 | 编码时 |
-|------|------|--------|
-| src/main/java/ | Java 源代码 | 新功能创建 `com.musicedu.<domain>` 包 |
-| src/main/resources/ | 配置文件 | application.yml 配置数据库、Redis 等 |
-| src/test/java/ | 测试代码 | 单元测试、集成测试 |
+| 目录                | 用途        | 编码时                                |
+| ------------------- | ----------- | ------------------------------------- |
+| src/main/java/      | Java 源代码 | 新功能创建 `com.musicedu.<domain>` 包 |
+| src/main/resources/ | 配置文件    | application.yml 配置数据库、Redis 等  |
+| src/test/java/      | 测试代码    | 单元测试、集成测试                    |
 
 ## 忽略目录
 
@@ -287,9 +296,11 @@ Spring Boot 2.7、MyBatis、MySQL
 ## 业务领域全景
 
 核心域（直接承载主营业务）：
+
 - 课程管理、用户管理
 
 支撑域（为核心域提供基础能力）：
+
 - 学习记录
 
 域间主要交互：用户管理 → 课程管理（教师权限校验）
@@ -317,12 +328,12 @@ architecture.md 的生成约束：
 
 ### architecture.md 与能力目录的分工
 
-| 架构概览 | 能力目录 |
-|---------|---------|
+| 架构概览                               | 能力目录                               |
+| -------------------------------------- | -------------------------------------- |
 | 提供全局技术视图：技术栈、顶层目录用途 | 提供具体业务模块信息：包路径、核心类名 |
-| 提供业务领域全景：域的分类和交互方向 | 提供业务域详情：操作列表、域级上下文 |
-| 描述通用编码约定：分层结构、分包约定 | 描述具体业务入口：核心类名、方法位置 |
-| 列出忽略目录：哪些目录不包含业务代码 | 列出业务操作：每个领域的具体功能 |
+| 提供业务领域全景：域的分类和交互方向   | 提供业务域详情：操作列表、域级上下文   |
+| 描述通用编码约定：分层结构、分包约定   | 描述具体业务入口：核心类名、方法位置   |
+| 列出忽略目录：哪些目录不包含业务代码   | 列出业务操作：每个领域的具体功能       |
 
 Agent 使用场景：
 
@@ -358,8 +369,8 @@ project-context.json 的结构：
 {
   "projectType": "monorepo",
   "packages": [
-    {"name": "web", "path": "packages/web", "type": "frontend-app"},
-    {"name": "server", "path": "packages/server", "type": "backend-service"}
+    { "name": "web", "path": "packages/web", "type": "frontend-app" },
+    { "name": "server", "path": "packages/server", "type": "backend-service" }
   ]
 }
 ```
@@ -407,17 +418,17 @@ modules.json 的结构：
 
 字段说明：
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| name | 是 | 模块名称，与构建配置中的模块标识一致 |
-| path | 是 | 模块在仓库中的相对路径 |
-| type | 是 | 模块的项目类型（backend-service / frontend-app / library 等） |
-| role | 是 | `deployable`（可独立部署的服务）或 `shared`（被依赖的共享库） |
-| description | 是 | 模块职责的一句话描述 |
-| dependencies | 是 | 该模块依赖的其他模块名称列表 |
-| usedBy | 否 | 仅 shared 模块：使用该模块的 deployable 模块列表 |
-| entryPoint | 否 | 仅 deployable 模块：启动入口文件路径 |
-| packageRoot | 否 | 该模块的代码根包路径 |
+| 字段         | 必填 | 说明                                                          |
+| ------------ | ---- | ------------------------------------------------------------- |
+| name         | 是   | 模块名称，与构建配置中的模块标识一致                          |
+| path         | 是   | 模块在仓库中的相对路径                                        |
+| type         | 是   | 模块的项目类型（backend-service / frontend-app / library 等） |
+| role         | 是   | `deployable`（可独立部署的服务）或 `shared`（被依赖的共享库） |
+| description  | 是   | 模块职责的一句话描述                                          |
+| dependencies | 是   | 该模块依赖的其他模块名称列表                                  |
+| usedBy       | 否   | 仅 shared 模块：使用该模块的 deployable 模块列表              |
+| entryPoint   | 否   | 仅 deployable 模块：启动入口文件路径                          |
+| packageRoot  | 否   | 该模块的代码根包路径                                          |
 
 modules.json 的使用场景：
 
@@ -447,8 +458,8 @@ modules.json 的使用场景：
 适用范围：仅适用于实物商品和虚拟商品的购买订单，不适用于退款流程。
 入口类：OrderController
 
-| 操作名称 | 访问方式 | 方法位置 | 描述 | 标签 |
-|---------|---------|---------|------|------|
+| 操作名称 | 访问方式           | 方法位置                 | 描述                                                                                                                                                                                                                                                                                                                   | 标签             |
+| -------- | ------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | 创建订单 | POST /order/submit | OrderController.submit() | 提交商品购买订单，完成商品校验、库存扣减和优惠券核销。仅支持 [支付宝](../external-systems/alipay.md) 和 [微信支付](../external-systems/wechat-pay.md)。实物商品必须提供收货地址，见 [实物商品地址要求](../constraints/physical-goods-address.md)。涉及 [订单聚合](../data-model/order.md) 中的 OrderDO 和 OrderGoodsDO | 订单、创建、购买 |
 
 域标签：订单、交易、购买
@@ -492,7 +503,7 @@ modules.json 的使用场景：
 - 大项目不会因文件过大导致 Agent 加载成本高
 - 增量更新时只重写单个文件，不影响其他文件
 
-### 为什么 index.md 和 _index.md 分开
+### 为什么 index.md 和 \_index.md 分开
 
 - `index.md` 是给 Agent 用的"地图"，Agent 只需要读一个文件就能了解全局
 - `_index.md` 是给生成程序维护的"目录"，当某个类型下的条目增删时，只需要更新对应的 `_index.md`
@@ -512,6 +523,7 @@ modules.json 的使用场景：
 - 架构概览描述"代码是怎么组织的"
 
 放在根目录的好处：
+
 - Agent 进入知识包时，首先看到架构概览链接，建立全局认知后再深入业务知识
 - 与 index.md 平级，定位为"入口级"文档
 - 单文件，不像其他类型有多个对象需要目录组织

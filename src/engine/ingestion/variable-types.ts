@@ -1,8 +1,8 @@
 // gitnexus/src/core/ingestion/variable-types.ts
 
-import type { SupportedLanguages } from '../shared';
-import type { FieldVisibility } from './field-types.js';
-import type { SyntaxNode } from './utils/ast-helpers.js';
+import type { SupportedLanguages } from "../shared";
+import type { FieldVisibility } from "./field-types.js";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
 
 // Reuse FieldVisibility — same set of language visibility levels
 export type VariableVisibility = FieldVisibility;
@@ -13,7 +13,7 @@ export type VariableVisibility = FieldVisibility;
  * - 'file': file scope (C/C++ static file-scope, Python module-level)
  * - 'block': block-scoped (JS `let`/`const` inside a function)
  */
-export type VariableScope = 'module' | 'file' | 'block';
+export type VariableScope = "module" | "file" | "block";
 
 /**
  * Represents a module/file-scoped variable, constant, or static declaration.
@@ -58,7 +58,10 @@ export interface VariableExtractor {
   language: SupportedLanguages;
   /** Extract variable metadata from a declaration node.
    *  Returns null if the node is not a recognized variable declaration. */
-  extract(node: SyntaxNode, context: VariableExtractorContext): VariableInfo | null;
+  extract(
+    node: SyntaxNode,
+    context: VariableExtractorContext,
+  ): VariableInfo | null;
   /** Check if a node is a recognized variable declaration type. */
   isVariableDeclaration(node: SyntaxNode): boolean;
 }

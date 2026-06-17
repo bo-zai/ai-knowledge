@@ -31,8 +31,14 @@
  * file-level `ImportEdge`s. None of these materialize `BindingRef`s.
  */
 
-import type { SymbolDefinition } from './symbol-definition.js';
-import type { BindingRef, ImportEdge, ParsedImport, ScopeId, WorkspaceIndex } from './types.js';
+import type { SymbolDefinition } from "./symbol-definition.js";
+import type {
+  BindingRef,
+  ImportEdge,
+  ParsedImport,
+  ScopeId,
+  WorkspaceIndex,
+} from "./types.js";
 
 // ─── Public contracts ───────────────────────────────────────────────────────
 
@@ -101,7 +107,10 @@ export interface FinalizeHooks {
    * `M`'s local defs to produce a concrete `BindingRef`; names with no
    * matching export are dropped.
    */
-  expandsWildcardTo(targetModuleScope: ScopeId, workspaceIndex: WorkspaceIndex): readonly string[];
+  expandsWildcardTo(
+    targetModuleScope: ScopeId,
+    workspaceIndex: WorkspaceIndex,
+  ): readonly string[];
 
   /**
    * Merge `incoming` bindings into `existing` for a given name. Called
@@ -159,7 +168,10 @@ export interface FinalizeOutput {
   /** Linked `ImportEdge[]` per module scope, in original input order. */
   readonly imports: ReadonlyMap<ScopeId, readonly ImportEdge[]>;
   /** Materialized bindings per module scope. */
-  readonly bindings: ReadonlyMap<ScopeId, ReadonlyMap<string, readonly BindingRef[]>>;
+  readonly bindings: ReadonlyMap<
+    ScopeId,
+    ReadonlyMap<string, readonly BindingRef[]>
+  >;
   /** SCCs in reverse-topological order (leaves first). */
   readonly sccs: readonly FinalizedScc[];
   readonly stats: FinalizeStats;
@@ -167,7 +179,10 @@ export interface FinalizeOutput {
 
 // ─── Entry point ───────────────────────────────────────────────────────────
 
-export function finalize(input: FinalizeInput, hooks: FinalizeHooks): FinalizeOutput {
+export function finalize(
+  input: FinalizeInput,
+  hooks: FinalizeHooks,
+): FinalizeOutput {
   const byFilePath = new Map<string, FinalizeFile>();
   for (const f of input.files) byFilePath.set(f.filePath, f);
 
@@ -181,7 +196,12 @@ export function finalize(input: FinalizeInput, hooks: FinalizeHooks): FinalizeOu
   for (const file of input.files) {
     const drafts: ImportEdgeDraft[] = [];
     for (const parsed of file.parsedImports) {
-      const draftArray = makeEdgeDrafts(parsed, file, hooks, input.workspaceIndex);
+      const draftArray = makeEdgeDrafts(
+        parsed,
+        file,
+        hooks,
+        input.workspaceIndex,
+      );
       drafts.push(...draftArray);
       totalEdges += draftArray.length;
     }
@@ -212,7 +232,11 @@ export function finalize(input: FinalizeInput, hooks: FinalizeHooks): FinalizeOu
   // SCC-condensed). Eliminates the recursive crawl that the per-edge
   // `tryFinalize` call site used to do; lookups are O(1) afterwards.
   // See `buildReexportClosures` for the algorithm.
-  const reexportClosures = buildReexportClosures(input.files, byFilePath, edgeIndex);
+  const reexportClosures = buildReexportClosures(
+    input.files,
+    byFilePath,
+    edgeIndex,
+  );
 
   // ── Phase 3: process SCCs in reverse-topological order (leaves first).
   // Within each SCC, run a bounded fixpoint that resolves intra-SCC edges.
@@ -255,7 +279,7 @@ export function finalize(input: FinalizeInput, hooks: FinalizeHooks): FinalizeOu
         if (draft.finalized !== null) continue;
         draft.finalized = {
           ...draft.base,
-          linkStatus: 'unresolved' as const,
+          linkStatus: "unresolved" as const,
         };
       }
     }
@@ -270,23 +294,34 @@ export function finalize(input: FinalizeInput, hooks: FinalizeHooks): FinalizeOu
     for (const d of drafts) {
       const edge = d.finalized;
       if (edge === null) {
-        throw new Error(`Invariant violated: import edge was not finalized for ${file.filePath}`);
+        throw new Error(
+          `Invariant violated: import edge was not finalized for ${file.filePath}`,
+        );
       }
-      if (d.source.kind === 'wildcard' && edge.linkStatus !== 'unresolved') {
+      if (d.source.kind === "wildcard" && edge.linkStatus !== "unresolved") {
         // Produce one `wildcard-expanded` ImportEdge per exported name.
-        const expanded = expandWildcard(edge, byFilePath, hooks, input.workspaceIndex);
+        const expanded = expandWildcard(
+          edge,
+          byFilePath,
+          hooks,
+          input.workspaceIndex,
+        );
         for (const e of expanded) finalized.push(e);
       } else {
         finalized.push(edge);
       }
-      if (edge.linkStatus !== 'unresolved') linkedEdges++;
+      if (edge.linkStatus !== "unresolved") linkedEdges++;
     }
     linkedByScope.set(file.moduleScope, Object.freeze(finalized));
   }
 
   // ── Phase 5: materialize module-scope bindings (local + imports + wildcards),
   // delegating precedence to `provider.mergeBindings`.
-  const bindingsByScope = materializeBindings(input.files, linkedByScope, hooks);
+  const bindingsByScope = materializeBindings(
+    input.files,
+    linkedByScope,
+    hooks,
+  );
 
   // ── Stats.
   const sccCount = sccs.length;
@@ -329,12 +364,12 @@ function makeEdgeDrafts(
   workspace: WorkspaceIndex,
 ): ImportEdgeDraft[] {
   // Dynamic-unresolved passes through — no `BindingRef`, no target file.
-  if (parsed.kind === 'dynamic-unresolved') {
+  if (parsed.kind === "dynamic-unresolved") {
     const base: ImportEdge = {
       localName: parsed.localName,
       targetFile: null,
-      targetExportedName: '',
-      kind: 'dynamic-unresolved',
+      targetExportedName: "",
+      kind: "dynamic-unresolved",
     };
     return [
       {
@@ -348,7 +383,11 @@ function makeEdgeDrafts(
     ];
   }
 
-  const targetFile = hooks.resolveImportTarget(parsed.targetRaw ?? '', file.filePath, workspace);
+  const targetFile = hooks.resolveImportTarget(
+    parsed.targetRaw ?? "",
+    file.filePath,
+    workspace,
+  );
 
   // Edge is unresolvable at the file level — mark unresolved now.
   if (targetFile === null) {
@@ -357,7 +396,7 @@ function makeEdgeDrafts(
       targetFile: null,
       targetExportedName: extractExportedName(parsed),
       kind: edgeKindFor(parsed),
-      linkStatus: 'unresolved',
+      linkStatus: "unresolved",
     };
     return [
       {
@@ -377,7 +416,8 @@ function makeEdgeDrafts(
   // `targetDefId` needed since they materialize no `BindingRef`. Pre-
   // finalize them here so the fixpoint loop skips them entirely.
   const targetFiles = Array.isArray(targetFile) ? targetFile : [targetFile];
-  const isFileLevelTerminal = parsed.kind === 'side-effect' || parsed.kind === 'dynamic-resolved';
+  const isFileLevelTerminal =
+    parsed.kind === "side-effect" || parsed.kind === "dynamic-resolved";
   return targetFiles.map((tf) => {
     const base: ImportEdge = {
       localName: extractLocalName(parsed),
@@ -396,17 +436,17 @@ function makeEdgeDrafts(
   });
 }
 
-function edgeKindFor(parsed: ParsedImport): ImportEdge['kind'] {
-  if (parsed.kind === 'wildcard') return 'wildcard-expanded';
+function edgeKindFor(parsed: ParsedImport): ImportEdge["kind"] {
+  if (parsed.kind === "wildcard") return "wildcard-expanded";
   return parsed.kind;
 }
 
 function extractLocalName(parsed: ParsedImport): string {
   switch (parsed.kind) {
-    case 'wildcard':
-    case 'side-effect':
-    case 'dynamic-resolved':
-      return '';
+    case "wildcard":
+    case "side-effect":
+    case "dynamic-resolved":
+      return "";
     default:
       return parsed.localName;
   }
@@ -414,16 +454,16 @@ function extractLocalName(parsed: ParsedImport): string {
 
 function extractExportedName(parsed: ParsedImport): string {
   switch (parsed.kind) {
-    case 'named':
-    case 'alias':
-    case 'namespace':
-    case 'reexport':
+    case "named":
+    case "alias":
+    case "namespace":
+    case "reexport":
       return parsed.importedName;
-    case 'wildcard':
-    case 'dynamic-unresolved':
-    case 'dynamic-resolved':
-    case 'side-effect':
-      return '';
+    case "wildcard":
+    case "dynamic-unresolved":
+    case "dynamic-resolved":
+    case "side-effect":
+      return "";
   }
 }
 
@@ -442,7 +482,7 @@ function tryFinalize(
 
   // Wildcards finalize at the file level; their per-name expansion happens
   // in phase 4. At this stage we just record the target module scope.
-  if (draft.source.kind === 'wildcard') {
+  if (draft.source.kind === "wildcard") {
     return {
       ...draft.base,
       targetModuleScope: targetModule.moduleScope,
@@ -455,8 +495,11 @@ function tryFinalize(
   // languages emit a synthetic module-def), pick it up as the `targetDefId`
   // so consumers can reach the module as a symbol — but its absence is not
   // a failure.
-  if (draft.source.kind === 'namespace') {
-    const moduleDef = findExportByName(targetModule.localDefs, extractExportedName(draft.source));
+  if (draft.source.kind === "namespace") {
+    const moduleDef = findExportByName(
+      targetModule.localDefs,
+      extractExportedName(draft.source),
+    );
     return {
       ...draft.base,
       targetModuleScope: targetModule.moduleScope,
@@ -472,7 +515,9 @@ function tryFinalize(
 
   if (exported !== undefined) {
     const transitiveVia =
-      draft.source.kind === 'reexport' ? Object.freeze([targetFile]) : undefined;
+      draft.source.kind === "reexport"
+        ? Object.freeze([targetFile])
+        : undefined;
     return {
       ...draft.base,
       targetModuleScope: targetModule.moduleScope,
@@ -489,7 +534,11 @@ function tryFinalize(
   // already encodes every name reachable through that file's named and
   // wildcard re-exports — including transitively through cyclic SCCs —
   // so the lookup is O(1) and never recurses.
-  const followed = lookupReexportedName(reexportClosures, targetFile, importedName);
+  const followed = lookupReexportedName(
+    reexportClosures,
+    targetFile,
+    importedName,
+  );
   if (followed === null) {
     // Target resolvable but the name isn't exported — keep trying in case a
     // re-export inside the target's SCC surfaces it in a later iteration.
@@ -498,7 +547,9 @@ function tryFinalize(
 
   const viaFiles = [targetFile, ...followed.via];
   const transitiveVia =
-    draft.source.kind === 'reexport' || viaFiles.length > 1 ? Object.freeze(viaFiles) : undefined;
+    draft.source.kind === "reexport" || viaFiles.length > 1
+      ? Object.freeze(viaFiles)
+      : undefined;
 
   return {
     ...draft.base,
@@ -519,7 +570,10 @@ function tryFinalize(
  *
  * Built once per finalize pass. Lookups are O(1).
  */
-type ReexportClosureEntry = { readonly def: SymbolDefinition; readonly via: readonly string[] };
+type ReexportClosureEntry = {
+  readonly def: SymbolDefinition;
+  readonly via: readonly string[];
+};
 type FileReexportClosure = ReadonlyMap<string, ReexportClosureEntry>;
 
 /**
@@ -584,7 +638,8 @@ function buildReexportClosures(
     const drafts = edgeIndex.get(file.filePath);
     if (drafts !== undefined) {
       for (const d of drafts) {
-        if (d.source.kind !== 'reexport' && d.source.kind !== 'wildcard') continue;
+        if (d.source.kind !== "reexport" && d.source.kind !== "wildcard")
+          continue;
         if (d.targetFile === null) continue;
         if (!byFilePath.has(d.targetFile)) continue;
         targets.add(d.targetFile);
@@ -657,7 +712,7 @@ function populateFileClosure(
   // Named re-exports — precedence over wildcards, declaration order
   // first-wins for duplicates of the same exported name.
   for (const draft of drafts) {
-    if (draft.source.kind !== 'reexport') continue;
+    if (draft.source.kind !== "reexport") continue;
     const targetFile = draft.targetFile;
     if (targetFile === null) continue;
     const targetModule = byFilePath.get(targetFile);
@@ -669,7 +724,10 @@ function populateFileClosure(
     const importedName = draft.source.importedName;
     const direct = findExportByName(targetModule.localDefs, importedName);
     if (direct !== undefined) {
-      myClosure.set(localName, { def: direct, via: Object.freeze([targetFile]) });
+      myClosure.set(localName, {
+        def: direct,
+        via: Object.freeze([targetFile]),
+      });
       continue;
     }
     const inherited = closures.get(targetFile)?.get(importedName);
@@ -687,7 +745,7 @@ function populateFileClosure(
   // + transitive closure). `myClosure.has(name)` checks below preserve
   // the named-precedence and first-wins semantics from above.
   for (const draft of drafts) {
-    if (draft.source.kind !== 'wildcard') continue;
+    if (draft.source.kind !== "wildcard") continue;
     const targetFile = draft.targetFile;
     if (targetFile === null) continue;
     const targetModule = byFilePath.get(targetFile);
@@ -741,7 +799,7 @@ function lookupReexportedName(
 function deriveSimpleName(def: SymbolDefinition): string | null {
   const q = def.qualifiedName;
   if (q === undefined || q.length === 0) return null;
-  const dot = q.lastIndexOf('.');
+  const dot = q.lastIndexOf(".");
   return dot === -1 ? q : q.slice(dot + 1);
 }
 
@@ -783,27 +841,30 @@ function findExportByName(
 }
 
 const CALLABLE_OR_TYPE_LIKE: ReadonlySet<string> = new Set([
-  'Function',
-  'Method',
-  'Constructor',
-  'Class',
-  'Interface',
-  'Enum',
-  'Struct',
-  'Record',
-  'Trait',
-  'Namespace',
-  'Module',
-  'TypeAlias',
-  'Type',
-  'Typedef',
+  "Function",
+  "Method",
+  "Constructor",
+  "Class",
+  "Interface",
+  "Enum",
+  "Struct",
+  "Record",
+  "Trait",
+  "Namespace",
+  "Module",
+  "TypeAlias",
+  "Type",
+  "Typedef",
 ]);
 
 function isCallableOrTypeLike(type: string): boolean {
   return CALLABLE_OR_TYPE_LIKE.has(type);
 }
 
-function countEdgesWithin(edgeIndex: Map<string, ImportEdgeDraft[]>, files: Set<string>): number {
+function countEdgesWithin(
+  edgeIndex: Map<string, ImportEdgeDraft[]>,
+  files: Set<string>,
+): number {
   let n = 0;
   for (const filePath of files) {
     const drafts = edgeIndex.get(filePath);
@@ -843,7 +904,7 @@ function expandWildcard(
       localName: name,
       targetFile: edge.targetFile,
       targetExportedName: name,
-      kind: 'wildcard-expanded',
+      kind: "wildcard-expanded",
       targetModuleScope: edge.targetModuleScope,
       targetDefId: def.nodeId,
     });
@@ -878,32 +939,39 @@ function materializeBindings(
     for (const def of file.localDefs) {
       const name = deriveSimpleName(def);
       if (name === null) continue;
-      const incoming: BindingRef[] = [{ def, origin: 'local' }];
+      const incoming: BindingRef[] = [{ def, origin: "local" }];
       const existing = scopeBindings.get(name) ?? [];
-      scopeBindings.set(name, hooks.mergeBindings(existing, incoming, file.moduleScope));
+      scopeBindings.set(
+        name,
+        hooks.mergeBindings(existing, incoming, file.moduleScope),
+      );
     }
 
     // Layer in finalized imports.
     const imports = linkedByScope.get(file.moduleScope) ?? [];
     for (const edge of imports) {
-      if (edge.targetDefId === undefined || edge.linkStatus === 'unresolved') continue;
+      if (edge.targetDefId === undefined || edge.linkStatus === "unresolved")
+        continue;
       const def = defById.get(edge.targetDefId);
       if (def === undefined) continue;
 
-      const origin: BindingRef['origin'] =
-        edge.kind === 'namespace'
-          ? 'namespace'
-          : edge.kind === 'wildcard-expanded'
-            ? 'wildcard'
-            : edge.kind === 'reexport'
-              ? 'reexport'
-              : 'import';
+      const origin: BindingRef["origin"] =
+        edge.kind === "namespace"
+          ? "namespace"
+          : edge.kind === "wildcard-expanded"
+            ? "wildcard"
+            : edge.kind === "reexport"
+              ? "reexport"
+              : "import";
       const fallback = deriveSimpleName(def);
       const name = edge.localName.length > 0 ? edge.localName : fallback;
       if (name === null) continue;
       const incoming: BindingRef[] = [{ def, origin, via: edge }];
       const existing = scopeBindings.get(name) ?? [];
-      scopeBindings.set(name, hooks.mergeBindings(existing, incoming, file.moduleScope));
+      scopeBindings.set(
+        name,
+        hooks.mergeBindings(existing, incoming, file.moduleScope),
+      );
     }
 
     // Freeze nested buckets for immutability.
@@ -924,7 +992,9 @@ function materializeBindings(
  * (leaves first — a property Tarjan gives for free, and the order
  * `finalize` wants so leaves are fully resolved before their dependents).
  */
-function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedScc[] {
+function tarjanSccs(
+  graph: ReadonlyMap<string, ReadonlySet<string>>,
+): FinalizedScc[] {
   const index = new Map<string, number>();
   const lowlink = new Map<string, number>();
   const onStack = new Set<string>();
@@ -934,7 +1004,11 @@ function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedS
 
   // Iterative DFS to avoid stack overflow on deep import chains.
   const allNodes = Array.from(graph.keys()).sort(); // deterministic order
-  const iterStack: Array<{ node: string; children: Iterator<string>; entered: boolean }> = [];
+  const iterStack: Array<{
+    node: string;
+    children: Iterator<string>;
+    entered: boolean;
+  }> = [];
 
   for (const root of allNodes) {
     if (index.has(root)) continue;
@@ -965,7 +1039,9 @@ function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedS
           while (true) {
             const w = stack.pop();
             if (w === undefined) {
-              throw new Error(`Invariant violated: Tarjan stack exhausted at ${frame.node}`);
+              throw new Error(
+                `Invariant violated: Tarjan stack exhausted at ${frame.node}`,
+              );
             }
             onStack.delete(w);
             scc.push(w);
@@ -986,8 +1062,8 @@ function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedS
             lowlink.set(
               parent.node,
               Math.min(
-                requiredNumber(lowlink, parent.node, 'lowlink'),
-                requiredNumber(lowlink, frame.node, 'lowlink'),
+                requiredNumber(lowlink, parent.node, "lowlink"),
+                requiredNumber(lowlink, frame.node, "lowlink"),
               ),
             );
           }
@@ -1006,8 +1082,8 @@ function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedS
         lowlink.set(
           frame.node,
           Math.min(
-            requiredNumber(lowlink, frame.node, 'lowlink'),
-            requiredNumber(index, child, 'index'),
+            requiredNumber(lowlink, frame.node, "lowlink"),
+            requiredNumber(index, child, "index"),
           ),
         );
       }
@@ -1017,7 +1093,11 @@ function tarjanSccs(graph: ReadonlyMap<string, ReadonlySet<string>>): FinalizedS
   return sccs;
 }
 
-function requiredNumber(map: ReadonlyMap<string, number>, key: string, label: string): number {
+function requiredNumber(
+  map: ReadonlyMap<string, number>,
+  key: string,
+  label: string,
+): number {
   const value = map.get(key);
   if (value === undefined) {
     throw new Error(`Invariant violated: missing Tarjan ${label} for ${key}`);

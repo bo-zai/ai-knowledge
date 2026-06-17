@@ -1,4 +1,11 @@
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 
 export async function ensureDir(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
@@ -14,22 +21,27 @@ export async function fileExists(path: string): Promise<boolean> {
 }
 
 export async function writeText(path: string, content: string): Promise<void> {
-  await writeFile(path, content, 'utf8');
+  await writeFile(path, content, "utf8");
 }
 
 export async function appendText(path: string, content: string): Promise<void> {
-  await appendFile(path, content, 'utf8');
+  await appendFile(path, content, "utf8");
 }
 
 export async function readText(path: string): Promise<string> {
-  return readFile(path, 'utf8');
+  return readFile(path, "utf8");
 }
 
 export async function removeDir(path: string): Promise<void> {
   const maxAttempts = 5;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await rm(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      await rm(path, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
       return;
     } catch (error) {
       if (!isRetriableRemoveError(error) || attempt === maxAttempts) {
@@ -46,7 +58,11 @@ function isRetriableRemoveError(error: unknown): boolean {
   }
 
   const withCode = error as Error & { code?: string };
-  return withCode.code === 'EBUSY' || withCode.code === 'EPERM' || withCode.code === 'ENOTEMPTY';
+  return (
+    withCode.code === "EBUSY" ||
+    withCode.code === "EPERM" ||
+    withCode.code === "ENOTEMPTY"
+  );
 }
 
 function sleep(ms: number): Promise<void> {
@@ -69,7 +85,7 @@ export async function extractClassCodeSnippet(
   maxLength: number = 500,
 ): Promise<string | undefined> {
   try {
-    const content = await readFile(filePath, 'utf8');
+    const content = await readFile(filePath, "utf8");
 
     // 根据语言选择匹配模式
     const lang = detectLanguage(filePath);
@@ -91,12 +107,14 @@ export async function extractClassCodeSnippet(
 /**
  * 检测文件语言
  */
-function detectLanguage(filePath: string): 'java' | 'typescript' | 'kotlin' | 'unknown' {
+function detectLanguage(
+  filePath: string,
+): "java" | "typescript" | "kotlin" | "unknown" {
   const ext = filePath.toLowerCase();
-  if (ext.endsWith('.java')) return 'java';
-  if (ext.endsWith('.ts') || ext.endsWith('.tsx')) return 'typescript';
-  if (ext.endsWith('.kt') || ext.endsWith('.kts')) return 'kotlin';
-  return 'unknown';
+  if (ext.endsWith(".java")) return "java";
+  if (ext.endsWith(".ts") || ext.endsWith(".tsx")) return "typescript";
+  if (ext.endsWith(".kt") || ext.endsWith(".kts")) return "kotlin";
+  return "unknown";
 }
 
 /**
@@ -112,9 +130,18 @@ function matchClassDefinition(
   // Java/Kotlin: class ClassName { ... }
   // TypeScript: class ClassName { ... } 或 export class ClassName { ... }
   const patterns: Record<string, RegExp> = {
-    java: new RegExp(`(?:public|private|protected)?\\s*(?:abstract|final)?\\s*class\\s+${className}\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`, 's'),
-    typescript: new RegExp(`(?:export\\s+)?class\\s+${className}\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`, 's'),
-    kotlin: new RegExp(`(?:public|private)?\\s*class\\s+${className}\\s*(?:\\([^)]*\\))?\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`, 's'),
+    java: new RegExp(
+      `(?:public|private|protected)?\\s*(?:abstract|final)?\\s*class\\s+${className}\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`,
+      "s",
+    ),
+    typescript: new RegExp(
+      `(?:export\\s+)?class\\s+${className}\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`,
+      "s",
+    ),
+    kotlin: new RegExp(
+      `(?:public|private)?\\s*class\\s+${className}\\s*(?:\\([^)]*\\))?\\s*\\{([^}]*(?:\\{[^}]*\\}[^}]*)*)\\}`,
+      "s",
+    ),
   };
 
   const pattern = patterns[lang] || patterns.java;
@@ -132,7 +159,7 @@ function extractFieldsFromClass(
   maxLength: number,
 ): string | undefined {
   // 按行分割
-  const lines = classBody.split('\n');
+  const lines = classBody.split("\n");
 
   // 字段声明特征：
   // Java: private/protected/public 类型 字段名;
@@ -158,12 +185,12 @@ function extractFieldsFromClass(
 
   if (fieldLines.length === 0) {
     // 如果没有找到字段，返回类体的前 N 行
-    const snippet = lines.slice(0, 10).join('\n').trim();
+    const snippet = lines.slice(0, 10).join("\n").trim();
     return snippet.length > maxLength ? snippet.slice(0, maxLength) : snippet;
   }
 
   // 构建代码片段
-  const snippet = fieldLines.join('\n');
+  const snippet = fieldLines.join("\n");
   return snippet.length > maxLength ? snippet.slice(0, maxLength) : snippet;
 }
 
@@ -187,8 +214,14 @@ export async function batchExtractClassSnippets(
     const batch = candidates.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (c) => {
-        const absolutePath = c.filePath.startsWith('/') ? c.filePath : `${repoPath}/${c.filePath}`;
-        const snippet = await extractClassCodeSnippet(absolutePath, c.className, maxLength);
+        const absolutePath = c.filePath.startsWith("/")
+          ? c.filePath
+          : `${repoPath}/${c.filePath}`;
+        const snippet = await extractClassCodeSnippet(
+          absolutePath,
+          c.className,
+          maxLength,
+        );
         return { className: c.className, snippet };
       }),
     );

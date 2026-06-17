@@ -1,273 +1,273 @@
-import ignore, { type Ignore } from 'ignore';
-import fs from 'fs/promises';
-import nodePath from 'path';
-import type { Path } from 'path-scurry';
+import ignore, { type Ignore } from "ignore";
+import fs from "fs/promises";
+import nodePath from "path";
+import type { Path } from "path-scurry";
 
 const DEFAULT_IGNORE_LIST = new Set([
   // Version Control
-  '.git',
-  '.svn',
-  '.hg',
-  '.bzr',
+  ".git",
+  ".svn",
+  ".hg",
+  ".bzr",
 
   // IDEs & Editors
-  '.idea',
-  '.vscode',
-  '.vs',
-  '.eclipse',
-  '.settings',
-  '.DS_Store',
-  'Thumbs.db',
+  ".idea",
+  ".vscode",
+  ".vs",
+  ".eclipse",
+  ".settings",
+  ".DS_Store",
+  "Thumbs.db",
 
   // Dependencies
-  'node_modules',
-  'bower_components',
-  'jspm_packages',
-  'vendor', // PHP/Go
+  "node_modules",
+  "bower_components",
+  "jspm_packages",
+  "vendor", // PHP/Go
   // 'packages' removed - commonly used for monorepo source code (lerna, pnpm, yarn workspaces)
-  'venv',
-  '.venv',
-  'env',
-  '.env',
-  '__pycache__',
-  '.pytest_cache',
-  '.mypy_cache',
-  'site-packages',
-  '.tox',
-  'eggs',
-  '.eggs',
-  'lib64',
-  'parts',
-  'sdist',
-  'wheels',
+  "venv",
+  ".venv",
+  "env",
+  ".env",
+  "__pycache__",
+  ".pytest_cache",
+  ".mypy_cache",
+  "site-packages",
+  ".tox",
+  "eggs",
+  ".eggs",
+  "lib64",
+  "parts",
+  "sdist",
+  "wheels",
 
   // Build Outputs
-  'dist',
-  'build',
-  'out',
-  'output',
-  'bin',
-  'obj',
-  'target', // Java/Rust
-  '.next',
-  '.nuxt',
-  '.output',
-  '.vercel',
-  '.netlify',
-  '.serverless',
-  '_build',
-  'public/build',
-  '.parcel-cache',
-  '.turbo',
-  '.svelte-kit',
+  "dist",
+  "build",
+  "out",
+  "output",
+  "bin",
+  "obj",
+  "target", // Java/Rust
+  ".next",
+  ".nuxt",
+  ".output",
+  ".vercel",
+  ".netlify",
+  ".serverless",
+  "_build",
+  "public/build",
+  ".parcel-cache",
+  ".turbo",
+  ".svelte-kit",
 
   // Test & Coverage
-  'coverage',
-  '.nyc_output',
-  'htmlcov',
-  '.coverage',
-  '__tests__', // Often just test files
-  '__mocks__',
-  '.jest',
+  "coverage",
+  ".nyc_output",
+  "htmlcov",
+  ".coverage",
+  "__tests__", // Often just test files
+  "__mocks__",
+  ".jest",
 
   // Logs & Temp
-  'logs',
-  'log',
-  'tmp',
-  'temp',
-  'cache',
-  '.cache',
-  '.tmp',
-  '.temp',
+  "logs",
+  "log",
+  "tmp",
+  "temp",
+  "cache",
+  ".cache",
+  ".tmp",
+  ".temp",
 
   // Generated/Compiled
-  '.generated',
-  'generated',
-  'auto-generated',
-  '.terraform',
-  '.serverless',
+  ".generated",
+  "generated",
+  "auto-generated",
+  ".terraform",
+  ".serverless",
 
   // Documentation (optional - might want to keep)
   // 'docs',
   // 'documentation',
 
   // Misc
-  '.husky',
-  '.github', // GitHub config, not code
-  '.circleci',
-  '.gitlab',
-  'fixtures', // Test fixtures
-  'snapshots', // Jest snapshots
-  '__snapshots__',
+  ".husky",
+  ".github", // GitHub config, not code
+  ".circleci",
+  ".gitlab",
+  "fixtures", // Test fixtures
+  "snapshots", // Jest snapshots
+  "__snapshots__",
 ]);
 
 const IGNORED_EXTENSIONS = new Set([
   // Images
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.svg',
-  '.ico',
-  '.webp',
-  '.bmp',
-  '.tiff',
-  '.tif',
-  '.psd',
-  '.ai',
-  '.sketch',
-  '.fig',
-  '.xd',
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".svg",
+  ".ico",
+  ".webp",
+  ".bmp",
+  ".tiff",
+  ".tif",
+  ".psd",
+  ".ai",
+  ".sketch",
+  ".fig",
+  ".xd",
 
   // Archives
-  '.zip',
-  '.tar',
-  '.gz',
-  '.rar',
-  '.7z',
-  '.bz2',
-  '.xz',
-  '.tgz',
+  ".zip",
+  ".tar",
+  ".gz",
+  ".rar",
+  ".7z",
+  ".bz2",
+  ".xz",
+  ".tgz",
 
   // Binary/Compiled
-  '.exe',
-  '.dll',
-  '.so',
-  '.dylib',
-  '.a',
-  '.lib',
-  '.o',
-  '.obj',
-  '.class',
-  '.jar',
-  '.war',
-  '.ear',
-  '.pyc',
-  '.pyo',
-  '.pyd',
-  '.beam', // Erlang
-  '.wasm', // WebAssembly - important!
-  '.node', // Native Node addons
+  ".exe",
+  ".dll",
+  ".so",
+  ".dylib",
+  ".a",
+  ".lib",
+  ".o",
+  ".obj",
+  ".class",
+  ".jar",
+  ".war",
+  ".ear",
+  ".pyc",
+  ".pyo",
+  ".pyd",
+  ".beam", // Erlang
+  ".wasm", // WebAssembly - important!
+  ".node", // Native Node addons
 
   // Documents
-  '.pdf',
-  '.doc',
-  '.docx',
-  '.xls',
-  '.xlsx',
-  '.ppt',
-  '.pptx',
-  '.odt',
-  '.ods',
-  '.odp',
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".odt",
+  ".ods",
+  ".odp",
 
   // Media
-  '.mp4',
-  '.mp3',
-  '.wav',
-  '.mov',
-  '.avi',
-  '.mkv',
-  '.flv',
-  '.wmv',
-  '.ogg',
-  '.webm',
-  '.flac',
-  '.aac',
-  '.m4a',
+  ".mp4",
+  ".mp3",
+  ".wav",
+  ".mov",
+  ".avi",
+  ".mkv",
+  ".flv",
+  ".wmv",
+  ".ogg",
+  ".webm",
+  ".flac",
+  ".aac",
+  ".m4a",
 
   // Fonts
-  '.woff',
-  '.woff2',
-  '.ttf',
-  '.eot',
-  '.otf',
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".eot",
+  ".otf",
 
   // Databases
-  '.db',
-  '.sqlite',
-  '.sqlite3',
-  '.mdb',
-  '.accdb',
+  ".db",
+  ".sqlite",
+  ".sqlite3",
+  ".mdb",
+  ".accdb",
 
   // Minified/Bundled files
-  '.min.js',
-  '.min.css',
-  '.bundle.js',
-  '.chunk.js',
+  ".min.js",
+  ".min.css",
+  ".bundle.js",
+  ".chunk.js",
 
   // Source maps (debug files, not source)
-  '.map',
+  ".map",
 
   // Lock files (handled separately, but also here)
-  '.lock',
+  ".lock",
 
   // Certificates & Keys (security - don't index!)
-  '.pem',
-  '.key',
-  '.crt',
-  '.cer',
-  '.p12',
-  '.pfx',
+  ".pem",
+  ".key",
+  ".crt",
+  ".cer",
+  ".p12",
+  ".pfx",
 
   // Data files (often large/binary)
-  '.csv',
-  '.tsv',
-  '.parquet',
-  '.avro',
-  '.feather',
-  '.npy',
-  '.npz',
-  '.pkl',
-  '.pickle',
-  '.h5',
-  '.hdf5',
+  ".csv",
+  ".tsv",
+  ".parquet",
+  ".avro",
+  ".feather",
+  ".npy",
+  ".npz",
+  ".pkl",
+  ".pickle",
+  ".h5",
+  ".hdf5",
 
   // Misc binary
-  '.bin',
-  '.dat',
-  '.data',
-  '.raw',
-  '.iso',
-  '.img',
-  '.dmg',
+  ".bin",
+  ".dat",
+  ".data",
+  ".raw",
+  ".iso",
+  ".img",
+  ".dmg",
 ]);
 
 // Files to ignore by exact name
 const IGNORED_FILES = new Set([
-  'package-lock.json',
-  'yarn.lock',
-  'pnpm-lock.yaml',
-  'composer.lock',
-  'Gemfile.lock',
-  'poetry.lock',
-  'Cargo.lock',
-  'go.sum',
-  '.gitignore',
-  '.gitattributes',
-  '.npmrc',
-  '.yarnrc',
-  '.editorconfig',
-  '.prettierrc',
-  '.prettierignore',
-  '.eslintignore',
-  '.dockerignore',
-  'Thumbs.db',
-  '.DS_Store',
-  'LICENSE',
-  'LICENSE.md',
-  'LICENSE.txt',
-  'CHANGELOG.md',
-  'CHANGELOG',
-  'CONTRIBUTING.md',
-  'CODE_OF_CONDUCT.md',
-  'SECURITY.md',
-  '.env',
-  '.env.local',
-  '.env.development',
-  '.env.production',
-  '.env.test',
-  '.env.example',
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+  "composer.lock",
+  "Gemfile.lock",
+  "poetry.lock",
+  "Cargo.lock",
+  "go.sum",
+  ".gitignore",
+  ".gitattributes",
+  ".npmrc",
+  ".yarnrc",
+  ".editorconfig",
+  ".prettierrc",
+  ".prettierignore",
+  ".eslintignore",
+  ".dockerignore",
+  "Thumbs.db",
+  ".DS_Store",
+  "LICENSE",
+  "LICENSE.md",
+  "LICENSE.txt",
+  "CHANGELOG.md",
+  "CHANGELOG",
+  "CONTRIBUTING.md",
+  "CODE_OF_CONDUCT.md",
+  "SECURITY.md",
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+  ".env.test",
+  ".env.example",
 ]);
 
 // The hardcoded DEFAULT_IGNORE_LIST is the "safety net" default: directories
@@ -279,8 +279,8 @@ const IGNORED_FILES = new Set([
 // hardcoded-list check so its callers (wiki generator, tests) get
 // deterministic results independent of per-repo config.
 export const shouldIgnorePath = (filePath: string): boolean => {
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  const parts = normalizedPath.split('/');
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const parts = normalizedPath.split("/");
   const fileName = parts[parts.length - 1];
   const fileNameLower = fileName.toLowerCase();
 
@@ -297,13 +297,13 @@ export const shouldIgnorePath = (filePath: string): boolean => {
   }
 
   // Check extension
-  const lastDotIndex = fileNameLower.lastIndexOf('.');
+  const lastDotIndex = fileNameLower.lastIndexOf(".");
   if (lastDotIndex !== -1) {
     const ext = fileNameLower.substring(lastDotIndex);
     if (IGNORED_EXTENSIONS.has(ext)) return true;
 
     // Handle compound extensions like .min.js, .bundle.js
-    const secondLastDot = fileNameLower.lastIndexOf('.', lastDotIndex - 1);
+    const secondLastDot = fileNameLower.lastIndexOf(".", lastDotIndex - 1);
     if (secondLastDot !== -1) {
       const compoundExt = fileNameLower.substring(secondLastDot);
       if (IGNORED_EXTENSIONS.has(compoundExt)) return true;
@@ -311,19 +311,19 @@ export const shouldIgnorePath = (filePath: string): boolean => {
   }
 
   // Ignore hidden files (starting with .)
-  if (fileName.startsWith('.') && fileName !== '.') {
+  if (fileName.startsWith(".") && fileName !== ".") {
     // But allow some important config files
-    const allowedDotFiles = ['.env', '.gitignore']; // Already in IGNORED_FILES, so this is redundant
+    const allowedDotFiles = [".env", ".gitignore"]; // Already in IGNORED_FILES, so this is redundant
     // Actually, let's NOT ignore all dot files - many are important configs
     // Just rely on the explicit lists above
   }
 
   // Ignore files that look like generated/bundled code
   if (
-    fileNameLower.includes('.bundle.') ||
-    fileNameLower.includes('.chunk.') ||
-    fileNameLower.includes('.generated.') ||
-    fileNameLower.endsWith('.d.ts')
+    fileNameLower.includes(".bundle.") ||
+    fileNameLower.includes(".chunk.") ||
+    fileNameLower.includes(".generated.") ||
+    fileNameLower.endsWith(".d.ts")
   ) {
     // TypeScript declaration files
     return true;
@@ -354,18 +354,26 @@ export const loadIgnoreRules = async (
   let hasRules = false;
 
   // Allow users to bypass .gitignore parsing (e.g. when .gitignore accidentally excludes source files)
-  const skipGitignore = options?.noGitignore ?? !!process.env.KNOWLEDGE_NO_GITIGNORE;
-  const filenames = skipGitignore ? ['.knowledge-ignore'] : ['.gitignore', '.knowledge-ignore'];
+  const skipGitignore =
+    options?.noGitignore ?? !!process.env.KNOWLEDGE_NO_GITIGNORE;
+  const filenames = skipGitignore
+    ? [".knowledge-ignore"]
+    : [".gitignore", ".knowledge-ignore"];
 
   for (const filename of filenames) {
     try {
-      const content = await fs.readFile(nodePath.join(repoPath, filename), 'utf-8');
+      const content = await fs.readFile(
+        nodePath.join(repoPath, filename),
+        "utf-8",
+      );
       ig.add(content);
       hasRules = true;
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') {
-        console.warn(`  Warning: could not read ${filename}: ${(err as Error).message}`);
+      if (code !== "ENOENT") {
+        console.warn(
+          `  Warning: could not read ${filename}: ${(err as Error).message}`,
+        );
       }
     }
   }
@@ -398,12 +406,12 @@ const hasExplicitUnignore = (ig: Ignore, rel: string): boolean => {
   if (ig.test(rel).unignored) return true;
   // Direct match on the path treated as a directory — `!dir/` matches
   // here when rel is the directory itself.
-  if (ig.test(rel + '/').unignored) return true;
+  if (ig.test(rel + "/").unignored) return true;
   // Walk ancestor segments. `!parent/` should propagate to every
   // descendant the same way `.gitignore` negation propagates.
-  const parts = rel.split('/');
+  const parts = rel.split("/");
   for (let i = parts.length - 1; i > 0; i--) {
-    const ancestor = parts.slice(0, i).join('/') + '/';
+    const ancestor = parts.slice(0, i).join("/") + "/";
     if (ig.test(ancestor).unignored) return true;
   }
   return false;
@@ -426,7 +434,10 @@ const hasExplicitUnignore = (ig: Ignore, rel: string): boolean => {
  * while leaving the parent negated). Last-match-wins is enforced by
  * consulting `ig.ignores(rel)` after `hasExplicitUnignore`.
  */
-export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptions) => {
+export const createIgnoreFilter = async (
+  repoPath: string,
+  options?: IgnoreOptions,
+) => {
   const ig = await loadIgnoreRules(repoPath, options);
 
   return {
@@ -460,7 +471,8 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // DEFAULT_IGNORE_LIST. The `!ig.ignores(rel + '/')` guard keeps
       // last-match-wins: `!__tests__/` + `__tests__/generated/` still
       // blocks descent into `__tests__/generated/`.
-      if (ig && rel && hasExplicitUnignore(ig, rel) && !ig.ignores(rel + '/')) return false;
+      if (ig && rel && hasExplicitUnignore(ig, rel) && !ig.ignores(rel + "/"))
+        return false;
       // Hardcoded list: block descent into well-known noise directories.
       if (DEFAULT_IGNORE_LIST.has(p.name)) return true;
       // Check against .gitignore / .knowledge-ignore patterns.
@@ -471,7 +483,7 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // Bare-name patterns (e.g. `local`) still match `local/` per gitignore spec:
       // the `ignore` package normalizes `dir` and `dir/` to match directories.
       // See: https://github.com/kaelzhang/node-ignore#2-filenames-and-dirnames
-      if (ig && rel && ig.ignores(rel + '/')) return true;
+      if (ig && rel && ig.ignores(rel + "/")) return true;
       return false;
     },
   };
@@ -500,10 +512,14 @@ export const createPathIgnoreChecker = async (
     if (!relativePath) return false;
 
     // Normalize to POSIX path (ignore package expects forward slashes)
-    const normalizedPath = relativePath.replace(/\\/g, '/');
+    const normalizedPath = relativePath.replace(/\\/g, "/");
 
     // 1. gitignore 规则优先（包括取反处理）
-    if (ig && hasExplicitUnignore(ig, normalizedPath) && !ig.ignores(normalizedPath)) {
+    if (
+      ig &&
+      hasExplicitUnignore(ig, normalizedPath) &&
+      !ig.ignores(normalizedPath)
+    ) {
       return false;
     }
     if (ig && ig.ignores(normalizedPath)) {
@@ -536,21 +552,29 @@ export const createDirectoryNameChecker = async (
     // 1. 硬编码列表快速检查（大多数情况）
     if (DEFAULT_IGNORE_LIST.has(dirName)) {
       // 但如果有取反规则，可能需要放行
-      if (ig && hasExplicitUnignore(ig, dirName) && !ig.ignores(dirName + '/')) {
+      if (
+        ig &&
+        hasExplicitUnignore(ig, dirName) &&
+        !ig.ignores(dirName + "/")
+      ) {
         return false;
       }
       return true;
     }
 
     // 2. gitignore 规则检查（作为目录）
-    if (ig && ig.ignores(dirName + '/')) {
+    if (ig && ig.ignores(dirName + "/")) {
       return true;
     }
 
     // 3. 隐藏目录（以 . 开头）默认忽略
-    if (dirName.startsWith('.') && dirName !== '.') {
+    if (dirName.startsWith(".") && dirName !== ".") {
       // 但如果有取反规则，放行
-      if (ig && hasExplicitUnignore(ig, dirName) && !ig.ignores(dirName + '/')) {
+      if (
+        ig &&
+        hasExplicitUnignore(ig, dirName) &&
+        !ig.ignores(dirName + "/")
+      ) {
         return false;
       }
       return true;

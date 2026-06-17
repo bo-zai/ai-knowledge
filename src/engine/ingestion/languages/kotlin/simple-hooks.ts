@@ -5,7 +5,7 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from '../../../shared/index.js';
+} from "../../../shared/index.js";
 
 export function kotlinBindingScopeFor(
   decl: CaptureMatch,
@@ -17,7 +17,7 @@ export function kotlinBindingScopeFor(
   // unbraced arm bodies (`is User -> obj.save()`), which would otherwise
   // trigger scope-extractor auto-hoist into the enclosing function scope
   // and erase the arm-local narrowing.
-  if (decl['@type-binding.narrowed'] !== undefined) return innermost.id;
+  if (decl["@type-binding.narrowed"] !== undefined) return innermost.id;
 
   // Lambda-scoped bindings (issue #1757) — explicit lambda parameters
   // and implicit `it` must stay inside the lambda body Block scope.
@@ -28,16 +28,16 @@ export function kotlinBindingScopeFor(
   //     that follows in the function body.
   //   - Nested lambda parameters override each other across siblings.
   // Same mechanism as the smart-cast precedent above.
-  if (decl['@type-binding.lambda-scoped'] !== undefined) return innermost.id;
+  if (decl["@type-binding.lambda-scoped"] !== undefined) return innermost.id;
 
-  if (decl['@type-binding.return'] === undefined) return null;
+  if (decl["@type-binding.return"] === undefined) return null;
 
   let current: Scope | undefined = innermost;
-  while (current !== undefined && current.kind !== 'Module') {
+  while (current !== undefined && current.kind !== "Module") {
     if (current.parent === null) break;
     current = tree.getScope(current.parent);
   }
-  return current?.kind === 'Module' ? current.id : null;
+  return current?.kind === "Module" ? current.id : null;
 }
 
 export function kotlinImportOwningScope(
@@ -49,6 +49,10 @@ export function kotlinImportOwningScope(
 }
 
 export function kotlinReceiverBinding(functionScope: Scope): TypeRef | null {
-  if (functionScope.kind !== 'Function') return null;
-  return functionScope.typeBindings.get('this') ?? functionScope.typeBindings.get('super') ?? null;
+  if (functionScope.kind !== "Function") return null;
+  return (
+    functionScope.typeBindings.get("this") ??
+    functionScope.typeBindings.get("super") ??
+    null
+  );
 }

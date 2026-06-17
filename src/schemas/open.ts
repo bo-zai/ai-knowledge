@@ -1,12 +1,12 @@
-import { z } from 'zod';
-import { commonObjectSchema } from './common.js';
+import { z } from "zod";
+import { commonObjectSchema } from "./common.js";
 
 /**
  * 边界类型枚举
  *
  * 边界知识记录已有能力的局限性和仓库边界的特殊说明。
  */
-export const BoundaryTypeSchema = z.enum(['limitation', 'disabled_feature']);
+export const BoundaryTypeSchema = z.enum(["limitation", "disabled_feature"]);
 
 export type BoundaryType = z.infer<typeof BoundaryTypeSchema>;
 
@@ -17,7 +17,7 @@ export type BoundaryType = z.infer<typeof BoundaryTypeSchema>;
  * OPEN 类型映射到 BOUNDARY 类型，聚焦于 Agent 无法从能力目录直接推断的情况。
  */
 export const openObjectSchema = commonObjectSchema.extend({
-  type: z.literal('OPEN'),
+  type: z.literal("OPEN"),
 
   /** 边界标题：简短描述边界内容 */
   boundary_title: z.string().min(1),
@@ -38,7 +38,7 @@ export const openObjectSchema = commonObjectSchema.extend({
   context_zh: z.string().min(1),
 
   /** 影响级别 */
-  impact: z.enum(['high', 'medium', 'low']),
+  impact: z.enum(["high", "medium", "low"]),
 
   /** 关联能力：该边界影响能力目录中的哪些能力（可选） */
   related_capability: z.string().optional(),
@@ -47,13 +47,15 @@ export const openObjectSchema = commonObjectSchema.extend({
   decision_needed_by: z.string().optional(),
 
   /** 可选方案（兼容旧字段） */
-  options: z.array(
-    z.object({
-      label: z.string().min(1),
-      pros: z.array(z.string()),
-      cons: z.array(z.string()),
-    }),
-  ).optional(),
+  options: z
+    .array(
+      z.object({
+        label: z.string().min(1),
+        pros: z.array(z.string()),
+        cons: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 
 export type OpenObject = z.infer<typeof openObjectSchema>;

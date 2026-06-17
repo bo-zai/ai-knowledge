@@ -1,31 +1,31 @@
-import OpenAI from 'openai';
-import type { ModelConfig } from '../config/model-config.js';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { logger } from '../shared/logger.js';
-import { HumanMessage } from '@langchain/core/messages';
-import { AGENT_RUNTIME_DEFAULTS, LLM_DEFAULTS } from '../config/defaults.js';
+import OpenAI from "openai";
+import type { ModelConfig } from "../config/model-config.js";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { logger } from "../shared/logger.js";
+import { HumanMessage } from "@langchain/core/messages";
+import { AGENT_RUNTIME_DEFAULTS, LLM_DEFAULTS } from "../config/defaults.js";
 import {
   createAgentRuntime,
   type AgentRuntime,
   type AgentRuntimeConfig,
   type ModelInstanceConfig,
-} from '../agent-runtime/runtime.js';
+} from "../agent-runtime/runtime.js";
 import {
   resolveModel,
   type RoutingContext,
   type RoutingResult,
   type ModelTier,
   type TaskSource,
-} from '../agent-runtime/routing/index.js';
+} from "../agent-runtime/routing/index.js";
 import {
   loadMultiModelsFile,
   getValidatedModels,
   type ValidatedModelConfig,
   type MultiModelsFile,
-} from '../config/multi-model-config.js';
-import { resolveModelConfig } from '../config/model-config.js';
-import type { LlmMessage } from './llm-types.js';
-import { toOpenAiMessages } from './llm-types.js';
+} from "../config/multi-model-config.js";
+import { resolveModelConfig } from "../config/model-config.js";
+import type { LlmMessage } from "./llm-types.js";
+import { toOpenAiMessages } from "./llm-types.js";
 
 export function createOpenAiClient(config: ModelConfig): OpenAI {
   return new OpenAI({
@@ -40,7 +40,7 @@ export function createOpenAiClient(config: ModelConfig): OpenAI {
  */
 export interface LlmGenerationResult {
   text: string;
-  mode: 'streaming' | 'non_streaming_fallback';
+  mode: "streaming" | "non_streaming_fallback";
   startedAt: string;
   firstChunkAt?: string;
   finishedAt: string;
@@ -68,18 +68,18 @@ export async function generateWithClient(
   // 归一化消息列表
   let messages: ChatCompletionMessageParam[];
 
-  if (typeof systemPromptOrMessages === 'string' && userPrompt !== undefined) {
+  if (typeof systemPromptOrMessages === "string" && userPrompt !== undefined) {
     // Legacy 模式：system + user
     messages = [
-      { role: 'system', content: systemPromptOrMessages },
-      { role: 'user', content: userPrompt },
+      { role: "system", content: systemPromptOrMessages },
+      { role: "user", content: userPrompt },
     ];
   } else if (Array.isArray(systemPromptOrMessages)) {
     // Message 数组模式
     messages = toOpenAiMessages(systemPromptOrMessages);
   } else {
     throw new Error(
-      'Invalid arguments: provide (systemPrompt, userPrompt) or messages[]'
+      "Invalid arguments: provide (systemPrompt, userPrompt) or messages[]",
     );
   }
 
@@ -113,7 +113,6 @@ async function generateWithMessagesInternal(
   messages: ChatCompletionMessageParam[],
   startedAt: string,
 ): Promise<LlmGenerationResult> {
-
   // Try streaming first
   try {
     const stream = await client.chat.completions.create({
@@ -123,12 +122,12 @@ async function generateWithMessagesInternal(
       stream: true,
     });
 
-    let text = '';
+    let text = "";
     let chunks = 0;
     let firstChunkAt: string | undefined;
 
     for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content ?? '';
+      const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         if (!firstChunkAt) {
           firstChunkAt = new Date().toISOString();
@@ -145,7 +144,7 @@ async function generateWithMessagesInternal(
     if (text.trim()) {
       return {
         text,
-        mode: 'streaming',
+        mode: "streaming",
         startedAt,
         firstChunkAt,
         finishedAt,
@@ -155,10 +154,17 @@ async function generateWithMessagesInternal(
     }
 
     // Empty response - fallback to non-streaming
-    return await nonStreamingFallback(client, model, messages, startedAt, 'Empty streaming response');
+    return await nonStreamingFallback(
+      client,
+      model,
+      messages,
+      startedAt,
+      "Empty streaming response",
+    );
   } catch (streamError) {
     // Streaming failed - fallback to non-streaming
-    const errorMsg = streamError instanceof Error ? streamError.message : String(streamError);
+    const errorMsg =
+      streamError instanceof Error ? streamError.message : String(streamError);
     logger.warn(`LLM streaming failed, fallback to non-streaming: ${errorMsg}`);
     return await nonStreamingFallback(
       client,
@@ -193,8 +199,8 @@ async function nonStreamingFallback(
     logger.debug(`LLM non-streaming fallback succeeded in ${durationMs}ms`);
 
     return {
-      text: response.choices[0]?.message?.content ?? '',
-      mode: 'non_streaming_fallback',
+      text: response.choices[0]?.message?.content ?? "",
+      mode: "non_streaming_fallback",
       startedAt,
       finishedAt,
       durationMs,
@@ -202,7 +208,10 @@ async function nonStreamingFallback(
       streamError,
     };
   } catch (nonStreamError) {
-    const errorMsg = nonStreamError instanceof Error ? nonStreamError.message : String(nonStreamError);
+    const errorMsg =
+      nonStreamError instanceof Error
+        ? nonStreamError.message
+        : String(nonStreamError);
     logger.error(`LLM non-streaming fallback failed: ${errorMsg}`);
     // 向上抛出异常，由调用者处理
     throw nonStreamError;
@@ -301,7 +310,7 @@ export async function generateWithAgent(
   if (validatedModels.length === 0 && options.modelConfig) {
     validatedModels = [
       {
-        id: 'default',
+        id: "default",
         name: options.modelConfig.model,
         baseUrl: options.modelConfig.baseUrl,
         model: options.modelConfig.model,
@@ -317,7 +326,7 @@ export async function generateWithAgent(
     const defaultConfig = resolveModelConfig({});
     validatedModels = [
       {
-        id: 'default',
+        id: "default",
         name: defaultConfig.model,
         baseUrl: defaultConfig.baseUrl,
         model: defaultConfig.model,
@@ -328,9 +337,9 @@ export async function generateWithAgent(
     ];
   }
 
-  logger.info('[AgentClient] Loaded models', {
+  logger.info("[AgentClient] Loaded models", {
     modelCount: validatedModels.length,
-    modelIds: validatedModels.map(m => m.id),
+    modelIds: validatedModels.map((m) => m.id),
   });
 
   // ── 2. 路由决策 ─────────────────────────────────────────────────────────────
@@ -344,7 +353,9 @@ export async function generateWithAgent(
   // 注入模型存储（简化实现，直接使用验证后的模型列表）
   const modelStorage = {
     getModelByTier: (tier: ModelTier): ValidatedModelConfig | null => {
-      const tierModels = validatedModels.filter(m => (m.tier ?? 'premium') === tier);
+      const tierModels = validatedModels.filter(
+        (m) => (m.tier ?? "premium") === tier,
+      );
       return tierModels[0] ?? null;
     },
     getCustomModelConfigs: () => validatedModels,
@@ -358,39 +369,47 @@ export async function generateWithAgent(
 
   // 简化路由：根据任务类型选择模型
   const taskSource = routingContext.taskSource;
-  if (taskSource === 'heartbeat' || taskSource === 'memory_summarize' || taskSource === 'scheduler_reminder') {
+  if (
+    taskSource === "heartbeat" ||
+    taskSource === "memory_summarize" ||
+    taskSource === "scheduler_reminder"
+  ) {
     // Economy 层任务
-    const economyModel = validatedModels.find(m => (m.tier ?? 'premium') === 'economy') ?? validatedModels[0];
+    const economyModel =
+      validatedModels.find((m) => (m.tier ?? "premium") === "economy") ??
+      validatedModels[0];
     routingResult = {
       resolvedModelId: `custom:${economyModel.id}`,
-      resolvedTier: 'economy',
+      resolvedTier: "economy",
       routeReason: `taskSource=${taskSource}→economy`,
-      fallbackChain: validatedModels.map(m => `custom:${m.id}`),
-      layer: 'layer1',
+      fallbackChain: validatedModels.map((m) => `custom:${m.id}`),
+      layer: "layer1",
     };
-  } else if (taskSource === 'optimizer') {
+  } else if (taskSource === "optimizer") {
     // Premium 层任务
-    const premiumModel = validatedModels.find(m => (m.tier ?? 'premium') === 'premium') ?? validatedModels[0];
+    const premiumModel =
+      validatedModels.find((m) => (m.tier ?? "premium") === "premium") ??
+      validatedModels[0];
     routingResult = {
       resolvedModelId: `custom:${premiumModel.id}`,
-      resolvedTier: 'premium',
+      resolvedTier: "premium",
       routeReason: `taskSource=${taskSource}→premium`,
-      fallbackChain: validatedModels.map(m => `custom:${m.id}`),
-      layer: 'layer1',
+      fallbackChain: validatedModels.map((m) => `custom:${m.id}`),
+      layer: "layer1",
     };
   } else {
     // 默认使用第一个有效模型
     const defaultModel = validatedModels[0];
     routingResult = {
       resolvedModelId: `custom:${defaultModel.id}`,
-      resolvedTier: (defaultModel.tier ?? 'premium') as ModelTier,
+      resolvedTier: (defaultModel.tier ?? "premium") as ModelTier,
       routeReason: `default-first-model`,
-      fallbackChain: validatedModels.map(m => `custom:${m.id}`),
-      layer: 'layer1',
+      fallbackChain: validatedModels.map((m) => `custom:${m.id}`),
+      layer: "layer1",
     };
   }
 
-  logger.info('[AgentClient] Routing result', {
+  logger.info("[AgentClient] Routing result", {
     resolvedModelId: routingResult.resolvedModelId,
     resolvedTier: routingResult.resolvedTier,
     routeReason: routingResult.routeReason,
@@ -398,8 +417,8 @@ export async function generateWithAgent(
   });
 
   // ── 3. 获取模型配置 ───────────────────────────────────────────────────────────
-  const modelId = routingResult.resolvedModelId.replace('custom:', '');
-  const selectedModel = validatedModels.find(m => m.id === modelId);
+  const modelId = routingResult.resolvedModelId.replace("custom:", "");
+  const selectedModel = validatedModels.find((m) => m.id === modelId);
 
   if (!selectedModel) {
     throw new Error(`Model not found: ${modelId}`);
@@ -411,7 +430,8 @@ export async function generateWithAgent(
     model: selectedModel.model,
     baseUrl: selectedModel.baseUrl,
     apiKey: selectedModel.apiKey,
-    maxTokens: selectedModel.maxTokens ?? AGENT_RUNTIME_DEFAULTS.defaultContextWindow,
+    maxTokens:
+      selectedModel.maxTokens ?? AGENT_RUNTIME_DEFAULTS.defaultContextWindow,
   };
 
   const runtimeConfig: AgentRuntimeConfig = {
@@ -425,8 +445,10 @@ export async function generateWithAgent(
     middleware: options.middleware as any[],
     abortSignal: options.abortSignal,
     maxRetryAttempts: LLM_DEFAULTS.maxRetries,
-    enableSummarization: options.enableSummarization ?? AGENT_RUNTIME_DEFAULTS.enableSummarization,
-    enableFileTools: options.enableFileTools ?? AGENT_RUNTIME_DEFAULTS.enableFileTools,
+    enableSummarization:
+      options.enableSummarization ?? AGENT_RUNTIME_DEFAULTS.enableSummarization,
+    enableFileTools:
+      options.enableFileTools ?? AGENT_RUNTIME_DEFAULTS.enableFileTools,
     enableWrite: options.enableWrite ?? AGENT_RUNTIME_DEFAULTS.enableWrite,
     enableTodoList: AGENT_RUNTIME_DEFAULTS.enableTodoList,
     enablePromptCaching: AGENT_RUNTIME_DEFAULTS.enablePromptCaching,
@@ -434,7 +456,7 @@ export async function generateWithAgent(
 
   const agent = createAgentRuntime(runtimeConfig);
 
-  logger.info('[AgentClient] Agent runtime created', {
+  logger.info("[AgentClient] Agent runtime created", {
     model: selectedModel.model,
     workspacePath: options.workspacePath,
   });
@@ -449,28 +471,28 @@ export async function generateWithAgent(
     });
 
     // 提取响应文本
-    let text = '';
+    let text = "";
     if (response && response.messages) {
       const lastMessage = response.messages[response.messages.length - 1];
-      if (lastMessage && typeof lastMessage.content === 'string') {
+      if (lastMessage && typeof lastMessage.content === "string") {
         text = lastMessage.content;
       } else if (lastMessage && Array.isArray(lastMessage.content)) {
         text = lastMessage.content
           .map((item: unknown) => {
-            if (typeof item === 'string') return item;
-            if (item && typeof item === 'object' && 'text' in item) {
+            if (typeof item === "string") return item;
+            if (item && typeof item === "object" && "text" in item) {
               return String((item as { text: unknown }).text);
             }
-            return '';
+            return "";
           })
-          .join('');
+          .join("");
       }
     }
 
     const finishedAt = new Date().toISOString();
     const durationMs = Date.now() - new Date(startedAt).getTime();
 
-    logger.info('[AgentClient] Agent generation completed', {
+    logger.info("[AgentClient] Agent generation completed", {
       resolvedModelId: routingResult.resolvedModelId,
       textLength: text.length,
       durationMs,
@@ -489,7 +511,7 @@ export async function generateWithAgent(
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error('[AgentClient] Agent generation failed', {
+    logger.error("[AgentClient] Agent generation failed", {
       error: errorMsg,
       resolvedModelId: routingResult.resolvedModelId,
     });
@@ -497,13 +519,13 @@ export async function generateWithAgent(
     // 尝试 fallback 链
     const fallbackChain = routingResult.fallbackChain;
     if (fallbackChain.length > 1) {
-      logger.info('[AgentClient] Attempting fallback', {
+      logger.info("[AgentClient] Attempting fallback", {
         fallbackChain,
       });
 
       // 尝试下一个 fallback 模型
-      const nextModelId = fallbackChain[1].replace('custom:', '');
-      const fallbackModel = validatedModels.find(m => m.id === nextModelId);
+      const nextModelId = fallbackChain[1].replace("custom:", "");
+      const fallbackModel = validatedModels.find((m) => m.id === nextModelId);
 
       if (fallbackModel) {
         const fallbackConfig: ModelInstanceConfig = {
@@ -511,7 +533,9 @@ export async function generateWithAgent(
           model: fallbackModel.model,
           baseUrl: fallbackModel.baseUrl,
           apiKey: fallbackModel.apiKey,
-          maxTokens: fallbackModel.maxTokens ?? AGENT_RUNTIME_DEFAULTS.defaultContextWindow,
+          maxTokens:
+            fallbackModel.maxTokens ??
+            AGENT_RUNTIME_DEFAULTS.defaultContextWindow,
         };
 
         const fallbackRuntimeConfig: AgentRuntimeConfig = {
@@ -526,10 +550,11 @@ export async function generateWithAgent(
             messages: [userMessage],
           });
 
-          let fallbackText = '';
+          let fallbackText = "";
           if (fallbackResponse && fallbackResponse.messages) {
-            const lastMessage = fallbackResponse.messages[fallbackResponse.messages.length - 1];
-            if (lastMessage && typeof lastMessage.content === 'string') {
+            const lastMessage =
+              fallbackResponse.messages[fallbackResponse.messages.length - 1];
+            if (lastMessage && typeof lastMessage.content === "string") {
               fallbackText = lastMessage.content;
             }
           }
@@ -537,7 +562,7 @@ export async function generateWithAgent(
           const finishedAt = new Date().toISOString();
           const durationMs = Date.now() - new Date(startedAt).getTime();
 
-          logger.info('[AgentClient] Fallback succeeded', {
+          logger.info("[AgentClient] Fallback succeeded", {
             fallbackModelId: nextModelId,
             textLength: fallbackText.length,
           });
@@ -545,16 +570,19 @@ export async function generateWithAgent(
           return {
             text: fallbackText,
             resolvedModelId: `custom:${nextModelId}`,
-            resolvedTier: (fallbackModel.tier ?? 'premium') as ModelTier,
+            resolvedTier: (fallbackModel.tier ?? "premium") as ModelTier,
             routeReason: `${routingResult.routeReason}→fallback`,
-            routingLayer: 'fallback',
+            routingLayer: "fallback",
             startedAt,
             finishedAt,
             durationMs,
           };
         } catch (fallbackError) {
-          logger.error('[AgentClient] Fallback failed', {
-            error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+          logger.error("[AgentClient] Fallback failed", {
+            error:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : String(fallbackError),
           });
         }
       }

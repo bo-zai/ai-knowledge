@@ -20,8 +20,8 @@
  * doesn't need to carry book-keeping fields.
  */
 
-import { ORIGIN_PRIORITY, type OriginForTieBreak } from '../origin-priority.js';
-import type { Resolution } from '../types.js';
+import { ORIGIN_PRIORITY, type OriginForTieBreak } from "../origin-priority.js";
+import type { Resolution } from "../types.js";
 
 export const CONFIDENCE_EPSILON = 0.001;
 
@@ -72,5 +72,5 @@ export function compareByConfidenceWithTiebreaks(
 const DEFAULT_KEY: TieBreakKey = Object.freeze({
   scopeDepth: 0,
   mroDepth: 0,
-  origin: 'local',
+  origin: "local",
 });

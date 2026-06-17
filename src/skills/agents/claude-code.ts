@@ -4,21 +4,26 @@
  * Skill 存储位置：项目根目录的 .claude/skills/ 目录
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { Agent, SkillInitConfig, SkillInitResult, SkillFile } from './types.js';
+import fs from "node:fs/promises";
+import path from "node:path";
+import type {
+  Agent,
+  SkillInitConfig,
+  SkillInitResult,
+  SkillFile,
+} from "./types.js";
 
 export const CLAUDE_CODE_AGENT: Agent = {
-  name: 'Claude Code',
-  id: 'claude-code',
+  name: "Claude Code",
+  id: "claude-code",
 
   getSkillDir(repoPath: string): string {
-    return path.join(repoPath, '.claude', 'skills');
+    return path.join(repoPath, ".claude", "skills");
   },
 
   async isInitialized(repoPath: string): Promise<boolean> {
     const skillDir = this.getSkillDir(repoPath);
-    const useKnowledgePath = path.join(skillDir, 'use-knowledge', 'SKILL.md');
+    const useKnowledgePath = path.join(skillDir, "use-knowledge", "SKILL.md");
 
     try {
       await fs.access(useKnowledgePath);
@@ -37,21 +42,17 @@ export const CLAUDE_CODE_AGENT: Agent = {
       await fs.mkdir(skillDir, { recursive: true });
 
       // 写入 use-knowledge skill（从 skill-templates 获取内容）
-      const { USE_KNOWLEDGE_SKILL } = await import('../skill-templates.js');
+      const { USE_KNOWLEDGE_SKILL } = await import("../skill-templates.js");
       if (!USE_KNOWLEDGE_SKILL) {
-        throw new Error('USE_KNOWLEDGE_SKILL is undefined or empty');
+        throw new Error("USE_KNOWLEDGE_SKILL is undefined or empty");
       }
-      const useKnowledgeDir = path.join(skillDir, 'use-knowledge');
+      const useKnowledgeDir = path.join(skillDir, "use-knowledge");
       await fs.mkdir(useKnowledgeDir, { recursive: true });
-      const skillFilePath = path.join(useKnowledgeDir, 'SKILL.md');
-      await fs.writeFile(
-        skillFilePath,
-        USE_KNOWLEDGE_SKILL,
-        'utf-8',
-      );
+      const skillFilePath = path.join(useKnowledgeDir, "SKILL.md");
+      await fs.writeFile(skillFilePath, USE_KNOWLEDGE_SKILL, "utf-8");
       files.push({
-        name: 'use-knowledge',
-        filename: '.claude/skills/use-knowledge/SKILL.md',
+        name: "use-knowledge",
+        filename: ".claude/skills/use-knowledge/SKILL.md",
         content: USE_KNOWLEDGE_SKILL,
       });
 
@@ -74,11 +75,11 @@ export const CLAUDE_CODE_AGENT: Agent = {
 
   async generateAgentsMd(repoPath: string): Promise<string | null> {
     // Claude Code 使用 CLAUDE.md 作为系统提示词
-    const claudeMdPath = path.join(repoPath, 'CLAUDE.md');
-    let existingContent = '';
+    const claudeMdPath = path.join(repoPath, "CLAUDE.md");
+    let existingContent = "";
 
     try {
-      existingContent = await fs.readFile(claudeMdPath, 'utf-8');
+      existingContent = await fs.readFile(claudeMdPath, "utf-8");
     } catch {
       // 文件不存在，创建新文件
     }
@@ -110,7 +111,7 @@ export const CLAUDE_CODE_AGENT: Agent = {
 `;
 
     // 如果已存在，检查是否包含 skill 说明
-    if (existingContent.includes('use-knowledge')) {
+    if (existingContent.includes("use-knowledge")) {
       return null; // 已包含，不需要更新
     }
 
@@ -119,7 +120,7 @@ export const CLAUDE_CODE_AGENT: Agent = {
       ? `${existingContent}\n${skillSection}`
       : `# 项目编码指南\n${skillSection}`;
 
-    await fs.writeFile(claudeMdPath, newContent, 'utf-8');
+    await fs.writeFile(claudeMdPath, newContent, "utf-8");
     return newContent;
   },
 };

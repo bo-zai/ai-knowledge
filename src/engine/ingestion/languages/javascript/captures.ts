@@ -27,47 +27,57 @@
  * Pure given the input source text. No I/O, no globals consulted.
  */
 
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
 import {
   findNodeAtRange,
   nodeToCapture,
   syntheticCapture,
   type SyntaxNode,
-} from '../../utils/ast-helpers.js';
-import { splitImportStatement } from '../typescript/import-decomposer.js';
-import { getJsParser, getJsScopeQuery, jsCachedTreeMatchesGrammar } from './query.js';
-import { computeTsArityMetadata } from '../typescript/arity-metadata.js';
-import { synthesizeTsReceiverBinding } from '../typescript/receiver-binding.js';
-import { isArrayMethodCallbackArrow } from '../typescript/array-callback.js';
-import { getTreeSitterBufferSize } from '../../constants.js';
-import { parseSourceSafe } from '../../../tree-sitter/safe-parse.js';
+} from "../../utils/ast-helpers.js";
+import { splitImportStatement } from "../typescript/import-decomposer.js";
+import {
+  getJsParser,
+  getJsScopeQuery,
+  jsCachedTreeMatchesGrammar,
+} from "./query.js";
+import { computeTsArityMetadata } from "../typescript/arity-metadata.js";
+import { synthesizeTsReceiverBinding } from "../typescript/receiver-binding.js";
+import { isArrayMethodCallbackArrow } from "../typescript/array-callback.js";
+import { getTreeSitterBufferSize } from "../../constants.js";
+import { parseSourceSafe } from "../../../tree-sitter/safe-parse.js";
 import {
   deriveDefaultExportHocName,
   isBlockedDefaultExportHoc,
   isDefaultExportHocFunctionNode,
-} from '../../ts-js-hoc-utils.js';
+} from "../../ts-js-hoc-utils.js";
 
 /** JS function-like node types that may carry a synthesized `this` binding.
  *  Kept in sync with the `@scope.function` patterns in `query.ts`. */
 const FUNCTION_NODE_TYPES = [
-  'method_definition',
-  'arrow_function',
-  'function_expression',
-  'function_declaration',
-  'generator_function_declaration',
+  "method_definition",
+  "arrow_function",
+  "function_expression",
+  "function_declaration",
+  "generator_function_declaration",
 ] as const;
 
 /** Declaration anchors that carry function-like arity metadata. */
-const FUNCTION_DECL_TAGS = ['@declaration.method', '@declaration.function'] as const;
+const FUNCTION_DECL_TAGS = [
+  "@declaration.method",
+  "@declaration.function",
+] as const;
 
 /** Callsite anchors that should carry `@reference.arity` + param types. */
 const CALL_TAGS = [
-  '@reference.call.free',
-  '@reference.call.member',
-  '@reference.call.constructor',
+  "@reference.call.free",
+  "@reference.call.member",
+  "@reference.call.constructor",
 ] as const;
 
-function pickFirstDefined(grouped: CaptureMatch, tags: readonly string[]): Capture | undefined {
+function pickFirstDefined(
+  grouped: CaptureMatch,
+  tags: readonly string[],
+): Capture | undefined {
   for (const tag of tags) {
     const cap = grouped[tag];
     if (cap !== undefined) return cap;
@@ -89,7 +99,10 @@ function pickFirstNode(
 /** Walks the parent chain from `node` (inclusive), returning the first node
  *  whose type matches, or null. Faster than `findNodeAtRange` when the caller
  *  already holds the anchor node — avoids re-scanning the tree from the root. */
-function findSelfOrAncestorOfType(node: SyntaxNode | undefined, type: string): SyntaxNode | null {
+function findSelfOrAncestorOfType(
+  node: SyntaxNode | undefined,
+  type: string,
+): SyntaxNode | null {
   if (node === undefined) return null;
   let current: SyntaxNode | null = node;
   while (current !== null) {
@@ -119,16 +132,16 @@ function shouldEmitReadMember(memberNode: SyntaxNode): boolean {
   const parent = memberNode.parent;
   if (parent === null) return true;
   switch (parent.type) {
-    case 'call_expression':
-      return parent.childForFieldName('function')?.id !== memberNode.id;
-    case 'new_expression':
-      return parent.childForFieldName('constructor')?.id !== memberNode.id;
-    case 'assignment_expression':
-    case 'augmented_assignment_expression':
-      return parent.childForFieldName('left')?.id !== memberNode.id;
-    case 'jsx_self_closing_element':
-    case 'jsx_opening_element':
-      return parent.childForFieldName('name')?.id !== memberNode.id;
+    case "call_expression":
+      return parent.childForFieldName("function")?.id !== memberNode.id;
+    case "new_expression":
+      return parent.childForFieldName("constructor")?.id !== memberNode.id;
+    case "assignment_expression":
+    case "augmented_assignment_expression":
+      return parent.childForFieldName("left")?.id !== memberNode.id;
+    case "jsx_self_closing_element":
+    case "jsx_opening_element":
+      return parent.childForFieldName("name")?.id !== memberNode.id;
     default:
       return true;
   }
@@ -140,7 +153,7 @@ function shouldEmitReadMember(memberNode: SyntaxNode): boolean {
  *  the anchor isn't a function-like (or isn't supplied). */
 function findFunctionNode(
   rootNode: SyntaxNode,
-  range: Capture['range'],
+  range: Capture["range"],
   anchorNode?: SyntaxNode,
 ): SyntaxNode | null {
   const fromAnchor = findSelfOrAncestorOfTypes(anchorNode, FUNCTION_NODE_TYPES);
@@ -155,30 +168,30 @@ function findFunctionNode(
 /** Infer a callsite argument's static type from literal shapes. */
 function inferArgType(argNode: SyntaxNode): string {
   switch (argNode.type) {
-    case 'number':
-      return 'number';
-    case 'string':
-    case 'template_string':
-      return 'string';
-    case 'true':
-    case 'false':
-      return 'boolean';
-    case 'null':
-      return 'null';
-    case 'undefined':
-      return 'undefined';
-    case 'array':
-      return 'Array';
-    case 'object':
-      return 'object';
-    case 'regex':
-      return 'RegExp';
-    case 'new_expression': {
-      const ctor = argNode.childForFieldName('constructor');
-      return ctor?.text ?? '';
+    case "number":
+      return "number";
+    case "string":
+    case "template_string":
+      return "string";
+    case "true":
+    case "false":
+      return "boolean";
+    case "null":
+      return "null";
+    case "undefined":
+      return "undefined";
+    case "array":
+      return "Array";
+    case "object":
+      return "object";
+    case "regex":
+      return "RegExp";
+    case "new_expression": {
+      const ctor = argNode.childForFieldName("constructor");
+      return ctor?.text ?? "";
     }
     default:
-      return '';
+      return "";
   }
 }
 
@@ -210,71 +223,113 @@ function synthesizeCjsImports(root: SyntaxNode, out: CaptureMatch[]): void {
       if (child !== null) stack.push(child);
     }
 
-    if (node.type !== 'call_expression') continue;
+    if (node.type !== "call_expression") continue;
 
     // Require call: function must be bare identifier "require".
-    const fn = node.childForFieldName('function');
-    if (fn === null || fn.type !== 'identifier' || fn.text !== 'require') continue;
+    const fn = node.childForFieldName("function");
+    if (fn === null || fn.type !== "identifier" || fn.text !== "require")
+      continue;
 
-    const argsNode = node.childForFieldName('arguments');
+    const argsNode = node.childForFieldName("arguments");
     if (argsNode === null) continue;
 
     // Source must be a string literal.
     const firstArg = argsNode.namedChild(0);
-    if (firstArg === null || firstArg.type !== 'string') continue;
+    if (firstArg === null || firstArg.type !== "string") continue;
     const rawSource = firstArg.text; // includes surrounding quotes
     const source = firstArg.namedChild(0)?.text ?? rawSource.slice(1, -1);
 
     const parent = node.parent;
 
     // Case 1: const { X } = require('./m') OR const X = require('./m')
-    if (parent?.type === 'variable_declarator') {
-      const nameNode = parent.childForFieldName('name');
+    if (parent?.type === "variable_declarator") {
+      const nameNode = parent.childForFieldName("name");
       if (nameNode === null) continue;
 
-      if (nameNode.type === 'object_pattern') {
+      if (nameNode.type === "object_pattern") {
         // Destructured: emit one match per specifier.
         for (const field of nameNode.namedChildren) {
           if (field === null) continue;
-          if (field.type === 'shorthand_property_identifier_pattern') {
+          if (field.type === "shorthand_property_identifier_pattern") {
             const name = field.text;
             out.push({
-              '@import.statement': syntheticCapture('@import.statement', node, rawSource),
-              '@import.kind': syntheticCapture('@import.kind', node, 'named'),
-              '@import.name': syntheticCapture('@import.name', field, name),
-              '@import.source': syntheticCapture('@import.source', firstArg, source),
+              "@import.statement": syntheticCapture(
+                "@import.statement",
+                node,
+                rawSource,
+              ),
+              "@import.kind": syntheticCapture("@import.kind", node, "named"),
+              "@import.name": syntheticCapture("@import.name", field, name),
+              "@import.source": syntheticCapture(
+                "@import.source",
+                firstArg,
+                source,
+              ),
             });
-          } else if (field.type === 'pair_pattern') {
-            const key = field.childForFieldName('key');
-            const value = field.childForFieldName('value');
-            if (key === null || value === null || value.type !== 'identifier') continue;
+          } else if (field.type === "pair_pattern") {
+            const key = field.childForFieldName("key");
+            const value = field.childForFieldName("value");
+            if (key === null || value === null || value.type !== "identifier")
+              continue;
             out.push({
-              '@import.statement': syntheticCapture('@import.statement', node, rawSource),
-              '@import.kind': syntheticCapture('@import.kind', node, 'named-alias'),
-              '@import.name': syntheticCapture('@import.name', key, key.text),
-              '@import.alias': syntheticCapture('@import.alias', value, value.text),
-              '@import.source': syntheticCapture('@import.source', firstArg, source),
+              "@import.statement": syntheticCapture(
+                "@import.statement",
+                node,
+                rawSource,
+              ),
+              "@import.kind": syntheticCapture(
+                "@import.kind",
+                node,
+                "named-alias",
+              ),
+              "@import.name": syntheticCapture("@import.name", key, key.text),
+              "@import.alias": syntheticCapture(
+                "@import.alias",
+                value,
+                value.text,
+              ),
+              "@import.source": syntheticCapture(
+                "@import.source",
+                firstArg,
+                source,
+              ),
             });
           }
         }
-      } else if (nameNode.type === 'identifier') {
+      } else if (nameNode.type === "identifier") {
         // Namespace-style: const X = require('./m') → bind whole module to X.
         out.push({
-          '@import.statement': syntheticCapture('@import.statement', node, rawSource),
-          '@import.kind': syntheticCapture('@import.kind', node, 'namespace'),
-          '@import.alias': syntheticCapture('@import.alias', nameNode, nameNode.text),
-          '@import.source': syntheticCapture('@import.source', firstArg, source),
+          "@import.statement": syntheticCapture(
+            "@import.statement",
+            node,
+            rawSource,
+          ),
+          "@import.kind": syntheticCapture("@import.kind", node, "namespace"),
+          "@import.alias": syntheticCapture(
+            "@import.alias",
+            nameNode,
+            nameNode.text,
+          ),
+          "@import.source": syntheticCapture(
+            "@import.source",
+            firstArg,
+            source,
+          ),
         });
       }
       continue;
     }
 
     // Case 2: bare require('./m') — side-effect import.
-    if (parent?.type === 'expression_statement') {
+    if (parent?.type === "expression_statement") {
       out.push({
-        '@import.statement': syntheticCapture('@import.statement', node, rawSource),
-        '@import.kind': syntheticCapture('@import.kind', node, 'side-effect'),
-        '@import.source': syntheticCapture('@import.source', firstArg, source),
+        "@import.statement": syntheticCapture(
+          "@import.statement",
+          node,
+          rawSource,
+        ),
+        "@import.kind": syntheticCapture("@import.kind", node, "side-effect"),
+        "@import.source": syntheticCapture("@import.source", firstArg, source),
       });
     }
   }
@@ -339,10 +394,13 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
     }
 
     const isFnDecl =
-      node.type === 'function_declaration' || node.type === 'generator_function_declaration';
-    const isMethodDef = node.type === 'method_definition';
+      node.type === "function_declaration" ||
+      node.type === "generator_function_declaration";
+    const isMethodDef = node.type === "method_definition";
     // Also check lexical_declaration containing an arrow/fn-expression
-    const isLexDecl = node.type === 'lexical_declaration' || node.type === 'variable_declaration';
+    const isLexDecl =
+      node.type === "lexical_declaration" ||
+      node.type === "variable_declaration";
 
     if (!isFnDecl && !isMethodDef && !isLexDecl) continue;
 
@@ -350,13 +408,15 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
     // wrapping export_statement, not the inner function_declaration.
     // Walk up to the export_statement so the preceding-sibling search finds it.
     const lookupNode =
-      (isFnDecl || isLexDecl) && node.parent?.type === 'export_statement' ? node.parent : node;
+      (isFnDecl || isLexDecl) && node.parent?.type === "export_statement"
+        ? node.parent
+        : node;
 
     // Find the preceding sibling comment.
     let sibling = lookupNode.previousNamedSibling;
-    while (sibling !== null && sibling.type === 'comment') {
+    while (sibling !== null && sibling.type === "comment") {
       const text = sibling.text;
-      if (text.startsWith('/**')) {
+      if (text.startsWith("/**")) {
         // Found a JSDoc block.
         const params = parseJsDocParams(text);
         const retType = parseJsDocReturn(text);
@@ -367,9 +427,21 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
 
         for (const p of params) {
           out.push({
-            '@type-binding.name': syntheticCapture('@type-binding.name', anchor, p.name),
-            '@type-binding.type': syntheticCapture('@type-binding.type', anchor, p.type),
-            '@type-binding.parameter': syntheticCapture('@type-binding.parameter', anchor, '1'),
+            "@type-binding.name": syntheticCapture(
+              "@type-binding.name",
+              anchor,
+              p.name,
+            ),
+            "@type-binding.type": syntheticCapture(
+              "@type-binding.type",
+              anchor,
+              p.type,
+            ),
+            "@type-binding.parameter": syntheticCapture(
+              "@type-binding.parameter",
+              anchor,
+              "1",
+            ),
           });
         }
 
@@ -378,21 +450,34 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
           // `hoistTypeBindingsToModule` knows which function's return type this is.
           let fnName: string | null = null;
           if (isFnDecl) {
-            fnName = node.childForFieldName('name')?.text ?? null;
+            fnName = node.childForFieldName("name")?.text ?? null;
           } else if (isMethodDef) {
             // method_definition uses `name:` field for the method name
-            const nameNode = node.childForFieldName('name');
-            if (nameNode?.type === 'property_identifier') fnName = nameNode.text;
+            const nameNode = node.childForFieldName("name");
+            if (nameNode?.type === "property_identifier")
+              fnName = nameNode.text;
           } else if (isLexDecl) {
             const declarator = node.namedChild(0);
-            const nameNode = declarator?.childForFieldName('name');
-            if (nameNode?.type === 'identifier') fnName = nameNode.text;
+            const nameNode = declarator?.childForFieldName("name");
+            if (nameNode?.type === "identifier") fnName = nameNode.text;
           }
           if (fnName !== null) {
             out.push({
-              '@type-binding.name': syntheticCapture('@type-binding.name', anchor, fnName),
-              '@type-binding.type': syntheticCapture('@type-binding.type', anchor, retType),
-              '@type-binding.return': syntheticCapture('@type-binding.return', anchor, '1'),
+              "@type-binding.name": syntheticCapture(
+                "@type-binding.name",
+                anchor,
+                fnName,
+              ),
+              "@type-binding.type": syntheticCapture(
+                "@type-binding.type",
+                anchor,
+                retType,
+              ),
+              "@type-binding.return": syntheticCapture(
+                "@type-binding.return",
+                anchor,
+                "1",
+              ),
             });
           }
         }
@@ -402,16 +487,28 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
         // overrides any weaker constructor/alias inference on the same name.
         if (varType !== null) {
           for (const declarator of node.namedChildren) {
-            if (declarator === null || declarator.type !== 'variable_declarator') continue;
-            const nameNode = declarator.childForFieldName('name');
-            if (nameNode === null || nameNode.type !== 'identifier') continue;
+            if (
+              declarator === null ||
+              declarator.type !== "variable_declarator"
+            )
+              continue;
+            const nameNode = declarator.childForFieldName("name");
+            if (nameNode === null || nameNode.type !== "identifier") continue;
             out.push({
-              '@type-binding.name': syntheticCapture('@type-binding.name', nameNode, nameNode.text),
-              '@type-binding.type': syntheticCapture('@type-binding.type', nameNode, varType),
-              '@type-binding.annotation': syntheticCapture(
-                '@type-binding.annotation',
+              "@type-binding.name": syntheticCapture(
+                "@type-binding.name",
                 nameNode,
-                '1',
+                nameNode.text,
+              ),
+              "@type-binding.type": syntheticCapture(
+                "@type-binding.type",
+                nameNode,
+                varType,
+              ),
+              "@type-binding.annotation": syntheticCapture(
+                "@type-binding.annotation",
+                nameNode,
+                "1",
               ),
             });
           }
@@ -426,7 +523,10 @@ function synthesizeJsDocBindings(root: SyntaxNode, out: CaptureMatch[]): void {
 
 // ─── Destructuring / for-of / instanceof (shared with TS captures) ───────
 
-function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeDestructuringBindings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -434,45 +534,54 @@ function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]):
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'variable_declarator') continue;
-    const nameNode = node.childForFieldName('name');
-    const valueNode = node.childForFieldName('value');
+    if (node.type !== "variable_declarator") continue;
+    const nameNode = node.childForFieldName("name");
+    const valueNode = node.childForFieldName("value");
     if (nameNode === null || valueNode === null) continue;
-    if (nameNode.type !== 'object_pattern') continue;
-    if (valueNode.type !== 'identifier') continue;
+    if (nameNode.type !== "object_pattern") continue;
+    if (valueNode.type !== "identifier") continue;
     const rhsName = valueNode.text;
     for (const fieldNode of nameNode.namedChildren) {
       if (fieldNode === null) continue;
-      if (fieldNode.type === 'shorthand_property_identifier_pattern') {
+      if (fieldNode.type === "shorthand_property_identifier_pattern") {
         const localName = fieldNode.text;
         out.push({
-          '@type-binding.name': syntheticCapture('@type-binding.name', fieldNode, localName),
-          '@type-binding.type': syntheticCapture(
-            '@type-binding.type',
+          "@type-binding.name": syntheticCapture(
+            "@type-binding.name",
+            fieldNode,
+            localName,
+          ),
+          "@type-binding.type": syntheticCapture(
+            "@type-binding.type",
             fieldNode,
             `${rhsName}.${localName}`,
           ),
-          '@type-binding.destructured': syntheticCapture(
-            '@type-binding.destructured',
+          "@type-binding.destructured": syntheticCapture(
+            "@type-binding.destructured",
             fieldNode,
             fieldNode.text,
           ),
         });
-      } else if (fieldNode.type === 'pair_pattern') {
-        const key = fieldNode.childForFieldName('key');
-        const value = fieldNode.childForFieldName('value');
-        if (key === null || value === null || value.type !== 'identifier') continue;
+      } else if (fieldNode.type === "pair_pattern") {
+        const key = fieldNode.childForFieldName("key");
+        const value = fieldNode.childForFieldName("value");
+        if (key === null || value === null || value.type !== "identifier")
+          continue;
         const fieldName = key.text;
         const localName = value.text;
         out.push({
-          '@type-binding.name': syntheticCapture('@type-binding.name', value, localName),
-          '@type-binding.type': syntheticCapture(
-            '@type-binding.type',
+          "@type-binding.name": syntheticCapture(
+            "@type-binding.name",
+            value,
+            localName,
+          ),
+          "@type-binding.type": syntheticCapture(
+            "@type-binding.type",
             fieldNode,
             `${rhsName}.${fieldName}`,
           ),
-          '@type-binding.destructured': syntheticCapture(
-            '@type-binding.destructured',
+          "@type-binding.destructured": syntheticCapture(
+            "@type-binding.destructured",
             fieldNode,
             fieldNode.text,
           ),
@@ -482,7 +591,10 @@ function synthesizeDestructuringBindings(root: SyntaxNode, out: CaptureMatch[]):
   }
 }
 
-function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeForOfMapTupleBindings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -490,25 +602,29 @@ function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]):
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'for_in_statement') continue;
-    const left = node.childForFieldName('left');
-    const right = node.childForFieldName('right');
+    if (node.type !== "for_in_statement") continue;
+    const left = node.childForFieldName("left");
+    const right = node.childForFieldName("right");
     if (left === null || right === null) continue;
-    if (left.type !== 'array_pattern' || right.type !== 'identifier') continue;
+    if (left.type !== "array_pattern" || right.type !== "identifier") continue;
     const rhs = right.text;
     let slot = 0;
     for (const child of left.namedChildren) {
-      if (child === null || child.type !== 'identifier') continue;
+      if (child === null || child.type !== "identifier") continue;
       const localName = child.text;
       out.push({
-        '@type-binding.name': syntheticCapture('@type-binding.name', child, localName),
-        '@type-binding.type': syntheticCapture(
-          '@type-binding.type',
+        "@type-binding.name": syntheticCapture(
+          "@type-binding.name",
+          child,
+          localName,
+        ),
+        "@type-binding.type": syntheticCapture(
+          "@type-binding.type",
           child,
           `__MAP_TUPLE_${slot}__:${rhs}`,
         ),
-        '@type-binding.map-tuple-entry': syntheticCapture(
-          '@type-binding.map-tuple-entry',
+        "@type-binding.map-tuple-entry": syntheticCapture(
+          "@type-binding.map-tuple-entry",
           child,
           String(slot),
         ),
@@ -518,7 +634,10 @@ function synthesizeForOfMapTupleBindings(root: SyntaxNode, out: CaptureMatch[]):
   }
 }
 
-function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeInstanceofNarrowings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -526,29 +645,38 @@ function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): 
     for (const child of node.namedChildren) {
       if (child !== null) stack.push(child);
     }
-    if (node.type !== 'if_statement') continue;
-    const cond = node.childForFieldName('condition');
+    if (node.type !== "if_statement") continue;
+    const cond = node.childForFieldName("condition");
     if (cond === null) continue;
-    const inner = cond.type === 'parenthesized_expression' ? cond.namedChildren[0] : cond;
-    if (inner === null || inner.type !== 'binary_expression') continue;
-    const op = inner.childForFieldName('operator');
-    const left = inner.childForFieldName('left');
-    const right = inner.childForFieldName('right');
+    const inner =
+      cond.type === "parenthesized_expression" ? cond.namedChildren[0] : cond;
+    if (inner === null || inner.type !== "binary_expression") continue;
+    const op = inner.childForFieldName("operator");
+    const left = inner.childForFieldName("left");
+    const right = inner.childForFieldName("right");
     if (op === null || left === null || right === null) continue;
-    if (op.type !== 'instanceof') continue;
-    if (left.type !== 'identifier') continue;
-    if (right.type !== 'identifier') continue;
+    if (op.type !== "instanceof") continue;
+    if (left.type !== "identifier") continue;
+    if (right.type !== "identifier") continue;
     const varName = left.text;
     const typeName = right.text;
-    const cons = node.childForFieldName('consequence');
+    const cons = node.childForFieldName("consequence");
     if (cons === null) continue;
     out.push({
-      '@type-binding.name': syntheticCapture('@type-binding.name', cons, varName),
-      '@type-binding.type': syntheticCapture('@type-binding.type', right, typeName),
-      '@type-binding.instanceof-narrow': syntheticCapture(
-        '@type-binding.instanceof-narrow',
+      "@type-binding.name": syntheticCapture(
+        "@type-binding.name",
         cons,
-        '1',
+        varName,
+      ),
+      "@type-binding.type": syntheticCapture(
+        "@type-binding.type",
+        right,
+        typeName,
+      ),
+      "@type-binding.instanceof-narrow": syntheticCapture(
+        "@type-binding.instanceof-narrow",
+        cons,
+        "1",
       ),
     });
   }
@@ -575,7 +703,10 @@ function synthesizeInstanceofNarrowings(root: SyntaxNode, out: CaptureMatch[]): 
  *   1. JSDoc `@type {T}` comment immediately preceding the statement
  *   2. `new Y()` constructor inference
  */
-function synthesizeConstructorFieldBindings(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeConstructorFieldBindings(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -584,50 +715,62 @@ function synthesizeConstructorFieldBindings(root: SyntaxNode, out: CaptureMatch[
       if (child !== null) stack.push(child);
     }
     // Only process constructor method definitions
-    if (node.type !== 'method_definition') continue;
-    const nameNode = node.childForFieldName('name');
-    if (nameNode?.text !== 'constructor') continue;
+    if (node.type !== "method_definition") continue;
+    const nameNode = node.childForFieldName("name");
+    if (nameNode?.text !== "constructor") continue;
 
-    const body = node.childForFieldName('body');
+    const body = node.childForFieldName("body");
     if (body === null) continue;
 
     for (const stmt of body.namedChildren) {
-      if (stmt === null || stmt.type !== 'expression_statement') continue;
+      if (stmt === null || stmt.type !== "expression_statement") continue;
       const expr = stmt.namedChild(0);
-      if (expr === null || expr.type !== 'assignment_expression') continue;
+      if (expr === null || expr.type !== "assignment_expression") continue;
 
-      const left = expr.childForFieldName('left');
-      const right = expr.childForFieldName('right');
+      const left = expr.childForFieldName("left");
+      const right = expr.childForFieldName("right");
       if (left === null || right === null) continue;
-      if (left.type !== 'member_expression') continue;
+      if (left.type !== "member_expression") continue;
 
-      const obj = left.childForFieldName('object');
-      const prop = left.childForFieldName('property');
+      const obj = left.childForFieldName("object");
+      const prop = left.childForFieldName("property");
       if (obj === null || prop === null) continue;
-      if (obj.text !== 'this' || prop.type !== 'property_identifier') continue;
+      if (obj.text !== "this" || prop.type !== "property_identifier") continue;
 
       const fieldName = prop.text;
 
       // Prefer JSDoc @type annotation on the preceding sibling comment.
       let typeName: string | null = null;
       const prevSib: SyntaxNode | null = stmt.previousNamedSibling;
-      if (prevSib !== null && prevSib.type === 'comment') {
+      if (prevSib !== null && prevSib.type === "comment") {
         const m = /@type\s*\{([^}]+)\}/.exec(prevSib.text);
         if (m?.[1]) typeName = m[1].trim();
       }
       // Fall back to constructor inference from `new Y()`.
-      if (typeName === null && right.type === 'new_expression') {
-        const ctor = right.childForFieldName('constructor');
-        if (ctor !== null && ctor.type === 'identifier') typeName = ctor.text;
+      if (typeName === null && right.type === "new_expression") {
+        const ctor = right.childForFieldName("constructor");
+        if (ctor !== null && ctor.type === "identifier") typeName = ctor.text;
       }
       if (typeName === null) continue;
 
       out.push({
-        '@type-binding.name': syntheticCapture('@type-binding.name', prop, fieldName),
-        '@type-binding.type': syntheticCapture('@type-binding.type', prop, typeName),
+        "@type-binding.name": syntheticCapture(
+          "@type-binding.name",
+          prop,
+          fieldName,
+        ),
+        "@type-binding.type": syntheticCapture(
+          "@type-binding.type",
+          prop,
+          typeName,
+        ),
         // Anchor: positioned inside the constructor body so tsBindingScopeFor
         // can walk up from the Function (constructor) scope to the Class scope.
-        '@type-binding.class-field': syntheticCapture('@type-binding.class-field', stmt, '1'),
+        "@type-binding.class-field": syntheticCapture(
+          "@type-binding.class-field",
+          stmt,
+          "1",
+        ),
       });
     }
   }
@@ -668,7 +811,10 @@ function synthesizeConstructorFieldBindings(root: SyntaxNode, out: CaptureMatch[
  * `normalizeSupertypeName(base)` (the legacy leg's reduction): `Base` → `Base`,
  * `ns.Base` → `Base`, `a.b.Base` → `Base` — keeping the two legs at parity.
  */
-function synthesizeJsInheritanceReferences(root: SyntaxNode, out: CaptureMatch[]): void {
+function synthesizeJsInheritanceReferences(
+  root: SyntaxNode,
+  out: CaptureMatch[],
+): void {
   const stack: SyntaxNode[] = [root];
   for (;;) {
     const node = stack.pop();
@@ -677,12 +823,12 @@ function synthesizeJsInheritanceReferences(root: SyntaxNode, out: CaptureMatch[]
       if (child !== null) stack.push(child);
     }
 
-    if (node.type !== 'class_declaration') continue;
+    if (node.type !== "class_declaration") continue;
 
     // Find the `class_heritage` child (holds the single `extends` base).
     let heritage: SyntaxNode | null = null;
     for (const child of node.namedChildren) {
-      if (child !== null && child.type === 'class_heritage') {
+      if (child !== null && child.type === "class_heritage") {
         heritage = child;
         break;
       }
@@ -696,8 +842,8 @@ function synthesizeJsInheritanceReferences(root: SyntaxNode, out: CaptureMatch[]
       const nameNode = terminalJsHeritageNameNode(base);
       if (nameNode === null) continue;
       out.push({
-        '@reference.inherits': nodeToCapture('@reference.inherits', base),
-        '@reference.name': nodeToCapture('@reference.name', nameNode),
+        "@reference.inherits": nodeToCapture("@reference.inherits", base),
+        "@reference.name": nodeToCapture("@reference.name", nameNode),
       });
     }
   }
@@ -712,12 +858,12 @@ function synthesizeJsInheritanceReferences(root: SyntaxNode, out: CaptureMatch[]
  *  `normalizeSupertypeName`'s reduction of each shape. */
 function terminalJsHeritageNameNode(node: SyntaxNode): SyntaxNode | null {
   switch (node.type) {
-    case 'identifier':
+    case "identifier":
     // `extends ns.Base` parses as a member_expression whose tail is a
     // `property_identifier` (not an identifier) — treat it as a leaf name.
-    case 'property_identifier':
+    case "property_identifier":
       return node;
-    case 'member_expression': {
+    case "member_expression": {
       // Qualified `ns.Base` / `a.b.Base` → tail identifier `Base`.
       const tail = node.lastNamedChild;
       return tail === null ? null : terminalJsHeritageNameNode(tail);
@@ -734,7 +880,9 @@ export function emitJsScopeCaptures(
   filePath: string,
   cachedTree?: unknown,
 ): readonly CaptureMatch[] {
-  let tree = cachedTree as ReturnType<ReturnType<typeof getJsParser>['parse']> | undefined;
+  let tree = cachedTree as
+    | ReturnType<ReturnType<typeof getJsParser>["parse"]>
+    | undefined;
   if (tree !== undefined && !jsCachedTreeMatchesGrammar(tree)) {
     tree = undefined;
   }
@@ -757,22 +905,22 @@ export function emitJsScopeCaptures(
     // (mirrors typescript/captures.ts groupedNodes).
     const groupedNodes: Record<string, SyntaxNode> = {};
     for (const c of m.captures) {
-      const tag = '@' + c.name;
+      const tag = "@" + c.name;
       grouped[tag] = nodeToCapture(tag, c.node);
       groupedNodes[tag] = c.node;
     }
     if (Object.keys(grouped).length === 0) continue;
 
     // Decompose ESM import_statement / re-export export_statement.
-    if (grouped['@import.statement'] !== undefined) {
-      const stmtCapture = grouped['@import.statement'];
+    if (grouped["@import.statement"] !== undefined) {
+      const stmtCapture = grouped["@import.statement"];
       const stmtNode =
-        findSelfOrAncestorOfTypes(groupedNodes['@import.statement'], [
-          'import_statement',
-          'export_statement',
+        findSelfOrAncestorOfTypes(groupedNodes["@import.statement"], [
+          "import_statement",
+          "export_statement",
         ]) ??
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'import_statement') ??
-        findNodeAtRange(tree.rootNode, stmtCapture.range, 'export_statement');
+        findNodeAtRange(tree.rootNode, stmtCapture.range, "import_statement") ??
+        findNodeAtRange(tree.rootNode, stmtCapture.range, "export_statement");
       if (stmtNode !== null) {
         const decomposed = splitImportStatement(stmtNode);
         for (const d of decomposed) out.push(d);
@@ -781,11 +929,14 @@ export function emitJsScopeCaptures(
     }
 
     // Decompose dynamic import() calls.
-    if (grouped['@import.dynamic'] !== undefined) {
-      const dynCapture = grouped['@import.dynamic'];
+    if (grouped["@import.dynamic"] !== undefined) {
+      const dynCapture = grouped["@import.dynamic"];
       const callNode =
-        findSelfOrAncestorOfType(groupedNodes['@import.dynamic'], 'call_expression') ??
-        findNodeAtRange(tree.rootNode, dynCapture.range, 'call_expression');
+        findSelfOrAncestorOfType(
+          groupedNodes["@import.dynamic"],
+          "call_expression",
+        ) ??
+        findNodeAtRange(tree.rootNode, dynCapture.range, "call_expression");
       if (callNode !== null) {
         const decomposed = splitImportStatement(callNode);
         for (const d of decomposed) out.push(d);
@@ -794,11 +945,13 @@ export function emitJsScopeCaptures(
     }
 
     // Filter @reference.read.member false-positives.
-    if (grouped['@reference.read.member'] !== undefined) {
-      const anchor = grouped['@reference.read.member'];
+    if (grouped["@reference.read.member"] !== undefined) {
+      const anchor = grouped["@reference.read.member"];
       const memberNode =
-        findSelfOrAncestorOfType(groupedNodes['@reference.read.member'], 'member_expression') ??
-        findNodeAtRange(tree.rootNode, anchor.range, 'member_expression');
+        findSelfOrAncestorOfType(
+          groupedNodes["@reference.read.member"],
+          "member_expression",
+        ) ?? findNodeAtRange(tree.rootNode, anchor.range, "member_expression");
       if (memberNode === null || !shouldEmitReadMember(memberNode)) {
         continue;
       }
@@ -811,12 +964,12 @@ export function emitJsScopeCaptures(
     // and the arrow's own @scope.function match (a different pattern) is
     // untouched, so inner-call attribution falls through to the enclosing
     // scope instead of a phantom Function.
-    const fnDeclAnchor = grouped['@declaration.function'];
+    const fnDeclAnchor = grouped["@declaration.function"];
     if (fnDeclAnchor !== undefined) {
       const arrowNode = findFunctionNode(
         tree.rootNode,
         fnDeclAnchor.range,
-        groupedNodes['@declaration.function'],
+        groupedNodes["@declaration.function"],
       );
       if (arrowNode !== null && isArrayMethodCallbackArrow(arrowNode)) {
         continue;
@@ -830,11 +983,11 @@ export function emitJsScopeCaptures(
       const fnNode = findFunctionNode(
         tree.rootNode,
         fnDeclAnchor.range,
-        groupedNodes['@declaration.function'],
+        groupedNodes["@declaration.function"],
       );
       if (fnNode !== null && isDefaultExportHocFunctionNode(fnNode)) {
-        grouped['@declaration.name'] = syntheticCapture(
-          '@declaration.name',
+        grouped["@declaration.name"] = syntheticCapture(
+          "@declaration.name",
           fnNode,
           deriveDefaultExportHocName(filePath),
         );
@@ -845,26 +998,30 @@ export function emitJsScopeCaptures(
     const declAnchor = pickFirstDefined(grouped, FUNCTION_DECL_TAGS);
     const declAnchorNode = pickFirstNode(groupedNodes, FUNCTION_DECL_TAGS);
     if (declAnchor !== undefined) {
-      const fnNode = findFunctionNode(tree.rootNode, declAnchor.range, declAnchorNode);
+      const fnNode = findFunctionNode(
+        tree.rootNode,
+        declAnchor.range,
+        declAnchorNode,
+      );
       if (fnNode !== null) {
         const arity = computeTsArityMetadata(fnNode);
         if (arity.parameterCount !== undefined) {
-          grouped['@declaration.parameter-count'] = syntheticCapture(
-            '@declaration.parameter-count',
+          grouped["@declaration.parameter-count"] = syntheticCapture(
+            "@declaration.parameter-count",
             fnNode,
             String(arity.parameterCount),
           );
         }
         if (arity.requiredParameterCount !== undefined) {
-          grouped['@declaration.required-parameter-count'] = syntheticCapture(
-            '@declaration.required-parameter-count',
+          grouped["@declaration.required-parameter-count"] = syntheticCapture(
+            "@declaration.required-parameter-count",
             fnNode,
             String(arity.requiredParameterCount),
           );
         }
         if (arity.parameterTypes !== undefined) {
-          grouped['@declaration.parameter-types'] = syntheticCapture(
-            '@declaration.parameter-types',
+          grouped["@declaration.parameter-types"] = syntheticCapture(
+            "@declaration.parameter-types",
             fnNode,
             JSON.stringify(arity.parameterTypes),
           );
@@ -883,32 +1040,35 @@ export function emitJsScopeCaptures(
     const callAnchor = pickFirstDefined(grouped, CALL_TAGS);
     const callAnchorNode = pickFirstNode(groupedNodes, CALL_TAGS);
     const anchorIsJsxElement =
-      callAnchorNode?.type === 'jsx_self_closing_element' ||
-      callAnchorNode?.type === 'jsx_opening_element';
+      callAnchorNode?.type === "jsx_self_closing_element" ||
+      callAnchorNode?.type === "jsx_opening_element";
     if (
       callAnchor !== undefined &&
-      grouped['@reference.arity'] === undefined &&
+      grouped["@reference.arity"] === undefined &&
       !anchorIsJsxElement
     ) {
       const callNode =
-        findSelfOrAncestorOfTypes(callAnchorNode, ['call_expression', 'new_expression']) ??
-        findNodeAtRange(tree.rootNode, callAnchor.range, 'call_expression') ??
-        findNodeAtRange(tree.rootNode, callAnchor.range, 'new_expression');
+        findSelfOrAncestorOfTypes(callAnchorNode, [
+          "call_expression",
+          "new_expression",
+        ]) ??
+        findNodeAtRange(tree.rootNode, callAnchor.range, "call_expression") ??
+        findNodeAtRange(tree.rootNode, callAnchor.range, "new_expression");
       if (callNode !== null) {
-        const argList = callNode.childForFieldName('arguments');
+        const argList = callNode.childForFieldName("arguments");
         const args: SyntaxNode[] =
           argList === null
             ? []
             : argList.namedChildren.filter(
-                (c): c is SyntaxNode => c !== null && c.type !== 'comment',
+                (c): c is SyntaxNode => c !== null && c.type !== "comment",
               );
-        grouped['@reference.arity'] = syntheticCapture(
-          '@reference.arity',
+        grouped["@reference.arity"] = syntheticCapture(
+          "@reference.arity",
           callNode,
           String(args.length),
         );
-        grouped['@reference.parameter-types'] = syntheticCapture(
-          '@reference.parameter-types',
+        grouped["@reference.parameter-types"] = syntheticCapture(
+          "@reference.parameter-types",
           callNode,
           JSON.stringify(args.map(inferArgType)),
         );
@@ -918,12 +1078,12 @@ export function emitJsScopeCaptures(
     out.push(grouped);
 
     // Synthesize `this` receiver type-bindings on class member functions.
-    const scopeFnAnchor = grouped['@scope.function'];
+    const scopeFnAnchor = grouped["@scope.function"];
     if (scopeFnAnchor !== undefined) {
       const fnNode = findFunctionNode(
         tree.rootNode,
         scopeFnAnchor.range,
-        groupedNodes['@scope.function'],
+        groupedNodes["@scope.function"],
       );
       if (fnNode !== null) {
         const synth = synthesizeTsReceiverBinding(fnNode);

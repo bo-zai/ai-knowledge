@@ -10,8 +10,8 @@
  * `linkStatus: 'unresolved'`.
  */
 
-import type { ParsedImport, WorkspaceIndex } from '../../../shared/index.js';
-import { resolvePythonImportInternal } from '../../import-resolvers/python.js';
+import type { ParsedImport, WorkspaceIndex } from "../../../shared/index.js";
+import { resolvePythonImportInternal } from "../../import-resolvers/python.js";
 
 export interface PythonResolveContext {
   readonly fromFile: string;
@@ -33,13 +33,14 @@ export function resolvePythonImportTarget(
   const ctx = workspaceIndex as PythonResolveContext | undefined;
   if (
     ctx === undefined ||
-    typeof (ctx as { fromFile?: unknown }).fromFile !== 'string' ||
+    typeof (ctx as { fromFile?: unknown }).fromFile !== "string" ||
     !((ctx as { allFilePaths?: unknown }).allFilePaths instanceof Set)
   ) {
     return null;
   }
-  if (parsedImport.kind === 'dynamic-unresolved') return null;
-  if (parsedImport.targetRaw === null || parsedImport.targetRaw === '') return null;
+  if (parsedImport.kind === "dynamic-unresolved") return null;
+  if (parsedImport.targetRaw === null || parsedImport.targetRaw === "")
+    return null;
 
   // PEP-328 relative + single-segment proximity bare imports.
   const internal = resolvePythonImportInternal(
@@ -51,17 +52,20 @@ export function resolvePythonImportTarget(
 
   // PEP-328: unresolved relative imports must NOT fall through to suffix
   // matching. Mirrors `pythonImportStrategy` in `configs/python.ts`.
-  if (parsedImport.targetRaw.startsWith('.')) return null;
+  if (parsedImport.targetRaw.startsWith(".")) return null;
 
   // External dotted imports like `django.apps` must not fall through to
   // generic suffix matching when the repo has unrelated local files such
   // as `accounts/apps.py`. Mirrors `pythonImportStrategy`'s
   // `hasRepoCandidate` check: only suffix-match if the leading segment
   // looks like a local package/module somewhere in-repo.
-  const pathLike = parsedImport.targetRaw.replace(/\./g, '/');
-  if (pathLike.includes('/')) {
-    const [leadingSegment] = pathLike.split('/').filter(Boolean);
-    if (!leadingSegment || !hasRepoCandidate(leadingSegment, ctx.allFilePaths, ctx.fromFile)) {
+  const pathLike = parsedImport.targetRaw.replace(/\./g, "/");
+  if (pathLike.includes("/")) {
+    const [leadingSegment] = pathLike.split("/").filter(Boolean);
+    if (
+      !leadingSegment ||
+      !hasRepoCandidate(leadingSegment, ctx.allFilePaths, ctx.fromFile)
+    ) {
       return null;
     }
   }
@@ -117,11 +121,15 @@ function resolveAbsoluteFromFiles(
   // multi-segment granularity. Closest match wins. Stop at `i > 0` because
   // `i === 0` would re-check the workspace-root candidates already covered
   // by the direct check above.
-  const importerDir = fromFile.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+  const importerDir = fromFile
+    .replace(/\\/g, "/")
+    .split("/")
+    .slice(0, -1)
+    .join("/");
   if (importerDir) {
-    const dirParts = importerDir.split('/').filter(Boolean);
+    const dirParts = importerDir.split("/").filter(Boolean);
     for (let i = dirParts.length; i > 0; i--) {
-      const ancestor = dirParts.slice(0, i).join('/');
+      const ancestor = dirParts.slice(0, i).join("/");
       const prefix = `${ancestor}/`;
       const candidateFile = `${prefix}${directFile}`;
       const candidatePkg = `${prefix}${directPkg}`;
@@ -147,7 +155,7 @@ function resolveAbsoluteFromFiles(
   const suffixPkg = `/${directPkg}`;
   const matches: { raw: string; norm: string }[] = [];
   for (const raw of allFilePaths) {
-    const norm = raw.replace(/\\/g, '/');
+    const norm = raw.replace(/\\/g, "/");
     if (norm.endsWith(suffixFile) || norm.endsWith(suffixPkg)) {
       matches.push({ raw, norm });
     }
@@ -155,8 +163,8 @@ function resolveAbsoluteFromFiles(
   if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0].raw;
   matches.sort((a, b) => {
-    const aDepth = a.norm.split('/').length;
-    const bDepth = b.norm.split('/').length;
+    const aDepth = a.norm.split("/").length;
+    const bDepth = b.norm.split("/").length;
     if (aDepth !== bDepth) return aDepth - bDepth;
     if (a.norm < b.norm) return -1;
     if (a.norm > b.norm) return 1;
@@ -198,18 +206,24 @@ function hasRepoCandidate(
   // Build importer-ancestor prefixes: for `backend/routers/cron.py`,
   // produces `["backend/routers/services/", "backend/services/"]` for
   // segment `services` (closest first, root excluded — covered above).
-  const importerDir = fromFile.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
-  const dirParts = importerDir ? importerDir.split('/').filter(Boolean) : [];
+  const importerDir = fromFile
+    .replace(/\\/g, "/")
+    .split("/")
+    .slice(0, -1)
+    .join("/");
+  const dirParts = importerDir ? importerDir.split("/").filter(Boolean) : [];
   const ancestorPrefixes: string[] = [];
   for (let i = dirParts.length; i > 0; i--) {
-    ancestorPrefixes.push(`${dirParts.slice(0, i).join('/')}/${leadingSegment}/`);
+    ancestorPrefixes.push(
+      `${dirParts.slice(0, i).join("/")}/${leadingSegment}/`,
+    );
   }
 
   for (const raw of allFilePaths) {
-    const f = raw.replace(/\\/g, '/');
+    const f = raw.replace(/\\/g, "/");
     if (f === rootFile || f === initFile) return true;
-    if (f.startsWith(prefix) && f.endsWith('.py')) return true;
-    if (f.endsWith('.py')) {
+    if (f.startsWith(prefix) && f.endsWith(".py")) return true;
+    if (f.endsWith(".py")) {
       for (const ap of ancestorPrefixes) {
         if (f.startsWith(ap)) return true;
       }

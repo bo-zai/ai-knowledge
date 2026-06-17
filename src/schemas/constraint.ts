@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonKnowledgeSchema } from './knowledge-type.js';
+import { z } from "zod";
+import { commonKnowledgeSchema } from "./knowledge-type.js";
 
 /**
  * 约束知识 Schema
@@ -11,7 +11,11 @@ import { commonKnowledgeSchema } from './knowledge-type.js';
 /**
  * 约束类型枚举
  */
-export const ConstraintTypeSchema = z.enum(['business_rule', 'technical', 'data']);
+export const ConstraintTypeSchema = z.enum([
+  "business_rule",
+  "technical",
+  "data",
+]);
 
 export type ConstraintType = z.infer<typeof ConstraintTypeSchema>;
 
@@ -19,7 +23,7 @@ export type ConstraintType = z.infer<typeof ConstraintTypeSchema>;
  * 约束知识 Schema
  */
 export const constraintSchema = commonKnowledgeSchema.extend({
-  type: z.literal('CONSTRAINT'),
+  type: z.literal("CONSTRAINT"),
 
   /** 约束名称：简短描述约束内容 */
   constraint_name: z.string().min(1),

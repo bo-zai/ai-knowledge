@@ -7,28 +7,28 @@
  * multiple interface implementation.
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
-import { createClassExtractor } from '../class-extractors/generic.js';
-import { kotlinClassConfig } from '../class-extractors/configs/jvm.js';
-import { defineLanguage } from '../language-provider.js';
-import { kotlinTypeConfig } from '../type-extractors/jvm.js';
-import { kotlinExportChecker } from '../export-detection.js';
-import { createImportResolver } from '../import-resolvers/resolver-factory.js';
-import { kotlinImportConfig } from '../import-resolvers/configs/jvm.js';
-import { extractKotlinNamedBindings } from '../named-bindings/kotlin.js';
-import { appendKotlinWildcard } from '../import-resolvers/jvm.js';
-import { KOTLIN_QUERIES } from '../tree-sitter-queries.js';
-import type { AstFrameworkPatternConfig } from '../language-provider.js';
-import type { SyntaxNode } from '../utils/ast-helpers.js';
-import { createCallExtractor } from '../call-extractors/generic.js';
-import { kotlinCallConfig } from '../call-extractors/configs/jvm.js';
-import { createFieldExtractor } from '../field-extractors/generic.js';
-import { kotlinConfig } from '../field-extractors/configs/jvm.js';
-import { createMethodExtractor } from '../method-extractors/generic.js';
-import { kotlinMethodConfig } from '../method-extractors/configs/jvm.js';
-import { createVariableExtractor } from '../variable-extractors/generic.js';
-import { kotlinVariableConfig } from '../variable-extractors/configs/jvm.js';
-import { createHeritageExtractor } from '../heritage-extractors/generic.js';
+import { SupportedLanguages } from "../../shared/index.js";
+import { createClassExtractor } from "../class-extractors/generic.js";
+import { kotlinClassConfig } from "../class-extractors/configs/jvm.js";
+import { defineLanguage } from "../language-provider.js";
+import { kotlinTypeConfig } from "../type-extractors/jvm.js";
+import { kotlinExportChecker } from "../export-detection.js";
+import { createImportResolver } from "../import-resolvers/resolver-factory.js";
+import { kotlinImportConfig } from "../import-resolvers/configs/jvm.js";
+import { extractKotlinNamedBindings } from "../named-bindings/kotlin.js";
+import { appendKotlinWildcard } from "../import-resolvers/jvm.js";
+import { KOTLIN_QUERIES } from "../tree-sitter-queries.js";
+import type { AstFrameworkPatternConfig } from "../language-provider.js";
+import type { SyntaxNode } from "../utils/ast-helpers.js";
+import { createCallExtractor } from "../call-extractors/generic.js";
+import { kotlinCallConfig } from "../call-extractors/configs/jvm.js";
+import { createFieldExtractor } from "../field-extractors/generic.js";
+import { kotlinConfig } from "../field-extractors/configs/jvm.js";
+import { createMethodExtractor } from "../method-extractors/generic.js";
+import { kotlinMethodConfig } from "../method-extractors/configs/jvm.js";
+import { createVariableExtractor } from "../variable-extractors/generic.js";
+import { kotlinVariableConfig } from "../variable-extractors/configs/jvm.js";
+import { createHeritageExtractor } from "../heritage-extractors/generic.js";
 
 /** Check if a Kotlin function_declaration capture is inside a class_body (i.e., a method).
  *  Kotlin grammar uses function_declaration for both top-level functions and class methods.
@@ -38,74 +38,74 @@ function isKotlinClassMethod(
 ): boolean {
   let ancestor = captureNode?.parent;
   while (ancestor) {
-    if (ancestor.type === 'class_body') return true;
+    if (ancestor.type === "class_body") return true;
     ancestor = ancestor.parent;
   }
   return false;
 }
 
 const BUILT_INS: ReadonlySet<string> = new Set([
-  'println',
-  'print',
-  'readLine',
-  'require',
-  'requireNotNull',
-  'check',
-  'assert',
-  'lazy',
-  'error',
-  'listOf',
-  'mapOf',
-  'setOf',
-  'mutableListOf',
-  'mutableMapOf',
-  'mutableSetOf',
-  'arrayOf',
-  'sequenceOf',
-  'also',
-  'apply',
-  'run',
-  'with',
-  'takeIf',
-  'takeUnless',
-  'TODO',
-  'buildString',
-  'buildList',
-  'buildMap',
-  'buildSet',
-  'repeat',
-  'synchronized',
-  'launch',
-  'async',
-  'runBlocking',
-  'withContext',
-  'coroutineScope',
-  'supervisorScope',
-  'delay',
-  'flow',
-  'flowOf',
-  'collect',
-  'emit',
-  'onEach',
-  'catch',
-  'buffer',
-  'conflate',
-  'distinctUntilChanged',
-  'flatMapLatest',
-  'flatMapMerge',
-  'combine',
-  'stateIn',
-  'shareIn',
-  'launchIn',
-  'to',
-  'until',
-  'downTo',
-  'step',
+  "println",
+  "print",
+  "readLine",
+  "require",
+  "requireNotNull",
+  "check",
+  "assert",
+  "lazy",
+  "error",
+  "listOf",
+  "mapOf",
+  "setOf",
+  "mutableListOf",
+  "mutableMapOf",
+  "mutableSetOf",
+  "arrayOf",
+  "sequenceOf",
+  "also",
+  "apply",
+  "run",
+  "with",
+  "takeIf",
+  "takeUnless",
+  "TODO",
+  "buildString",
+  "buildList",
+  "buildMap",
+  "buildSet",
+  "repeat",
+  "synchronized",
+  "launch",
+  "async",
+  "runBlocking",
+  "withContext",
+  "coroutineScope",
+  "supervisorScope",
+  "delay",
+  "flow",
+  "flowOf",
+  "collect",
+  "emit",
+  "onEach",
+  "catch",
+  "buffer",
+  "conflate",
+  "distinctUntilChanged",
+  "flatMapLatest",
+  "flatMapMerge",
+  "combine",
+  "stateIn",
+  "shareIn",
+  "launchIn",
+  "to",
+  "until",
+  "downTo",
+  "step",
 ]);
 
 export const kotlinProvider = defineLanguage({
   id: SupportedLanguages.Kotlin,
-  extensions: ['.kt', '.kts'],
+  extensions: [".kt", ".kts"],
   entryPointPatterns: [
     /^on(Create|Start|Resume|Pause|Stop|Destroy)$/,
     /^do[A-Z]/,
@@ -117,34 +117,34 @@ export const kotlinProvider = defineLanguage({
   ],
   astFrameworkPatterns: [
     {
-      framework: 'spring-kotlin',
+      framework: "spring-kotlin",
       entryPointMultiplier: 3.2,
-      reason: 'spring-kotlin-annotation',
+      reason: "spring-kotlin-annotation",
       patterns: [
-        '@RestController',
-        '@Controller',
-        '@GetMapping',
-        '@PostMapping',
-        '@RequestMapping',
+        "@RestController",
+        "@Controller",
+        "@GetMapping",
+        "@PostMapping",
+        "@RequestMapping",
       ],
     },
     {
-      framework: 'jaxrs',
+      framework: "jaxrs",
       entryPointMultiplier: 3.0,
-      reason: 'jaxrs-annotation',
-      patterns: ['@Path', '@GET', '@POST', '@PUT', '@DELETE'],
+      reason: "jaxrs-annotation",
+      patterns: ["@Path", "@GET", "@POST", "@PUT", "@DELETE"],
     },
     {
-      framework: 'ktor',
+      framework: "ktor",
       entryPointMultiplier: 2.8,
-      reason: 'ktor-routing',
-      patterns: ['routing', 'embeddedServer', 'Application.module'],
+      reason: "ktor-routing",
+      patterns: ["routing", "embeddedServer", "Application.module"],
     },
     {
-      framework: 'android-kotlin',
+      framework: "android-kotlin",
       entryPointMultiplier: 2.5,
-      reason: 'android-annotation',
-      patterns: ['@AndroidEntryPoint', 'AppCompatActivity', 'Fragment('],
+      reason: "android-annotation",
+      patterns: ["@AndroidEntryPoint", "AppCompatActivity", "Fragment("],
     },
   ] satisfies AstFrameworkPatternConfig[],
   treeSitterQueries: KOTLIN_QUERIES,
@@ -153,7 +153,7 @@ export const kotlinProvider = defineLanguage({
   importResolver: createImportResolver(kotlinImportConfig),
   namedBindingExtractor: extractKotlinNamedBindings,
   importPathPreprocessor: appendKotlinWildcard,
-  mroStrategy: 'implements-split',
+  mroStrategy: "implements-split",
   callExtractor: createCallExtractor(kotlinCallConfig),
   fieldExtractor: createFieldExtractor(kotlinConfig),
   methodExtractor: createMethodExtractor(kotlinMethodConfig),
@@ -162,8 +162,8 @@ export const kotlinProvider = defineLanguage({
   heritageExtractor: createHeritageExtractor(SupportedLanguages.Kotlin),
   builtInNames: BUILT_INS,
   labelOverride: (functionNode, defaultLabel) => {
-    if (defaultLabel !== 'Function') return defaultLabel;
-    if (isKotlinClassMethod(functionNode)) return 'Method';
+    if (defaultLabel !== "Function") return defaultLabel;
+    if (isKotlinClassMethod(functionNode)) return "Method";
     return defaultLabel;
   },
 });

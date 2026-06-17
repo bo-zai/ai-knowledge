@@ -41,9 +41,12 @@
  * follow-up plan.
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import type { MutableSemanticModel, SemanticModel } from '../../model/semantic-model.js';
-import { simpleQualifiedName } from '../graph-bridge/ids.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import type {
+  MutableSemanticModel,
+  SemanticModel,
+} from "../../model/semantic-model.js";
+import { simpleQualifiedName } from "../graph-bridge/ids.js";
 
 export interface ReconcileStats {
   /** Method/Function/Constructor defs registered into MethodRegistry. */
@@ -69,7 +72,11 @@ export function reconcileOwnership(
       const simple = simpleQualifiedName(def);
       if (simple === undefined) continue;
 
-      if (def.type === 'Method' || def.type === 'Function' || def.type === 'Constructor') {
+      if (
+        def.type === "Method" ||
+        def.type === "Function" ||
+        def.type === "Constructor"
+      ) {
         const existing = model.methods.lookupAllByOwner(ownerId, simple);
         if (existing.some((e) => e.nodeId === def.nodeId)) {
           skippedAlreadyPresent++;
@@ -77,7 +84,7 @@ export function reconcileOwnership(
         }
         model.methods.register(ownerId, simple, def);
         methodsRegistered++;
-      } else if (def.type === 'Property' || def.type === 'Variable') {
+      } else if (def.type === "Property" || def.type === "Variable") {
         const existing = model.fields.lookupFieldByOwner(ownerId, simple);
         if (existing !== undefined && existing.nodeId === def.nodeId) {
           skippedAlreadyPresent++;
@@ -111,8 +118,8 @@ export function validateOwnershipParity(
   model: SemanticModel,
   onWarn: (message: string) => void,
 ): number {
-  if (process.env.NODE_ENV === 'production') return 0;
-  if (process.env.VALIDATE_SEMANTIC_MODEL === '0') return 0;
+  if (process.env.NODE_ENV === "production") return 0;
+  if (process.env.VALIDATE_SEMANTIC_MODEL === "0") return 0;
 
   let mismatches = 0;
   for (const parsed of parsedFiles) {
@@ -122,7 +129,11 @@ export function validateOwnershipParity(
       const simple = simpleQualifiedName(def);
       if (simple === undefined) continue;
 
-      if (def.type === 'Method' || def.type === 'Function' || def.type === 'Constructor') {
+      if (
+        def.type === "Method" ||
+        def.type === "Function" ||
+        def.type === "Constructor"
+      ) {
         const found = model.methods.lookupAllByOwner(ownerId, simple);
         if (!found.some((d) => d.nodeId === def.nodeId)) {
           onWarn(
@@ -131,7 +142,7 @@ export function validateOwnershipParity(
           );
           mismatches++;
         }
-      } else if (def.type === 'Property' || def.type === 'Variable') {
+      } else if (def.type === "Property" || def.type === "Variable") {
         const found = model.fields.lookupFieldByOwner(ownerId, simple);
         if (found === undefined || found.nodeId !== def.nodeId) {
           onWarn(

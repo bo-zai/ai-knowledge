@@ -1,8 +1,11 @@
 // gitnexus/src/core/ingestion/heritage-extractors/configs/ruby.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { HeritageExtractionConfig, HeritageInfo } from '../../heritage-types.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type {
+  HeritageExtractionConfig,
+  HeritageInfo,
+} from "../../heritage-types.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 /**
  * Maximum parent depth for enclosing class/module walk.
@@ -18,8 +21,8 @@ function findEnclosingClassName(callNode: SyntaxNode): string | null {
   let current = callNode.parent;
   let depth = 0;
   while (current && ++depth <= MAX_PARENT_DEPTH) {
-    if (current.type === 'class' || current.type === 'module') {
-      const nameNode = current.childForFieldName?.('name');
+    if (current.type === "class" || current.type === "module") {
+      const nameNode = current.childForFieldName?.("name");
       if (nameNode) return nameNode.text;
     }
     current = current.parent;
@@ -28,7 +31,11 @@ function findEnclosingClassName(callNode: SyntaxNode): string | null {
 }
 
 /** Ruby heritage call names that express mixin inclusion. */
-const RUBY_HERITAGE_CALL_NAMES: ReadonlySet<string> = new Set(['include', 'extend', 'prepend']);
+const RUBY_HERITAGE_CALL_NAMES: ReadonlySet<string> = new Set([
+  "include",
+  "extend",
+  "prepend",
+]);
 
 /**
  * Ruby heritage extraction config.
@@ -57,9 +64,9 @@ export const rubyHeritageConfig: HeritageExtractionConfig = {
       if (!enclosingClass) return [];
 
       const results: HeritageInfo[] = [];
-      const argList = callNode.childForFieldName?.('arguments');
+      const argList = callNode.childForFieldName?.("arguments");
       for (const arg of argList?.children ?? []) {
-        if (arg.type === 'constant' || arg.type === 'scope_resolution') {
+        if (arg.type === "constant" || arg.type === "scope_resolution") {
           results.push({
             className: enclosingClass,
             parentName: arg.text,

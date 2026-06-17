@@ -9,4 +9,4 @@
  * parameter node types via `extractTsJsParameters`).
  */
 
-export { typescriptArityCompatibility as jsArityCompatibility } from '../typescript/arity.js';
+export { typescriptArityCompatibility as jsArityCompatibility } from "../typescript/arity.js";

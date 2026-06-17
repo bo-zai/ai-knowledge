@@ -12,7 +12,7 @@
  */
 export interface TokenThreshold {
   /** 阈值类型 */
-  type: 'tokens';
+  type: "tokens";
   /** token 数量 */
   value: number;
 }
@@ -171,23 +171,28 @@ export const AIWIKI_SUMMARY_PROMPT = `你的任务是为正在进行的 ai-wiki 
  * @param maxTokens - 模型的最大上下文窗口大小
  * @returns 计算后的阈值配置
  */
-export function computeSummarizationThresholds(maxTokens: number): SummarizationThresholds {
+export function computeSummarizationThresholds(
+  maxTokens: number,
+): SummarizationThresholds {
   // 触发阈值：达到 75% 上下文窗口时触发
   const triggerTokens = Math.floor(maxTokens * DEFAULT_TRIGGER_RATIO);
 
   // 保留阈值：保留 10%，至少 4000 tokens
-  const keepTokens = Math.max(Math.floor(maxTokens * SUMMARY_KEEP_RATIO), MIN_KEEP_TOKENS);
+  const keepTokens = Math.max(
+    Math.floor(maxTokens * SUMMARY_KEEP_RATIO),
+    MIN_KEEP_TOKENS,
+  );
 
   // 工具驱逐限制：8% 上下文，范围 6000-20000
   const toolEvictLimit = Math.min(
     MAX_TOOL_EVICT_LIMIT,
-    Math.max(Math.floor(maxTokens * 0.08), MIN_TOOL_EVICT_LIMIT)
+    Math.max(Math.floor(maxTokens * 0.08), MIN_TOOL_EVICT_LIMIT),
   );
 
   // 摘要输入上限：65% 上下文，上限 700000
   const trimForSummary = Math.min(
     SUMMARY_INPUT_TOKEN_CAP,
-    Math.floor(maxTokens * SUMMARY_INPUT_RATIO)
+    Math.floor(maxTokens * SUMMARY_INPUT_RATIO),
   );
 
   return {
@@ -209,25 +214,34 @@ export function computeSummarizationThresholds(maxTokens: number): Summarization
  */
 export function createSummarizationMiddlewareOptions(
   config: SummarizationConfig,
-  thresholds?: SummarizationThresholds
+  thresholds?: SummarizationThresholds,
 ): Record<string, unknown> {
   // 如果未提供阈值，从模型上下文窗口计算
   // 注意：实际实现中需要从模型配置获取 maxTokens
   const defaultMaxTokens = 128_000; // 默认上下文窗口大小
-  const computedThresholds = thresholds ?? computeSummarizationThresholds(defaultMaxTokens);
+  const computedThresholds =
+    thresholds ?? computeSummarizationThresholds(defaultMaxTokens);
 
   return {
     model: config.model,
     backend: config.backend,
     historyPathPrefix: config.historyPathPrefix,
     ...(config.summaryPrompt && { summaryPrompt: config.summaryPrompt }),
-    ...(config.trimTokensToSummarize !== undefined && { trimTokensToSummarize: config.trimTokensToSummarize }),
+    ...(config.trimTokensToSummarize !== undefined && {
+      trimTokensToSummarize: config.trimTokensToSummarize,
+    }),
     ...(config.trigger && { trigger: config.trigger }),
     ...(config.keep && { keep: config.keep }),
-    ...(config.truncateArgsSettings && { truncateArgsSettings: config.truncateArgsSettings }),
+    ...(config.truncateArgsSettings && {
+      truncateArgsSettings: config.truncateArgsSettings,
+    }),
     // 如果配置中未指定，使用计算值
-    ...(!config.trigger && { trigger: { type: 'tokens', value: computedThresholds.triggerTokens } }),
-    ...(!config.keep && { keep: { type: 'tokens', value: computedThresholds.keepTokens } }),
+    ...(!config.trigger && {
+      trigger: { type: "tokens", value: computedThresholds.triggerTokens },
+    }),
+    ...(!config.keep && {
+      keep: { type: "tokens", value: computedThresholds.keepTokens },
+    }),
   };
 }
 
@@ -246,7 +260,7 @@ export function createSummarizationMiddlewareWrapper(
   model: string,
   backend: unknown,
   maxTokens?: number,
-  customPrompt?: string
+  customPrompt?: string,
 ): {
   options: Record<string, unknown>;
   thresholds: SummarizationThresholds;
@@ -261,14 +275,14 @@ export function createSummarizationMiddlewareWrapper(
   const config: SummarizationConfig = {
     model,
     backend,
-    historyPathPrefix: '.aiwiki/conversation_history',
+    historyPathPrefix: ".aiwiki/conversation_history",
     summaryPrompt: customPrompt ?? AIWIKI_SUMMARY_PROMPT,
   };
 
   // 构建参数截断设置
   const truncateArgsSettings: TruncateArgsSettings = {
-    trigger: { type: 'tokens', value: thresholds.triggerTokens },
-    keep: { type: 'tokens', value: thresholds.keepTokens },
+    trigger: { type: "tokens", value: thresholds.triggerTokens },
+    keep: { type: "tokens", value: thresholds.keepTokens },
     maxLength: 2000,
   };
 
@@ -276,7 +290,8 @@ export function createSummarizationMiddlewareWrapper(
   const options = createSummarizationMiddlewareOptions(config, thresholds);
 
   // 添加参数截断设置
-  (options as Record<string, unknown>).truncateArgsSettings = truncateArgsSettings;
+  (options as Record<string, unknown>).truncateArgsSettings =
+    truncateArgsSettings;
 
   return {
     options,

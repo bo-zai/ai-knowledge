@@ -10,8 +10,8 @@
  *     `javaArityCompatibility` can detect them.
  */
 
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
-import { javaMethodConfig } from '../../method-extractors/configs/jvm.js';
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
+import { javaMethodConfig } from "../../method-extractors/configs/jvm.js";
 
 export interface JavaArityMetadata {
   readonly parameterCount: number | undefined;
@@ -19,7 +19,9 @@ export interface JavaArityMetadata {
   readonly parameterTypes: readonly string[] | undefined;
 }
 
-export function computeJavaArityMetadata(fnNode: SyntaxNode): JavaArityMetadata {
+export function computeJavaArityMetadata(
+  fnNode: SyntaxNode,
+): JavaArityMetadata {
   const params = javaMethodConfig.extractParameters?.(fnNode) ?? [];
 
   let hasVariadic = false;
@@ -28,7 +30,7 @@ export function computeJavaArityMetadata(fnNode: SyntaxNode): JavaArityMetadata 
     if (p.isVariadic) hasVariadic = true;
     if (p.type !== null) types.push(p.type);
   }
-  if (hasVariadic) types.push('varargs');
+  if (hasVariadic) types.push("varargs");
 
   const total = params.length;
   // For varargs methods, `parameterCount` (max) is unknown — any number of

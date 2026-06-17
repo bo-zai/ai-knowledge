@@ -1,10 +1,10 @@
 // gitnexus/src/core/ingestion/variable-extractors/configs/python.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { VariableExtractionConfig } from '../../variable-types.js';
-import type { VariableVisibility } from '../../variable-types.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { VariableExtractionConfig } from "../../variable-types.js";
+import type { VariableVisibility } from "../../variable-types.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 /**
  * Python variable extraction config.
@@ -25,15 +25,15 @@ function extractNameFromPython(node: SyntaxNode): string | undefined {
 
   // Annotated assignment: name: str = "default"
   // AST: expression_statement > type > identifier
-  if (inner.type === 'type') {
-    const ident = inner.childForFieldName('name') ?? inner.firstNamedChild;
-    return ident?.type === 'identifier' ? ident.text : undefined;
+  if (inner.type === "type") {
+    const ident = inner.childForFieldName("name") ?? inner.firstNamedChild;
+    return ident?.type === "identifier" ? ident.text : undefined;
   }
 
   // Plain assignment: x = 5
-  if (inner.type === 'assignment') {
-    const left = inner.childForFieldName('left');
-    if (left?.type === 'identifier') return left.text;
+  if (inner.type === "assignment") {
+    const left = inner.childForFieldName("left");
+    if (left?.type === "identifier") return left.text;
   }
 
   return undefined;
@@ -44,17 +44,18 @@ function extractTypeFromPython(node: SyntaxNode): string | undefined {
   if (!inner) return undefined;
 
   // Standalone annotated type without assignment: `name: str`
-  if (inner.type === 'type') {
-    const typeNode = inner.childForFieldName('type') ?? inner.namedChild(1);
-    if (typeNode) return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
+  if (inner.type === "type") {
+    const typeNode = inner.childForFieldName("type") ?? inner.namedChild(1);
+    if (typeNode)
+      return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
   }
 
   // Annotated assignment: `name: str = "hello"`
   // AST: expression_statement > assignment > [identifier, type > identifier, ...]
-  if (inner.type === 'assignment') {
+  if (inner.type === "assignment") {
     for (let i = 0; i < inner.childCount; i++) {
       const child = inner.child(i);
-      if (child?.type === 'type') {
+      if (child?.type === "type") {
         const typeId = child.firstNamedChild;
         if (typeId) return extractSimpleTypeName(typeId) ?? typeId.text?.trim();
       }
@@ -66,14 +67,14 @@ function extractTypeFromPython(node: SyntaxNode): string | undefined {
 
 function extractVisFromPython(node: SyntaxNode): VariableVisibility {
   const name = extractNameFromPython(node);
-  if (!name) return 'public';
+  if (!name) return "public";
   // Dunder names (__name__, __all__) are public Python conventions
-  if (name.startsWith('__') && name.endsWith('__')) return 'public';
+  if (name.startsWith("__") && name.endsWith("__")) return "public";
   // Double underscore prefix (name mangled) = private
-  if (name.startsWith('__')) return 'private';
+  if (name.startsWith("__")) return "private";
   // Single underscore prefix = protected by convention
-  if (name.startsWith('_')) return 'protected';
-  return 'public';
+  if (name.startsWith("_")) return "protected";
+  return "public";
 }
 
 export const pythonVariableConfig: VariableExtractionConfig = {
@@ -83,7 +84,7 @@ export const pythonVariableConfig: VariableExtractionConfig = {
   // expression_statement is broad — isVariableDeclaration returns true for
   // all expression_statement nodes, but extract() safely filters non-assignments
   // by returning null when extractNameFromPython finds no assignment target.
-  variableNodeTypes: ['expression_statement'],
+  variableNodeTypes: ["expression_statement"],
 
   extractName: extractNameFromPython,
   extractType: extractTypeFromPython,

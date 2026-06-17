@@ -8,10 +8,10 @@
  *   Layer 3: LLM 分类器路由（可选）
  */
 
-import { createHash } from 'node:crypto';
-import { ChatOpenAI } from '@langchain/openai';
-import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { logger } from '../../shared/logger.js';
+import { createHash } from "node:crypto";
+import { ChatOpenAI } from "@langchain/openai";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { logger } from "../../shared/logger.js";
 import type {
   RoutingContext,
   RoutingResult,
@@ -23,9 +23,16 @@ import type {
   RoutingTrace,
   ModelTier,
   TaskSource,
-} from './types.js';
+} from "./types.js";
 
-export type { ModelTier, RoutingContext, RoutingResult, RoutingFeedback, RoutingTrace, TaskSource };
+export type {
+  ModelTier,
+  RoutingContext,
+  RoutingResult,
+  RoutingFeedback,
+  RoutingTrace,
+  TaskSource,
+};
 
 // ─── 常量 ──────────────────────────────────────────────────────────────────
 
@@ -124,7 +131,7 @@ export interface ModelStorage {
   /** 获取所有自定义模型配置 */
   getCustomModelConfigs(): ModelConfig[];
   /** 获取全局路由模式 */
-  getGlobalRoutingMode(): 'auto' | 'pinned';
+  getGlobalRoutingMode(): "auto" | "pinned";
   /** 默认最大 token 数 */
   DEFAULT_MAX_TOKENS: number;
 }
@@ -143,7 +150,7 @@ export interface ThreadStorage {
 let modelStorage: ModelStorage = {
   getModelByTier: () => null,
   getCustomModelConfigs: () => [],
-  getGlobalRoutingMode: () => 'auto',
+  getGlobalRoutingMode: () => "auto",
   DEFAULT_MAX_TOKENS: 4096,
 };
 
@@ -168,7 +175,10 @@ export function setThreadStorage(storage: ThreadStorage): void {
 
 // ─── 分类器缓存 ───────────────────────────────────────────────────────────
 
-const CLASSIFIER_CACHE = new Map<string, { tier: ModelTier; expiresAt: number }>();
+const CLASSIFIER_CACHE = new Map<
+  string,
+  { tier: ModelTier; expiresAt: number }
+>();
 
 /**
  * 清理分类器缓存
@@ -196,7 +206,7 @@ function evictClassifierCache(): void {
  * 计算消息哈希
  */
 function hashMessage(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
 // ─── 会话路由状态 ─────────────────────────────────────────────────────────
@@ -204,7 +214,9 @@ function hashMessage(text: string): string {
 /**
  * 读取会话路由状态
  */
-function readThreadRoutingState(threadId: string | undefined): ThreadRoutingState | null {
+function readThreadRoutingState(
+  threadId: string | undefined,
+): ThreadRoutingState | null {
   if (!threadId) return null;
   const row = threadStorage.getThread(threadId);
   if (!row?.metadata) return null;
@@ -219,7 +231,10 @@ function readThreadRoutingState(threadId: string | undefined): ThreadRoutingStat
 /**
  * 写入会话路由状态
  */
-function writeThreadRoutingState(threadId: string, patch: Partial<ThreadRoutingState>): void {
+function writeThreadRoutingState(
+  threadId: string,
+  patch: Partial<ThreadRoutingState>,
+): void {
   const row = threadStorage.getThread(threadId);
   if (!row) return;
   let meta: Record<string, unknown> = {};
@@ -236,20 +251,26 @@ function writeThreadRoutingState(threadId: string, patch: Partial<ThreadRoutingS
 /**
  * 设置失败回退粘性
  */
-export function setFailoverSticky(threadId: string | undefined, modelId: string): void {
+export function setFailoverSticky(
+  threadId: string | undefined,
+  modelId: string,
+): void {
   if (!threadId) return;
   try {
     writeThreadRoutingState(threadId, {
       failoverStickyModelId: modelId,
       failoverStickyUntil: Date.now() + FAILOVER_STICKY_TTL_MS,
     });
-    logger.info('[ROUTING] Failover sticky 设置', {
+    logger.info("[ROUTING] Failover sticky 设置", {
       threadId,
       modelId,
       durationMin: FAILOVER_STICKY_TTL_MS / 60_000,
     });
   } catch (err) {
-    logger.warn('[ROUTING] Failover sticky 设置失败', { threadId, error: String(err) });
+    logger.warn("[ROUTING] Failover sticky 设置失败", {
+      threadId,
+      error: String(err),
+    });
   }
 }
 
@@ -259,7 +280,7 @@ export function setFailoverSticky(threadId: string | undefined, modelId: string)
 export function rememberRoutingDecision(
   threadId: string | undefined,
   result: RoutingResult,
-  failoverStickyModelId?: string
+  failoverStickyModelId?: string,
 ): void {
   if (!threadId) return;
   try {
@@ -271,7 +292,7 @@ export function rememberRoutingDecision(
     if (failoverStickyModelId) {
       patch.failoverStickyModelId = failoverStickyModelId;
       patch.failoverStickyUntil = Date.now() + FAILOVER_STICKY_TTL_MS;
-      logger.info('[ROUTING] Failover sticky 设置', {
+      logger.info("[ROUTING] Failover sticky 设置", {
         threadId,
         modelId: failoverStickyModelId,
         durationMin: FAILOVER_STICKY_TTL_MS / 60_000,
@@ -279,7 +300,7 @@ export function rememberRoutingDecision(
     }
     writeThreadRoutingState(threadId, patch);
   } catch (err) {
-    logger.warn('[ROUTING] 路由决策记录失败', { threadId, error: String(err) });
+    logger.warn("[ROUTING] 路由决策记录失败", { threadId, error: String(err) });
   }
 }
 
@@ -288,7 +309,10 @@ export function rememberRoutingDecision(
  *
  * 用于后续路由决策参考 economy 错误路由情况
  */
-export function rememberRoutingFeedback(threadId: string | undefined, fb: RoutingFeedback): void {
+export function rememberRoutingFeedback(
+  threadId: string | undefined,
+  fb: RoutingFeedback,
+): void {
   if (!threadId) return;
   try {
     const now = Date.now();
@@ -296,8 +320,8 @@ export function rememberRoutingFeedback(threadId: string | undefined, fb: Routin
 
     const touchedTools = fb.toolCallCount > 0;
     const misroutedEconomy =
-      fb.resolvedTier === 'economy' &&
-      (fb.toolErrorCount > 0 || fb.outcome === 'error');
+      fb.resolvedTier === "economy" &&
+      (fb.toolErrorCount > 0 || fb.outcome === "error");
 
     writeThreadRoutingState(threadId, {
       lastResolvedTier: fb.resolvedTier,
@@ -305,12 +329,16 @@ export function rememberRoutingFeedback(threadId: string | undefined, fb: Routin
       lastRunOutcome: fb.outcome,
       lastToolCallCount: fb.toolCallCount,
       lastToolErrorCount: fb.toolErrorCount,
-      premiumStickyUntil: touchedTools ? now + PREMIUM_STICKY_TTL_MS : prev.premiumStickyUntil,
-      forcePremiumUntil: misroutedEconomy ? now + FORCE_PREMIUM_TTL_MS : prev.forcePremiumUntil,
+      premiumStickyUntil: touchedTools
+        ? now + PREMIUM_STICKY_TTL_MS
+        : prev.premiumStickyUntil,
+      forcePremiumUntil: misroutedEconomy
+        ? now + FORCE_PREMIUM_TTL_MS
+        : prev.forcePremiumUntil,
       lastInputTokens: fb.lastInputTokens ?? prev.lastInputTokens,
     });
   } catch (err) {
-    logger.warn('[ROUTING] 路由反馈记录失败', { threadId, error: String(err) });
+    logger.warn("[ROUTING] 路由反馈记录失败", { threadId, error: String(err) });
   }
 }
 
@@ -340,7 +368,12 @@ function countCodeBlocks(text: string): number {
 function requiresToolCapability(message: string): boolean {
   if (FILESYSTEM_OP_PATTERN.test(message)) return true;
   if (FILE_OR_REPO_PATTERN.test(message)) return true;
-  if (/```/.test(message) && /(error|traceback|exception|stack trace|npm |pnpm |tsc |jest |pytest)/i.test(message)) {
+  if (
+    /```/.test(message) &&
+    /(error|traceback|exception|stack trace|npm |pnpm |tsc |jest |pytest)/i.test(
+      message,
+    )
+  ) {
     return true;
   }
   return false;
@@ -361,12 +394,16 @@ function isStrictEconomy(message: string): boolean {
  *
  * 返回 "economy" 仅当高置信度确认消息为纯社交/确认交换
  */
-function scoreSocialEconomy(trimmed: string): { result: 'economy' | 'uncertain'; score: number } {
+function scoreSocialEconomy(trimmed: string): {
+  result: "economy" | "uncertain";
+  score: number;
+} {
   // 硬性限制：过长消息不可能是纯社交
-  if (trimmed.length > 40) return { result: 'uncertain', score: -1 };
+  if (trimmed.length > 40) return { result: "uncertain", score: -1 };
 
   // 模糊延续词看起来短但有隐含任务上下文
-  if (AMBIGUOUS_SHORT_PATTERN.test(trimmed)) return { result: 'uncertain', score: -1 };
+  if (AMBIGUOUS_SHORT_PATTERN.test(trimmed))
+    return { result: "uncertain", score: -1 };
 
   let score = 0;
 
@@ -388,7 +425,7 @@ function scoreSocialEconomy(trimmed: string): { result: 'economy' | 'uncertain';
   if (/[?？]/.test(trimmed)) score -= 3;
   if (/\d{3,}/.test(trimmed)) score -= 2;
 
-  return { result: score >= 4 ? 'economy' : 'uncertain', score };
+  return { result: score >= 4 ? "economy" : "uncertain", score };
 }
 
 /**
@@ -396,52 +433,91 @@ function scoreSocialEconomy(trimmed: string): { result: 'economy' | 'uncertain';
  */
 function applyLayer2RulesWithDetail(message: string): Layer2Detail {
   const trimmed = message.trim();
-  if (!trimmed) return { result: 'premium', matchedRule: 'empty-message' };
+  if (!trimmed) return { result: "premium", matchedRule: "empty-message" };
 
   const estimatedTokens = estimateTokens(trimmed);
   if (estimatedTokens > 3000) {
-    return { result: 'premium', matchedRule: 'token-limit-exceeded', estimatedTokens };
+    return {
+      result: "premium",
+      matchedRule: "token-limit-exceeded",
+      estimatedTokens,
+    };
   }
 
   const codeBlockCount = countCodeBlocks(trimmed);
   if (codeBlockCount >= 2) {
-    return { result: 'premium', matchedRule: 'multiple-code-blocks', codeBlockCount };
+    return {
+      result: "premium",
+      matchedRule: "multiple-code-blocks",
+      codeBlockCount,
+    };
   }
 
   // 文件系统操作动词
   const fsMatch = FILESYSTEM_OP_PATTERN.exec(trimmed);
   if (fsMatch) {
-    return { result: 'premium', matchedRule: 'FILESYSTEM_OP_PATTERN', fsOpMatch: fsMatch[0] };
+    return {
+      result: "premium",
+      matchedRule: "FILESYSTEM_OP_PATTERN",
+      fsOpMatch: fsMatch[0],
+    };
   }
 
   // 文件路径存在
   const fileMatch = FILE_OR_REPO_PATTERN.exec(trimmed);
   if (fileMatch) {
-    return { result: 'premium', matchedRule: 'FILE_OR_REPO_PATTERN', filePatternMatch: fileMatch[0] };
+    return {
+      result: "premium",
+      matchedRule: "FILE_OR_REPO_PATTERN",
+      filePatternMatch: fileMatch[0],
+    };
   }
 
   // 粘贴的错误输出
-  if (/```/.test(trimmed) && /(error|traceback|exception|stack trace|npm |pnpm |tsc |jest |pytest)/i.test(trimmed)) {
-    return { result: 'premium', matchedRule: 'pasted-error-output', codeBlockCount };
+  if (
+    /```/.test(trimmed) &&
+    /(error|traceback|exception|stack trace|npm |pnpm |tsc |jest |pytest)/i.test(
+      trimmed,
+    )
+  ) {
+    return {
+      result: "premium",
+      matchedRule: "pasted-error-output",
+      codeBlockCount,
+    };
   }
 
   // 纯上下文请求
   if (trimmed.length <= 200 && INCTX_ECONOMY_PATTERN.test(trimmed)) {
-    return { result: 'economy', matchedRule: 'INCTX_ECONOMY_PATTERN', inCtxMatch: true, messageLength: trimmed.length };
+    return {
+      result: "economy",
+      matchedRule: "INCTX_ECONOMY_PATTERN",
+      inCtxMatch: true,
+      messageLength: trimmed.length,
+    };
   }
 
   // 严格 economy 允许列表
   if (isStrictEconomy(trimmed)) {
-    return { result: 'economy', matchedRule: 'STRICT_ECONOMY_PATTERN' };
+    return { result: "economy", matchedRule: "STRICT_ECONOMY_PATTERN" };
   }
 
   // 社交评分
   const scored = scoreSocialEconomy(trimmed);
-  if (scored.result === 'economy') {
-    return { result: 'economy', matchedRule: 'social-score→economy', socialScore: scored.score, messageLength: trimmed.length };
+  if (scored.result === "economy") {
+    return {
+      result: "economy",
+      matchedRule: "social-score→economy",
+      socialScore: scored.score,
+      messageLength: trimmed.length,
+    };
   }
 
-  return { result: 'uncertain', matchedRule: 'no-rule-matched', messageLength: trimmed.length };
+  return {
+    result: "uncertain",
+    matchedRule: "no-rule-matched",
+    messageLength: trimmed.length,
+  };
 }
 
 // ─── Layer 3 LLM 分类器 ───────────────────────────────────────────────────
@@ -456,7 +532,9 @@ function applyLayer2RulesWithDetail(message: string): Layer2Detail {
  */
 function pickClassifierModel(): ModelConfig | null {
   const configs = modelStorage.getCustomModelConfigs();
-  const economyConfigs = configs.filter((c) => (c.tier ?? 'premium') === 'economy' && c.apiKey);
+  const economyConfigs = configs.filter(
+    (c) => (c.tier ?? "premium") === "economy" && c.apiKey,
+  );
 
   // 用户配置的 Qwen economy 模型
   const userQwen = economyConfigs.find((c) => /qwen/i.test(c.model));
@@ -466,7 +544,7 @@ function pickClassifierModel(): ModelConfig | null {
 
   const selected = userQwen ?? userNonQwen ?? null;
 
-  logger.debug('[ROUTING] Layer3 分类器模型选择', {
+  logger.debug("[ROUTING] Layer3 分类器模型选择", {
     selected: selected ? { id: selected.id, model: selected.model } : null,
     candidates: economyConfigs.map((c) => ({ id: c.id, model: c.model })),
   });
@@ -481,24 +559,27 @@ async function classifyWithLlm(message: string): Promise<Layer3Result> {
   const key = hashMessage(message);
   const cached = CLASSIFIER_CACHE.get(key);
   if (cached && cached.expiresAt > Date.now()) {
-    logger.debug('[ROUTING] Layer3 缓存命中', { cacheKey: key, tier: cached.tier });
+    logger.debug("[ROUTING] Layer3 缓存命中", {
+      cacheKey: key,
+      tier: cached.tier,
+    });
     return { tier: cached.tier, cacheHit: true };
   }
 
   const classifierModel = pickClassifierModel();
   if (!classifierModel) {
-    return { tier: 'premium', cacheHit: false };
+    return { tier: "premium", cacheHit: false };
   }
 
   try {
     // 禁用思考的参数
     const noThinkParams: Record<string, unknown> = {
-      reasoning_effort: 'none',
+      reasoning_effort: "none",
       enable_thinking: false,
       chat_template_kwargs: { enable_thinking: false },
     };
 
-    logger.debug('[ROUTING] Layer3 分类器调用开始', {
+    logger.debug("[ROUTING] Layer3 分类器调用开始", {
       cacheKey: key,
       model: classifierModel.model,
       messageLength: message.length,
@@ -542,27 +623,32 @@ Route "economy" only if BOTH dimensions are clearly NO.
 • "重构 components/ 目录下的组件" → multi-file, agentic task`;
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('layer3-timeout')), LAYER3_TIMEOUT_MS)
+      setTimeout(() => reject(new Error("layer3-timeout")), LAYER3_TIMEOUT_MS),
     );
 
     const response = await Promise.race([
       llm.invoke([
         new SystemMessage(systemPrompt),
-        new HumanMessage(`Classify this request (reply only "premium" or "economy"):\n\n${message.slice(0, 600)}`),
+        new HumanMessage(
+          `Classify this request (reply only "premium" or "economy"):\n\n${message.slice(0, 600)}`,
+        ),
       ]),
       timeoutPromise,
     ]);
 
-    const raw = (typeof response.content === 'string' ? response.content : '').toLowerCase();
-    const containsThink = /<think>[\s\S]*?<\/think>/.test(raw) || raw.includes('<think>');
-    const text = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    const raw = (
+      typeof response.content === "string" ? response.content : ""
+    ).toLowerCase();
+    const containsThink =
+      /<think>[\s\S]*?<\/think>/.test(raw) || raw.includes("<think>");
+    const text = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
-    const lastEconomy = text.lastIndexOf('economy');
-    const lastPremium = text.lastIndexOf('premium');
+    const lastEconomy = text.lastIndexOf("economy");
+    const lastPremium = text.lastIndexOf("premium");
     const tier: ModelTier =
-      lastEconomy > lastPremium && lastEconomy !== -1 ? 'economy' : 'premium';
+      lastEconomy > lastPremium && lastEconomy !== -1 ? "economy" : "premium";
 
-    logger.debug('[ROUTING] Layer3 分类器调用完成', {
+    logger.debug("[ROUTING] Layer3 分类器调用完成", {
       cacheKey: key,
       containsThink,
       derivedTier: tier,
@@ -580,17 +666,17 @@ Route "economy" only if BOTH dimensions are clearly NO.
       rawPreview: raw.slice(0, 200),
     };
   } catch (err) {
-    const isTimeout = err instanceof Error && err.message === 'layer3-timeout';
+    const isTimeout = err instanceof Error && err.message === "layer3-timeout";
     const reason = isTimeout ? `timeout >${LAYER3_TIMEOUT_MS}ms` : String(err);
 
-    logger.warn('[ROUTING] Layer3 分类器失败', {
+    logger.warn("[ROUTING] Layer3 分类器失败", {
       reason,
       model: classifierModel.model,
-      defaultTo: 'premium',
+      defaultTo: "premium",
     });
 
     return {
-      tier: 'premium',
+      tier: "premium",
       classifierModel: classifierModel.model,
       cacheHit: false,
       timedOut: isTimeout,
@@ -605,10 +691,15 @@ Route "economy" only if BOTH dimensions are clearly NO.
  */
 function buildFallbackChain(primaryTier: ModelTier): string[] {
   const configs = modelStorage.getCustomModelConfigs();
-  const fallbackTier: ModelTier = primaryTier === 'economy' ? 'premium' : 'economy';
+  const fallbackTier: ModelTier =
+    primaryTier === "economy" ? "premium" : "economy";
 
-  const primary = configs.filter((c) => (c.tier ?? 'premium') === primaryTier).map((c) => `custom:${c.id}`);
-  const fallback = configs.filter((c) => (c.tier ?? 'premium') === fallbackTier).map((c) => `custom:${c.id}`);
+  const primary = configs
+    .filter((c) => (c.tier ?? "premium") === primaryTier)
+    .map((c) => `custom:${c.id}`);
+  const fallback = configs
+    .filter((c) => (c.tier ?? "premium") === fallbackTier)
+    .map((c) => `custom:${c.id}`);
   const all = configs.map((c) => `custom:${c.id}`);
 
   const seen = new Set<string>();
@@ -632,17 +723,17 @@ function buildFallbackChain(primaryTier: ModelTier): string[] {
 function guardContextCapacity(
   result: RoutingResult,
   threadId: string | undefined,
-  layerRecords: RoutingLayerRecord[]
+  layerRecords: RoutingLayerRecord[],
 ): RoutingResult {
-  if (result.resolvedTier !== 'economy') return result;
+  if (result.resolvedTier !== "economy") return result;
 
   const state = readThreadRoutingState(threadId);
   const lastInputTokens = state?.lastInputTokens;
   if (!lastInputTokens || lastInputTokens <= 0) return result;
 
   const configs = modelStorage.getCustomModelConfigs();
-  const currentCfgId = result.resolvedModelId.startsWith('custom:')
-    ? result.resolvedModelId.slice('custom:'.length)
+  const currentCfgId = result.resolvedModelId.startsWith("custom:")
+    ? result.resolvedModelId.slice("custom:".length)
     : result.resolvedModelId;
   const currentCfg = configs.find((c) => c.id === currentCfgId);
   const currentMax = currentCfg?.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS;
@@ -654,15 +745,19 @@ function guardContextCapacity(
 
   // 尝试其他更大的 economy 模型
   const otherEconomy = configs
-    .filter((c) => (c.tier ?? 'premium') === 'economy' && c.id !== currentCfgId)
-    .sort((a, b) => (b.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS) - (a.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS));
+    .filter((c) => (c.tier ?? "premium") === "economy" && c.id !== currentCfgId)
+    .sort(
+      (a, b) =>
+        (b.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS) -
+        (a.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS),
+    );
 
   for (const candidate of otherEconomy) {
     const candidateMax = candidate.maxTokens ?? modelStorage.DEFAULT_MAX_TOKENS;
     if (lastInputTokens < Math.floor(candidateMax * CONTEXT_CAPACITY_RATIO)) {
       const guardReason = `context-guard:switch-economy(${lastInputTokens}/${candidateMax})`;
-      logger.info('[ROUTING] 上下文容量保护', {
-        action: 'switch-economy',
+      logger.info("[ROUTING] 上下文容量保护", {
+        action: "switch-economy",
         lastInputTokens,
         originalMax: currentMax,
         newModelId: candidate.id,
@@ -670,11 +765,16 @@ function guardContextCapacity(
       });
 
       layerRecords.push({
-        layer: 'layer2',
+        layer: "layer2",
         durationMs: 0,
-        result: 'economy',
+        result: "economy",
         reason: guardReason,
-        detail: { lastInputTokens, originalMax: currentMax, switchedTo: candidate.id, switchedMax: candidateMax },
+        detail: {
+          lastInputTokens,
+          originalMax: currentMax,
+          switchedTo: candidate.id,
+          switchedMax: candidateMax,
+        },
       });
 
       return {
@@ -683,7 +783,9 @@ function guardContextCapacity(
         routeReason: `${result.routeReason}→${guardReason}`,
         fallbackChain: [
           `custom:${candidate.id}`,
-          ...result.fallbackChain.filter((id) => id !== `custom:${candidate.id}`),
+          ...result.fallbackChain.filter(
+            (id) => id !== `custom:${candidate.id}`,
+          ),
         ],
       };
     }
@@ -691,23 +793,35 @@ function guardContextCapacity(
 
   // 没有 economy 模型能处理 → 升级到 premium
   const guardReason = `context-guard:escalate-premium(${lastInputTokens}/${currentMax})`;
-  logger.info('[ROUTING] 上下文容量保护', {
-    action: 'escalate-premium',
+  logger.info("[ROUTING] 上下文容量保护", {
+    action: "escalate-premium",
     lastInputTokens,
     economyMax: currentMax,
     candidatesChecked: otherEconomy.length,
   });
 
   layerRecords.push({
-    layer: 'layer2',
+    layer: "layer2",
     durationMs: 0,
-    result: 'premium',
+    result: "premium",
     reason: guardReason,
-    detail: { lastInputTokens, economyMax: currentMax, candidatesChecked: otherEconomy.length },
+    detail: {
+      lastInputTokens,
+      economyMax: currentMax,
+      candidatesChecked: otherEconomy.length,
+    },
   });
 
-  const safeLayer = (result.layer === 'pinned' ? 'layer2' : result.layer) as 'layer1' | 'thread' | 'layer2' | 'layer3';
-  return resolveFromTier('premium', `${result.routeReason}→${guardReason}`, safeLayer);
+  const safeLayer = (result.layer === "pinned" ? "layer2" : result.layer) as
+    | "layer1"
+    | "thread"
+    | "layer2"
+    | "layer3";
+  return resolveFromTier(
+    "premium",
+    `${result.routeReason}→${guardReason}`,
+    safeLayer,
+  );
 }
 
 // ─── 从层级解析模型 ───────────────────────────────────────────────────────
@@ -718,11 +832,15 @@ function guardContextCapacity(
 function resolveFromTier(
   tier: ModelTier,
   reason: string,
-  layer: 'layer1' | 'thread' | 'layer2' | 'layer3'
+  layer: "layer1" | "thread" | "layer2" | "layer3",
 ): RoutingResult {
   const model = modelStorage.getModelByTier(tier);
   const configs = modelStorage.getCustomModelConfigs();
-  const fallbackId = model ? `custom:${model.id}` : (configs[0] ? `custom:${configs[0].id}` : '');
+  const fallbackId = model
+    ? `custom:${model.id}`
+    : configs[0]
+      ? `custom:${configs[0].id}`
+      : "";
   const fallbackChain = buildFallbackChain(tier);
 
   const result: RoutingResult = {
@@ -733,7 +851,7 @@ function resolveFromTier(
     layer,
   };
 
-  logger.info('[ROUTING] 路由完成', {
+  logger.info("[ROUTING] 路由完成", {
     layer,
     resolvedModelId: result.resolvedModelId,
     resolvedTier: result.resolvedTier,
@@ -749,20 +867,23 @@ function resolveFromTier(
 function resolveFromExactModel(
   modelId: string,
   tier: ModelTier,
-  reason: string
+  reason: string,
 ): RoutingResult {
-  const fallbackChain = [modelId, ...buildFallbackChain(tier).filter((id) => id !== modelId)];
+  const fallbackChain = [
+    modelId,
+    ...buildFallbackChain(tier).filter((id) => id !== modelId),
+  ];
 
   const result: RoutingResult = {
     resolvedModelId: modelId,
     resolvedTier: tier,
     routeReason: reason,
     fallbackChain,
-    layer: 'thread',
+    layer: "thread",
   };
 
-  logger.info('[ROUTING] 路由完成', {
-    layer: 'thread',
+  logger.info("[ROUTING] 路由完成", {
+    layer: "thread",
     resolvedModelId: modelId,
     resolvedTier: tier,
     routeReason: reason,
@@ -777,8 +898,8 @@ function resolveFromExactModel(
  * 解析模型名称
  */
 function resolveModelName(resolvedModelId: string): string {
-  const cfgId = resolvedModelId.startsWith('custom:')
-    ? resolvedModelId.slice('custom:'.length)
+  const cfgId = resolvedModelId.startsWith("custom:")
+    ? resolvedModelId.slice("custom:".length)
     : resolvedModelId;
   const cfg = modelStorage.getCustomModelConfigs().find((c) => c.id === cfgId);
   return cfg?.model ?? cfg?.name ?? cfgId;
@@ -790,10 +911,10 @@ function resolveModelName(resolvedModelId: string): string {
 function buildRoutingTrace(
   ctx: RoutingContext,
   layers: RoutingLayerRecord[],
-  finalResult: RoutingResult
+  finalResult: RoutingResult,
 ): RoutingTrace | undefined {
   try {
-    const message = ctx.message ?? '';
+    const message = ctx.message ?? "";
     return {
       messageSnippet: message.slice(0, 100),
       taskSource: ctx.taskSource,
@@ -821,7 +942,9 @@ function buildRoutingTrace(
  *   Layer 2: 规则匹配路由
  *   Layer 3: LLM 分类器路由
  */
-export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> {
+export async function resolveModel(
+  ctx: RoutingContext,
+): Promise<RoutingResult> {
   const layerRecords: RoutingLayerRecord[] = [];
 
   function recordLayer(rec: RoutingLayerRecord): void {
@@ -842,41 +965,43 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
   }
 
   // ── Pinned 模式 ───────────────────────────────────────────────────────────
-  if (ctx.routingMode === 'pinned') {
+  if (ctx.routingMode === "pinned") {
     const t0 = Date.now();
     const configs = modelStorage.getCustomModelConfigs();
     const requestedId = ctx.requestedModelId;
     let modelId: string;
-    let tier: ModelTier = 'premium';
+    let tier: ModelTier = "premium";
 
     if (requestedId) {
       modelId = requestedId;
-      const cfgId = requestedId.startsWith('custom:') ? requestedId.slice('custom:'.length) : requestedId;
+      const cfgId = requestedId.startsWith("custom:")
+        ? requestedId.slice("custom:".length)
+        : requestedId;
       const cfg = configs.find((c) => c.id === cfgId);
-      tier = cfg?.tier ?? 'premium';
+      tier = cfg?.tier ?? "premium";
     } else {
       const first = configs[0];
-      modelId = first ? `custom:${first.id}` : '';
-      tier = first?.tier ?? 'premium';
+      modelId = first ? `custom:${first.id}` : "";
+      tier = first?.tier ?? "premium";
     }
 
     recordLayer({
-      layer: 'pinned',
+      layer: "pinned",
       durationMs: Date.now() - t0,
       result: tier,
-      reason: requestedId ? 'user-pinned-model' : 'fallback-to-first-config',
+      reason: requestedId ? "user-pinned-model" : "fallback-to-first-config",
       detail: { requestedModelId: requestedId, resolvedModelId: modelId },
     });
 
     const result: RoutingResult = {
       resolvedModelId: modelId,
       resolvedTier: tier,
-      routeReason: 'pinned',
+      routeReason: "pinned",
       fallbackChain: buildFallbackChain(tier),
-      layer: 'pinned',
+      layer: "pinned",
     };
 
-    logger.info('[ROUTING] Pinned 路由', {
+    logger.info("[ROUTING] Pinned 路由", {
       taskSource: ctx.taskSource,
       resolvedModelId: result.resolvedModelId,
       resolvedTier: result.resolvedTier,
@@ -891,34 +1016,42 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
   {
     const t0 = Date.now();
     switch (ctx.taskSource) {
-      case 'heartbeat':
-      case 'memory_summarize':
-      case 'scheduler_reminder': {
+      case "heartbeat":
+      case "memory_summarize":
+      case "scheduler_reminder": {
         recordLayer({
-          layer: 'layer1',
+          layer: "layer1",
           durationMs: Date.now() - t0,
-          result: 'economy',
+          result: "economy",
           reason: `taskSource=${ctx.taskSource}→economy`,
         });
-        const r = resolveFromTier('economy', `layer1:${ctx.taskSource}→economy`, 'layer1');
+        const r = resolveFromTier(
+          "economy",
+          `layer1:${ctx.taskSource}→economy`,
+          "layer1",
+        );
         return withTrace(r);
       }
-      case 'optimizer': {
+      case "optimizer": {
         recordLayer({
-          layer: 'layer1',
+          layer: "layer1",
           durationMs: Date.now() - t0,
-          result: 'premium',
-          reason: 'taskSource=optimizer→premium',
+          result: "premium",
+          reason: "taskSource=optimizer→premium",
         });
-        const r = resolveFromTier('premium', 'layer1:optimizer→premium', 'layer1');
+        const r = resolveFromTier(
+          "premium",
+          "layer1:optimizer→premium",
+          "layer1",
+        );
         return withTrace(r);
       }
       default:
         // chat / scheduler_action / knowledge_read / knowledge_generate
         recordLayer({
-          layer: 'layer1',
+          layer: "layer1",
           durationMs: Date.now() - t0,
-          result: 'uncertain',
+          result: "uncertain",
           reason: `taskSource=${ctx.taskSource}→pass-through`,
         });
     }
@@ -930,13 +1063,13 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
     const threadState = readThreadRoutingState(ctx.threadId);
     const now = Date.now();
 
-    if (ctx.taskSource === 'chat' && threadState) {
+    if (ctx.taskSource === "chat" && threadState) {
       // resume/interrupt 复用上次模型
       if (ctx.continuation && threadState.lastResolvedModelId) {
         recordLayer({
-          layer: 'thread',
+          layer: "thread",
           durationMs: Date.now() - t0,
-          result: 'reuse',
+          result: "reuse",
           reason: `${ctx.continuation}→reuse-last-model`,
           detail: {
             lastResolvedModelId: threadState.lastResolvedModelId,
@@ -945,35 +1078,43 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
         });
         const r = resolveFromExactModel(
           threadState.lastResolvedModelId,
-          threadState.lastResolvedTier ?? 'premium',
-          `thread:${ctx.continuation}→reuse-last-model`
+          threadState.lastResolvedTier ?? "premium",
+          `thread:${ctx.continuation}→reuse-last-model`,
         );
         return withTrace(r);
       }
 
       // Failover 粘性
-      if (threadState.failoverStickyModelId && (threadState.failoverStickyUntil ?? 0) > now) {
-        const foCfgId = threadState.failoverStickyModelId.startsWith('custom:')
-          ? threadState.failoverStickyModelId.slice('custom:'.length)
+      if (
+        threadState.failoverStickyModelId &&
+        (threadState.failoverStickyUntil ?? 0) > now
+      ) {
+        const foCfgId = threadState.failoverStickyModelId.startsWith("custom:")
+          ? threadState.failoverStickyModelId.slice("custom:".length)
           : threadState.failoverStickyModelId;
-        const foCfg = modelStorage.getCustomModelConfigs().find((c) => c.id === foCfgId);
+        const foCfg = modelStorage
+          .getCustomModelConfigs()
+          .find((c) => c.id === foCfgId);
         if (foCfg?.apiKey) {
           const remainingMs = (threadState.failoverStickyUntil ?? 0) - now;
           recordLayer({
-            layer: 'thread',
+            layer: "thread",
             durationMs: Date.now() - t0,
-            result: foCfg.tier ?? 'premium',
-            reason: 'failover-sticky',
-            detail: { failoverStickyModelId: threadState.failoverStickyModelId, remainingMs },
+            result: foCfg.tier ?? "premium",
+            reason: "failover-sticky",
+            detail: {
+              failoverStickyModelId: threadState.failoverStickyModelId,
+              remainingMs,
+            },
           });
           const r = resolveFromExactModel(
             threadState.failoverStickyModelId,
-            foCfg.tier ?? 'premium',
-            'thread:failover-sticky'
+            foCfg.tier ?? "premium",
+            "thread:failover-sticky",
           );
           return withTrace(r);
         }
-        logger.warn('[ROUTING] Failover sticky 模型不可用', {
+        logger.warn("[ROUTING] Failover sticky 模型不可用", {
           modelId: threadState.failoverStickyModelId,
         });
       }
@@ -982,35 +1123,52 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
       if ((threadState.forcePremiumUntil ?? 0) > now) {
         const remainingMs = (threadState.forcePremiumUntil ?? 0) - now;
         recordLayer({
-          layer: 'thread',
+          layer: "thread",
           durationMs: Date.now() - t0,
-          result: 'premium',
-          reason: 'force-premium-after-economy-failure',
-          detail: { forcePremiumUntil: threadState.forcePremiumUntil, remainingMs },
+          result: "premium",
+          reason: "force-premium-after-economy-failure",
+          detail: {
+            forcePremiumUntil: threadState.forcePremiumUntil,
+            remainingMs,
+          },
         });
-        const r = resolveFromTier('premium', 'thread:force-premium-after-economy-failure', 'thread');
+        const r = resolveFromTier(
+          "premium",
+          "thread:force-premium-after-economy-failure",
+          "thread",
+        );
         return withTrace(r);
       }
 
       // Sticky premium
-      if ((threadState.premiumStickyUntil ?? 0) > now && !isStrictEconomy(ctx.message ?? '')) {
+      if (
+        (threadState.premiumStickyUntil ?? 0) > now &&
+        !isStrictEconomy(ctx.message ?? "")
+      ) {
         const remainingMs = (threadState.premiumStickyUntil ?? 0) - now;
         recordLayer({
-          layer: 'thread',
+          layer: "thread",
           durationMs: Date.now() - t0,
-          result: 'premium',
-          reason: 'sticky-premium-after-tool-work',
-          detail: { premiumStickyUntil: threadState.premiumStickyUntil, remainingMs },
+          result: "premium",
+          reason: "sticky-premium-after-tool-work",
+          detail: {
+            premiumStickyUntil: threadState.premiumStickyUntil,
+            remainingMs,
+          },
         });
-        const r = resolveFromTier('premium', 'thread:sticky-premium-after-tool-work', 'thread');
+        const r = resolveFromTier(
+          "premium",
+          "thread:sticky-premium-after-tool-work",
+          "thread",
+        );
         return withTrace(r);
       }
 
       recordLayer({
-        layer: 'thread',
+        layer: "thread",
         durationMs: Date.now() - t0,
-        result: 'uncertain',
-        reason: 'thread-state-no-override',
+        result: "uncertain",
+        reason: "thread-state-no-override",
         detail: {
           hasForcePremium: (threadState.forcePremiumUntil ?? 0) > now,
           hasStickyPremium: (threadState.premiumStickyUntil ?? 0) > now,
@@ -1019,23 +1177,23 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
       });
     } else {
       recordLayer({
-        layer: 'thread',
+        layer: "thread",
         durationMs: Date.now() - t0,
-        result: 'uncertain',
-        reason: threadState ? 'non-chat-taskSource' : 'no-thread-state',
+        result: "uncertain",
+        reason: threadState ? "non-chat-taskSource" : "no-thread-state",
       });
     }
   }
 
   // ── Layer 2: 规则匹配 ─────────────────────────────────────────────────────
-  const message = ctx.message ?? '';
+  const message = ctx.message ?? "";
   {
     const t0 = Date.now();
     const l2Detail = applyLayer2RulesWithDetail(message);
 
-    if (l2Detail.result !== 'uncertain') {
+    if (l2Detail.result !== "uncertain") {
       recordLayer({
-        layer: 'layer2',
+        layer: "layer2",
         durationMs: Date.now() - t0,
         result: l2Detail.result,
         reason: l2Detail.matchedRule,
@@ -1049,17 +1207,24 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
           messageLength: l2Detail.messageLength,
         },
       });
-      let r = resolveFromTier(l2Detail.result, `layer2:rules→${l2Detail.result}`, 'layer2');
+      let r = resolveFromTier(
+        l2Detail.result,
+        `layer2:rules→${l2Detail.result}`,
+        "layer2",
+      );
       r = guardContextCapacity(r, ctx.threadId, layerRecords);
       return withTrace(r);
     }
 
     recordLayer({
-      layer: 'layer2',
+      layer: "layer2",
       durationMs: Date.now() - t0,
-      result: 'uncertain',
+      result: "uncertain",
       reason: l2Detail.matchedRule,
-      detail: { estimatedTokens: l2Detail.estimatedTokens, messageLength: l2Detail.messageLength },
+      detail: {
+        estimatedTokens: l2Detail.estimatedTokens,
+        messageLength: l2Detail.messageLength,
+      },
     });
   }
 
@@ -1070,7 +1235,7 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
     const durationMs = Date.now() - t0;
 
     recordLayer({
-      layer: 'layer3',
+      layer: "layer3",
       durationMs,
       result: l3.tier,
       reason: l3.cacheHit
@@ -1089,7 +1254,7 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
       },
     });
 
-    let r = resolveFromTier(l3.tier, `layer3:llm→${l3.tier}`, 'layer3');
+    let r = resolveFromTier(l3.tier, `layer3:llm→${l3.tier}`, "layer3");
     r = guardContextCapacity(r, ctx.threadId, layerRecords);
     return withTrace(r);
   }
@@ -1098,6 +1263,6 @@ export async function resolveModel(ctx: RoutingContext): Promise<RoutingResult> 
 /**
  * 获取全局路由模式
  */
-export function getGlobalRoutingMode(): 'auto' | 'pinned' {
+export function getGlobalRoutingMode(): "auto" | "pinned" {
   return modelStorage.getGlobalRoutingMode();
 }

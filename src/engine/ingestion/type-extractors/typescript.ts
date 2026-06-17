@@ -1,4 +1,4 @@
-import type { SyntaxNode } from '../utils/ast-helpers.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
 import type {
   LanguageTypeConfig,
   ParameterExtractor,
@@ -11,7 +11,7 @@ import type {
   ForLoopExtractor,
   PatternBindingExtractor,
   LiteralTypeInferrer,
-} from './types.js';
+} from "./types.js";
 import {
   extractSimpleTypeName,
   extractVarName,
@@ -23,31 +23,31 @@ import {
   resolveIterableElementType,
   methodToTypeArgPosition,
   type TypeArgPosition,
-} from './shared.js';
+} from "./shared.js";
 
 const DECLARATION_NODE_TYPES: ReadonlySet<string> = new Set([
-  'lexical_declaration',
-  'variable_declaration',
-  'function_declaration', // JSDoc @param on function declarations
-  'method_definition', // JSDoc @param on class methods
-  'public_field_definition', // class field: private users: User[]
+  "lexical_declaration",
+  "variable_declaration",
+  "function_declaration", // JSDoc @param on function declarations
+  "method_definition", // JSDoc @param on class methods
+  "public_field_definition", // class field: private users: User[]
 ]);
 
 const normalizeJsDocType = (raw: string): string | undefined => {
   let type = raw.trim();
   // Strip JSDoc nullable/non-nullable prefixes: ?User → User, !User → User
-  if (type.startsWith('?') || type.startsWith('!')) type = type.slice(1);
+  if (type.startsWith("?") || type.startsWith("!")) type = type.slice(1);
   // Strip union with null/undefined/void: User|null → User
   const parts = type
-    .split('|')
+    .split("|")
     .map((p) => p.trim())
-    .filter((p) => p !== 'null' && p !== 'undefined' && p !== 'void');
+    .filter((p) => p !== "null" && p !== "undefined" && p !== "void");
   if (parts.length !== 1) return undefined; // ambiguous union
   type = parts[0];
   // Strip module: prefix — module:models.User → models.User
-  if (type.startsWith('module:')) type = type.slice(7);
+  if (type.startsWith("module:")) type = type.slice(7);
   // Take last segment of dotted path: models.User → User
-  const segments = type.split('.');
+  const segments = type.split(".");
   type = segments[segments.length - 1];
   // Strip generic wrapper: Promise<User> → Promise (base type, not inner)
   const genericMatch = type.match(/^(\w+)\s*</);
@@ -68,9 +68,9 @@ const collectJsDocParams = (funcNode: SyntaxNode): Map<string, string> => {
   const commentTexts: string[] = [];
   let sibling = funcNode.previousSibling;
   while (sibling) {
-    if (sibling.type === 'comment') {
+    if (sibling.type === "comment") {
       commentTexts.unshift(sibling.text);
-    } else if (sibling.isNamed && sibling.type !== 'decorator') {
+    } else if (sibling.isNamed && sibling.type !== "decorator") {
       break;
     }
     sibling = sibling.previousSibling;
@@ -78,7 +78,7 @@ const collectJsDocParams = (funcNode: SyntaxNode): Map<string, string> => {
   if (commentTexts.length === 0) return new Map();
 
   const params = new Map<string, string>();
-  const commentBlock = commentTexts.join('\n');
+  const commentBlock = commentTexts.join("\n");
   JSDOC_PARAM_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = JSDOC_PARAM_RE.exec(commentBlock)) !== null) {
@@ -100,7 +100,10 @@ const extractDeclaration: TypeBindingExtractor = (
   env: Map<string, string>,
 ): void => {
   // JSDoc @param on functions/methods — pre-populate env with param types
-  if (node.type === 'function_declaration' || node.type === 'method_definition') {
+  if (
+    node.type === "function_declaration" ||
+    node.type === "method_definition"
+  ) {
     const jsDocParams = collectJsDocParams(node);
     for (const [paramName, typeName] of jsDocParams) {
       if (!env.has(paramName)) env.set(paramName, typeName);
@@ -109,9 +112,9 @@ const extractDeclaration: TypeBindingExtractor = (
   }
 
   // Class field: `private users: User[]` — public_field_definition has name + type fields directly.
-  if (node.type === 'public_field_definition') {
-    const nameNode = node.childForFieldName('name');
-    const typeAnnotation = node.childForFieldName('type');
+  if (node.type === "public_field_definition") {
+    const nameNode = node.childForFieldName("name");
+    const typeAnnotation = node.childForFieldName("type");
     if (!nameNode || !typeAnnotation) return;
     const varName = nameNode.text;
     if (!varName) return;
@@ -122,9 +125,9 @@ const extractDeclaration: TypeBindingExtractor = (
 
   for (let i = 0; i < node.namedChildCount; i++) {
     const declarator = node.namedChild(i);
-    if (declarator?.type !== 'variable_declarator') continue;
-    const nameNode = declarator.childForFieldName('name');
-    const typeAnnotation = declarator.childForFieldName('type');
+    if (declarator?.type !== "variable_declarator") continue;
+    const nameNode = declarator.childForFieldName("name");
+    const typeAnnotation = declarator.childForFieldName("type");
     if (!nameNode || !typeAnnotation) continue;
     const varName = extractVarName(nameNode);
     const typeName = extractSimpleTypeName(typeAnnotation);
@@ -133,17 +136,25 @@ const extractDeclaration: TypeBindingExtractor = (
 };
 
 /** TypeScript: required_parameter / optional_parameter → name: type */
-const extractParameter: ParameterExtractor = (node: SyntaxNode, env: Map<string, string>): void => {
+const extractParameter: ParameterExtractor = (
+  node: SyntaxNode,
+  env: Map<string, string>,
+): void => {
   let nameNode: SyntaxNode | null = null;
   let typeNode: SyntaxNode | null = null;
 
-  if (node.type === 'required_parameter' || node.type === 'optional_parameter') {
-    nameNode = node.childForFieldName('pattern') ?? node.childForFieldName('name');
-    typeNode = node.childForFieldName('type');
+  if (
+    node.type === "required_parameter" ||
+    node.type === "optional_parameter"
+  ) {
+    nameNode =
+      node.childForFieldName("pattern") ?? node.childForFieldName("name");
+    typeNode = node.childForFieldName("type");
   } else {
     // Generic fallback
-    nameNode = node.childForFieldName('name') ?? node.childForFieldName('pattern');
-    typeNode = node.childForFieldName('type');
+    nameNode =
+      node.childForFieldName("name") ?? node.childForFieldName("pattern");
+    typeNode = node.childForFieldName("type");
   }
 
   if (!nameNode || !typeNode) return;
@@ -160,19 +171,22 @@ const extractInitializer: InitializerExtractor = (
 ): void => {
   for (let i = 0; i < node.namedChildCount; i++) {
     const declarator = node.namedChild(i);
-    if (declarator?.type !== 'variable_declarator') continue;
+    if (declarator?.type !== "variable_declarator") continue;
     // Only activate when there is no explicit type annotation — extractDeclaration already
     // handles the annotated case and this function is called as a fallback.
-    if (declarator.childForFieldName('type') !== null) continue;
-    let valueNode = declarator.childForFieldName('value');
+    if (declarator.childForFieldName("type") !== null) continue;
+    let valueNode = declarator.childForFieldName("value");
     // Unwrap `new User() as T`, `new User()!`, and double-cast `new User() as unknown as T`
-    while (valueNode?.type === 'as_expression' || valueNode?.type === 'non_null_expression') {
+    while (
+      valueNode?.type === "as_expression" ||
+      valueNode?.type === "non_null_expression"
+    ) {
       valueNode = valueNode.firstNamedChild;
     }
-    if (valueNode?.type !== 'new_expression') continue;
-    const constructorNode = valueNode.childForFieldName('constructor');
+    if (valueNode?.type !== "new_expression") continue;
+    const constructorNode = valueNode.childForFieldName("constructor");
     if (!constructorNode) continue;
-    const nameNode = declarator.childForFieldName('name');
+    const nameNode = declarator.childForFieldName("name");
     if (!nameNode) continue;
     const varName = extractVarName(nameNode);
     const typeName = extractSimpleTypeName(constructorNode);
@@ -186,27 +200,27 @@ const extractInitializer: InitializerExtractor = (
  * await is unwrapped: const user = await fetchUser() → callee = 'fetchUser'.
  */
 const scanConstructorBinding: ConstructorBindingScanner = (node) => {
-  if (node.type !== 'variable_declarator') return undefined;
+  if (node.type !== "variable_declarator") return undefined;
   if (hasTypeAnnotation(node)) return undefined;
-  const nameNode = node.childForFieldName('name');
-  if (!nameNode || nameNode.type !== 'identifier') return undefined;
-  const value = unwrapAwait(node.childForFieldName('value'));
-  if (!value || value.type !== 'call_expression') return undefined;
+  const nameNode = node.childForFieldName("name");
+  if (!nameNode || nameNode.type !== "identifier") return undefined;
+  const value = unwrapAwait(node.childForFieldName("value"));
+  if (!value || value.type !== "call_expression") return undefined;
   const calleeName = extractCalleeName(value);
   if (!calleeName) return undefined;
   return { varName: nameNode.text, calleeName };
 };
 
-const FOR_LOOP_NODE_TYPES: ReadonlySet<string> = new Set(['for_in_statement']);
+const FOR_LOOP_NODE_TYPES: ReadonlySet<string> = new Set(["for_in_statement"]);
 
 /** TS function/method node types that carry a parameters list. */
 const TS_FUNCTION_NODE_TYPES = new Set([
-  'function_declaration',
-  'function_expression',
-  'arrow_function',
-  'method_definition',
-  'generator_function',
-  'generator_function_declaration',
+  "function_declaration",
+  "function_expression",
+  "arrow_function",
+  "method_definition",
+  "generator_function",
+  "generator_function_declaration",
 ]);
 
 /**
@@ -218,33 +232,35 @@ const TS_FUNCTION_NODE_TYPES = new Set([
  */
 const extractTsElementTypeFromAnnotation = (
   typeAnnotation: SyntaxNode,
-  pos: TypeArgPosition = 'last',
+  pos: TypeArgPosition = "last",
   depth = 0,
 ): string | undefined => {
   if (depth > 50) return undefined;
   // Unwrap type_annotation (the node text includes ': ' prefix)
   const inner =
-    typeAnnotation.type === 'type_annotation'
+    typeAnnotation.type === "type_annotation"
       ? (typeAnnotation.firstNamedChild ?? typeAnnotation)
       : typeAnnotation;
 
   // readonly User[] — readonly_type wraps array_type: unwrap and recurse
-  if (inner.type === 'readonly_type') {
+  if (inner.type === "readonly_type") {
     const wrapped = inner.firstNamedChild;
-    if (wrapped) return extractTsElementTypeFromAnnotation(wrapped, pos, depth + 1);
+    if (wrapped)
+      return extractTsElementTypeFromAnnotation(wrapped, pos, depth + 1);
   }
 
   // User[] — array_type: first named child is the element type
-  if (inner.type === 'array_type') {
+  if (inner.type === "array_type") {
     const elem = inner.firstNamedChild;
     if (elem) return extractSimpleTypeName(elem);
   }
 
   // Array<User>, Map<string, User> — generic_type
   // pos determines which type arg: 'first' for keys, 'last' for values
-  if (inner.type === 'generic_type') {
+  if (inner.type === "generic_type") {
     const args = extractGenericTypeArgs(inner);
-    if (args.length >= 1) return pos === 'first' ? args[0] : args[args.length - 1];
+    if (args.length >= 1)
+      return pos === "first" ? args[0] : args[args.length - 1];
   }
 
   // Fallback: strip ': ' prefix from type_annotation text and use string extraction
@@ -261,7 +277,7 @@ const findTsLocalDeclElementType = (
   iterableName: string,
   blockNode: SyntaxNode,
   beforeNode: SyntaxNode,
-  pos: TypeArgPosition = 'last',
+  pos: TypeArgPosition = "last",
 ): string | undefined => {
   for (let i = 0; i < blockNode.namedChildCount; i++) {
     const stmt = blockNode.namedChild(i);
@@ -269,14 +285,19 @@ const findTsLocalDeclElementType = (
     // Stop when we reach the for-loop itself
     if (stmt === beforeNode || stmt.startIndex >= beforeNode.startIndex) break;
     // Look for lexical_declaration or variable_declaration
-    if (stmt.type !== 'lexical_declaration' && stmt.type !== 'variable_declaration') continue;
+    if (
+      stmt.type !== "lexical_declaration" &&
+      stmt.type !== "variable_declaration"
+    )
+      continue;
     for (let j = 0; j < stmt.namedChildCount; j++) {
       const decl = stmt.namedChild(j);
-      if (decl?.type !== 'variable_declarator') continue;
-      const nameNode = decl.childForFieldName('name');
+      if (decl?.type !== "variable_declarator") continue;
+      const nameNode = decl.childForFieldName("name");
       if (nameNode?.text !== iterableName) continue;
-      const typeAnnotation = decl.childForFieldName('type');
-      if (typeAnnotation) return extractTsElementTypeFromAnnotation(typeAnnotation, pos);
+      const typeAnnotation = decl.childForFieldName("type");
+      if (typeAnnotation)
+        return extractTsElementTypeFromAnnotation(typeAnnotation, pos);
     }
   }
   return undefined;
@@ -291,31 +312,40 @@ const findTsLocalDeclElementType = (
 const findTsIterableElementType = (
   iterableName: string,
   startNode: SyntaxNode,
-  pos: TypeArgPosition = 'last',
+  pos: TypeArgPosition = "last",
 ): string | undefined => {
   let current: SyntaxNode | null = startNode.parent;
   // Capture the immediate statement_block parent to search local declarations
-  const blockNode = current?.type === 'statement_block' ? current : null;
+  const blockNode = current?.type === "statement_block" ? current : null;
 
   while (current) {
     if (TS_FUNCTION_NODE_TYPES.has(current.type)) {
       // Search function parameters
       const paramsNode =
-        current.childForFieldName('parameters') ?? current.childForFieldName('formal_parameters');
+        current.childForFieldName("parameters") ??
+        current.childForFieldName("formal_parameters");
       if (paramsNode) {
         for (let i = 0; i < paramsNode.namedChildCount; i++) {
           const param = paramsNode.namedChild(i);
           if (!param) continue;
-          const patternNode = param.childForFieldName('pattern') ?? param.childForFieldName('name');
+          const patternNode =
+            param.childForFieldName("pattern") ??
+            param.childForFieldName("name");
           if (patternNode?.text === iterableName) {
-            const typeAnnotation = param.childForFieldName('type');
-            if (typeAnnotation) return extractTsElementTypeFromAnnotation(typeAnnotation, pos);
+            const typeAnnotation = param.childForFieldName("type");
+            if (typeAnnotation)
+              return extractTsElementTypeFromAnnotation(typeAnnotation, pos);
           }
         }
       }
       // Search local declarations in the function body (statement_block)
       if (blockNode) {
-        const result = findTsLocalDeclElementType(iterableName, blockNode, startNode, pos);
+        const result = findTsLocalDeclElementType(
+          iterableName,
+          blockNode,
+          startNode,
+          pos,
+        );
         if (result) return result;
       }
       break; // stop at the nearest function boundary
@@ -341,13 +371,13 @@ const extractForLoopBinding: ForLoopExtractor = (
   node,
   { scopeEnv, declarationTypeNodes, scope, returnTypeLookup },
 ): void => {
-  if (node.type !== 'for_in_statement') return;
+  if (node.type !== "for_in_statement") return;
 
   // Confirm this is `for...of`, not `for...in`, by scanning unnamed children for the keyword text.
   let isForOf = false;
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child && !child.isNamed && child.text === 'of') {
+    if (child && !child.isNamed && child.text === "of") {
       isForOf = true;
       break;
     }
@@ -355,35 +385,36 @@ const extractForLoopBinding: ForLoopExtractor = (
   if (!isForOf) return;
 
   // The iterable is the `right` field — may be identifier, member_expression, or call_expression.
-  const rightNode = node.childForFieldName('right');
+  const rightNode = node.childForFieldName("right");
   let iterableName: string | undefined;
   let methodName: string | undefined;
   let callExprElementType: string | undefined;
-  if (rightNode?.type === 'identifier') {
+  if (rightNode?.type === "identifier") {
     iterableName = rightNode.text;
-  } else if (rightNode?.type === 'member_expression') {
-    const prop = rightNode.childForFieldName('property');
+  } else if (rightNode?.type === "member_expression") {
+    const prop = rightNode.childForFieldName("property");
     if (prop) iterableName = prop.text;
-  } else if (rightNode?.type === 'call_expression') {
+  } else if (rightNode?.type === "call_expression") {
     // entries.values() → call_expression > function: member_expression > object + property
     // this.repos.values() → nested member_expression: extract property from inner member
     // getUsers() → call_expression > function: identifier (Phase 7.3 — return-type path)
-    const fn = rightNode.childForFieldName('function');
-    if (fn?.type === 'member_expression') {
-      const obj = fn.childForFieldName('object');
-      const prop = fn.childForFieldName('property');
-      if (obj?.type === 'identifier') {
+    const fn = rightNode.childForFieldName("function");
+    if (fn?.type === "member_expression") {
+      const obj = fn.childForFieldName("object");
+      const prop = fn.childForFieldName("property");
+      if (obj?.type === "identifier") {
         iterableName = obj.text;
-      } else if (obj?.type === 'member_expression') {
+      } else if (obj?.type === "member_expression") {
         // this.repos.values() → obj = this.repos → extract 'repos'
-        const innerProp = obj.childForFieldName('property');
+        const innerProp = obj.childForFieldName("property");
         if (innerProp) iterableName = innerProp.text;
       }
-      if (prop?.type === 'property_identifier') methodName = prop.text;
-    } else if (fn?.type === 'identifier') {
+      if (prop?.type === "property_identifier") methodName = prop.text;
+    } else if (fn?.type === "identifier") {
       // Direct function call: for (const user of getUsers())
       const rawReturn = returnTypeLookup.lookupRawReturnType(fn.text);
-      if (rawReturn) callExprElementType = extractElementTypeFromString(rawReturn);
+      if (rawReturn)
+        callExprElementType = extractElementTypeFromString(rawReturn);
     }
   }
   if (!iterableName && !callExprElementType) return;
@@ -409,21 +440,21 @@ const extractForLoopBinding: ForLoopExtractor = (
   if (!elementType) return;
 
   // The loop variable is the `left` field.
-  const leftNode = node.childForFieldName('left');
+  const leftNode = node.childForFieldName("left");
   if (!leftNode) return;
 
   // Handle destructured for-of: for (const [k, v] of entries)
   // AST: left = array_pattern directly (no variable_declarator wrapper)
   // Bind the LAST identifier to the element type (value in [key, value] patterns)
-  if (leftNode.type === 'array_pattern') {
+  if (leftNode.type === "array_pattern") {
     const lastChild = leftNode.lastNamedChild;
-    if (lastChild?.type === 'identifier') {
+    if (lastChild?.type === "identifier") {
       scopeEnv.set(lastChild.text, elementType);
     }
     return;
   }
 
-  if (leftNode.type === 'object_pattern') {
+  if (leftNode.type === "object_pattern") {
     // Object destructuring (e.g., `for (const { id } of users)`) destructures
     // into fields of the element type. Without field-level resolution, we cannot
     // bind individual properties to their correct types. Skip to avoid false bindings.
@@ -432,8 +463,9 @@ const extractForLoopBinding: ForLoopExtractor = (
 
   let loopVarNode: SyntaxNode | null = leftNode;
   // `const user` parses as: left → variable_declarator containing an identifier named `user`
-  if (loopVarNode.type === 'variable_declarator') {
-    loopVarNode = loopVarNode.childForFieldName('name') ?? loopVarNode.firstNamedChild;
+  if (loopVarNode.type === "variable_declarator") {
+    loopVarNode =
+      loopVarNode.childForFieldName("name") ?? loopVarNode.firstNamedChild;
   }
   if (!loopVarNode) return;
 
@@ -451,21 +483,31 @@ const collectDestructuredFields = (
   for (let j = 0; j < nameNode.namedChildCount; j++) {
     const prop = nameNode.namedChild(j);
     if (!prop) continue;
-    if (prop.type === 'shorthand_property_identifier_pattern') {
+    if (prop.type === "shorthand_property_identifier_pattern") {
       // `const { name } = obj` → shorthand: varName = fieldName
       const varName = prop.text;
       if (!scopeEnv.has(varName)) {
-        items.push({ kind: 'fieldAccess', lhs: varName, receiver, field: varName });
+        items.push({
+          kind: "fieldAccess",
+          lhs: varName,
+          receiver,
+          field: varName,
+        });
       }
-    } else if (prop.type === 'pair_pattern') {
+    } else if (prop.type === "pair_pattern") {
       // `const { address: addr } = obj` → pair_pattern: key=field, value=varName
-      const keyNode = prop.childForFieldName('key');
-      const valNode = prop.childForFieldName('value');
+      const keyNode = prop.childForFieldName("key");
+      const valNode = prop.childForFieldName("value");
       if (keyNode && valNode) {
         const fieldName = keyNode.text;
         const varName = valNode.text;
         if (!scopeEnv.has(varName)) {
-          items.push({ kind: 'fieldAccess', lhs: varName, receiver, field: fieldName });
+          items.push({
+            kind: "fieldAccess",
+            lhs: varName,
+            receiver,
+            field: fieldName,
+          });
         }
       }
     }
@@ -475,45 +517,56 @@ const collectDestructuredFields = (
 
 /** TS/JS: const alias = u → variable_declarator with name/value fields.
  *  Also handles destructuring: `const { a, b } = obj` and `const { a } = fn()` → N fieldAccess items. */
-const extractPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv) => {
+const extractPendingAssignment: PendingAssignmentExtractor = (
+  node,
+  scopeEnv,
+) => {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (!child || child.type !== 'variable_declarator') continue;
-    const nameNode = child.childForFieldName('name');
-    const valueNode = child.childForFieldName('value');
+    if (!child || child.type !== "variable_declarator") continue;
+    const nameNode = child.childForFieldName("name");
+    const valueNode = child.childForFieldName("value");
     if (!nameNode || !valueNode) continue;
 
     // Object destructuring from identifier: `const { address, name } = user`
-    if (nameNode.type === 'object_pattern' && valueNode.type === 'identifier') {
-      const items = collectDestructuredFields(nameNode, valueNode.text, scopeEnv);
+    if (nameNode.type === "object_pattern" && valueNode.type === "identifier") {
+      const items = collectDestructuredFields(
+        nameNode,
+        valueNode.text,
+        scopeEnv,
+      );
       if (items.length > 0) return items;
       continue;
     }
 
     // Object destructuring from call/await: `const { x } = fn()` or `const { x } = await fn()`
     // Emits a synthetic callResult + N fieldAccess items resolved via fixpoint iteration.
-    if (nameNode.type === 'object_pattern') {
+    if (nameNode.type === "object_pattern") {
       const callNode = unwrapAwait(valueNode);
-      if (callNode?.type === 'call_expression') {
-        const funcNode = callNode.childForFieldName('function');
+      if (callNode?.type === "call_expression") {
+        const funcNode = callNode.childForFieldName("function");
         if (funcNode) {
           let syntheticVar: string | undefined;
           let leadItem: PendingAssignment | undefined;
 
-          if (funcNode.type === 'identifier') {
+          if (funcNode.type === "identifier") {
             syntheticVar = `__destr_${funcNode.text}_${callNode.startIndex}`;
-            leadItem = { kind: 'callResult', lhs: syntheticVar, callee: funcNode.text };
-          } else if (funcNode.type === 'member_expression') {
-            const obj = funcNode.childForFieldName('object');
-            const prop = funcNode.childForFieldName('property');
+            leadItem = {
+              kind: "callResult",
+              lhs: syntheticVar,
+              callee: funcNode.text,
+            };
+          } else if (funcNode.type === "member_expression") {
+            const obj = funcNode.childForFieldName("object");
+            const prop = funcNode.childForFieldName("property");
             if (
               obj &&
-              prop?.type === 'property_identifier' &&
-              (obj.type === 'identifier' || obj.type === 'this')
+              prop?.type === "property_identifier" &&
+              (obj.type === "identifier" || obj.type === "this")
             ) {
               syntheticVar = `__destr_${prop.text}_${callNode.startIndex}`;
               leadItem = {
-                kind: 'methodCallResult',
+                kind: "methodCallResult",
                 lhs: syntheticVar,
                 receiver: obj.text,
                 method: prop.text,
@@ -522,7 +575,11 @@ const extractPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv) =>
           }
 
           if (syntheticVar && leadItem) {
-            const fieldItems = collectDestructuredFields(nameNode, syntheticVar, scopeEnv);
+            const fieldItems = collectDestructuredFields(
+              nameNode,
+              syntheticVar,
+              scopeEnv,
+            );
             if (fieldItems.length > 0) return [leadItem, ...fieldItems];
           }
         }
@@ -532,39 +589,50 @@ const extractPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv) =>
 
     const lhs = nameNode.text;
     if (scopeEnv.has(lhs)) continue;
-    if (valueNode.type === 'identifier') return { kind: 'copy', lhs, rhs: valueNode.text };
+    if (valueNode.type === "identifier")
+      return { kind: "copy", lhs, rhs: valueNode.text };
     // member_expression RHS → fieldAccess (a.field, this.field)
-    if (valueNode.type === 'member_expression') {
-      const obj = valueNode.childForFieldName('object');
-      const prop = valueNode.childForFieldName('property');
+    if (valueNode.type === "member_expression") {
+      const obj = valueNode.childForFieldName("object");
+      const prop = valueNode.childForFieldName("property");
       if (
         obj &&
-        prop?.type === 'property_identifier' &&
-        (obj.type === 'identifier' || obj.type === 'this')
+        prop?.type === "property_identifier" &&
+        (obj.type === "identifier" || obj.type === "this")
       ) {
-        return { kind: 'fieldAccess', lhs, receiver: obj.text, field: prop.text };
+        return {
+          kind: "fieldAccess",
+          lhs,
+          receiver: obj.text,
+          field: prop.text,
+        };
       }
       continue;
     }
     // Unwrap await: `const user = await fetchUser()` or `await a.getC()`
     const callNode = unwrapAwait(valueNode);
-    if (!callNode || callNode.type !== 'call_expression') continue;
-    const funcNode = callNode.childForFieldName('function');
+    if (!callNode || callNode.type !== "call_expression") continue;
+    const funcNode = callNode.childForFieldName("function");
     if (!funcNode) continue;
     // Simple call → callResult: getUser()
-    if (funcNode.type === 'identifier') {
-      return { kind: 'callResult', lhs, callee: funcNode.text };
+    if (funcNode.type === "identifier") {
+      return { kind: "callResult", lhs, callee: funcNode.text };
     }
     // Method call with receiver → methodCallResult: a.getC()
-    if (funcNode.type === 'member_expression') {
-      const obj = funcNode.childForFieldName('object');
-      const prop = funcNode.childForFieldName('property');
+    if (funcNode.type === "member_expression") {
+      const obj = funcNode.childForFieldName("object");
+      const prop = funcNode.childForFieldName("property");
       if (
         obj &&
-        prop?.type === 'property_identifier' &&
-        (obj.type === 'identifier' || obj.type === 'this')
+        prop?.type === "property_identifier" &&
+        (obj.type === "identifier" || obj.type === "this")
       ) {
-        return { kind: 'methodCallResult', lhs, receiver: obj.text, method: prop.text };
+        return {
+          kind: "methodCallResult",
+          lhs,
+          receiver: obj.text,
+          method: prop.text,
+        };
       }
     }
   }
@@ -572,7 +640,7 @@ const extractPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv) =>
 };
 
 /** Null-check keywords that indicate a null-comparison in binary expressions. */
-const NULL_CHECK_KEYWORDS = new Set(['null', 'undefined']);
+const NULL_CHECK_KEYWORDS = new Set(["null", "undefined"]);
 
 /**
  * Find the if-body (consequence) block for a null-check binary_expression.
@@ -582,24 +650,26 @@ const NULL_CHECK_KEYWORDS = new Set(['null', 'undefined']);
  * AST structure: if_statement > parenthesized_expression > binary_expression
  *                if_statement > statement_block (consequence)
  */
-const findIfConsequenceBlock = (binaryExpr: SyntaxNode): SyntaxNode | undefined => {
+const findIfConsequenceBlock = (
+  binaryExpr: SyntaxNode,
+): SyntaxNode | undefined => {
   // Walk up to find the if_statement (typically: binary_expression > parenthesized_expression > if_statement)
   let current = binaryExpr.parent;
   while (current) {
-    if (current.type === 'if_statement') {
+    if (current.type === "if_statement") {
       // The consequence is the first statement_block child of if_statement
       for (let i = 0; i < current.childCount; i++) {
         const child = current.child(i);
-        if (child?.type === 'statement_block') return child;
+        if (child?.type === "statement_block") return child;
       }
       return undefined;
     }
     // Stop climbing at function/block boundaries — don't cross scope
     if (
-      current.type === 'function_declaration' ||
-      current.type === 'function_expression' ||
-      current.type === 'arrow_function' ||
-      current.type === 'method_definition'
+      current.type === "function_declaration" ||
+      current.type === "function_expression" ||
+      current.type === "arrow_function" ||
+      current.type === "method_definition"
     )
       return undefined;
     current = current.parent;
@@ -617,19 +687,24 @@ const extractPatternBinding: PatternBindingExtractor = (
   declarationTypeNodes,
   scope,
 ) => {
-  if (node.type !== 'binary_expression') return undefined;
+  if (node.type !== "binary_expression") return undefined;
 
   // Check for instanceof first (existing behavior)
-  const instanceofOp = node.children.find((c) => !c.isNamed && c.text === 'instanceof');
+  const instanceofOp = node.children.find(
+    (c) => !c.isNamed && c.text === "instanceof",
+  );
   if (instanceofOp) {
     const left = node.namedChild(0);
     const right = node.namedChild(1);
-    if (left?.type !== 'identifier' || right?.type !== 'identifier') return undefined;
+    if (left?.type !== "identifier" || right?.type !== "identifier")
+      return undefined;
     return { varName: left.text, typeName: right.text };
   }
 
   // Null-check narrowing: x !== null, x != null, x !== undefined, x != undefined
-  const op = node.children.find((c) => !c.isNamed && (c.text === '!==' || c.text === '!='));
+  const op = node.children.find(
+    (c) => !c.isNamed && (c.text === "!==" || c.text === "!="),
+  );
   if (!op) return undefined;
 
   const left = node.namedChild(0);
@@ -639,10 +714,13 @@ const extractPatternBinding: PatternBindingExtractor = (
   // Determine which side is the variable and which is null/undefined
   let varNode: SyntaxNode | undefined;
   let isNullCheck = false;
-  if (left.type === 'identifier' && NULL_CHECK_KEYWORDS.has(right.text)) {
+  if (left.type === "identifier" && NULL_CHECK_KEYWORDS.has(right.text)) {
     varNode = left;
     isNullCheck = true;
-  } else if (right.type === 'identifier' && NULL_CHECK_KEYWORDS.has(left.text)) {
+  } else if (
+    right.type === "identifier" &&
+    NULL_CHECK_KEYWORDS.has(left.text)
+  ) {
     varNode = right;
     isNullCheck = true;
   }
@@ -660,7 +738,8 @@ const extractPatternBinding: PatternBindingExtractor = (
   if (!declTypeNode) return undefined;
   const declText = declTypeNode.text;
   // Only narrow if the original declaration was nullable
-  if (!declText.includes('null') && !declText.includes('undefined')) return undefined;
+  if (!declText.includes("null") && !declText.includes("undefined"))
+    return undefined;
 
   // Find the if-body block to scope the narrowing
   const ifBody = findIfConsequenceBlock(node);
@@ -669,27 +748,30 @@ const extractPatternBinding: PatternBindingExtractor = (
   return {
     varName,
     typeName: resolvedType,
-    narrowingRange: { startIndex: ifBody.startIndex, endIndex: ifBody.endIndex },
+    narrowingRange: {
+      startIndex: ifBody.startIndex,
+      endIndex: ifBody.endIndex,
+    },
   };
 };
 
 /** Infer the type of a literal AST node for TypeScript overload disambiguation. */
 const inferTsLiteralType: LiteralTypeInferrer = (node) => {
   switch (node.type) {
-    case 'number':
-      return 'number';
-    case 'string':
-    case 'template_string':
-      return 'string';
-    case 'true':
-    case 'false':
-      return 'boolean';
-    case 'null':
-      return 'null';
-    case 'undefined':
-      return 'undefined';
-    case 'regex':
-      return 'RegExp';
+    case "number":
+      return "number";
+    case "string":
+    case "template_string":
+      return "string";
+    case "true":
+    case "false":
+      return "boolean";
+    case "null":
+      return "null";
+    case "undefined":
+      return "undefined";
+    case "regex":
+      return "RegExp";
     default:
       return undefined;
   }
@@ -698,7 +780,7 @@ const inferTsLiteralType: LiteralTypeInferrer = (node) => {
 export const typeConfig: LanguageTypeConfig = {
   declarationNodeTypes: DECLARATION_NODE_TYPES,
   forLoopNodeTypes: FOR_LOOP_NODE_TYPES,
-  patternBindingNodeTypes: new Set(['binary_expression']),
+  patternBindingNodeTypes: new Set(["binary_expression"]),
   extractDeclaration,
   extractParameter,
   extractInitializer,

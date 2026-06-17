@@ -1,9 +1,9 @@
-import type { NodeLabel, SupportedLanguages } from '../shared';
-import type { SyntaxNode } from './utils/ast-helpers.js';
+import type { NodeLabel, SupportedLanguages } from "../shared";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
 
 export type ClassLikeNodeLabel = Extract<
   NodeLabel,
-  'Class' | 'Struct' | 'Interface' | 'Enum' | 'Record'
+  "Class" | "Struct" | "Interface" | "Enum" | "Record"
 >;
 
 export interface ExtractedClassSymbol {

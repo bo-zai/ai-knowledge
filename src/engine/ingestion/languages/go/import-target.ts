@@ -1,4 +1,4 @@
-import type { GoModuleConfig } from '../../language-config.js';
+import type { GoModuleConfig } from "../../language-config.js";
 
 /**
  * Resolve a Go import path to ALL .go files in the matching package directory.
@@ -26,12 +26,15 @@ export function resolveGoImportTarget(
   // 1) go.mod-based: strip module prefix, match directory
   if (
     goModule != null &&
-    (targetRaw === goModule.modulePath || targetRaw.startsWith(`${goModule.modulePath}/`))
+    (targetRaw === goModule.modulePath ||
+      targetRaw.startsWith(`${goModule.modulePath}/`))
   ) {
     const relativePkg =
-      targetRaw === goModule.modulePath ? '' : targetRaw.slice(goModule.modulePath.length + 1); // e.g. "internal/models"
+      targetRaw === goModule.modulePath
+        ? ""
+        : targetRaw.slice(goModule.modulePath.length + 1); // e.g. "internal/models"
     const files =
-      relativePkg === ''
+      relativePkg === ""
         ? findRootPackageFiles(allFilePaths)
         : findAllFilesInPkgDir(allFilePaths, relativePkg);
     if (files.length > 0) return files;
@@ -41,9 +44,9 @@ export function resolveGoImportTarget(
   //    "github.com/xxx/yyy/pkg" → try "github.com/xxx/yyy/pkg/" → "xxx/yyy/pkg/" → "yyy/pkg/"
   // Stop at ≥2 segments to avoid matching a single-segment suffix (e.g.
   // "pkg", "util", "internal") to a local directory with the same name.
-  const parts = targetRaw.split('/').filter(Boolean);
+  const parts = targetRaw.split("/").filter(Boolean);
   for (let i = 0; i < parts.length - 1; i++) {
-    const files = findAllFilesInPkgDir(allFilePaths, parts.slice(i).join('/'));
+    const files = findAllFilesInPkgDir(allFilePaths, parts.slice(i).join("/"));
     if (files.length > 0) return files;
   }
 
@@ -53,24 +56,31 @@ export function resolveGoImportTarget(
 function findRootPackageFiles(allFilePaths: ReadonlySet<string>): string[] {
   const result: string[] = [];
   for (const raw of allFilePaths) {
-    const normalized = raw.replace(/\\/g, '/');
-    if (normalized.includes('/')) continue;
-    if (!normalized.endsWith('.go') || normalized.endsWith('_test.go')) continue;
+    const normalized = raw.replace(/\\/g, "/");
+    if (normalized.includes("/")) continue;
+    if (!normalized.endsWith(".go") || normalized.endsWith("_test.go"))
+      continue;
     result.push(raw);
   }
   return result.sort();
 }
 
-function findAllFilesInPkgDir(allFilePaths: ReadonlySet<string>, pkgPath: string): string[] {
-  const pkgDir = '/' + pkgPath + '/';
+function findAllFilesInPkgDir(
+  allFilePaths: ReadonlySet<string>,
+  pkgPath: string,
+): string[] {
+  const pkgDir = "/" + pkgPath + "/";
   const result: string[] = [];
   for (const raw of allFilePaths) {
-    const normalized = '/' + raw.replace(/\\/g, '/');
+    const normalized = "/" + raw.replace(/\\/g, "/");
     if (!normalized.includes(pkgDir)) continue;
-    if (!normalized.endsWith('.go') || normalized.endsWith('_test.go')) continue;
+    if (!normalized.endsWith(".go") || normalized.endsWith("_test.go"))
+      continue;
     // Ensure file is directly in the package directory (not a subdirectory)
-    const afterPkg = normalized.substring(normalized.indexOf(pkgDir) + pkgDir.length);
-    if (!afterPkg.includes('/')) result.push(raw);
+    const afterPkg = normalized.substring(
+      normalized.indexOf(pkgDir) + pkgDir.length,
+    );
+    if (!afterPkg.includes("/")) result.push(raw);
   }
   return result;
 }

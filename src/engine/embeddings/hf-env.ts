@@ -1,5 +1,5 @@
-import os from 'node:os';
-import { join } from 'node:path';
+import os from "node:os";
+import { join } from "node:path";
 
 /**
  * @internal Exported only for unit tests and the two embedder entry points
@@ -48,7 +48,8 @@ export interface HfEnvSubset {
  * call site a single line at each entry point.
  */
 export function applyHfEnvOverrides(env: HfEnvSubset): void {
-  env.cacheDir = process.env.HF_HOME ?? join(os.homedir(), '.cache', 'huggingface');
+  env.cacheDir =
+    process.env.HF_HOME ?? join(os.homedir(), ".cache", "huggingface");
   // `.trim()` guards against the common copy-paste failure mode of
   // `HF_ENDPOINT="  https://hf-mirror.com  "` (leading/trailing whitespace
   // from shell scripts or docs) — without it, a whitespace-only value
@@ -57,6 +58,6 @@ export function applyHfEnvOverrides(env: HfEnvSubset): void {
   // truthy guard already handles the unset/empty cases.
   const endpoint = process.env.HF_ENDPOINT?.trim();
   if (endpoint) {
-    env.remoteHost = endpoint.endsWith('/') ? endpoint : endpoint + '/';
+    env.remoteHost = endpoint.endsWith("/") ? endpoint : endpoint + "/";
   }
 }

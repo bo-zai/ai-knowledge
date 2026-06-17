@@ -6,11 +6,11 @@
  * so the MCP server can discover indexed repos from any cwd.
  */
 
-import fs from 'fs/promises';
-import { realpathSync } from 'fs';
-import path from 'path';
-import os from 'os';
-import { getInferredRepoName, resolveRepoIdentityRoot } from './git.js';
+import fs from "fs/promises";
+import { realpathSync } from "fs";
+import path from "path";
+import os from "os";
+import { getInferredRepoName, resolveRepoIdentityRoot } from "./git.js";
 
 /**
  * Normalise a repo path for registry comparison across platforms
@@ -92,10 +92,10 @@ export interface RegistryEntry {
   lastCommit: string;
   /** See {@link RepoMeta.remoteUrl}. Mirrored from meta at register time. */
   remoteUrl?: string;
-  stats?: RepoMeta['stats'];
+  stats?: RepoMeta["stats"];
 }
 
-const KNOWLEDGE_INDEX_DIR = '.knowledge';
+const KNOWLEDGE_INDEX_DIR = ".knowledge";
 const KNOWLEDGE_EXCLUDE_ENTRY = `${KNOWLEDGE_INDEX_DIR}/`;
 
 // ─── Local Storage Helpers ─────────────────────────────────────────────
@@ -114,8 +114,8 @@ export const getStoragePaths = (repoPath: string) => {
   const storagePath = getStoragePath(repoPath);
   return {
     storagePath,
-    lbugPath: path.join(storagePath, 'lbug'),
-    metaPath: path.join(storagePath, 'meta.json'),
+    lbugPath: path.join(storagePath, "lbug"),
+    metaPath: path.join(storagePath, "meta.json"),
   };
 };
 
@@ -125,7 +125,7 @@ export const getStoragePaths = (repoPath: string) => {
  */
 export const hasKuzuIndex = async (storagePath: string): Promise<boolean> => {
   try {
-    await fs.stat(path.join(storagePath, 'kuzu'));
+    await fs.stat(path.join(storagePath, "kuzu"));
     return true;
   } catch {
     return false;
@@ -144,8 +144,8 @@ export const hasKuzuIndex = async (storagePath: string): Promise<boolean> => {
 export const cleanupOldKuzuFiles = async (
   storagePath: string,
 ): Promise<{ found: boolean; needsReindex: boolean }> => {
-  const oldPath = path.join(storagePath, 'kuzu');
-  const newPath = path.join(storagePath, 'lbug');
+  const oldPath = path.join(storagePath, "kuzu");
+  const newPath = path.join(storagePath, "lbug");
   try {
     await fs.stat(oldPath);
     // Old kuzu file/dir exists — determine if lbug is already present
@@ -156,7 +156,7 @@ export const cleanupOldKuzuFiles = async (
       needsReindex = true;
     }
     // Delete kuzu database file and its sidecars (.wal, .lock)
-    for (const suffix of ['', '.wal', '.lock']) {
+    for (const suffix of ["", ".wal", ".lock"]) {
       try {
         await fs.unlink(oldPath + suffix);
       } catch {}
@@ -175,10 +175,12 @@ export const cleanupOldKuzuFiles = async (
 /**
  * Load metadata from an indexed repo
  */
-export const loadMeta = async (storagePath: string): Promise<RepoMeta | null> => {
+export const loadMeta = async (
+  storagePath: string,
+): Promise<RepoMeta | null> => {
   try {
-    const metaPath = path.join(storagePath, 'meta.json');
-    const raw = await fs.readFile(metaPath, 'utf-8');
+    const metaPath = path.join(storagePath, "meta.json");
+    const raw = await fs.readFile(metaPath, "utf-8");
     return JSON.parse(raw) as RepoMeta;
   } catch {
     return null;
@@ -188,10 +190,13 @@ export const loadMeta = async (storagePath: string): Promise<RepoMeta | null> =>
 /**
  * Save metadata to storage
  */
-export const saveMeta = async (storagePath: string, meta: RepoMeta): Promise<void> => {
+export const saveMeta = async (
+  storagePath: string,
+  meta: RepoMeta,
+): Promise<void> => {
   await fs.mkdir(storagePath, { recursive: true });
-  const metaPath = path.join(storagePath, 'meta.json');
-  await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+  const metaPath = path.join(storagePath, "meta.json");
+  await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
 };
 
 /**
@@ -210,7 +215,9 @@ export const hasIndex = async (repoPath: string): Promise<boolean> => {
 /**
  * Load an indexed repo from a path
  */
-export const loadRepo = async (repoPath: string): Promise<IndexedRepo | null> => {
+export const loadRepo = async (
+  repoPath: string,
+): Promise<IndexedRepo | null> => {
   const paths = getStoragePaths(repoPath);
   const meta = await loadMeta(paths.storagePath);
   if (!meta) return null;
@@ -225,7 +232,9 @@ export const loadRepo = async (repoPath: string): Promise<IndexedRepo | null> =>
 /**
  * Find .knowledge by walking up from a starting path
  */
-export const findRepo = async (startPath: string): Promise<IndexedRepo | null> => {
+export const findRepo = async (
+  startPath: string,
+): Promise<IndexedRepo | null> => {
   let current = path.resolve(startPath);
   const root = path.parse(current).root;
 
@@ -241,18 +250,20 @@ export const findRepo = async (startPath: string): Promise<IndexedRepo | null> =
 /**
  * Keep generated index files ignored without modifying the user's root .gitignore.
  */
-export const ensureKnowledgeIgnored = async (repoPath: string): Promise<void> => {
-  const gitignorePath = path.join(getStoragePath(repoPath), '.gitignore');
+export const ensureKnowledgeIgnored = async (
+  repoPath: string,
+): Promise<void> => {
+  const gitignorePath = path.join(getStoragePath(repoPath), ".gitignore");
 
   await fs.mkdir(path.dirname(gitignorePath), { recursive: true });
-  await fs.writeFile(gitignorePath, '*\n', 'utf-8');
+  await fs.writeFile(gitignorePath, "*\n", "utf-8");
 
   await ensureGitInfoExclude(repoPath);
 };
 
 const ensureGitInfoExclude = async (repoPath: string): Promise<void> => {
-  const gitDirPath = path.join(path.resolve(repoPath), '.git');
-  const excludePath = path.join(gitDirPath, 'info', 'exclude');
+  const gitDirPath = path.join(path.resolve(repoPath), ".git");
+  const excludePath = path.join(gitDirPath, "info", "exclude");
 
   try {
     const gitDir = await fs.stat(gitDirPath);
@@ -263,21 +274,29 @@ const ensureGitInfoExclude = async (repoPath: string): Promise<void> => {
 
   await fs.mkdir(path.dirname(excludePath), { recursive: true });
 
-  let content = '';
+  let content = "";
   try {
-    content = await fs.readFile(excludePath, 'utf-8');
+    content = await fs.readFile(excludePath, "utf-8");
   } catch (err: any) {
-    if (err?.code !== 'ENOENT') throw err;
+    if (err?.code !== "ENOENT") throw err;
   }
 
   const excludes = content
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'));
-  if (excludes.includes(KNOWLEDGE_INDEX_DIR) || excludes.includes(KNOWLEDGE_EXCLUDE_ENTRY)) return;
+    .filter((line) => line && !line.startsWith("#"));
+  if (
+    excludes.includes(KNOWLEDGE_INDEX_DIR) ||
+    excludes.includes(KNOWLEDGE_EXCLUDE_ENTRY)
+  )
+    return;
 
-  const separator = content.length === 0 || content.endsWith('\n') ? '' : '\n';
-  await fs.writeFile(excludePath, `${content}${separator}${KNOWLEDGE_EXCLUDE_ENTRY}\n`, 'utf-8');
+  const separator = content.length === 0 || content.endsWith("\n") ? "" : "\n";
+  await fs.writeFile(
+    excludePath,
+    `${content}${separator}${KNOWLEDGE_EXCLUDE_ENTRY}\n`,
+    "utf-8",
+  );
 };
 
 // ─── Global Registry (~/.knowledge/registry.json) ───────────────────────
@@ -286,14 +305,14 @@ const ensureGitInfoExclude = async (repoPath: string): Promise<void> => {
  * Get the path to the global knowledge directory
  */
 export const getGlobalDir = (): string => {
-  return process.env.KNOWLEDGE_HOME || path.join(os.homedir(), '.knowledge');
+  return process.env.KNOWLEDGE_HOME || path.join(os.homedir(), ".knowledge");
 };
 
 /**
  * Get the path to the global registry file
  */
 export const getGlobalRegistryPath = (): string => {
-  return path.join(getGlobalDir(), 'registry.json');
+  return path.join(getGlobalDir(), "registry.json");
 };
 
 /**
@@ -301,7 +320,7 @@ export const getGlobalRegistryPath = (): string => {
  */
 export const readRegistry = async (): Promise<RegistryEntry[]> => {
   try {
-    const raw = await fs.readFile(getGlobalRegistryPath(), 'utf-8');
+    const raw = await fs.readFile(getGlobalRegistryPath(), "utf-8");
     const data = JSON.parse(raw);
     return Array.isArray(data) ? data : [];
   } catch {
@@ -315,7 +334,11 @@ export const readRegistry = async (): Promise<RegistryEntry[]> => {
 const writeRegistry = async (entries: RegistryEntry[]): Promise<void> => {
   const dir = getGlobalDir();
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(getGlobalRegistryPath(), JSON.stringify(entries, null, 2), 'utf-8');
+  await fs.writeFile(
+    getGlobalRegistryPath(),
+    JSON.stringify(entries, null, 2),
+    "utf-8",
+  );
 };
 
 /**
@@ -362,7 +385,7 @@ export interface RegisterRepoOptions {
  * `instanceof RegistryNameCollisionError` for type-safe narrowing.
  */
 export class RegistryNameCollisionError extends Error {
-  readonly kind = 'RegistryNameCollisionError' as const;
+  readonly kind = "RegistryNameCollisionError" as const;
   constructor(
     public readonly registryName: string,
     public readonly existingPath: string,
@@ -373,7 +396,7 @@ export class RegistryNameCollisionError extends Error {
         `Pass --name <alias> to register "${requestedPath}" under a different name, ` +
         `or --allow-duplicate-name to allow both paths under the same name (leaves -r <name> ambiguous for these two).`,
     );
-    this.name = 'RegistryNameCollisionError';
+    this.name = "RegistryNameCollisionError";
   }
 }
 
@@ -386,7 +409,10 @@ export class RegistryNameCollisionError extends Error {
  *
  *  `inferredName` is passed in (rather than re-derived) so callers can
  *  avoid a second `git config` subprocess invocation. */
-const hasCustomAlias = (entry: RegistryEntry, inferredName: string | null): boolean => {
+const hasCustomAlias = (
+  entry: RegistryEntry,
+  inferredName: string | null,
+): boolean => {
   const resolved = path.resolve(entry.path);
   if (entry.name === path.basename(resolved)) return false;
   // Canonical-root-derived names are not user aliases either (#1259):
@@ -399,7 +425,8 @@ const hasCustomAlias = (entry: RegistryEntry, inferredName: string | null): bool
   // canonical checkout entry. The Claude-Code per-task worktree workflow
   // — analyze canonical, then analyze worktree, then re-analyze worktree
   // — would break on the third call.
-  if (entry.name === path.basename(resolveRepoIdentityRoot(resolved))) return false;
+  if (entry.name === path.basename(resolveRepoIdentityRoot(resolved)))
+    return false;
   if (inferredName && entry.name === inferredName) return false;
   return true;
 };
@@ -460,7 +487,9 @@ export const registerRepo = async (
     // to a stable key instead of throwing.
     const a = canonicalizePath(e.path);
     const b = canonicalInput;
-    return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+    return process.platform === "win32"
+      ? a.toLowerCase() === b.toLowerCase()
+      : a === b;
   });
   const existing = existingIdx >= 0 ? entries[existingIdx] : null;
 
@@ -546,8 +575,12 @@ export const unregisterRepo = async (repoPath: string): Promise<void> => {
   const resolved = canonicalizePath(repoPath);
   const entries = await readRegistry();
   const matches = (a: string, b: string) =>
-    process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
-  const filtered = entries.filter((e) => !matches(canonicalizePath(e.path), resolved));
+    process.platform === "win32"
+      ? a.toLowerCase() === b.toLowerCase()
+      : a === b;
+  const filtered = entries.filter(
+    (e) => !matches(canonicalizePath(e.path), resolved),
+  );
   await writeRegistry(filtered);
 };
 
@@ -559,17 +592,17 @@ export const unregisterRepo = async (repoPath: string): Promise<void> => {
  * (e.g. MCP tools) can surface the error directly.
  */
 export class RegistryNotFoundError extends Error {
-  readonly kind = 'RegistryNotFoundError' as const;
+  readonly kind = "RegistryNotFoundError" as const;
   constructor(
     public readonly target: string,
     public readonly availableNames: string[],
   ) {
     const hint =
       availableNames.length > 0
-        ? ` Available: ${availableNames.join(', ')}.`
-        : ' No repositories are currently registered.';
+        ? ` Available: ${availableNames.join(", ")}.`
+        : " No repositories are currently registered.";
     super(`No registered repo matches "${target}".${hint}`);
-    this.name = 'RegistryNotFoundError';
+    this.name = "RegistryNotFoundError";
   }
 }
 
@@ -587,17 +620,17 @@ export class RegistryNotFoundError extends Error {
  * class.
  */
 export class RegistryAmbiguousTargetError extends Error {
-  readonly kind = 'RegistryAmbiguousTargetError' as const;
+  readonly kind = "RegistryAmbiguousTargetError" as const;
   constructor(
     public readonly target: string,
     public readonly matches: RegistryEntry[],
   ) {
-    const listing = matches.map((m) => `  - ${m.name}  (${m.path})`).join('\n');
+    const listing = matches.map((m) => `  - ${m.name}  (${m.path})`).join("\n");
     super(
       `Multiple registered repos match "${target}":\n${listing}\n` +
         `Pass the absolute path instead to disambiguate.`,
     );
-    this.name = 'RegistryAmbiguousTargetError';
+    this.name = "RegistryAmbiguousTargetError";
   }
 }
 
@@ -617,16 +650,16 @@ export class RegistryAmbiguousTargetError extends Error {
  * side effects, antivirus, or future regressions).
  */
 export class AnalysisNotFinalizedError extends Error {
-  readonly kind = 'AnalysisNotFinalizedError' as const;
+  readonly kind = "AnalysisNotFinalizedError" as const;
   constructor(
     public readonly repoPath: string,
     public readonly storagePath: string,
-    public readonly missing: 'meta' | 'registry-entry',
+    public readonly missing: "meta" | "registry-entry",
     public readonly registryPath: string,
   ) {
     const detail =
-      missing === 'meta'
-        ? `meta.json was not written to ${path.join(storagePath, 'meta.json')}`
+      missing === "meta"
+        ? `meta.json was not written to ${path.join(storagePath, "meta.json")}`
         : `registry entry for ${repoPath} was not added to ${registryPath}`;
     super(
       `Analysis did not finalize for ${repoPath}: ${detail}. ` +
@@ -634,7 +667,7 @@ export class AnalysisNotFinalizedError extends Error {
         `Re-run "knowledge analyze" — if the problem persists, inspect ` +
         `${storagePath} for a stale lbug.wal that signals an aborted write.`,
     );
-    this.name = 'AnalysisNotFinalizedError';
+    this.name = "AnalysisNotFinalizedError";
   }
 }
 
@@ -652,28 +685,37 @@ export class AnalysisNotFinalizedError extends Error {
  * Callers must skip this assertion on the `alreadyUpToDate` early-return
  * path, where the rebuild was deliberately not run.
  */
-export const assertAnalysisFinalized = async (repoPath: string): Promise<void> => {
+export const assertAnalysisFinalized = async (
+  repoPath: string,
+): Promise<void> => {
   const resolved = path.resolve(repoPath);
   const { storagePath, metaPath } = getStoragePaths(resolved);
 
   try {
     await fs.access(metaPath);
   } catch {
-    throw new AnalysisNotFinalizedError(resolved, storagePath, 'meta', getGlobalRegistryPath());
+    throw new AnalysisNotFinalizedError(
+      resolved,
+      storagePath,
+      "meta",
+      getGlobalRegistryPath(),
+    );
   }
 
   const entries = await readRegistry();
   const canonicalInput = canonicalizePath(resolved);
-  const isWin = process.platform === 'win32';
+  const isWin = process.platform === "win32";
   const found = entries.some((e) => {
     const a = canonicalizePath(e.path);
-    return isWin ? a.toLowerCase() === canonicalInput.toLowerCase() : a === canonicalInput;
+    return isWin
+      ? a.toLowerCase() === canonicalInput.toLowerCase()
+      : a === canonicalInput;
   });
   if (!found) {
     throw new AnalysisNotFinalizedError(
       resolved,
       storagePath,
-      'registry-entry',
+      "registry-entry",
       getGlobalRegistryPath(),
     );
   }
@@ -689,7 +731,7 @@ export const assertAnalysisFinalized = async (repoPath: string): Promise<void> =
  * the entry is pointing at.
  */
 export class UnsafeStoragePathError extends Error {
-  readonly kind = 'UnsafeStoragePathError' as const;
+  readonly kind = "UnsafeStoragePathError" as const;
   constructor(
     public readonly entry: RegistryEntry,
     public readonly expectedStoragePath: string,
@@ -703,7 +745,7 @@ export class UnsafeStoragePathError extends Error {
         `hand-edited. Delete the entry manually from ~/.knowledge/registry.json ` +
         `and re-run analyze.`,
     );
-    this.name = 'UnsafeStoragePathError';
+    this.name = "UnsafeStoragePathError";
   }
 }
 
@@ -740,7 +782,7 @@ export const assertSafeStoragePath = (entry: RegistryEntry): void => {
   const expected = path.join(path.resolve(entry.path), KNOWLEDGE_INDEX_DIR);
   const actual = path.resolve(entry.storagePath);
   const matches =
-    process.platform === 'win32'
+    process.platform === "win32"
       ? expected.toLowerCase() === actual.toLowerCase()
       : expected === actual;
   if (!matches) {
@@ -771,7 +813,10 @@ export const assertSafeStoragePath = (entry: RegistryEntry): void => {
  * a second disk read, and so tests can inject fixtures without touching
  * `GITNEXUS_HOME`.
  */
-export const resolveRegistryEntry = (entries: RegistryEntry[], target: string): RegistryEntry => {
+export const resolveRegistryEntry = (
+  entries: RegistryEntry[],
+  target: string,
+): RegistryEntry => {
   // Tier 1: path match. Canonicalise BOTH sides so symlink and
   // Windows-8.3 quirks don't cause a false miss — e.g. the caller
   // passes `/var/folders/.../repo` while the registry has
@@ -785,7 +830,9 @@ export const resolveRegistryEntry = (entries: RegistryEntry[], target: string): 
   const pathMatch = entries.find((e) => {
     const a = canonicalizePath(e.path);
     const b = canonicalTarget;
-    return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+    return process.platform === "win32"
+      ? a.toLowerCase() === b.toLowerCase()
+      : a === b;
   });
   if (pathMatch) return pathMatch;
 
@@ -793,7 +840,9 @@ export const resolveRegistryEntry = (entries: RegistryEntry[], target: string): 
   // name collisions are already filtered case-insensitively in
   // `registerRepo`, so "APP" vs "app" are considered the same key.
   const targetLower = target.toLowerCase();
-  const nameMatches = entries.filter((e) => e.name.toLowerCase() === targetLower);
+  const nameMatches = entries.filter(
+    (e) => e.name.toLowerCase() === targetLower,
+  );
   if (nameMatches.length === 1) return nameMatches[0];
   if (nameMatches.length > 1) {
     throw new RegistryAmbiguousTargetError(target, nameMatches);
@@ -809,7 +858,9 @@ export const resolveRegistryEntry = (entries: RegistryEntry[], target: string): 
     nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
   }
   const availableNames = entries.map((e) =>
-    (nameCounts.get(e.name.toLowerCase()) ?? 0) > 1 ? `${e.name} (${e.path})` : e.name,
+    (nameCounts.get(e.name.toLowerCase()) ?? 0) > 1
+      ? `${e.name} (${e.path})`
+      : e.name,
   );
   throw new RegistryNotFoundError(target, availableNames);
 };
@@ -828,7 +879,7 @@ export const listRegisteredRepos = async (opts?: {
   const valid: RegistryEntry[] = [];
   for (const entry of entries) {
     try {
-      await fs.access(path.join(entry.storagePath, 'meta.json'));
+      await fs.access(path.join(entry.storagePath, "meta.json"));
       valid.push(entry);
     } catch {
       // Index no longer exists — skip
@@ -849,7 +900,7 @@ export interface CLIConfig {
   apiKey?: string;
   model?: string;
   baseUrl?: string;
-  provider?: 'openai' | 'openrouter' | 'azure' | 'custom' | 'cursor';
+  provider?: "openai" | "openrouter" | "azure" | "custom" | "cursor";
   cursorModel?: string;
   /** Azure api-version query param (e.g. '2024-10-21'). Only used when provider is 'azure'. */
   apiVersion?: string;
@@ -861,7 +912,7 @@ export interface CLIConfig {
  * Get the path to the global CLI config file
  */
 export const getGlobalConfigPath = (): string => {
-  return path.join(getGlobalDir(), 'config.json');
+  return path.join(getGlobalDir(), "config.json");
 };
 
 /**
@@ -869,7 +920,7 @@ export const getGlobalConfigPath = (): string => {
  */
 export const loadCLIConfig = async (): Promise<CLIConfig> => {
   try {
-    const raw = await fs.readFile(getGlobalConfigPath(), 'utf-8');
+    const raw = await fs.readFile(getGlobalConfigPath(), "utf-8");
     return JSON.parse(raw) as CLIConfig;
   } catch {
     return {};
@@ -883,9 +934,9 @@ export const saveCLIConfig = async (config: CLIConfig): Promise<void> => {
   const dir = getGlobalDir();
   await fs.mkdir(dir, { recursive: true });
   const configPath = getGlobalConfigPath();
-  await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
   // Restrict file permissions on Unix (config may contain API keys)
-  if (process.platform !== 'win32') {
+  if (process.platform !== "win32") {
     try {
       await fs.chmod(configPath, 0o600);
     } catch {
@@ -927,10 +978,13 @@ export const findSiblingClones = async (
 ): Promise<RegistryEntry[]> => {
   if (!remoteUrl) return [];
   const entries = await readRegistry();
-  const isWin = process.platform === 'win32';
-  const norm = (p: string) => (isWin ? path.resolve(p).toLowerCase() : path.resolve(p));
+  const isWin = process.platform === "win32";
+  const norm = (p: string) =>
+    isWin ? path.resolve(p).toLowerCase() : path.resolve(p);
   const self = norm(selfPath);
-  return entries.filter((e) => e.remoteUrl === remoteUrl && norm(e.path) !== self);
+  return entries.filter(
+    (e) => e.remoteUrl === remoteUrl && norm(e.path) !== self,
+  );
 };
 
 /**
@@ -943,7 +997,7 @@ export const findSiblingClones = async (
  *   - `none`              — no relationship found.
  */
 export interface CwdMatch {
-  match: 'path' | 'sibling-by-remote' | 'none';
+  match: "path" | "sibling-by-remote" | "none";
   entry?: RegistryEntry;
   /** The git toplevel of `cwd`, when `cwd` is inside a git work tree. */
   cwdGitRoot?: string;

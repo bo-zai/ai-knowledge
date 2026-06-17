@@ -13,7 +13,10 @@ Output format:
 
   const user = JSON.stringify(
     {
-      task: { object_type: input.objectType, generation_mode: input.generationMode },
+      task: {
+        object_type: input.objectType,
+        generation_mode: input.generationMode,
+      },
       evidence: input.evidence,
     },
     null,

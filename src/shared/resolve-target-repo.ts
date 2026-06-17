@@ -5,8 +5,8 @@
  * Priority: --repo > positional path > cwd git root > cwd fallback
  */
 
-import path from 'node:path';
-import { getGitRoot, hasGitDir } from '../engine/storage/git.js';
+import path from "node:path";
+import { getGitRoot, hasGitDir } from "../engine/storage/git.js";
 
 export interface ResolveRepoInput {
   repoOption?: string;
@@ -16,7 +16,7 @@ export interface ResolveRepoInput {
 
 export interface ResolveRepoResult {
   repoPath: string;
-  source: 'repo_option' | 'positional_path' | 'cwd_git_root' | 'cwd_fallback';
+  source: "repo_option" | "positional_path" | "cwd_git_root" | "cwd_fallback";
 }
 
 /**
@@ -31,7 +31,7 @@ export function resolveTargetRepo(input: ResolveRepoInput): ResolveRepoResult {
     const normalizedPath = path.resolve(input.repoOption);
     return {
       repoPath: normalizedPath,
-      source: 'repo_option',
+      source: "repo_option",
     };
   }
 
@@ -40,7 +40,7 @@ export function resolveTargetRepo(input: ResolveRepoInput): ResolveRepoResult {
     const normalizedPath = path.resolve(input.positionalPath);
     return {
       repoPath: normalizedPath,
-      source: 'positional_path',
+      source: "positional_path",
     };
   }
 
@@ -50,7 +50,7 @@ export function resolveTargetRepo(input: ResolveRepoInput): ResolveRepoResult {
     if (gitRoot) {
       return {
         repoPath: gitRoot,
-        source: 'cwd_git_root',
+        source: "cwd_git_root",
       };
     }
   }
@@ -58,6 +58,6 @@ export function resolveTargetRepo(input: ResolveRepoInput): ResolveRepoResult {
   // Priority 4: fallback to cwd
   return {
     repoPath: cwd,
-    source: 'cwd_fallback',
+    source: "cwd_fallback",
   };
 }

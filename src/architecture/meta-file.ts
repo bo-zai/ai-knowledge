@@ -2,24 +2,26 @@
  * 生成元信息（.meta）文件处理
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import type { GenerationMeta } from './project-context.js';
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { GenerationMeta } from "./project-context.js";
 
 /** 默认知识库目录名 */
-const DEFAULT_KNOWLEDGE_DIR = 'ai-knowledge';
+const DEFAULT_KNOWLEDGE_DIR = "ai-knowledge";
 
 /** 默认版本号 */
-const DEFAULT_VERSION = '1.0.0';
+const DEFAULT_VERSION = "1.0.0";
 
 /**
  * 读取生成元信息
  */
-export async function loadGenerationMeta(outputRoot: string): Promise<GenerationMeta | null> {
-  const filePath = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR, '.meta');
+export async function loadGenerationMeta(
+  outputRoot: string,
+): Promise<GenerationMeta | null> {
+  const filePath = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR, ".meta");
 
   try {
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await fs.readFile(filePath, "utf-8");
     return JSON.parse(content) as GenerationMeta;
   } catch {
     return null;
@@ -34,7 +36,7 @@ export async function saveGenerationMeta(
   commitHash: string,
   projectTypeIdentifiedAt: string,
 ): Promise<void> {
-  const filePath = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR, '.meta');
+  const filePath = path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR, ".meta");
 
   const meta: GenerationMeta = {
     lastCommitHash: commitHash,
@@ -43,7 +45,7 @@ export async function saveGenerationMeta(
     projectTypeIdentifiedAt,
   };
 
-  await fs.writeFile(filePath, JSON.stringify(meta, null, 2) + '\n', 'utf-8');
+  await fs.writeFile(filePath, JSON.stringify(meta, null, 2) + "\n", "utf-8");
 }
 
 /**
@@ -52,12 +54,15 @@ export async function saveGenerationMeta(
 export async function getCurrentCommitHash(repoPath: string): Promise<string> {
   try {
     // 使用 git rev-parse HEAD 获取当前 commit hash
-    const { execSync } = await import('node:child_process');
-    const hash = execSync('git rev-parse HEAD', { cwd: repoPath, encoding: 'utf-8' }).trim();
+    const { execSync } = await import("node:child_process");
+    const hash = execSync("git rev-parse HEAD", {
+      cwd: repoPath,
+      encoding: "utf-8",
+    }).trim();
     return hash;
   } catch {
     // git 命令失败，返回空字符串
-    return '';
+    return "";
   }
 }
 
@@ -77,7 +82,8 @@ export function shouldReidentifyProjectType(
 
   // 超过 30 天重新识别
   const identifiedAt = new Date(meta.projectTypeIdentifiedAt);
-  const daysSinceIdentification = (Date.now() - identifiedAt.getTime()) / (1000 * 60 * 60 * 24);
+  const daysSinceIdentification =
+    (Date.now() - identifiedAt.getTime()) / (1000 * 60 * 60 * 24);
   if (daysSinceIdentification > 30) return true;
 
   return false;

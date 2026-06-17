@@ -12,7 +12,7 @@ export {
   findMapperFilesForTable,
   type DbTableNode,
   type DbTableContext,
-} from './index-service.js';
+} from "./index-service.js";
 
 export {
   createQueryService,
@@ -20,4 +20,4 @@ export {
   type QueryService,
   type QueryServiceDeps,
   type DbEvidenceBundle,
-} from './query-service.js';
+} from "./query-service.js";

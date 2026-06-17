@@ -1,4 +1,4 @@
-import { AppError } from '../shared/errors.js';
+import { AppError } from "../shared/errors.js";
 
 export interface GeneratorOutput {
   objects: unknown[];
@@ -9,7 +9,7 @@ export interface GeneratorOutput {
 function extractJson(text: string): string {
   // 1. 尝试直接解析
   const trimmed = text.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
     return trimmed;
   }
 
@@ -20,8 +20,8 @@ function extractJson(text: string): string {
   }
 
   // 3. 尝试找到第一个 { 到最后一个 }
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     return text.slice(firstBrace, lastBrace + 1);
   }
@@ -34,14 +34,14 @@ function repairJson(text: string): string {
   let repaired = text;
 
   // 1. 移除尾部逗号
-  repaired = repaired.replace(/,\s*}/g, '}');
-  repaired = repaired.replace(/,\s*]/g, ']');
+  repaired = repaired.replace(/,\s*}/g, "}");
+  repaired = repaired.replace(/,\s*]/g, "]");
 
   // 2. 修复未闭合的引号（简化处理）
   // 这里不做复杂修复，因为可能导致更多问题
 
   // 3. 移除控制字符
-  repaired = repaired.replace(/[\x00-\x1f]/g, '');
+  repaired = repaired.replace(/[\x00-\x1f]/g, "");
 
   return repaired;
 }
@@ -64,15 +64,18 @@ export function parseGeneratorOutput(text: string): GeneratorOutput {
       // 4. 失败时抛出详细错误
       throw new AppError(
         `Invalid generator output: JSON parse failed. Original: ${parseError instanceof Error ? parseError.message : String(parseError)}. Repair attempt: ${repairError instanceof Error ? repairError.message : String(repairError)}`,
-        'INVALID_GENERATOR_OUTPUT',
+        "INVALID_GENERATOR_OUTPUT",
       );
     }
   }
 }
 
 function validateOutput(parsed: unknown): GeneratorOutput {
-  if (!parsed || typeof parsed !== 'object') {
-    throw new AppError('Generator output must be an object', 'INVALID_GENERATOR_OUTPUT');
+  if (!parsed || typeof parsed !== "object") {
+    throw new AppError(
+      "Generator output must be an object",
+      "INVALID_GENERATOR_OUTPUT",
+    );
   }
 
   const obj = parsed as Record<string, unknown>;
@@ -82,14 +85,17 @@ function validateOutput(parsed: unknown): GeneratorOutput {
   // 确保有 objects 数组
   if (!Array.isArray(obj.objects)) {
     // 尝试兼容：如果输出直接是对象，将其包装成数组
-    if (obj.object && typeof obj.object === 'object') {
+    if (obj.object && typeof obj.object === "object") {
       objects = [obj.object];
     } else if (obj.id && obj.type) {
       // 单个对象输出
       const { objects: _objects, warnings: _warnings, ...singleObject } = obj;
       objects = [singleObject];
     } else {
-      throw new AppError('Generator output must have an objects array', 'INVALID_GENERATOR_OUTPUT');
+      throw new AppError(
+        "Generator output must have an objects array",
+        "INVALID_GENERATOR_OUTPUT",
+      );
     }
   } else {
     objects = obj.objects as unknown[];

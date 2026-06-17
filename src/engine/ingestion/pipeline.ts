@@ -15,9 +15,9 @@
  * See ARCHITECTURE.md for the full phase dependency diagram.
  */
 
-import { createKnowledgeGraph } from '../graph/graph.js';
-import { type PipelineProgress } from '../shared';
-import { PipelineResult } from '../types/pipeline.js';
+import { createKnowledgeGraph } from "../graph/graph.js";
+import { type PipelineProgress } from "../shared";
+import { PipelineResult } from "../types/pipeline.js";
 import {
   runPipeline,
   getPhaseOutput,
@@ -37,7 +37,7 @@ import {
   type PipelinePhase,
   type CommunitiesOutput,
   type ProcessesOutput,
-} from './pipeline-phases/index.js';
+} from "./pipeline-phases/index.js";
 
 export interface PipelineOptions {
   /** Skip MRO, community detection, and process extraction for faster test runs. */
@@ -115,23 +115,29 @@ export const runPipelineFromRepo = async (
   const { totalFiles, usedWorkerPool } = getPhaseOutput<{
     totalFiles: number;
     usedWorkerPool: boolean;
-  }>(results, 'parse');
+  }>(results, "parse");
 
-  let communityResult: CommunitiesOutput['communityResult'] | undefined;
-  let processResult: ProcessesOutput['processResult'] | undefined;
+  let communityResult: CommunitiesOutput["communityResult"] | undefined;
+  let processResult: ProcessesOutput["processResult"] | undefined;
 
   if (!options?.skipGraphPhases) {
-    communityResult = getPhaseOutput<CommunitiesOutput>(results, 'communities').communityResult;
-    processResult = getPhaseOutput<ProcessesOutput>(results, 'processes').processResult;
+    communityResult = getPhaseOutput<CommunitiesOutput>(
+      results,
+      "communities",
+    ).communityResult;
+    processResult = getPhaseOutput<ProcessesOutput>(
+      results,
+      "processes",
+    ).processResult;
   }
 
   onProgress({
-    phase: 'complete',
+    phase: "complete",
     percent: 100,
     message:
       communityResult && processResult
         ? `Graph complete! ${communityResult.stats.totalCommunities} communities, ${processResult.stats.totalProcesses} processes detected.`
-        : 'Graph complete! (graph phases skipped)',
+        : "Graph complete! (graph phases skipped)",
     stats: {
       filesProcessed: totalFiles,
       totalFiles,

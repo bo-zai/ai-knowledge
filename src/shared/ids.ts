@@ -1,27 +1,27 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 
 const ID_PREFIXES = {
-  TERM: 'TERM-',
-  CON: 'CON-',
-  FLOW: 'FLOW-',
-  MOD: 'MOD-',
-  OPEN: 'OPEN-',
-  OWN: 'OWN-',
-  VER: 'VER-',
-  DB: 'DB-',
-  DATA_MODEL: 'DATA_MODEL-',
-  BOUNDARY: 'BOUNDARY-',
-  EXTERNAL: 'EXTERNAL-',
-  CONSTRAINT: 'CONSTRAINT-',
-  RELATION: 'RELATION-',
-  WORKFLOW: 'WORKFLOW-',
+  TERM: "TERM-",
+  CON: "CON-",
+  FLOW: "FLOW-",
+  MOD: "MOD-",
+  OPEN: "OPEN-",
+  OWN: "OWN-",
+  VER: "VER-",
+  DB: "DB-",
+  DATA_MODEL: "DATA_MODEL-",
+  BOUNDARY: "BOUNDARY-",
+  EXTERNAL: "EXTERNAL-",
+  CONSTRAINT: "CONSTRAINT-",
+  RELATION: "RELATION-",
+  WORKFLOW: "WORKFLOW-",
 } as const;
 
 export type ObjectType = keyof typeof ID_PREFIXES;
 
 // 生成稳定的对象 ID（基于输入值，不使用随机值）
 export function generateObjectId(type: ObjectType, seed: string): string {
-  const normalizedSeed = seed.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const normalizedSeed = seed.toLowerCase().replace(/[^a-z0-9]/g, "-");
   return `${ID_PREFIXES[type]}${normalizedSeed}`;
 }
 

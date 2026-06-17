@@ -9,7 +9,7 @@
  * Shape is unchanged from the prior local definition.
  */
 
-import type { NodeLabel } from '../graph/types.js';
+import type { NodeLabel } from "../graph/types.js";
 
 export interface SymbolDefinition {
   nodeId: string;

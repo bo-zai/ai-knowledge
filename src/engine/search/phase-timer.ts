@@ -48,7 +48,10 @@ export class PhaseTimer {
   stop(): void {
     if (this.current !== null) {
       const elapsed = performance.now() - this.t0;
-      this.phases.set(this.current, (this.phases.get(this.current) ?? 0) + elapsed);
+      this.phases.set(
+        this.current,
+        (this.phases.get(this.current) ?? 0) + elapsed,
+      );
       this.current = null;
     }
   }

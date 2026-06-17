@@ -17,8 +17,8 @@
  * dotted fallback via #916).
  */
 
-import type { SymbolDefinition } from './symbol-definition.js';
-import type { DefId } from './types.js';
+import type { SymbolDefinition } from "./symbol-definition.js";
+import type { DefId } from "./types.js";
 
 export interface QualifiedNameIndex {
   readonly byQualifiedName: ReadonlyMap<string, readonly DefId[]>;
@@ -43,7 +43,9 @@ export interface QualifiedNameIndex {
  *
  * Pure function — safe to call repeatedly; no side effects.
  */
-export function buildQualifiedNameIndex(defs: readonly SymbolDefinition[]): QualifiedNameIndex {
+export function buildQualifiedNameIndex(
+  defs: readonly SymbolDefinition[],
+): QualifiedNameIndex {
   const byQualifiedName = new Map<string, DefId[]>();
   const seenPairs = new Set<string>();
 
@@ -76,7 +78,9 @@ export function buildQualifiedNameIndex(defs: readonly SymbolDefinition[]): Qual
 
 const EMPTY: readonly DefId[] = Object.freeze([]);
 
-function wrapIndex(byQualifiedName: Map<string, readonly DefId[]>): QualifiedNameIndex {
+function wrapIndex(
+  byQualifiedName: Map<string, readonly DefId[]>,
+): QualifiedNameIndex {
   return {
     byQualifiedName,
     get size() {

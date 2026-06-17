@@ -8,13 +8,13 @@
  * @writes  graph (CodeElement nodes, QUERIES edges)
  */
 
-import type { PipelinePhase, PipelineContext, PhaseResult } from './types.js';
-import { getPhaseOutput } from './types.js';
-import type { ParseOutput } from './parse.js';
-import { generateId } from '../../lib/utils.js';
-import type { ExtractedORMQuery } from '../workers/parse-worker.js';
-import type { KnowledgeGraph } from '../../graph/types.js';
-import { isDev } from '../utils/env.js';
+import type { PipelinePhase, PipelineContext, PhaseResult } from "./types.js";
+import { getPhaseOutput } from "./types.js";
+import type { ParseOutput } from "./parse.js";
+import { generateId } from "../../lib/utils.js";
+import type { ExtractedORMQuery } from "../workers/parse-worker.js";
+import type { KnowledgeGraph } from "../../graph/types.js";
+import { isDev } from "../utils/env.js";
 
 export interface ORMOutput {
   edgesCreated: number;
@@ -22,14 +22,14 @@ export interface ORMOutput {
 }
 
 export const ormPhase: PipelinePhase<ORMOutput> = {
-  name: 'orm',
-  deps: ['parse'],
+  name: "orm",
+  deps: ["parse"],
 
   async execute(
     ctx: PipelineContext,
     deps: ReadonlyMap<string, PhaseResult<unknown>>,
   ): Promise<ORMOutput> {
-    const { allORMQueries } = getPhaseOutput<ParseOutput>(deps, 'parse');
+    const { allORMQueries } = getPhaseOutput<ParseOutput>(deps, "parse");
 
     if (allORMQueries.length === 0) {
       return { edgesCreated: 0, modelCount: 0 };
@@ -52,21 +52,21 @@ function processORMQueries(
     let modelNodeId = modelNodes.get(modelKey);
     if (!modelNodeId) {
       const candidateIds = [
-        generateId('Class', `${q.model}`),
-        generateId('Interface', `${q.model}`),
-        generateId('CodeElement', `${q.model}`),
+        generateId("Class", `${q.model}`),
+        generateId("Interface", `${q.model}`),
+        generateId("CodeElement", `${q.model}`),
       ];
       const existing = candidateIds.find((id) => graph.getNode(id));
       if (existing) {
         modelNodeId = existing;
       } else {
-        modelNodeId = generateId('CodeElement', `${q.orm}:${q.model}`);
+        modelNodeId = generateId("CodeElement", `${q.orm}:${q.model}`);
         graph.addNode({
           id: modelNodeId,
-          label: 'CodeElement',
+          label: "CodeElement",
           properties: {
             name: q.model,
-            filePath: '',
+            filePath: "",
             description: `${q.orm} model/table: ${q.model}`,
           },
         });
@@ -74,16 +74,16 @@ function processORMQueries(
       modelNodes.set(modelKey, modelNodeId);
     }
 
-    const fileId = generateId('File', q.filePath);
+    const fileId = generateId("File", q.filePath);
     const edgeKey = `${fileId}->${modelNodeId}:${q.method}`;
     if (seenEdges.has(edgeKey)) continue;
     seenEdges.add(edgeKey);
 
     graph.addRelationship({
-      id: generateId('QUERIES', edgeKey),
+      id: generateId("QUERIES", edgeKey),
       sourceId: fileId,
       targetId: modelNodeId,
-      type: 'QUERIES',
+      type: "QUERIES",
       confidence: 0.9,
       reason: `${q.orm}-${q.method}`,
     });

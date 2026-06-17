@@ -14,9 +14,9 @@
  *  - Each phase is independently testable with mocked inputs
  */
 
-import type { KnowledgeGraph } from '../../graph/types.js';
-import type { PipelineProgress } from '../../shared/index.js';
-import type { PipelineOptions } from '../pipeline.js';
+import type { KnowledgeGraph } from "../../graph/types.js";
+import type { PipelineProgress } from "../../shared/index.js";
+import type { PipelineOptions } from "../pipeline.js";
 
 // ── Shared context ─────────────────────────────────────────────────────────
 
@@ -71,7 +71,10 @@ export interface PipelinePhase<TOutput = unknown> {
    * @param deps   Map of dependency name → PhaseResult (typed outputs from upstream phases)
    * @returns      The phase's typed output
    */
-  execute(ctx: PipelineContext, deps: ReadonlyMap<string, PhaseResult<unknown>>): Promise<TOutput>;
+  execute(
+    ctx: PipelineContext,
+    deps: ReadonlyMap<string, PhaseResult<unknown>>,
+  ): Promise<TOutput>;
 }
 
 /**

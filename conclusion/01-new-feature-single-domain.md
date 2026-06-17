@@ -18,6 +18,7 @@ CodeGraph search "Integral" kind=function
 ```
 
 一次并行调用返回：
+
 - context("打分") → 返回 ScoreController.score()、ScoreService、相关符号和关键代码
 - context("课件类型") → 返回 CoursewareDO.coursewareType、CoursewareTypeEnum
 - search "Score" → ScoreController、ScoreService、ScoreDO、ScoreRecord 等
@@ -68,6 +69,7 @@ grep "coursewareType" path=ScoreService
 ### 第四步：确定实现方案
 
 基于前面的理解：
+
 1. 批量打分入口：在 ScoreController 新增 batchScore() 方法
 2. 复用现有 score() 的逻辑，循环调用
 3. 积分发放复用 ScoreEvent 异步机制
@@ -86,12 +88,14 @@ CodeGraph node ScoreController
 参考现有 score() 方法的参数格式（ScoreRequest DTO）、权限注解（@RequireRole）、事务处理方式，编写 batchScore()。
 
 编码过程中检查约束：
+
 - 权限注解：从现有 score() 方法看到 @RequireRole("TEACHER")，直接复用
 - 事务边界：看现有批量操作模式（grep "@Transactional" in Service files）
 
 ### 第六步：验证
 
 检查边界情况：
+
 - 空学生列表 → 参数校验
 - 课件类型不存在 → 参数校验
 - 一个学生打分失败 → 根据用户回答决定策略
@@ -114,11 +118,11 @@ CodeGraph node ScoreController
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| 术语映射（打分→ScoreService） | CodeGraph context | 低——context 已覆盖 |
-| 现有打分流程 | CodeGraph explore | 无 |
-| 积分是异步触发的 | CodeGraph callers ScoreEvent | 无 |
-| 课件类型的分支逻辑 | grep coursewareType | 中——概念知识可替代 |
-| 积分发放的限制条件 | 读 IntegralService 源码 | 中——约束知识可替代 |
-| 新代码放哪个包 | CodeGraph node | 无 |
+| 信息需求                      | 实际获取方式                 |  知识库的增量价值  |
+| ----------------------------- | ---------------------------- | :----------------: |
+| 术语映射（打分→ScoreService） | CodeGraph context            | 低——context 已覆盖 |
+| 现有打分流程                  | CodeGraph explore            |         无         |
+| 积分是异步触发的              | CodeGraph callers ScoreEvent |         无         |
+| 课件类型的分支逻辑            | grep coursewareType          | 中——概念知识可替代 |
+| 积分发放的限制条件            | 读 IntegralService 源码      | 中——约束知识可替代 |
+| 新代码放哪个包                | CodeGraph node               |         无         |

@@ -1,20 +1,23 @@
-import { SupportedLanguages, type ParsedFile } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
-import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
-import { resolveDefGraphId } from '../../scope-resolution/graph-bridge/ids.js';
-import type { GraphNodeLookup } from '../../scope-resolution/graph-bridge/node-lookup.js';
-import { isClassLike } from '../../scope-resolution/scope/walkers.js';
-import { kotlinProvider } from '../kotlin.js';
+import { SupportedLanguages, type ParsedFile } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import {
+  buildMro,
+  defaultLinearize,
+} from "../../scope-resolution/passes/mro.js";
+import type { ScopeResolver } from "../../scope-resolution/contract/scope-resolver.js";
+import { resolveDefGraphId } from "../../scope-resolution/graph-bridge/ids.js";
+import type { GraphNodeLookup } from "../../scope-resolution/graph-bridge/node-lookup.js";
+import { isClassLike } from "../../scope-resolution/scope/walkers.js";
+import { kotlinProvider } from "../kotlin.js";
 import {
   kotlinArityCompatibility,
   kotlinMergeBindings,
   populateKotlinOwners,
   resolveKotlinImportTarget,
   type KotlinResolveContext,
-} from './index.js';
-import { clearCompanionScopes } from './companion-scopes.js';
-import { isKotlinStaticOnly } from './owners.js';
+} from "./index.js";
+import { clearCompanionScopes } from "./companion-scopes.js";
+import { isKotlinStaticOnly } from "./owners.js";
 
 /**
  * Kotlin scope resolver for RFC #909 Ring 3.
@@ -54,7 +57,7 @@ import { isKotlinStaticOnly } from './owners.js';
 export const kotlinScopeResolver: ScopeResolver = {
   language: SupportedLanguages.Kotlin,
   languageProvider: kotlinProvider,
-  importEdgeReason: 'kotlin-scope: import',
+  importEdgeReason: "kotlin-scope: import",
 
   loadResolutionConfig: () => {
     // Drop the module-level `companionScopesByFile` table from any
@@ -73,20 +76,24 @@ export const kotlinScopeResolver: ScopeResolver = {
   resolveImportTarget: (targetRaw, fromFile, allFilePaths) => {
     const ws: KotlinResolveContext = { fromFile, allFilePaths };
     return resolveKotlinImportTarget(
-      { kind: 'named', localName: '_', importedName: '_', targetRaw },
+      { kind: "named", localName: "_", importedName: "_", targetRaw },
       ws,
     );
   },
 
-  mergeBindings: (existing, incoming) => [...kotlinMergeBindings([...existing, ...incoming])],
+  mergeBindings: (existing, incoming) => [
+    ...kotlinMergeBindings([...existing, ...incoming]),
+  ],
 
-  arityCompatibility: (callsite, def) => kotlinArityCompatibility(def, callsite),
+  arityCompatibility: (callsite, def) =>
+    kotlinArityCompatibility(def, callsite),
 
-  buildMro: (graph, parsedFiles, nodeLookup) => buildKotlinMro(graph, parsedFiles, nodeLookup),
+  buildMro: (graph, parsedFiles, nodeLookup) =>
+    buildKotlinMro(graph, parsedFiles, nodeLookup),
 
   populateOwners: (parsed: ParsedFile) => populateKotlinOwners(parsed),
 
-  isSuperReceiver: (text) => text.trim() === 'super',
+  isSuperReceiver: (text) => text.trim() === "super",
 
   isStaticOnly: isKotlinStaticOnly,
 
@@ -127,7 +134,7 @@ function buildKotlinMro(
 
   // Direct IMPLEMENTS targets per class-like def.
   const directImpls = new Map<string, string[]>();
-  for (const rel of graph.iterRelationshipsByType('IMPLEMENTS')) {
+  for (const rel of graph.iterRelationshipsByType("IMPLEMENTS")) {
     const source = defIdByGraphId.get(rel.sourceId);
     const target = defIdByGraphId.get(rel.targetId);
     if (source === undefined || target === undefined) continue;
@@ -154,7 +161,10 @@ function buildKotlinMro(
     }
     if (seeds.length === 0) continue;
     const interfaces = closeInterfaces(seeds, directImpls);
-    mro.set(classDefId, [...extendsMro, ...interfaces.filter((i) => !extendsMro.includes(i))]);
+    mro.set(classDefId, [
+      ...extendsMro,
+      ...interfaces.filter((i) => !extendsMro.includes(i)),
+    ]);
   }
 
   // Classes with no EXTENDS still need an MRO entry when they implement

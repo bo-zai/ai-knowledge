@@ -4,7 +4,7 @@
  * 为知识生成流程提供结构化代码片段，支持从图数据库或文件解析双路径提取。
  */
 
-import type { SupportedLanguages } from '../engine/shared/index.js';
+import type { SupportedLanguages } from "../engine/shared/index.js";
 
 /**
  * 提取的类代码结构
@@ -155,7 +155,10 @@ export interface LanguageExtractorStrategy {
    * @param properties - 字段节点列表
    * @returns true 表示图数据不完整，需要 Fallback
    */
-  needsFallback?(classNode: GraphClassNode, properties: GraphPropertyNode[]): boolean;
+  needsFallback?(
+    classNode: GraphClassNode,
+    properties: GraphPropertyNode[],
+  ): boolean;
 }
 
 /**

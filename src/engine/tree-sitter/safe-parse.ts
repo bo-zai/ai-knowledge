@@ -4,8 +4,8 @@
  * Ported from GitNexus, adapted for ai-wiki logger signature.
  */
 
-import type Parser from 'tree-sitter';
-import { logger } from '../../shared/logger.js';
+import type Parser from "tree-sitter";
+import { logger } from "../../shared/logger.js";
 
 /**
  * tree-sitter 0.21.x's Node native binding crashes (SIGSEGV) on Windows when
@@ -29,7 +29,7 @@ const DEFAULT_PARSE_TIMEOUT_MS = 15_000;
  */
 function resolveParseTimeoutMs(): number {
   const raw = process.env.GITNEXUS_PARSE_TIMEOUT_MS;
-  if (raw === undefined || raw === '') return DEFAULT_PARSE_TIMEOUT_MS;
+  if (raw === undefined || raw === "") return DEFAULT_PARSE_TIMEOUT_MS;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_PARSE_TIMEOUT_MS;
   return Math.floor(parsed);
@@ -43,7 +43,7 @@ interface TimeoutCapableParser {
 function armParseBudget(parser: Parser, budgetMs: number): boolean {
   if (budgetMs <= 0) return false;
   const cap = parser as unknown as TimeoutCapableParser;
-  if (typeof cap.setTimeoutMicros !== 'function') return false;
+  if (typeof cap.setTimeoutMicros !== "function") return false;
   cap.setTimeoutMicros(Math.floor(budgetMs * 1000));
   return true;
 }
@@ -67,10 +67,10 @@ export class ParseTimeoutError extends Error {
   constructor(budgetMs: number, label?: string) {
     super(
       `tree-sitter parse exceeded its ${budgetMs}ms budget` +
-        (label ? ` while parsing ${label}` : '') +
-        ' (set GITNEXUS_PARSE_TIMEOUT_MS=0 to disable)',
+        (label ? ` while parsing ${label}` : "") +
+        " (set GITNEXUS_PARSE_TIMEOUT_MS=0 to disable)",
     );
-    this.name = 'ParseTimeoutError';
+    this.name = "ParseTimeoutError";
     this.budgetMs = budgetMs;
     this.label = label;
   }
@@ -134,8 +134,10 @@ export function parseSourceSafe(
   if (tree.rootNode != null && parseHadErrors(tree)) {
     degradedParseCount += 1;
     if (degradedParseCount <= DEGRADED_PARSE_LOG_LIMIT) {
-      const logData = label ? { file: label, rootType: tree.rootNode.type, degradedParseCount } : { rootType: tree.rootNode.type, degradedParseCount };
-      logger.debug('tree-sitter parsed with errors (degraded tree)', logData);
+      const logData = label
+        ? { file: label, rootType: tree.rootNode.type, degradedParseCount }
+        : { rootType: tree.rootNode.type, degradedParseCount };
+      logger.debug("tree-sitter parsed with errors (degraded tree)", logData);
     }
   }
 

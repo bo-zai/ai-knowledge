@@ -24,9 +24,9 @@
  *      must not destabilize the legacy DAG.
  */
 
-import type { ParsedFile } from '../shared';
-import { extract as extractScope } from './scope-extractor.js';
-import type { LanguageProvider } from './language-provider.js';
+import type { ParsedFile } from "../shared";
+import { extract as extractScope } from "./scope-extractor.js";
+import type { LanguageProvider } from "./language-provider.js";
 
 /** Callback used to report scope-extraction warnings to the host (worker or direct). */
 export type ScopeBridgeWarn = (message: string) => void;
@@ -46,7 +46,11 @@ export function extractParsedFile(
   if (provider.emitScopeCaptures === undefined) return undefined;
   if (sourceText.trim().length === 0) return undefined;
   try {
-    const captures = provider.emitScopeCaptures(sourceText, filePath, cachedTree);
+    const captures = provider.emitScopeCaptures(
+      sourceText,
+      filePath,
+      cachedTree,
+    );
     return extractScope(captures, filePath, provider);
   } catch (err) {
     const message = `scope extraction failed for ${filePath}: ${

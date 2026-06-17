@@ -1,10 +1,10 @@
-import os from 'os';
-import { createRequire } from 'module';
+import os from "os";
+import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 
-export type CapabilityStatus = 'available' | 'degraded' | 'unavailable';
-export type SemanticSearchMode = 'vector-index' | 'exact-scan' | 'unavailable';
+export type CapabilityStatus = "available" | "degraded" | "unavailable";
+export type SemanticSearchMode = "vector-index" | "exact-scan" | "unavailable";
 
 export interface RuntimeFingerprint {
   platform: NodeJS.Platform;
@@ -34,13 +34,16 @@ const packageVersion = (name: string): string | undefined => {
 
 const gitnexusVersion = (): string => {
   try {
-    return require('../../../package.json').version;
+    return require("../../../package.json").version;
   } catch {
-    return 'unknown';
+    return "unknown";
   }
 };
 
-const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+const parsePositiveInt = (
+  value: string | undefined,
+  fallback: number,
+): number => {
   if (value === undefined) return fallback;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -49,39 +52,46 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
 export const DEFAULT_EXACT_SCAN_LIMIT = 10_000;
 
 export const getExactScanLimit = (): number =>
-  parsePositiveInt(process.env.GITNEXUS_SEMANTIC_EXACT_SCAN_LIMIT, DEFAULT_EXACT_SCAN_LIMIT);
+  parsePositiveInt(
+    process.env.GITNEXUS_SEMANTIC_EXACT_SCAN_LIMIT,
+    DEFAULT_EXACT_SCAN_LIMIT,
+  );
 
 export const getRuntimeFingerprint = (): RuntimeFingerprint => ({
   platform: process.platform,
   arch: process.arch,
   node: process.version,
   gitnexus: gitnexusVersion(),
-  ladybugdb: packageVersion('@ladybugdb/core'),
-  onnxruntime: packageVersion('onnxruntime-node'),
+  ladybugdb: packageVersion("@ladybugdb/core"),
+  onnxruntime: packageVersion("onnxruntime-node"),
 });
 
 export const isVectorExtensionSupportedByPlatform = (
   platform: NodeJS.Platform = process.platform,
-): boolean => platform !== 'win32';
+): boolean => platform !== "win32";
 
 export const getRuntimeCapabilities = (): RuntimeCapabilities => {
-  const vector = isVectorExtensionSupportedByPlatform() ? 'available' : 'unavailable';
+  const vector = isVectorExtensionSupportedByPlatform()
+    ? "available"
+    : "unavailable";
   const exactScanLimit = getExactScanLimit();
   return {
-    graph: 'available',
-    fts: 'available',
+    graph: "available",
+    fts: "available",
     vector,
-    semanticMode: vector === 'available' ? 'vector-index' : 'exact-scan',
+    semanticMode: vector === "available" ? "vector-index" : "exact-scan",
     exactScanLimit,
     reason:
-      vector === 'unavailable'
-        ? 'LadybugDB VECTOR is disabled on this platform; semantic search uses exact scan when embeddings exist.'
+      vector === "unavailable"
+        ? "LadybugDB VECTOR is disabled on this platform; semantic search uses exact scan when embeddings exist."
         : undefined,
   };
 };
 
 export const defaultEmbeddingThreads = (): number => {
   const available =
-    typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length;
+    typeof os.availableParallelism === "function"
+      ? os.availableParallelism()
+      : os.cpus().length;
   return Math.max(1, Math.min(4, Math.floor(available / 2) || 1));
 };

@@ -1,8 +1,8 @@
 // gitnexus/src/core/ingestion/method-types.ts
 
-import type { SupportedLanguages } from '../shared';
-import type { FieldVisibility } from './field-types.js';
-import type { SyntaxNode } from './utils/ast-helpers.js';
+import type { SupportedLanguages } from "../shared";
+import type { FieldVisibility } from "./field-types.js";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
 
 // Reuse FieldVisibility — same set of language visibility levels
 export type MethodVisibility = FieldVisibility;
@@ -49,18 +49,25 @@ export interface ExtractedMethods {
 
 export interface MethodExtractor {
   language: SupportedLanguages;
-  extract(node: SyntaxNode, context: MethodExtractorContext): ExtractedMethods | null;
+  extract(
+    node: SyntaxNode,
+    context: MethodExtractorContext,
+  ): ExtractedMethods | null;
   isTypeDeclaration(node: SyntaxNode): boolean;
   /** Extract method info from a standalone method node (e.g. Go top-level method_declaration). */
-  extractFromNode?(node: SyntaxNode, context: MethodExtractorContext): MethodInfo | null;
+  extractFromNode?(
+    node: SyntaxNode,
+    context: MethodExtractorContext,
+  ): MethodInfo | null;
   /** Extract function name + label from an AST node during parent-walk.
    *  Languages with non-standard AST structures (e.g. C/C++ declarator
    *  unwrapping, Swift init/deinit, Rust impl_item) provide this hook
    *  to replace the generic name-field lookup.
    *  Return null to fall through to the generic extractor. */
-  extractFunctionName?(
-    node: SyntaxNode,
-  ): { funcName: string | null; label: import('../shared/index.js').NodeLabel } | null;
+  extractFunctionName?(node: SyntaxNode): {
+    funcName: string | null;
+    label: import("../shared/index.js").NodeLabel;
+  } | null;
 }
 
 export interface MethodExtractionConfig {
@@ -95,7 +102,8 @@ export interface MethodExtractionConfig {
   ) => MethodInfo | null;
   /** Extract function name + label from an AST node during parent-walk.
    *  Passed through to the MethodExtractor by createMethodExtractor. */
-  extractFunctionName?: (
-    node: SyntaxNode,
-  ) => { funcName: string | null; label: import('../shared/index.js').NodeLabel } | null;
+  extractFunctionName?: (node: SyntaxNode) => {
+    funcName: string | null;
+    label: import("../shared/index.js").NodeLabel;
+  } | null;
 }

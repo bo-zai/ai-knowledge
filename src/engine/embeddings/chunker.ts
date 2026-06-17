@@ -7,18 +7,22 @@
  * - Short content (≤ chunkSize): no chunking
  */
 
-export { type Chunk, characterChunk } from './character-chunk.js';
+export { type Chunk, characterChunk } from "./character-chunk.js";
 
-import { characterChunk } from './character-chunk.js';
-import type { Chunk } from './character-chunk.js';
-import { ensureAndParse, findDeclarationNode, findFunctionNode } from './ast-utils.js';
-import { buildLineIndex, resolveChunkLines } from './line-index.js';
+import { characterChunk } from "./character-chunk.js";
+import type { Chunk } from "./character-chunk.js";
+import {
+  ensureAndParse,
+  findDeclarationNode,
+  findFunctionNode,
+} from "./ast-utils.js";
+import { buildLineIndex, resolveChunkLines } from "./line-index.js";
 import {
   CHUNKING_RULES,
   CHUNK_MODE_AST_DECLARATION,
   CHUNK_MODE_AST_FUNCTION,
   type ChunkingRule,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Main chunkNode function: dispatches by label
@@ -111,7 +115,7 @@ const astChunk = async (
   if (!targetNode) return [];
 
   // Get the body (statements) via childForFieldName('body')
-  const bodyNode = targetNode.childForFieldName('body');
+  const bodyNode = targetNode.childForFieldName("body");
   if (!bodyNode) return [];
 
   // Extract individual statements
@@ -142,21 +146,21 @@ const astChunk = async (
 };
 
 const DECLARATION_BODY_NODE_TYPES = new Set([
-  'class_body',
-  'object_type',
-  'declaration_list',
-  'interface_body',
+  "class_body",
+  "object_type",
+  "declaration_list",
+  "interface_body",
 ]);
 
 const FIELD_LIKE_MEMBER_TYPES = new Set([
-  'field_definition',
-  'public_field_definition',
-  'property_definition',
-  'property_signature',
-  'variable_declarator',
-  'lexical_declaration',
-  'pair',
-  'enum_assignment',
+  "field_definition",
+  "public_field_definition",
+  "property_definition",
+  "property_signature",
+  "variable_declarator",
+  "lexical_declaration",
+  "pair",
+  "enum_assignment",
 ]);
 
 const declarationChunk = async (
@@ -202,7 +206,12 @@ const buildChunk = (
   endOffset: number,
   baseStartLine: number,
 ): Chunk => {
-  const lineRange = resolveChunkLines(lineOffsets, startOffset, endOffset, baseStartLine);
+  const lineRange = resolveChunkLines(
+    lineOffsets,
+    startOffset,
+    endOffset,
+    baseStartLine,
+  );
   return {
     text: content.slice(startOffset, endOffset),
     chunkIndex,
@@ -242,7 +251,8 @@ const chunkByUnits = (
 
     while (chunkEndUnitIdx + 1 < units.length) {
       const nextEndOffset =
-        chunkEndUnitIdx + 1 === units.length - 1 && includeContainerSuffixOnLastChunk
+        chunkEndUnitIdx + 1 === units.length - 1 &&
+        includeContainerSuffixOnLastChunk
           ? containerEndOffset
           : units[chunkEndUnitIdx + 1].endIndex;
       if (nextEndOffset - chunkStartOffset > chunkSize) break;
@@ -257,7 +267,8 @@ const chunkByUnits = (
           ? containerStartOffset
           : oversizedUnit.startIndex;
       const oversizedEndOffset =
-        chunkStartUnitIdx === units.length - 1 && includeContainerSuffixOnLastChunk
+        chunkStartUnitIdx === units.length - 1 &&
+        includeContainerSuffixOnLastChunk
           ? containerEndOffset
           : oversizedUnit.endIndex;
       const oversizedLineRange = resolveChunkLines(
@@ -325,7 +336,8 @@ const findOverlapStartIndex = (
   let overlapStartIdx = chunkEndStmtIdx;
   while (overlapStartIdx > chunkStartStmtIdx) {
     const overlapLength =
-      statements[chunkEndStmtIdx].endIndex - statements[overlapStartIdx - 1].startIndex;
+      statements[chunkEndStmtIdx].endIndex -
+      statements[overlapStartIdx - 1].startIndex;
     if (overlapLength > overlapSize) break;
     overlapStartIdx -= 1;
   }
@@ -334,7 +346,7 @@ const findOverlapStartIndex = (
 };
 
 const getDeclarationBodyNode = (node: any): any | null => {
-  const bodyNode = node.childForFieldName?.('body');
+  const bodyNode = node.childForFieldName?.("body");
   if (bodyNode) return bodyNode;
 
   for (let i = 0; i < node.namedChildCount; i++) {
@@ -350,7 +362,11 @@ const collectDeclarationUnits = (
   bodyNode: any,
   groupFields: boolean,
 ): Array<{ startIndex: number; endIndex: number }> => {
-  const members: Array<{ startIndex: number; endIndex: number; groupable: boolean }> = [];
+  const members: Array<{
+    startIndex: number;
+    endIndex: number;
+    groupable: boolean;
+  }> = [];
 
   for (let i = 0; i < bodyNode.namedChildCount; i++) {
     const child = bodyNode.namedChild(i);
@@ -377,7 +393,10 @@ const collectDeclarationUnits = (
       };
       continue;
     }
-    grouped.push({ startIndex: current.startIndex, endIndex: current.endIndex });
+    grouped.push({
+      startIndex: current.startIndex,
+      endIndex: current.endIndex,
+    });
     current = next;
   }
 

@@ -58,8 +58,8 @@
  * annotates each with `primaryByLanguage[lang]`.
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import {
   aggregateDiffs,
   diffResolutions,
@@ -68,12 +68,12 @@ import {
   type ShadowDiff,
   type ShadowParityReport,
   type SupportedLanguages,
-} from '../shared';
+} from "../shared";
 
 // ─── Public API ────────────────────────────────────────────────────────────
 
 /** Which side of the dual-run is considered authoritative for this language. */
-export type PrimarySide = 'legacy' | 'registry';
+export type PrimarySide = "legacy" | "registry";
 
 /** One record per call site the caller dual-runs. */
 export interface ShadowRecordInput {
@@ -95,7 +95,9 @@ export interface PersistedShadowReport {
   readonly schemaVersion: 1;
   readonly runId: string;
   readonly generatedAt: string;
-  readonly primaryByLanguage: Readonly<Partial<Record<SupportedLanguages, PrimarySide>>>;
+  readonly primaryByLanguage: Readonly<
+    Partial<Record<SupportedLanguages, PrimarySide>>
+  >;
   readonly report: ShadowParityReport;
 }
 
@@ -129,14 +131,15 @@ export interface ShadowHarness {
  * env var in the hot path.
  */
 export function createShadowHarness(): ShadowHarness {
-  const enabled = parseShadowModeEnv(process.env['GITNEXUS_SHADOW_MODE']);
+  const enabled = parseShadowModeEnv(process.env["GITNEXUS_SHADOW_MODE"]);
 
   interface Accumulated {
     readonly language: SupportedLanguages;
     readonly diff: ShadowDiff;
   }
   const records: Accumulated[] = [];
-  const primaryByLanguage: Partial<Record<SupportedLanguages, PrimarySide>> = {};
+  const primaryByLanguage: Partial<Record<SupportedLanguages, PrimarySide>> =
+    {};
 
   const recordImpl = (input: ShadowRecordInput): void => {
     if (!enabled) return;
@@ -152,7 +155,10 @@ export function createShadowHarness(): ShadowHarness {
     return aggregateDiffs(records, now);
   };
 
-  const persistImpl = async (outputDir: string, now: Date = new Date()): Promise<string> => {
+  const persistImpl = async (
+    outputDir: string,
+    now: Date = new Date(),
+  ): Promise<string> => {
     await fs.mkdir(outputDir, { recursive: true });
     const report = snapshotImpl(now);
     const runId = makeRunId(now);
@@ -165,9 +171,9 @@ export function createShadowHarness(): ShadowHarness {
     };
     const json = JSON.stringify(payload, null, 2);
     const perRunPath = path.join(outputDir, `${runId}.json`);
-    const latestPath = path.join(outputDir, 'latest.json');
-    await fs.writeFile(perRunPath, json, 'utf8');
-    await fs.writeFile(latestPath, json, 'utf8');
+    const latestPath = path.join(outputDir, "latest.json");
+    await fs.writeFile(perRunPath, json, "utf8");
+    await fs.writeFile(latestPath, json, "utf8");
     return perRunPath;
   };
 
@@ -199,7 +205,7 @@ export function createShadowHarness(): ShadowHarness {
 function parseShadowModeEnv(raw: string | undefined): boolean {
   if (raw === undefined) return false;
   const normalized = raw.trim().toLowerCase();
-  return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
 /**
@@ -209,14 +215,14 @@ function parseShadowModeEnv(raw: string | undefined): boolean {
  * clock-second. Shape: `YYYYMMDD-HHMMSS-xxxxxxxx`.
  */
 function makeRunId(now: Date): string {
-  const y = now.getUTCFullYear().toString().padStart(4, '0');
-  const m = (now.getUTCMonth() + 1).toString().padStart(2, '0');
-  const d = now.getUTCDate().toString().padStart(2, '0');
-  const h = now.getUTCHours().toString().padStart(2, '0');
-  const min = now.getUTCMinutes().toString().padStart(2, '0');
-  const s = now.getUTCSeconds().toString().padStart(2, '0');
+  const y = now.getUTCFullYear().toString().padStart(4, "0");
+  const m = (now.getUTCMonth() + 1).toString().padStart(2, "0");
+  const d = now.getUTCDate().toString().padStart(2, "0");
+  const h = now.getUTCHours().toString().padStart(2, "0");
+  const min = now.getUTCMinutes().toString().padStart(2, "0");
+  const s = now.getUTCSeconds().toString().padStart(2, "0");
   const entropy = Math.floor(Math.random() * 0xffffffff)
     .toString(16)
-    .padStart(8, '0');
+    .padStart(8, "0");
   return `${y}${m}${d}-${h}${min}${s}-${entropy}`;
 }

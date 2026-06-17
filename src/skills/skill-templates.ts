@@ -4,18 +4,18 @@
  * 从 templates 目录加载 skill 模板文件
  */
 
-import fs from 'node:fs/promises';
-import fsSync from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { logger } from '../shared/logger.js';
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { logger } from "../shared/logger.js";
 
 // ESM 模块中获取当前文件目录
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /** Skill 模板目录（相对于 skills 模块根目录） */
-const TEMPLATE_DIR = path.join(__dirname, '..', 'skills', 'templates');
+const TEMPLATE_DIR = path.join(__dirname, "..", "skills", "templates");
 
 /**
  * 加载 skill 模板内容
@@ -24,10 +24,10 @@ const TEMPLATE_DIR = path.join(__dirname, '..', 'skills', 'templates');
  * @returns skill 内容（SKILL.md 文件内容）
  */
 export async function loadSkillTemplate(skillName: string): Promise<string> {
-  const skillPath = path.join(TEMPLATE_DIR, skillName, 'SKILL.md');
+  const skillPath = path.join(TEMPLATE_DIR, skillName, "SKILL.md");
 
   try {
-    const content = await fs.readFile(skillPath, 'utf-8');
+    const content = await fs.readFile(skillPath, "utf-8");
     return content;
   } catch (error) {
     logger.error(`Failed to load skill template: ${skillPath}`);
@@ -41,10 +41,10 @@ export async function loadSkillTemplate(skillName: string): Promise<string> {
  * 注意：使用 fsSync.readFileSync 而不是 require
  */
 export function loadSkillTemplateSync(skillName: string): string {
-  const skillPath = path.join(TEMPLATE_DIR, skillName, 'SKILL.md');
+  const skillPath = path.join(TEMPLATE_DIR, skillName, "SKILL.md");
 
   try {
-    const content = fsSync.readFileSync(skillPath, 'utf-8');
+    const content = fsSync.readFileSync(skillPath, "utf-8");
     return content;
   } catch (error) {
     logger.error(`Failed to load skill template sync: ${skillPath}`);
@@ -58,12 +58,10 @@ export function loadSkillTemplateSync(skillName: string): string {
 export async function getAvailableSkillTemplates(): Promise<string[]> {
   try {
     const entries = await fs.readdir(TEMPLATE_DIR, { withFileTypes: true });
-    return entries
-      .filter(e => e.isDirectory())
-      .map(e => e.name);
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     // 目录不存在或读取失败
-    return ['use-knowledge']; // 返回默认列表
+    return ["use-knowledge"]; // 返回默认列表
   }
 }
 
@@ -92,7 +90,7 @@ let _useKnowledgeSkill: string | null = null;
 
 export function getUseKnowledgeSkill(): string {
   if (_useKnowledgeSkill === null) {
-    _useKnowledgeSkill = loadSkillTemplateSync('use-knowledge');
+    _useKnowledgeSkill = loadSkillTemplateSync("use-knowledge");
   }
   return _useKnowledgeSkill;
 }

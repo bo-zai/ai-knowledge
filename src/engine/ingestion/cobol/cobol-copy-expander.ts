@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------
 
 export interface CopyReplacing {
-  type: 'LEADING' | 'TRAILING' | 'EXACT';
+  type: "LEADING" | "TRAILING" | "EXACT";
   from: string;
   to: string;
   isPseudotext?: boolean;
@@ -65,7 +65,7 @@ function stripInlineComment(line: string): string {
       if (ch === inQuote) inQuote = null;
     } else if (ch === '"' || ch === "'") {
       inQuote = ch;
-    } else if (ch === '|') {
+    } else if (ch === "|") {
       return line.substring(0, i);
     }
   }
@@ -76,21 +76,23 @@ function stripInlineComment(line: string): string {
  * Check if a line is a COBOL comment (indicator in col 7 is `*` or `/`).
  */
 function isCommentLine(line: string): boolean {
-  return line.length >= 7 && (line[6] === '*' || line[6] === '/');
+  return line.length >= 7 && (line[6] === "*" || line[6] === "/");
 }
 
 /**
  * Check if a line is a continuation line (indicator in col 7 is `-`).
  */
 function isContinuationLine(line: string): boolean {
-  return line.length >= 7 && line[6] === '-';
+  return line.length >= 7 && line[6] === "-";
 }
 
 /**
  * Merge continuation lines into their predecessors.
  * Returns an array of logical lines with their original starting line numbers.
  */
-function mergeLogicalLines(rawLines: string[]): Array<{ text: string; lineNum: number }> {
+function mergeLogicalLines(
+  rawLines: string[],
+): Array<{ text: string; lineNum: number }> {
   const logical: Array<{ text: string; lineNum: number }> = [];
 
   for (let i = 0; i < rawLines.length; i++) {
@@ -98,7 +100,7 @@ function mergeLogicalLines(rawLines: string[]): Array<{ text: string; lineNum: n
 
     // Skip comment lines
     if (isCommentLine(raw)) {
-      logical.push({ text: '', lineNum: i + 1 });
+      logical.push({ text: "", lineNum: i + 1 });
       continue;
     }
 
@@ -106,11 +108,11 @@ function mergeLogicalLines(rawLines: string[]): Array<{ text: string; lineNum: n
     if (isContinuationLine(raw)) {
       if (logical.length > 0) {
         const prev = logical[logical.length - 1];
-        const continuation = raw.length > 7 ? raw.substring(7).trimStart() : '';
+        const continuation = raw.length > 7 ? raw.substring(7).trimStart() : "";
         prev.text += continuation;
       }
       // Push empty placeholder to preserve line count
-      logical.push({ text: '', lineNum: i + 1 });
+      logical.push({ text: "", lineNum: i + 1 });
       continue;
     }
 
@@ -171,16 +173,16 @@ export function parseReplacingClause(text: string): CopyReplacing[] {
   // Parse token stream: [LEADING|TRAILING]? <from> BY <to>
   let i = 0;
   while (i < tokens.length) {
-    let type: CopyReplacing['type'] = 'EXACT';
+    let type: CopyReplacing["type"] = "EXACT";
 
     // Check for type modifier (only on non-pseudotext tokens)
     if (!tokens[i].isPseudotext) {
       const upper = tokens[i].value.toUpperCase();
-      if (upper === 'LEADING') {
-        type = 'LEADING';
+      if (upper === "LEADING") {
+        type = "LEADING";
         i++;
-      } else if (upper === 'TRAILING') {
-        type = 'TRAILING';
+      } else if (upper === "TRAILING") {
+        type = "TRAILING";
         i++;
       }
     }
@@ -190,11 +192,11 @@ export function parseReplacingClause(text: string): CopyReplacing[] {
     i++;
 
     // Pseudotext always forces EXACT type
-    if (fromToken.isPseudotext) type = 'EXACT';
+    if (fromToken.isPseudotext) type = "EXACT";
 
     // Expect BY keyword
     if (i >= tokens.length) break;
-    if (tokens[i].value.toUpperCase() !== 'BY') {
+    if (tokens[i].value.toUpperCase() !== "BY") {
       // Malformed — skip this token and try to resync
       continue;
     }
@@ -245,7 +247,7 @@ function parseCopyStatements(
       endLine = lineNum;
     } else {
       // Continue accumulating
-      accumulator += ' ' + text.trim();
+      accumulator += " " + text.trim();
       endLine = lineNum;
     }
 
@@ -284,7 +286,7 @@ function parseSingleCopyStatement(
   endLine: number,
 ): ParsedCopyStatement | null {
   // Strip terminating period
-  const text = stmt.replace(/\.\s*$/, '').trim();
+  const text = stmt.replace(/\.\s*$/, "").trim();
 
   // Extract target: COPY <target> or COPY "<target>" or COPY '<target>'
   // Optionally followed by IN/OF <library-name> (COBOL-85 standard: IN and OF are synonyms)
@@ -300,7 +302,7 @@ function parseSingleCopyStatement(
   let replacing: CopyReplacing[] = [];
   const replacingIdx = text.search(/\bREPLACING\b/i);
   if (replacingIdx >= 0) {
-    const replacingText = text.substring(replacingIdx + 'REPLACING'.length);
+    const replacingText = text.substring(replacingIdx + "REPLACING".length);
     replacing = parseReplacingClause(replacingText);
   }
 
@@ -326,11 +328,13 @@ function applyReplacing(content: string, replacings: CopyReplacing[]): string {
   let result = content;
   for (const r of replacings) {
     if (
-      r.type === 'EXACT' &&
-      (r.isPseudotext || r.from.includes(' ') || !/^[A-Z][A-Z0-9-]*$/i.test(r.from))
+      r.type === "EXACT" &&
+      (r.isPseudotext ||
+        r.from.includes(" ") ||
+        !/^[A-Z][A-Z0-9-]*$/i.test(r.from))
     ) {
-      const escaped = r.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(escaped, 'gi');
+      const escaped = r.from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(escaped, "gi");
       result = result.replace(re, r.to);
     }
   }
@@ -339,8 +343,10 @@ function applyReplacing(content: string, replacings: CopyReplacing[]): string {
   const identifierReplacings = replacings.filter(
     (r) =>
       !(
-        r.type === 'EXACT' &&
-        (r.isPseudotext || r.from.includes(' ') || !/^[A-Z][A-Z0-9-]*$/i.test(r.from))
+        r.type === "EXACT" &&
+        (r.isPseudotext ||
+          r.from.includes(" ") ||
+          !/^[A-Z][A-Z0-9-]*$/i.test(r.from))
       ),
   );
   if (identifierReplacings.length === 0) return result;
@@ -351,17 +357,17 @@ function applyReplacing(content: string, replacings: CopyReplacing[]): string {
       const from = r.from.toUpperCase();
       const to = r.to.toUpperCase();
       switch (r.type) {
-        case 'LEADING':
+        case "LEADING":
           if (upper.startsWith(from)) {
             return to + match.substring(from.length);
           }
           break;
-        case 'TRAILING':
+        case "TRAILING":
           if (upper.endsWith(from)) {
             return match.substring(0, match.length - from.length) + to;
           }
           break;
-        case 'EXACT':
+        case "EXACT":
           if (upper === from) {
             return to;
           }
@@ -473,8 +479,8 @@ export function expandCopies(
 
       // Guard against exponential breadth amplification (N copybooks each with N COPYs)
       if (++totalExpansions > MAX_TOTAL_EXPANSIONS) {
-        if (!warnedCircular.has('__max_total__')) {
-          warnedCircular.add('__max_total__');
+        if (!warnedCircular.has("__max_total__")) {
+          warnedCircular.add("__max_total__");
           console.warn(
             `[cobol-copy-expander] Max total expansions (${MAX_TOTAL_EXPANSIONS}) reached ` +
               `in ${srcPath}. Skipping further expansions.`,
@@ -495,15 +501,20 @@ export function expandCopies(
       // Recurse into the copybook for nested COPYs
       const nestedVisited = new Set(visited);
       nestedVisited.add(resolvedPath);
-      const expandedCopybook = expandRecursive(replaced, resolvedPath, depth + 1, nestedVisited);
+      const expandedCopybook = expandRecursive(
+        replaced,
+        resolvedPath,
+        depth + 1,
+        nestedVisited,
+      );
 
       // Splice: replace the COPY statement lines with expanded content
       // startLine/endLine are 1-based; convert to 0-based array index
-      const expansionLines = expandedCopybook.split('\n');
+      const expansionLines = expandedCopybook.split("\n");
       const removeCount = cs.endLine - cs.startLine + 1;
       outputLines.splice(cs.startLine - 1, removeCount, ...expansionLines);
     }
 
-    return outputLines.join('\n');
+    return outputLines.join("\n");
   }
 }

@@ -65,8 +65,8 @@
  *   - No caching. Callers that want memoization can wrap this function.
  */
 
-import type { NodeLabel } from '../../graph/types.js';
-import type { SymbolDefinition } from '../symbol-definition.js';
+import type { NodeLabel } from "../../graph/types.js";
+import type { SymbolDefinition } from "../symbol-definition.js";
 import type {
   BindingRef,
   Callsite,
@@ -75,17 +75,31 @@ import type {
   Resolution,
   Scope,
   ScopeId,
-} from '../types.js';
-import type { OriginForTieBreak } from '../origin-priority.js';
-import { composeEvidence, confidenceFromEvidence, type RawSignals } from './evidence.js';
-import { compareByConfidenceWithTiebreaks, type TieBreakKey } from './tie-breaks.js';
-import { lookupQualified } from './lookup-qualified.js';
-import type { ArityVerdict, OwnerScopedContributor, RegistryContext } from './context.js';
+} from "../types.js";
+import type { OriginForTieBreak } from "../origin-priority.js";
+import {
+  composeEvidence,
+  confidenceFromEvidence,
+  type RawSignals,
+} from "./evidence.js";
+import {
+  compareByConfidenceWithTiebreaks,
+  type TieBreakKey,
+} from "./tie-breaks.js";
+import { lookupQualified } from "./lookup-qualified.js";
+import type {
+  ArityVerdict,
+  OwnerScopedContributor,
+  RegistryContext,
+} from "./context.js";
 
 // ─── Public entry point ─────────────────────────────────────────────────────
 
 /** Extended `LookupParams` narrowing `ownerScopedContributor` to the concrete shape. */
-export interface CoreLookupParams extends Omit<LookupParams, 'ownerScopedContributor'> {
+export interface CoreLookupParams extends Omit<
+  LookupParams,
+  "ownerScopedContributor"
+> {
   readonly ownerScopedContributor: OwnerScopedContributor | null;
   /** Call-site description forwarded to `arityCompatibility`. Optional — for non-call lookups. */
   readonly callsite?: Callsite;
@@ -106,11 +120,24 @@ export function lookupCore(
   const perCandidate = new Map<DefId, CandidateState>();
 
   // ── Step 1: lexical scope-chain walk ──────────────────────────────────
-  const lexicalShadowed = walkLexicalChain(name, startScope, acceptedKinds, ctx, perCandidate);
+  const lexicalShadowed = walkLexicalChain(
+    name,
+    startScope,
+    acceptedKinds,
+    ctx,
+    perCandidate,
+  );
 
   // ── Step 2: type-binding / MRO walk (methods/fields) ──────────────────
   if (params.useReceiverTypeBinding && ctx.methodDispatch !== undefined) {
-    walkReceiverTypeBinding(name, startScope, acceptedKinds, params, ctx, perCandidate);
+    walkReceiverTypeBinding(
+      name,
+      startScope,
+      acceptedKinds,
+      params,
+      ctx,
+      perCandidate,
+    );
   }
 
   // ── Step 3: owner-scoped contributor ──────────────────────────────────
@@ -132,8 +159,12 @@ export function lookupCore(
   }
 
   // ── Step 6: global fallback (only when Steps 1-3 produced nothing) ──
-  if (perCandidate.size === 0 && !lexicalShadowed && name.includes('.')) {
-    const globals = lookupQualified(name, { acceptedKinds: params.acceptedKinds }, ctx);
+  if (perCandidate.size === 0 && !lexicalShadowed && name.includes(".")) {
+    const globals = lookupQualified(
+      name,
+      { acceptedKinds: params.acceptedKinds },
+      ctx,
+    );
     if (globals.length > 0) return globals;
   }
 
@@ -152,7 +183,7 @@ interface CandidateState {
 }
 
 interface MutableRawSignals {
-  origin?: BindingRef['origin'] | 'global-qualified' | 'global-name';
+  origin?: BindingRef["origin"] | "global-qualified" | "global-name";
   scopeChainDepth?: number;
   viaUnlinkedImport?: boolean;
   typeBindingMroDepth?: number;
@@ -177,7 +208,7 @@ function ensureCandidate(
   const fresh: CandidateState = {
     def,
     signals: { kindMatch: true },
-    tieBreakKey: { scopeDepth: 0, mroDepth: 0, origin: 'local' },
+    tieBreakKey: { scopeDepth: 0, mroDepth: 0, origin: "local" },
   };
   perCandidate.set(def.nodeId, fresh);
   return fresh;
@@ -232,10 +263,10 @@ function recordLexicalHit(
   const state = ensureCandidate(perCandidate, binding.def);
   state.signals.origin = binding.origin;
   state.signals.scopeChainDepth = scopeChainDepth;
-  if (binding.via?.linkStatus === 'unresolved') {
+  if (binding.via?.linkStatus === "unresolved") {
     state.signals.viaUnlinkedImport = true;
   }
-  if (binding.via?.kind === 'dynamic-unresolved') {
+  if (binding.via?.kind === "dynamic-unresolved") {
     state.signals.dynamicUnresolved = true;
   }
   state.tieBreakKey.scopeDepth = scopeChainDepth;
@@ -294,7 +325,7 @@ function resolveReceiverOwner(
   return undefined;
 }
 
-const IMPLICIT_RECEIVERS: readonly string[] = Object.freeze(['self', 'this']);
+const IMPLICIT_RECEIVERS: readonly string[] = Object.freeze(["self", "this"]);
 
 function lookupReceiverType(
   startScope: ScopeId,
@@ -347,8 +378,9 @@ function collectOwnedMembers(
 }
 
 function simpleNameOf(def: SymbolDefinition): string | undefined {
-  if (def.qualifiedName === undefined || def.qualifiedName.length === 0) return undefined;
-  const dot = def.qualifiedName.lastIndexOf('.');
+  if (def.qualifiedName === undefined || def.qualifiedName.length === 0)
+    return undefined;
+  const dot = def.qualifiedName.lastIndexOf(".");
   return dot === -1 ? def.qualifiedName : def.qualifiedName.slice(dot + 1);
 }
 
@@ -381,7 +413,7 @@ function recordTypeBindingHit(
   // overrides `tieBreakKey.origin` back to `'local'` for direct-owner
   // members, so any same-def overlap still ends up ranked correctly.
   if (firstHit && state.signals.origin === undefined) {
-    state.tieBreakKey.origin = 'import';
+    state.tieBreakKey.origin = "import";
   }
 }
 
@@ -398,10 +430,10 @@ function seedFromOwnerScopedContributor(
     const state = ensureCandidate(perCandidate, def);
     // Treat the contributor's direct membership as `origin: 'local'` —
     // strongest visibility, no scope-chain penalty.
-    state.signals.origin = 'local';
+    state.signals.origin = "local";
     state.signals.scopeChainDepth = 0;
     state.signals.ownerMatch = def.ownerId === contributor.ownerDefId;
-    state.tieBreakKey.origin = 'local';
+    state.tieBreakKey.origin = "local";
   }
 }
 
@@ -417,7 +449,7 @@ function applyArityFilter(
     // No provider → record 'unknown' for every candidate; keeps signal
     // shape uniform for composeEvidence.
     for (const state of perCandidate.values()) {
-      state.signals.arityVerdict = 'unknown';
+      state.signals.arityVerdict = "unknown";
     }
     return;
   }
@@ -426,14 +458,14 @@ function applyArityFilter(
   for (const state of perCandidate.values()) {
     const verdict = arityFn(callsite, state.def);
     state.signals.arityVerdict = verdict;
-    if (verdict === 'compatible') anyCompatible = true;
+    if (verdict === "compatible") anyCompatible = true;
   }
 
   if (!anyCompatible) return;
 
   // Filter: when at least one compatible candidate exists, drop incompatibles.
   for (const [defId, state] of perCandidate) {
-    if (state.signals.arityVerdict === 'incompatible') {
+    if (state.signals.arityVerdict === "incompatible") {
       perCandidate.delete(defId);
     }
   }
@@ -441,7 +473,9 @@ function applyArityFilter(
 
 // ─── Step 7 implementation ─────────────────────────────────────────────────
 
-function rankCandidates(perCandidate: Map<DefId, CandidateState>): readonly Resolution[] {
+function rankCandidates(
+  perCandidate: Map<DefId, CandidateState>,
+): readonly Resolution[] {
   const resolutions: Resolution[] = [];
   const tieKeys = new Map<string, TieBreakKey>();
 

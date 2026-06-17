@@ -12,7 +12,7 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from '../../../shared/index.js';
+} from "../../../shared/index.js";
 
 // ─── bindingScopeFor ──────────────────────────────────────────────────────
 
@@ -42,8 +42,8 @@ export function tsBindingScopeFor(
   tree: ScopeTree,
 ): ScopeId | null {
   // Method return type: hoist to Module (mirrors csharpBindingScopeFor).
-  if (decl['@type-binding.return'] !== undefined) {
-    return walkToScope(innermost, tree, 'Module');
+  if (decl["@type-binding.return"] !== undefined) {
+    return walkToScope(innermost, tree, "Module");
   }
 
   // Parameter property (`constructor(public address: Address)`): hoist
@@ -51,14 +51,14 @@ export function tsBindingScopeFor(
   // resolves through the class's typeBindings. The regular
   // @type-binding.parameter binding still fires for the constructor
   // scope; this one adds a second binding on the class.
-  if (decl['@type-binding.parameter-property'] !== undefined) {
-    return walkToScope(innermost, tree, 'Class');
+  if (decl["@type-binding.parameter-property"] !== undefined) {
+    return walkToScope(innermost, tree, "Class");
   }
 
   // `var` declarations: hoist to nearest enclosing Function or Module.
-  const variable = decl['@declaration.variable'];
+  const variable = decl["@declaration.variable"];
   if (variable !== undefined && isVarDeclaration(variable.text)) {
-    return walkToScope(innermost, tree, 'Function', 'Module');
+    return walkToScope(innermost, tree, "Function", "Module");
   }
 
   // Function declarations are already anchored at their definition
@@ -79,7 +79,7 @@ export function tsBindingScopeFor(
 function walkToScope(
   from: Scope,
   tree: ScopeTree,
-  ...kinds: readonly Scope['kind'][]
+  ...kinds: readonly Scope["kind"][]
 ): ScopeId | null {
   let cur: Scope | undefined = from;
   const kindSet = new Set(kinds);
@@ -97,9 +97,9 @@ function walkToScope(
  *  the keyword's first character — no leading whitespace possible. */
 function isVarDeclaration(captureText: string): boolean {
   return (
-    captureText.startsWith('var ') ||
-    captureText.startsWith('var\t') ||
-    captureText.startsWith('var\n')
+    captureText.startsWith("var ") ||
+    captureText.startsWith("var\t") ||
+    captureText.startsWith("var\n")
   );
 }
 
@@ -157,6 +157,6 @@ export function tsImportOwningScope(
  * `index.ts`.
  */
 export function tsReceiverBinding(functionScope: Scope): TypeRef | null {
-  if (functionScope.kind !== 'Function') return null;
-  return functionScope.typeBindings.get('this') ?? null;
+  if (functionScope.kind !== "Function") return null;
+  return functionScope.typeBindings.get("this") ?? null;
 }

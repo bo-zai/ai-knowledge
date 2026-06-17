@@ -22,7 +22,7 @@ export {
   type MapperMethodBinding,
   type DbTableEvidenceBundle,
   type GapInfo,
-} from './types.js';
+} from "./types.js";
 
 export {
   isMapperXmlFile,
@@ -30,7 +30,7 @@ export {
   extractTableNamesFromSql,
   type MapperXmlDocument,
   type SqlStatement,
-} from './xml-language.js';
+} from "./xml-language.js";
 
 export {
   parseMapperFile,
@@ -40,7 +40,7 @@ export {
   extractTablesFromSql,
   type MapperInfo,
   type MapperStatement,
-} from './mapper-parser.js';
+} from "./mapper-parser.js";
 
 export {
   buildLineageEdges,
@@ -50,14 +50,14 @@ export {
   enrichDbContextWithLineage,
   type SqlLineageEdge,
   type MapperMethodBinding as SqlLineageMapperMethodBinding,
-} from './sql-lineage.js';
+} from "./sql-lineage.js";
 
 // Include resolver
 export {
   resolveStatementSql,
   resolveAllStatements,
   getFragmentById,
-} from './include-resolver.js';
+} from "./include-resolver.js";
 
 // ResultMap resolver
 export {
@@ -68,15 +68,13 @@ export {
   findColumnForProperty,
   getStatementResultMapping,
   buildResultMapLookup,
-} from './result-map-resolver.js';
+} from "./result-map-resolver.js";
 
 // Java entity evidence
 export {
   resolveEntityEvidence,
   buildFieldEvidenceLookup,
-} from './java-entity-evidence.js';
+} from "./java-entity-evidence.js";
 
 // Caller evidence
-export {
-  resolveCallerEvidence,
-} from './caller-evidence.js';
+export { resolveCallerEvidence } from "./caller-evidence.js";

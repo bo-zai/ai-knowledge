@@ -1,5 +1,5 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from "node:fs/promises";
+import path from "node:path";
 
 export interface DomainCapabilityRef {
   capabilityId: string;
@@ -27,14 +27,14 @@ export interface DomainRegistry {
   domains: DomainRegistryEntry[];
 }
 
-const DOMAIN_REGISTRY_RELATIVE_PATH = '.internal/domain-registry.json';
+const DOMAIN_REGISTRY_RELATIVE_PATH = ".internal/domain-registry.json";
 
 function normalizeKey(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function normalizeCapabilityIdentity(input: {
@@ -43,24 +43,26 @@ function normalizeCapabilityIdentity(input: {
   capabilityName?: string;
 }): string {
   const normalizedPath = input.capabilityPath
-    ?.replace(/\\/g, '/')
+    ?.replace(/\\/g, "/")
     .toLowerCase()
-    .replace(/^capabilities\//, '')
-    .replace(/\.md$/, '');
+    .replace(/^capabilities\//, "")
+    .replace(/\.md$/, "");
   if (normalizedPath) return normalizedPath;
 
   const normalizedId = input.capabilityId
     ?.toLowerCase()
-    .replace(/^cap-/, '')
-    .replace(/^capability-/, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^cap-/, "")
+    .replace(/^capability-/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   if (normalizedId) return normalizedId;
 
-  return normalizeKey(input.capabilityName ?? 'unknown-capability');
+  return normalizeKey(input.capabilityName ?? "unknown-capability");
 }
 
-function uniqueCapabilities(items: DomainCapabilityRef[]): DomainCapabilityRef[] {
+function uniqueCapabilities(
+  items: DomainCapabilityRef[],
+): DomainCapabilityRef[] {
   const grouped = new Map<string, DomainCapabilityRef>();
   for (const item of items) {
     const key = normalizeCapabilityIdentity(item);
@@ -70,8 +72,9 @@ function uniqueCapabilities(items: DomainCapabilityRef[]): DomainCapabilityRef[]
       continue;
     }
 
-    const preferCurrent = item.capabilityPath.toLowerCase() === item.capabilityPath
-      || !existing.summaryZh && !!item.summaryZh;
+    const preferCurrent =
+      item.capabilityPath.toLowerCase() === item.capabilityPath ||
+      (!existing.summaryZh && !!item.summaryZh);
     if (preferCurrent) {
       grouped.set(key, {
         capabilityId: item.capabilityId || existing.capabilityId,
@@ -88,10 +91,10 @@ function splitDomainTerms(value: string): string[] {
   return value
     .trim()
     .toLowerCase()
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[^a-z0-9]+/g, " ")
     .split(/\s+/)
-    .filter(term => term.length > 1);
+    .filter((term) => term.length > 1);
 }
 
 export function deriveDomainKey(input: {
@@ -105,7 +108,7 @@ export function deriveDomainKey(input: {
     input.domainName,
     input.conceptId,
     input.capabilityId,
-    'unknown-domain',
+    "unknown-domain",
   ];
 
   for (const candidate of candidates) {
@@ -114,13 +117,15 @@ export function deriveDomainKey(input: {
     if (normalized) return normalized;
   }
 
-  return 'unknown-domain';
+  return "unknown-domain";
 }
 
-export async function loadDomainRegistry(packageRoot: string): Promise<DomainRegistry> {
+export async function loadDomainRegistry(
+  packageRoot: string,
+): Promise<DomainRegistry> {
   const registryPath = path.join(packageRoot, DOMAIN_REGISTRY_RELATIVE_PATH);
   try {
-    const raw = await fs.readFile(registryPath, 'utf-8');
+    const raw = await fs.readFile(registryPath, "utf-8");
     const parsed = JSON.parse(raw) as DomainRegistry;
     return {
       updatedAt: parsed.updatedAt || new Date().toISOString(),
@@ -134,7 +139,10 @@ export async function loadDomainRegistry(packageRoot: string): Promise<DomainReg
   }
 }
 
-export async function saveDomainRegistry(packageRoot: string, registry: DomainRegistry): Promise<void> {
+export async function saveDomainRegistry(
+  packageRoot: string,
+  registry: DomainRegistry,
+): Promise<void> {
   const registryPath = path.join(packageRoot, DOMAIN_REGISTRY_RELATIVE_PATH);
   await fs.mkdir(path.dirname(registryPath), { recursive: true });
   await fs.writeFile(
@@ -146,8 +154,8 @@ export async function saveDomainRegistry(packageRoot: string, registry: DomainRe
       },
       null,
       2,
-    ) + '\n',
-    'utf-8',
+    ) + "\n",
+    "utf-8",
   );
 }
 
@@ -166,7 +174,7 @@ export function upsertConceptDomain(
     domainName: concept.domainName,
     conceptId: concept.conceptId,
   });
-  let entry = registry.domains.find(item => item.domainKey === domainKey);
+  let entry = registry.domains.find((item) => item.domainKey === domainKey);
   if (!entry) {
     entry = {
       domainKey,
@@ -202,7 +210,7 @@ export function upsertCapabilityDomain(
     domainName: capability.domainName,
     capabilityId: capability.capabilityId,
   });
-  let entry = registry.domains.find(item => item.domainKey === domainKey);
+  let entry = registry.domains.find((item) => item.domainKey === domainKey);
   if (!entry) {
     entry = {
       domainKey,
@@ -216,8 +224,10 @@ export function upsertCapabilityDomain(
     entry.domainName = capability.domainName;
   }
   entry.capabilityRefs = uniqueCapabilities([
-    ...entry.capabilityRefs.filter(item =>
-      normalizeCapabilityIdentity(item) !== normalizeCapabilityIdentity(capability),
+    ...entry.capabilityRefs.filter(
+      (item) =>
+        normalizeCapabilityIdentity(item) !==
+        normalizeCapabilityIdentity(capability),
     ),
     {
       capabilityId: capability.capabilityId,
@@ -230,9 +240,13 @@ export function upsertCapabilityDomain(
 }
 
 export function sortDomainRegistry(registry: DomainRegistry): DomainRegistry {
-  registry.domains.sort((left, right) => left.domainName.localeCompare(right.domainName, 'zh-CN'));
+  registry.domains.sort((left, right) =>
+    left.domainName.localeCompare(right.domainName, "zh-CN"),
+  );
   for (const domain of registry.domains) {
-    domain.capabilityRefs.sort((left, right) => left.capabilityName.localeCompare(right.capabilityName, 'zh-CN'));
+    domain.capabilityRefs.sort((left, right) =>
+      left.capabilityName.localeCompare(right.capabilityName, "zh-CN"),
+    );
   }
   return registry;
 }
@@ -252,11 +266,13 @@ export function findBestMatchingDomain(
     domainName: input.domainName,
   });
 
-  const exact = registry.domains.find(domain => domain.domainKey === requestedKey);
+  const exact = registry.domains.find(
+    (domain) => domain.domainKey === requestedKey,
+  );
   if (exact) return exact;
 
   const signalTerms = new Set<string>([
-    ...splitDomainTerms(input.domainName ?? ''),
+    ...splitDomainTerms(input.domainName ?? ""),
     ...(input.targetTerms ?? []).flatMap(splitDomainTerms),
     ...(input.primaryObjects ?? []).flatMap(splitDomainTerms),
     ...(input.relatedEntities ?? []).flatMap(splitDomainTerms),
@@ -267,7 +283,9 @@ export function findBestMatchingDomain(
     const domainTerms = new Set<string>([
       ...splitDomainTerms(domain.domainKey),
       ...splitDomainTerms(domain.domainName),
-      ...domain.capabilityRefs.flatMap(item => splitDomainTerms(item.capabilityName)),
+      ...domain.capabilityRefs.flatMap((item) =>
+        splitDomainTerms(item.capabilityName),
+      ),
       ...(domain.concept ? splitDomainTerms(domain.concept.conceptName) : []),
     ]);
 
@@ -275,7 +293,12 @@ export function findBestMatchingDomain(
     for (const term of signalTerms) {
       if (domainTerms.has(term)) score += 1;
     }
-    if (domain.domainName && input.domainName && domain.domainName.includes(input.domainName)) score += 2;
+    if (
+      domain.domainName &&
+      input.domainName &&
+      domain.domainName.includes(input.domainName)
+    )
+      score += 2;
 
     if (score >= 2 && (!best || score > best.score)) {
       best = { domain, score };

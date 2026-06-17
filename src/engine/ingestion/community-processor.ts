@@ -12,28 +12,47 @@
  * generation paths that don't need community detection.
  */
 
-import Graph from 'graphology';
-import type { AbstractGraph, Attributes } from 'graphology-types';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import fs from 'fs';
-import type { NodeLabel } from '../shared';
-import { KnowledgeGraph } from '../graph/types.js';
+import Graph from "graphology";
+import type { AbstractGraph, Attributes } from "graphology-types";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import fs from "fs";
+import type { NodeLabel } from "../shared";
+import { KnowledgeGraph } from "../graph/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // Navigate to vendor directory - works from both src/ (3 levels up) and dist/cli/ (2 levels up)
-const leidenPathFromSrc = resolve(__dirname, '..', '..', '..', 'vendor', 'leiden', 'index.cjs');
-const leidenPathFromDist = resolve(__dirname, '..', 'vendor', 'leiden', 'index.cjs');
+const leidenPathFromSrc = resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "vendor",
+  "leiden",
+  "index.cjs",
+);
+const leidenPathFromDist = resolve(
+  __dirname,
+  "..",
+  "vendor",
+  "leiden",
+  "index.cjs",
+);
 // Try both paths to handle different build outputs
-const leidenPath = fs.existsSync(leidenPathFromDist) ? leidenPathFromDist : leidenPathFromSrc;
+const leidenPath = fs.existsSync(leidenPathFromDist)
+  ? leidenPathFromDist
+  : leidenPathFromSrc;
 /** Graphology Graph instance type (AbstractGraph from graphology-types avoids CJS/ESM interop namespace issue) */
 type GraphInstance = AbstractGraph<Attributes, Attributes, Attributes>;
 
 /** Vendored Leiden algorithm module shape */
 interface LeidenModule {
-  detailed: (graph: GraphInstance, options: Record<string, unknown>) => LeidenDetailedResult;
+  detailed: (
+    graph: GraphInstance,
+    options: Record<string, unknown>,
+  ) => LeidenDetailedResult;
 }
 
 /** Result returned by leiden.detailed() */
@@ -85,18 +104,18 @@ export interface CommunityDetectionResult {
 // ============================================================================
 
 export const COMMUNITY_COLORS = [
-  '#ef4444', // red
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#06b6d4', // cyan
-  '#3b82f6', // blue
-  '#8b5cf6', // violet
-  '#d946ef', // fuchsia
-  '#ec4899', // pink
-  '#f43f5e', // rose
-  '#14b8a6', // teal
-  '#84cc16', // lime
+  "#ef4444", // red
+  "#f97316", // orange
+  "#eab308", // yellow
+  "#22c55e", // green
+  "#06b6d4", // cyan
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+  "#d946ef", // fuchsia
+  "#ec4899", // pink
+  "#f43f5e", // rose
+  "#14b8a6", // teal
+  "#84cc16", // lime
 ];
 
 export const getCommunityColor = (communityIndex: number): string => {
@@ -117,16 +136,16 @@ export const processCommunities = async (
   knowledgeGraph: KnowledgeGraph,
   onProgress?: (message: string, progress: number) => void,
 ): Promise<CommunityDetectionResult> => {
-  onProgress?.('Building graph for community detection...', 0);
+  onProgress?.("Building graph for community detection...", 0);
 
   // Pre-check total symbol count to determine large-graph mode before building
   let symbolCount = 0;
   knowledgeGraph.forEachNode((node) => {
     if (
-      node.label === 'Function' ||
-      node.label === 'Class' ||
-      node.label === 'Method' ||
-      node.label === 'Interface'
+      node.label === "Function" ||
+      node.label === "Class" ||
+      node.label === "Method" ||
+      node.label === "Interface"
     ) {
       symbolCount++;
     }
@@ -147,7 +166,7 @@ export const processCommunities = async (
   const edgeCount = graph.size;
 
   onProgress?.(
-    `Running Leiden on ${nodeCount} nodes, ${edgeCount} edges${isLarge ? ` (filtered from ${symbolCount} symbols)` : ''}...`,
+    `Running Leiden on ${nodeCount} nodes, ${edgeCount} edges${isLarge ? ` (filtered from ${symbolCount} symbols)` : ""}...`,
     30,
   );
 
@@ -158,20 +177,23 @@ export const processCommunities = async (
   let details: LeidenDetailedResult;
   try {
     const leiden = getLeiden();
-      details = await Promise.race([
-        Promise.resolve(
-          leiden.detailed(graph, {
+    details = await Promise.race([
+      Promise.resolve(
+        leiden.detailed(graph, {
           resolution: isLarge ? 2.0 : 1.0,
           maxIterations: isLarge ? 3 : 0,
         }),
       ),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Leiden timeout')), LEIDEN_TIMEOUT_MS),
+        setTimeout(
+          () => reject(new Error("Leiden timeout")),
+          LEIDEN_TIMEOUT_MS,
+        ),
       ),
     ]);
   } catch (e: any) {
-    if (e.message === 'Leiden timeout') {
-      onProgress?.('Community detection timed out, using fallback...', 60);
+    if (e.message === "Leiden timeout") {
+      onProgress?.("Community detection timed out, using fallback...", 60);
       // Fallback: assign all nodes to community 0
       const communities: Record<string, number> = {};
       graph.forEachNode((node: string) => {
@@ -193,7 +215,7 @@ export const processCommunities = async (
     knowledgeGraph,
   );
 
-  onProgress?.('Creating membership edges...', 80);
+  onProgress?.("Creating membership edges...", 80);
 
   // Step 4: Create membership mappings
   const memberships: CommunityMembership[] = [];
@@ -204,7 +226,7 @@ export const processCommunities = async (
     });
   });
 
-  onProgress?.('Community detection complete!', 100);
+  onProgress?.("Community detection complete!", 100);
 
   return {
     communities: communityNodes,
@@ -228,20 +250,29 @@ export const processCommunities = async (
  */
 const MIN_CONFIDENCE_LARGE = 0.5;
 
-const buildGraphologyGraph = (knowledgeGraph: KnowledgeGraph, isLarge: boolean): GraphInstance => {
+const buildGraphologyGraph = (
+  knowledgeGraph: KnowledgeGraph,
+  isLarge: boolean,
+): GraphInstance => {
   const GraphCtor = Graph as unknown as new (options: {
     type: string;
     allowSelfLoops: boolean;
   }) => GraphInstance;
-  const graph = new GraphCtor({ type: 'undirected', allowSelfLoops: false });
+  const graph = new GraphCtor({ type: "undirected", allowSelfLoops: false });
 
-  const symbolTypes = new Set<NodeLabel>(['Function', 'Class', 'Method', 'Interface']);
-  const clusteringRelTypes = new Set(['CALLS', 'EXTENDS', 'IMPLEMENTS']);
+  const symbolTypes = new Set<NodeLabel>([
+    "Function",
+    "Class",
+    "Method",
+    "Interface",
+  ]);
+  const clusteringRelTypes = new Set(["CALLS", "EXTENDS", "IMPLEMENTS"]);
   const connectedNodes = new Set<string>();
   const nodeDegree = new Map<string, number>();
 
   knowledgeGraph.forEachRelationship((rel) => {
-    if (!clusteringRelTypes.has(rel.type) || rel.sourceId === rel.targetId) return;
+    if (!clusteringRelTypes.has(rel.type) || rel.sourceId === rel.targetId)
+      return;
     if (isLarge && rel.confidence < MIN_CONFIDENCE_LARGE) return;
 
     connectedNodes.add(rel.sourceId);
@@ -318,7 +349,12 @@ const createCommunityNodes = (
     // Skip singleton communities - they're just isolated nodes
     if (memberIds.length < 2) return;
 
-    const heuristicLabel = generateHeuristicLabel(memberIds, nodePathMap, graph, commNum);
+    const heuristicLabel = generateHeuristicLabel(
+      memberIds,
+      nodePathMap,
+      graph,
+      commNum,
+    );
 
     communityNodes.push({
       id: `comm_${commNum}`,
@@ -352,17 +388,23 @@ const generateHeuristicLabel = (
   const folderCounts = new Map<string, number>();
 
   memberIds.forEach((nodeId) => {
-    const filePath = nodePathMap.get(nodeId) || '';
-    const parts = filePath.split('/').filter(Boolean);
+    const filePath = nodePathMap.get(nodeId) || "";
+    const parts = filePath.split("/").filter(Boolean);
 
     // Get the most specific folder (parent directory)
     if (parts.length >= 2) {
       const folder = parts[parts.length - 2];
       // Skip generic folder names
       if (
-        !['src', 'lib', 'core', 'utils', 'common', 'shared', 'helpers'].includes(
-          folder.toLowerCase(),
-        )
+        ![
+          "src",
+          "lib",
+          "core",
+          "utils",
+          "common",
+          "shared",
+          "helpers",
+        ].includes(folder.toLowerCase())
       ) {
         folderCounts.set(folder, (folderCounts.get(folder) || 0) + 1);
       }
@@ -371,7 +413,7 @@ const generateHeuristicLabel = (
 
   // Find most common folder
   let maxCount = 0;
-  let bestFolder = '';
+  let bestFolder = "";
 
   folderCounts.forEach((count, folder) => {
     if (count > maxCount) {
@@ -388,7 +430,7 @@ const generateHeuristicLabel = (
   // Fallback: use function names to detect patterns
   const names: string[] = [];
   memberIds.forEach((nodeId) => {
-    const name = graph.getNodeAttribute(nodeId, 'name');
+    const name = graph.getNodeAttribute(nodeId, "name");
     if (name) names.push(name);
   });
 
@@ -408,7 +450,7 @@ const generateHeuristicLabel = (
  * Find common prefix among strings
  */
 const findCommonPrefix = (strings: string[]): string => {
-  if (strings.length === 0) return '';
+  if (strings.length === 0) return "";
 
   const sorted = strings.slice().sort();
   const first = sorted[0];
@@ -430,14 +472,20 @@ const findCommonPrefix = (strings: string[]): string => {
  * Estimate cohesion score (0-1) based on internal edge density.
  * Uses sampling for large communities to avoid O(N^2) cost.
  */
-const calculateCohesion = (memberIds: string[], graph: GraphInstance): number => {
+const calculateCohesion = (
+  memberIds: string[],
+  graph: GraphInstance,
+): number => {
   if (memberIds.length <= 1) return 1.0;
 
   const memberSet = new Set(memberIds);
 
   // Sample up to 50 members for large communities
   const SAMPLE_SIZE = 50;
-  const sample = memberIds.length <= SAMPLE_SIZE ? memberIds : memberIds.slice(0, SAMPLE_SIZE);
+  const sample =
+    memberIds.length <= SAMPLE_SIZE
+      ? memberIds
+      : memberIds.slice(0, SAMPLE_SIZE);
 
   let internalEdges = 0;
   let totalEdges = 0;

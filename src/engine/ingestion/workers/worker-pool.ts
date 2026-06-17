@@ -1,7 +1,7 @@
-import { Worker } from 'node:worker_threads';
-import os from 'node:os';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { Worker } from "node:worker_threads";
+import os from "node:os";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 export interface WorkerPool {
   /**
@@ -30,11 +30,11 @@ export interface WorkerPoolOptions {
 
 /** Message shapes sent back by worker threads. */
 type WorkerOutgoingMessage =
-  | { type: 'progress'; filesProcessed: number }
-  | { type: 'warning'; message: string }
-  | { type: 'sub-batch-done' }
-  | { type: 'error'; error: string }
-  | { type: 'result'; data: unknown };
+  | { type: "progress"; filesProcessed: number }
+  | { type: "warning"; message: string }
+  | { type: "sub-batch-done" }
+  | { type: "error"; error: string }
+  | { type: "result"; data: unknown };
 
 interface WorkerJob<TInput> {
   startIndex: number;
@@ -62,15 +62,15 @@ const DEFAULT_TIMEOUT_RETRIES = 1;
 const DEFAULT_TIMEOUT_BACKOFF_FACTOR = 2;
 
 function positiveInteger(value: unknown): number | undefined {
-  const parsed = typeof value === 'string' ? Number(value) : value;
-  return typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0
+  const parsed = typeof value === "string" ? Number(value) : value;
+  return typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0
     ? Math.floor(parsed)
     : undefined;
 }
 
 function nonNegativeInteger(value: unknown): number | undefined {
-  const parsed = typeof value === 'string' ? Number(value) : value;
-  return typeof parsed === 'number' && Number.isFinite(parsed) && parsed >= 0
+  const parsed = typeof value === "string" ? Number(value) : value;
+  return typeof parsed === "number" && Number.isFinite(parsed) && parsed >= 0
     ? Math.floor(parsed)
     : undefined;
 }
@@ -88,18 +88,20 @@ export function resolveWorkerPoolOptions(
       positiveInteger(options.subBatchIdleTimeoutMs) ??
       positiveInteger(process.env.GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS) ??
       DEFAULT_SUB_BATCH_IDLE_TIMEOUT_MS,
-    maxTimeoutRetries: nonNegativeInteger(options.maxTimeoutRetries) ?? DEFAULT_TIMEOUT_RETRIES,
+    maxTimeoutRetries:
+      nonNegativeInteger(options.maxTimeoutRetries) ?? DEFAULT_TIMEOUT_RETRIES,
     timeoutBackoffFactor:
-      positiveInteger(options.timeoutBackoffFactor) ?? DEFAULT_TIMEOUT_BACKOFF_FACTOR,
+      positiveInteger(options.timeoutBackoffFactor) ??
+      DEFAULT_TIMEOUT_BACKOFF_FACTOR,
   };
 }
 
 function waitForWorkerOnline(worker: Worker): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
-      worker.removeListener('online', onOnline);
-      worker.removeListener('error', onError);
-      worker.removeListener('exit', onExit);
+      worker.removeListener("online", onOnline);
+      worker.removeListener("error", onError);
+      worker.removeListener("exit", onExit);
     };
     const onOnline = () => {
       cleanup();
@@ -111,24 +113,28 @@ function waitForWorkerOnline(worker: Worker): Promise<void> {
     };
     const onExit = (code: number) => {
       cleanup();
-      reject(new Error(`Replacement worker exited with code ${code} before coming online`));
+      reject(
+        new Error(
+          `Replacement worker exited with code ${code} before coming online`,
+        ),
+      );
     };
-    worker.once('online', onOnline);
-    worker.once('error', onError);
-    worker.once('exit', onExit);
+    worker.once("online", onOnline);
+    worker.once("error", onError);
+    worker.once("exit", onExit);
   });
 }
 
 function estimateItemBytes(item: unknown): number {
-  if (typeof item !== 'object' || item === null) return 0;
+  if (typeof item !== "object" || item === null) return 0;
   const content = (item as { content?: unknown }).content;
-  return typeof content === 'string' ? Buffer.byteLength(content, 'utf8') : 0;
+  return typeof content === "string" ? Buffer.byteLength(content, "utf8") : 0;
 }
 
 function itemPath(item: unknown): string | undefined {
-  if (typeof item !== 'object' || item === null) return undefined;
+  if (typeof item !== "object" || item === null) return undefined;
   const path = (item as { path?: unknown }).path;
-  return typeof path === 'string' ? path : undefined;
+  return typeof path === "string" ? path : undefined;
 }
 
 function createJobs<TInput>(
@@ -160,7 +166,8 @@ function createJobs<TInput>(
   for (const item of items) {
     const itemBytes = estimateItemBytes(item);
     const wouldExceedItems = batch.length >= maxItems;
-    const wouldExceedBytes = batch.length > 0 && batchBytes + itemBytes > maxBytes;
+    const wouldExceedBytes =
+      batch.length > 0 && batchBytes + itemBytes > maxBytes;
     if (wouldExceedItems || wouldExceedBytes) flush();
     batch.push(item);
     batchBytes += itemBytes;
@@ -199,13 +206,16 @@ export const createWorkerPool = (
     onProgress?: (filesProcessed: number) => void,
   ): Promise<TResult[]> => {
     if (poolBroken) {
-      const reason = poolFailure ? `: ${poolFailure.message}` : '';
+      const reason = poolFailure ? `: ${poolFailure.message}` : "";
       return Promise.reject(
-        new Error(`Worker pool is unavailable after a previous failure${reason}`),
+        new Error(
+          `Worker pool is unavailable after a previous failure${reason}`,
+        ),
       );
     }
     if (items.length === 0) return Promise.resolve([]);
-    if (workers.length === 0) return Promise.reject(new Error('Worker pool has no active workers'));
+    if (workers.length === 0)
+      return Promise.reject(new Error("Worker pool has no active workers"));
 
     const jobs = createJobs(
       items,
@@ -224,8 +234,14 @@ export const createWorkerPool = (
 
       const reportProgress = () => {
         if (!onProgress) return;
-        const inFlight = inFlightProgress.reduce((sum, value) => sum + value, 0);
-        const next = Math.min(items.length, Math.max(maxReported, completedFiles + inFlight));
+        const inFlight = inFlightProgress.reduce(
+          (sum, value) => sum + value,
+          0,
+        );
+        const next = Math.min(
+          items.length,
+          Math.max(maxReported, completedFiles + inFlight),
+        );
         if (next === maxReported) return;
         maxReported = next;
         onProgress(next);
@@ -256,7 +272,9 @@ export const createWorkerPool = (
         poolFailure = err;
         if (stopped) return;
         stopped = true;
-        await Promise.all(workers.map((worker) => worker.terminate().catch(() => undefined)));
+        await Promise.all(
+          workers.map((worker) => worker.terminate().catch(() => undefined)),
+        );
         reject(err);
       };
 
@@ -265,7 +283,8 @@ export const createWorkerPool = (
         if (jobs.length === 0 && activeWorkers === 0) {
           stopped = true;
           results.sort((a, b) => a.startIndex - b.startIndex);
-          if (onProgress && maxReported < items.length) onProgress(items.length);
+          if (onProgress && maxReported < items.length)
+            onProgress(items.length);
           resolve(results.map((result) => result.data));
         }
       };
@@ -275,7 +294,9 @@ export const createWorkerPool = (
         job: WorkerJob<TInput>,
         lastProgress: number,
       ): boolean => {
-        const nextTimeout = Math.ceil(job.timeoutMs * poolOptions.timeoutBackoffFactor);
+        const nextTimeout = Math.ceil(
+          job.timeoutMs * poolOptions.timeoutBackoffFactor,
+        );
 
         if (job.items.length > 1) {
           const midpoint = Math.ceil(job.items.length / 2);
@@ -284,7 +305,10 @@ export const createWorkerPool = (
           const first: WorkerJob<TInput> = {
             startIndex: job.startIndex,
             items: firstItems,
-            estimatedBytes: firstItems.reduce((sum, item) => sum + estimateItemBytes(item), 0),
+            estimatedBytes: firstItems.reduce(
+              (sum, item) => sum + estimateItemBytes(item),
+              0,
+            ),
             attempt: job.attempt,
             splitDepth: job.splitDepth + 1,
             timeoutMs: nextTimeout,
@@ -292,7 +316,10 @@ export const createWorkerPool = (
           const second: WorkerJob<TInput> = {
             startIndex: job.startIndex + midpoint,
             items: secondItems,
-            estimatedBytes: secondItems.reduce((sum, item) => sum + estimateItemBytes(item), 0),
+            estimatedBytes: secondItems.reduce(
+              (sum, item) => sum + estimateItemBytes(item),
+              0,
+            ),
             attempt: job.attempt,
             splitDepth: job.splitDepth + 1,
             timeoutMs: nextTimeout,
@@ -326,7 +353,7 @@ export const createWorkerPool = (
         void fail(
           new Error(
             `Worker ${workerIndex} parse job idle timeout after ${job.timeoutMs / 1000}s ` +
-              `(single item${itemPath(job.items[0]) ? `: ${itemPath(job.items[0])}` : ''}, ` +
+              `(single item${itemPath(job.items[0]) ? `: ${itemPath(job.items[0])}` : ""}, ` +
               `${job.estimatedBytes} bytes, last progress: ${lastProgress}). ` +
               `Analyze will retry through sequential fallback. Increase with ` +
               `--worker-timeout or GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS.`,
@@ -353,9 +380,9 @@ export const createWorkerPool = (
 
         const cleanup = () => {
           if (idleTimer) clearTimeout(idleTimer);
-          worker.removeListener('message', handler);
-          worker.removeListener('error', errorHandler);
-          worker.removeListener('exit', exitHandler);
+          worker.removeListener("message", handler);
+          worker.removeListener("error", errorHandler);
+          worker.removeListener("exit", exitHandler);
         };
 
         const finishJob = () => {
@@ -372,7 +399,11 @@ export const createWorkerPool = (
               settled = true;
               cleanup();
               inFlightProgress[workerIndex] = 0;
-              const shouldContinue = requeueAfterTimeout(workerIndex, job, lastProgress);
+              const shouldContinue = requeueAfterTimeout(
+                workerIndex,
+                job,
+                lastProgress,
+              );
               if (!shouldContinue) {
                 activeWorkers--;
                 return;
@@ -394,33 +425,43 @@ export const createWorkerPool = (
 
         const handler = (msg: WorkerOutgoingMessage) => {
           if (settled || stopped) return;
-          if (msg.type === 'progress') {
-            const bounded = Math.min(job.items.length, Math.max(0, msg.filesProcessed));
+          if (msg.type === "progress") {
+            const bounded = Math.min(
+              job.items.length,
+              Math.max(0, msg.filesProcessed),
+            );
             inFlightProgress[workerIndex] = bounded;
             lastProgress = bounded;
             resetIdleTimer();
             reportProgress();
-          } else if (msg.type === 'warning') {
+          } else if (msg.type === "warning") {
             resetIdleTimer();
             console.warn(msg.message);
-          } else if (msg.type === 'sub-batch-done') {
+          } else if (msg.type === "sub-batch-done") {
             waitingForFlush = true;
             resetIdleTimer();
-            worker.postMessage({ type: 'flush' });
-          } else if (msg.type === 'error') {
+            worker.postMessage({ type: "flush" });
+          } else if (msg.type === "error") {
             settled = true;
             cleanup();
             void fail(new Error(`Worker ${workerIndex} error: ${msg.error}`));
-          } else if (msg.type === 'result') {
+          } else if (msg.type === "result") {
             if (!waitingForFlush) {
               settled = true;
               cleanup();
-              void fail(new Error(`Worker ${workerIndex} protocol error: result before flush`));
+              void fail(
+                new Error(
+                  `Worker ${workerIndex} protocol error: result before flush`,
+                ),
+              );
               return;
             }
             settled = true;
             cleanup();
-            results.push({ startIndex: job.startIndex, data: msg.data as TResult });
+            results.push({
+              startIndex: job.startIndex,
+              data: msg.data as TResult,
+            });
             completedFiles += job.items.length;
             reportProgress();
             finishJob();
@@ -447,15 +488,15 @@ export const createWorkerPool = (
           }
         };
 
-        worker.on('message', handler);
-        worker.once('error', errorHandler);
-        worker.once('exit', exitHandler);
+        worker.on("message", handler);
+        worker.once("error", errorHandler);
+        worker.once("exit", exitHandler);
         resetIdleTimer();
         if (stopped) {
           cleanup();
           return;
         }
-        worker.postMessage({ type: 'sub-batch', files: job.items });
+        worker.postMessage({ type: "sub-batch", files: job.items });
       };
 
       for (let i = 0; i < workers.length; i++) runWorker(i);

@@ -6,42 +6,39 @@
 
 /** 主项目类型 */
 export type PrimaryProjectType =
-  | 'backend-service'
-  | 'frontend-app'
-  | 'cli-tool'
-  | 'library'
-  | 'mobile-app';
+  | "backend-service"
+  | "frontend-app"
+  | "cli-tool"
+  | "library"
+  | "mobile-app";
 
 /** 复合项目类型 */
-export type CompositeProjectType =
-  | 'fullstack'
-  | 'monorepo'
-  | 'microservices';
+export type CompositeProjectType = "fullstack" | "monorepo" | "microservices";
 
 /** 特殊项目类型 */
 export type SpecialProjectType =
-  | 'config-only'
-  | 'api-definition'
-  | 'static-site'
-  | 'test-only';
+  | "config-only"
+  | "api-definition"
+  | "static-site"
+  | "test-only";
 
 /** 所有项目类型 */
 export type ProjectType =
   | PrimaryProjectType
   | CompositeProjectType
   | SpecialProjectType
-  | 'unknown';
+  | "unknown";
 
 /** 主语言类型 */
 export type PrimaryLanguage =
-  | 'java'
-  | 'typescript'
-  | 'javascript'
-  | 'go'
-  | 'python'
-  | 'kotlin'
-  | 'rust'
-  | 'other';
+  | "java"
+  | "typescript"
+  | "javascript"
+  | "go"
+  | "python"
+  | "kotlin"
+  | "rust"
+  | "other";
 
 /** 子包信息（monorepo/fullstack 时使用） */
 export interface PackageInfo {

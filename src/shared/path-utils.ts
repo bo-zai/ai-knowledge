@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename } from "node:path";
 
 /**
  * Extract repository name from a path, handling both Windows and POSIX styles.
@@ -11,24 +11,24 @@ export function getRepoBasename(repoPath: string): string {
   // platform regardless of where we're running.
 
   // Normalize the path first to handle mixed separators
-  const normalized = repoPath.replace(/\\/g, '/');
+  const normalized = repoPath.replace(/\\/g, "/");
 
   // Remove trailing separators
-  const trimmed = normalized.replace(/\/+$/, '');
+  const trimmed = normalized.replace(/\/+$/, "");
 
   // Handle Windows drive letter roots (e.g., "C:" or "C:/")
   if (trimmed.match(/^[A-Za-z]:$/)) {
-    return 'unknown';
+    return "unknown";
   }
 
   // Handle POSIX root
-  if (trimmed === '' || trimmed === '/') {
-    return 'unknown';
+  if (trimmed === "" || trimmed === "/") {
+    return "unknown";
   }
 
   // Split and get the last non-empty segment
-  const segments = trimmed.split('/').filter(s => s.length > 0);
-  return segments.length > 0 ? segments[segments.length - 1] : 'unknown';
+  const segments = trimmed.split("/").filter((s) => s.length > 0);
+  return segments.length > 0 ? segments[segments.length - 1] : "unknown";
 }
 
 /**
@@ -38,12 +38,12 @@ export function getRepoBasename(repoPath: string): string {
  */
 export function getRepoId(repoPath: string): string {
   const name = getRepoBasename(repoPath);
-  if (name === 'unknown') {
-    return 'unknown';
+  if (name === "unknown") {
+    return "unknown";
   }
   // Sanitize: lowercase, replace spaces and underscores with dashes, remove special chars
   return name
     .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
 }

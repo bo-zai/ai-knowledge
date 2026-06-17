@@ -1,15 +1,15 @@
-import { homedir } from 'node:os';
+import { homedir } from "node:os";
 
-import { appendText, ensureDir } from '../shared/fs.js';
-import type { LlmGenerationResult } from '../generation/llm-client.js';
+import { appendText, ensureDir } from "../shared/fs.js";
+import type { LlmGenerationResult } from "../generation/llm-client.js";
 
 export interface SliceDebugTrace {
   sliceId: string;
   sliceKind: string;
   sliceTitle: string;
   objectType: string;
-  mode: 'mock' | 'llm';
-  status: 'success' | 'empty' | 'validation_failed' | 'error';
+  mode: "mock" | "llm";
+  status: "success" | "empty" | "validation_failed" | "error";
   startedAt: string;
   finishedAt: string;
   durationMs: number;
@@ -44,8 +44,10 @@ export async function writeDebugLogs(input: {
   await ensureDir(basePath);
 
   const sections: string[] = [];
-  sections.push('');
-  sections.push('================================================================');
+  sections.push("");
+  sections.push(
+    "================================================================",
+  );
   sections.push(`[RUN] ${new Date().toISOString()}`);
   sections.push(`run_id: ${input.runId}`);
   sections.push(`repo_id: ${input.repoId}`);
@@ -54,7 +56,9 @@ export async function writeDebugLogs(input: {
   sections.push(`total_slices: ${input.traces.length}`);
 
   for (const trace of input.traces) {
-    sections.push('----------------------------------------------------------------');
+    sections.push(
+      "----------------------------------------------------------------",
+    );
     sections.push(`[SLICE] ${trace.sliceId}`);
     sections.push(`kind: ${trace.sliceKind}`);
     sections.push(`title: ${trace.sliceTitle}`);
@@ -73,20 +77,22 @@ export async function writeDebugLogs(input: {
     if (trace.error) {
       sections.push(`error: ${trace.error}`);
     }
-    sections.push('[REQUEST.SYSTEM]');
+    sections.push("[REQUEST.SYSTEM]");
     sections.push(trace.request.systemPrompt);
-    sections.push('[REQUEST.USER]');
+    sections.push("[REQUEST.USER]");
     sections.push(prettyValue(tryParseJson(trace.request.userPrompt)));
-    sections.push('[RESPONSE.RAW]');
-    sections.push(trace.response.rawText ?? '');
-    sections.push('[RESPONSE.PARSED]');
+    sections.push("[RESPONSE.RAW]");
+    sections.push(trace.response.rawText ?? "");
+    sections.push("[RESPONSE.PARSED]");
     sections.push(prettyValue(trace.response.parsedOutput ?? null));
-    sections.push('[RESPONSE.WARNINGS]');
+    sections.push("[RESPONSE.WARNINGS]");
     sections.push(prettyValue(trace.response.warnings ?? []));
   }
-  sections.push('================================================================');
+  sections.push(
+    "================================================================",
+  );
 
-  await appendText(logPath, `${sections.join('\n')}\n`);
+  await appendText(logPath, `${sections.join("\n")}\n`);
 }
 
 function tryParseJson(value: string): unknown {
@@ -102,9 +108,9 @@ function prettyValue(value: unknown): string {
   return JSON.stringify(
     value,
     (_key, currentValue) => {
-      if (typeof currentValue === 'object' && currentValue !== null) {
+      if (typeof currentValue === "object" && currentValue !== null) {
         if (seen.has(currentValue)) {
-          return '[Circular]';
+          return "[Circular]";
         }
         seen.add(currentValue);
       }

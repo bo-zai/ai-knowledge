@@ -39,10 +39,10 @@
  * scope-resolution generalization plan.
  */
 
-import type { ParsedFile, ScopeId, TypeRef } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { WorkspaceResolutionIndex } from '../workspace-index.js';
-import { lookupBindingsAt, namesAtScope } from '../scope/walkers.js';
+import type { ParsedFile, ScopeId, TypeRef } from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import type { WorkspaceResolutionIndex } from "../workspace-index.js";
+import { lookupBindingsAt, namesAtScope } from "../scope/walkers.js";
 
 /**
  * Max chain depth for the post-finalize re-follow. Effective end-to-end
@@ -67,7 +67,7 @@ export function followChainPostFinalize(
   let current = start;
   const visited = new Set<string>();
   for (let depth = 0; depth < RECHAIN_MAX_DEPTH; depth++) {
-    if (current.rawName.includes('.')) return current;
+    if (current.rawName.includes(".")) return current;
     let scopeId: ScopeId | null = fromScopeId;
     let next: TypeRef | undefined;
     while (scopeId !== null) {
@@ -151,7 +151,7 @@ export function propagateImportedReturnTypes(
 
         const refs = lookupBindingsAt(importerModule.id, localName, indexes);
         for (const ref of refs) {
-          if (ref.origin !== 'import' && ref.origin !== 'reexport') continue;
+          if (ref.origin !== "import" && ref.origin !== "reexport") continue;
           const sourceModule = moduleScopeByFile.get(ref.def.filePath);
           if (sourceModule === undefined) continue;
 
@@ -159,7 +159,7 @@ export function propagateImportedReturnTypes(
           // name (e.g. `get_user`), not the importer's local alias.
           const qn = ref.def.qualifiedName;
           if (qn === undefined) continue;
-          const dot = qn.lastIndexOf('.');
+          const dot = qn.lastIndexOf(".");
           const sourceName = dot === -1 ? qn : qn.slice(dot + 1);
 
           const sourceTypeRef = sourceModule.typeBindings.get(sourceName);
@@ -167,11 +167,18 @@ export function propagateImportedReturnTypes(
 
           // Chain-follow inside the source module so we mirror the
           // terminal type, not an intermediate intra-source reference.
-          const terminal = followChainPostFinalize(sourceTypeRef, sourceModule.id, indexes);
+          const terminal = followChainPostFinalize(
+            sourceTypeRef,
+            sourceModule.id,
+            indexes,
+          );
 
           // Mutating typeBindings is safe because draftToScope
           // produced a non-frozen Map (Contract Invariant I3/I8).
-          (importerModule.typeBindings as Map<string, TypeRef>).set(localName, terminal);
+          (importerModule.typeBindings as Map<string, TypeRef>).set(
+            localName,
+            terminal,
+          );
           // First-write-wins for the local alias: if the same
           // `localName` was registered multiple times via
           // `mergeBindings` (rare; happens with conflicting
@@ -188,9 +195,16 @@ export function propagateImportedReturnTypes(
       // later (closer-to-root) SCC will see x's terminal type rather
       // than an intra-module call ref.
       for (const [name, ref] of importerModule.typeBindings) {
-        const resolved = followChainPostFinalize(ref, importerModule.id, indexes);
+        const resolved = followChainPostFinalize(
+          ref,
+          importerModule.id,
+          indexes,
+        );
         if (resolved !== ref) {
-          (importerModule.typeBindings as Map<string, TypeRef>).set(name, resolved);
+          (importerModule.typeBindings as Map<string, TypeRef>).set(
+            name,
+            resolved,
+          );
         }
       }
     }

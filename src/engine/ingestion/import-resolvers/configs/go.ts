@@ -3,13 +3,20 @@
  * Go-specific package strategy (go.mod), then standard fallback.
  */
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
-import { createStandardStrategy } from '../standard.js';
-import { resolveGoPackageDir, resolveGoPackage } from '../go.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type {
+  ImportResolutionConfig,
+  ImportResolverStrategy,
+} from "../types.js";
+import { createStandardStrategy } from "../standard.js";
+import { resolveGoPackageDir, resolveGoPackage } from "../go.js";
 
 /** Go-specific package resolution strategy — resolves go.mod-based package imports. */
-export const goPackageStrategy: ImportResolverStrategy = (rawImportPath, _filePath, ctx) => {
+export const goPackageStrategy: ImportResolverStrategy = (
+  rawImportPath,
+  _filePath,
+  ctx,
+) => {
   const goModule = ctx.configs.goModule;
   if (goModule && rawImportPath.startsWith(goModule.modulePath)) {
     const pkgSuffix = resolveGoPackageDir(rawImportPath, goModule);
@@ -21,7 +28,7 @@ export const goPackageStrategy: ImportResolverStrategy = (rawImportPath, _filePa
         ctx.allFileList,
       );
       if (pkgFiles.length > 0) {
-        return { kind: 'package', files: pkgFiles, dirSuffix: pkgSuffix };
+        return { kind: "package", files: pkgFiles, dirSuffix: pkgSuffix };
       }
     }
     // Fall through if no files found (package might be external)
@@ -31,5 +38,8 @@ export const goPackageStrategy: ImportResolverStrategy = (rawImportPath, _filePa
 
 export const goImportConfig: ImportResolutionConfig = {
   language: SupportedLanguages.Go,
-  strategies: [goPackageStrategy, createStandardStrategy(SupportedLanguages.Go)],
+  strategies: [
+    goPackageStrategy,
+    createStandardStrategy(SupportedLanguages.Go),
+  ],
 };

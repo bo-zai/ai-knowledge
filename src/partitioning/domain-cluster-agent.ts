@@ -4,40 +4,46 @@
  * 使用 LangGraph 工具动态探索代码库，判断候选分区是否应该合并
  */
 
-import { DynamicStructuredTool } from '@langchain/core/tools';
-import { createAgentRuntime, type AgentRuntime, type AgentRuntimeConfig } from '../agent-runtime/runtime.js';
-import { createDomainClusterTools } from '../agent-tools/domain-cluster-tools.js';
-import { LLM_DEFAULTS } from '../config/defaults.js';
-import { logger } from '../shared/logger.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import {
+  createAgentRuntime,
+  type AgentRuntime,
+  type AgentRuntimeConfig,
+} from "../agent-runtime/runtime.js";
+import { createDomainClusterTools } from "../agent-tools/domain-cluster-tools.js";
+import { LLM_DEFAULTS } from "../config/defaults.js";
+import { logger } from "../shared/logger.js";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 import type {
   DomainClusterInput,
   DomainClusterResult,
   DomainMergeDecision,
   PartitionCandidate,
-} from './types.js';
+} from "./types.js";
 
 // ========== 提示词加载 ==========
 
 // 使用 fileURLToPath 正确获取模块目录路径（Windows 兼容）
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, '..', 'prompts');
+const PROMPTS_DIR = path.join(__dirname, "..", "prompts");
 
 /**
  * 加载提示词文件
  */
 async function loadSystemPrompt(): Promise<string> {
-  const promptFile = path.join(PROMPTS_DIR, 'domain-cluster.md');
+  const promptFile = path.join(PROMPTS_DIR, "domain-cluster.md");
 
   try {
-    const content = await fs.readFile(promptFile, 'utf-8');
+    const content = await fs.readFile(promptFile, "utf-8");
     logger.info(`[DomainClusterAgent] Loaded prompt from: ${promptFile}`);
     return content;
   } catch (err) {
-    logger.warn(`[DomainClusterAgent] Failed to load prompt file, using fallback: ${err}`);
+    logger.warn(
+      `[DomainClusterAgent] Failed to load prompt file, using fallback: ${err}`,
+    );
     return DOMAIN_CLUSTER_FALLBACK_PROMPT;
   }
 }
@@ -84,20 +90,24 @@ export class DomainClusterAgent {
       // recursionLimit 控制 Agent 执行循环次数（每次工具调用算一次递归）
       // 默认值 25 对于复杂分析任务可能不足，增加到 100 允许完成完整分析流程
       // 防止 GraphRecursionError: Recursion limit reached without hitting a stop condition
-      const response = await this.agent.invoke({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: inputMessage },
-        ],
-      }, {
-        recursionLimit: 100,
-      });
+      const response = await this.agent.invoke(
+        {
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: inputMessage },
+          ],
+        },
+        {
+          recursionLimit: 100,
+        },
+      );
 
       // 解析响应
       const lastMessage = response.messages[response.messages.length - 1];
-      const content = typeof lastMessage.content === 'string'
-        ? lastMessage.content
-        : JSON.stringify(lastMessage.content);
+      const content =
+        typeof lastMessage.content === "string"
+          ? lastMessage.content
+          : JSON.stringify(lastMessage.content);
 
       const decisions = this.parseDecisions(content);
 
@@ -120,7 +130,7 @@ export class DomainClusterAgent {
         executionTimeMs: Date.now() - startTime,
       };
     } catch (err) {
-      logger.error('DomainClusterAgent failed:', err);
+      logger.error("DomainClusterAgent failed:", err);
       return {
         decisions: [],
         success: false,
@@ -135,7 +145,7 @@ export class DomainClusterAgent {
    */
   private buildInputMessage(input: DomainClusterInput): string {
     // 构建 commit 历史部分
-    let commitHistorySection = '';
+    let commitHistorySection = "";
     if (input.commitHistory && input.commitHistory.candidateCommits.size > 0) {
       commitHistorySection = `
 ## Git Commit 历史
@@ -143,13 +153,14 @@ export class DomainClusterAgent {
 以下是每个候选的入口点文件的 commit 历史（最近 20 条），可以帮助理解业务语义：
 
 `;
-      for (const [candidateId, commits] of input.commitHistory.candidateCommits) {
+      for (const [candidateId, commits] of input.commitHistory
+        .candidateCommits) {
         if (commits.length > 0) {
           commitHistorySection += `### ${candidateId}\n`;
           for (const commit of commits) {
             commitHistorySection += `- ${commit.hash.slice(0, 7)}: ${commit.message}\n`;
           }
-          commitHistorySection += '\n';
+          commitHistorySection += "\n";
         }
       }
     }
@@ -159,8 +170,8 @@ export class DomainClusterAgent {
 
 ## 项目上下文
 - 项目路径: ${input.projectContext.repoPath}
-- 模块列表: ${input.projectContext.moduleNames?.join(', ') ?? '未知'}
-- 是否有领域文档: ${input.projectContext.hasDomainDocs ? '是' : '否'}
+- 模块列表: ${input.projectContext.moduleNames?.join(", ") ?? "未知"}
+- 是否有领域文档: ${input.projectContext.hasDomainDocs ? "是" : "否"}
 
 ## 候选列表
 ${JSON.stringify(input.candidates, null, 2)}
@@ -198,10 +209,10 @@ ${commitHistorySection}
         return JSON.parse(plainCodeBlockMatch[1]) as DomainMergeDecision[];
       }
 
-      logger.warn('No valid JSON found in response');
+      logger.warn("No valid JSON found in response");
       return [];
     } catch (err) {
-      logger.error('Failed to parse decisions:', err);
+      logger.error("Failed to parse decisions:", err);
       return [];
     }
   }
@@ -211,27 +222,38 @@ ${commitHistorySection}
    */
   private validateDecisions(
     decisions: DomainMergeDecision[],
-    candidates: PartitionCandidate[]
+    candidates: PartitionCandidate[],
   ): { valid: boolean; error?: string } {
-    const allCandidateIds = candidates.map(c => c.candidateId);
-    const decisionIds = decisions.flatMap(d => d.mergeGroup);
+    const allCandidateIds = candidates.map((c) => c.candidateId);
+    const decisionIds = decisions.flatMap((d) => d.mergeGroup);
 
     // 检查是否有遗漏
-    const missing = allCandidateIds.filter(id => !decisionIds.includes(id));
+    const missing = allCandidateIds.filter((id) => !decisionIds.includes(id));
     if (missing.length > 0) {
-      return { valid: false, error: `Missing candidates: ${missing.join(', ')}` };
+      return {
+        valid: false,
+        error: `Missing candidates: ${missing.join(", ")}`,
+      };
     }
 
     // 检查是否有重复
-    const duplicates = decisionIds.filter((id, idx) => decisionIds.indexOf(id) !== idx);
+    const duplicates = decisionIds.filter(
+      (id, idx) => decisionIds.indexOf(id) !== idx,
+    );
     if (duplicates.length > 0) {
-      return { valid: false, error: `Duplicate candidates: ${duplicates.join(', ')}` };
+      return {
+        valid: false,
+        error: `Duplicate candidates: ${duplicates.join(", ")}`,
+      };
     }
 
     // 检查置信度范围
     for (const decision of decisions) {
       if (decision.confidence < 0 || decision.confidence > 1) {
-        return { valid: false, error: `Invalid confidence for ${decision.mergeGroup.join(',')}` };
+        return {
+          valid: false,
+          error: `Invalid confidence for ${decision.mergeGroup.join(",")}`,
+        };
       }
     }
 
@@ -243,10 +265,12 @@ ${commitHistorySection}
    */
   private fixDecisions(
     decisions: DomainMergeDecision[],
-    candidates: PartitionCandidate[]
+    candidates: PartitionCandidate[],
   ): DomainMergeDecision[] {
-    const decisionIds = decisions.flatMap(d => d.mergeGroup);
-    const missing = candidates.filter(c => !decisionIds.includes(c.candidateId));
+    const decisionIds = decisions.flatMap((d) => d.mergeGroup);
+    const missing = candidates.filter(
+      (c) => !decisionIds.includes(c.candidateId),
+    );
 
     // 为每个遗漏的候选创建单独决策
     for (const candidate of missing) {
@@ -254,7 +278,7 @@ ${commitHistorySection}
         mergeGroup: [candidate.candidateId],
         domainName: `${candidate.anchorTable}域`,
         confidence: 0.3,
-        reasoning: '无法判断，Agent 未输出决策，自动生成独立决策',
+        reasoning: "无法判断，Agent 未输出决策，自动生成独立决策",
       });
     }
 
@@ -273,13 +297,16 @@ export async function createDomainClusterAgent(
     model?: string;
     baseUrl?: string;
     apiKey?: string;
-  }
+  },
 ): Promise<DomainClusterAgent> {
   // 使用默认配置或自定义配置
   const config = {
     model: modelConfig?.model ?? LLM_DEFAULTS.model,
     baseUrl: modelConfig?.baseUrl ?? LLM_DEFAULTS.baseUrl,
-    apiKey: modelConfig?.apiKey ?? process.env[LLM_DEFAULTS.apiKeyEnv] ?? LLM_DEFAULTS.apiKey,
+    apiKey:
+      modelConfig?.apiKey ??
+      process.env[LLM_DEFAULTS.apiKeyEnv] ??
+      LLM_DEFAULTS.apiKey,
     maxTokens: 128_000,
   };
 
@@ -292,7 +319,7 @@ export async function createDomainClusterAgent(
   // 创建 Agent Runtime
   const agent = createAgentRuntime({
     model: {
-      id: 'domain-cluster-agent',
+      id: "domain-cluster-agent",
       model: config.model,
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
@@ -313,7 +340,7 @@ export async function createDomainClusterAgent(
  */
 export function createDomainClusterAgentSync(
   workspacePath: string,
-  agent: AgentRuntime
+  agent: AgentRuntime,
 ): DomainClusterAgent {
   return new DomainClusterAgent(workspacePath, agent);
 }

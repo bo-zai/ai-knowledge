@@ -176,7 +176,7 @@ export class BindingAccumulator {
   appendFile(filePath: string, entries: readonly BindingEntry[]): void {
     if (this._finalized) {
       throw new Error(
-        '[BindingAccumulator] appendFile after finalize — no further appends allowed',
+        "[BindingAccumulator] appendFile after finalize — no further appends allowed",
       );
     }
     // Single-use lifecycle: once disposed, the accumulator is dead. A
@@ -184,7 +184,7 @@ export class BindingAccumulator {
     // (the consumer is reading state that was supposed to be released),
     // so convert the silent use-after-dispose into a loud failure.
     if (this._disposed) {
-      throw new Error('BindingAccumulator: use after dispose');
+      throw new Error("BindingAccumulator: use after dispose");
     }
     if (entries.length === 0) {
       return;
@@ -214,7 +214,7 @@ export class BindingAccumulator {
     // Populated lazily on first file-scope entry per file.
     let fileScopeMap = this._fileScopeByFile.get(filePath);
     for (const e of entries) {
-      if (e.scope === '') {
+      if (e.scope === "") {
         if (fileScopeMap === undefined) {
           fileScopeMap = new Map();
           this._fileScopeByFile.set(filePath, fileScopeMap);
@@ -233,7 +233,7 @@ export class BindingAccumulator {
     // the `scope === ''` subset of `_allByFile[key]`. A drift would
     // indicate a bug in `appendFile()` where one map was updated but
     // not the other.
-    if (process.env.NODE_ENV !== 'production' && !this._finalized) {
+    if (process.env.NODE_ENV !== "production" && !this._finalized) {
       for (const [filePath, fileScopeMap] of this._fileScopeByFile) {
         const allEntries = this._allByFile.get(filePath);
         if (allEntries === undefined) {
@@ -245,7 +245,7 @@ export class BindingAccumulator {
         // Count unique file-scope varNames in _allByFile (to match Map dedup
         // semantics in _fileScopeByFile where Map.set deduplicates same-name).
         const projectedNames = new Set(
-          allEntries.filter((e) => e.scope === '').map((e) => e.varName),
+          allEntries.filter((e) => e.scope === "").map((e) => e.varName),
         );
         if (projectedNames.size !== fileScopeMap.size) {
           throw new Error(
@@ -383,7 +383,9 @@ export class BindingAccumulator {
     for (const [filePath, entries] of this._allByFile) {
       total += MAP_ENTRY_OVERHEAD + filePath.length * 2;
       for (const e of entries) {
-        total += ENTRY_OVERHEAD + (e.scope.length + e.varName.length + e.typeName.length) * 2;
+        total +=
+          ENTRY_OVERHEAD +
+          (e.scope.length + e.varName.length + e.typeName.length) * 2;
       }
     }
     return total;

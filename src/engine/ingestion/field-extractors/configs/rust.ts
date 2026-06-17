@@ -1,9 +1,9 @@
 // gitnexus/src/core/ingestion/field-extractors/configs/rust.ts
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { FieldExtractionConfig } from '../generic.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import { hasKeyword } from './helpers.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { FieldExtractionConfig } from "../generic.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import { hasKeyword } from "./helpers.js";
 
 /**
  * Rust field extraction config.
@@ -14,25 +14,26 @@ import { hasKeyword } from './helpers.js';
  */
 export const rustConfig: FieldExtractionConfig = {
   language: SupportedLanguages.Rust,
-  typeDeclarationNodes: ['struct_item', 'enum_item'],
-  fieldNodeTypes: ['field_declaration'],
-  bodyNodeTypes: ['field_declaration_list'],
-  defaultVisibility: 'private',
+  typeDeclarationNodes: ["struct_item", "enum_item"],
+  fieldNodeTypes: ["field_declaration"],
+  bodyNodeTypes: ["field_declaration_list"],
+  defaultVisibility: "private",
 
   extractName(node) {
-    const name = node.childForFieldName('name');
+    const name = node.childForFieldName("name");
     if (name) return name.text;
     // fallback: first field_identifier
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
-      if (child?.type === 'field_identifier') return child.text;
+      if (child?.type === "field_identifier") return child.text;
     }
     return undefined;
   },
 
   extractType(node) {
-    const typeNode = node.childForFieldName('type');
-    if (typeNode) return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
+    const typeNode = node.childForFieldName("type");
+    if (typeNode)
+      return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
     return undefined;
   },
 
@@ -40,9 +41,9 @@ export const rustConfig: FieldExtractionConfig = {
     // Check for visibility_modifier named child (pub, pub(crate), pub(super))
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
-      if (child?.type === 'visibility_modifier') return 'public';
+      if (child?.type === "visibility_modifier") return "public";
     }
-    return hasKeyword(node, 'pub') ? 'public' : 'private';
+    return hasKeyword(node, "pub") ? "public" : "private";
   },
 
   isStatic(_node) {

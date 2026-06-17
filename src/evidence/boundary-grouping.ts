@@ -6,8 +6,8 @@
  * 阶段2：每组独立调用 LLM 生成边界知识
  */
 
-import { logger } from '../shared/logger.js';
-import type { LlmClaimsProvider } from '../generation/knowledge-generator.js';
+import { logger } from "../shared/logger.js";
+import type { LlmClaimsProvider } from "../generation/knowledge-generator.js";
 
 /**
  * 配置文件信息
@@ -78,9 +78,9 @@ const GROUPING_SYSTEM_PROMPT = `你是配置文件分析专家。根据配置文
  * 构建分组用户提示词
  */
 function buildGroupingUserPrompt(configFiles: ConfigFileInfo[]): string {
-  const fileList = configFiles.map(f =>
-    JSON.stringify({ name: f.name, path: f.path })
-  ).join(',\n  ');
+  const fileList = configFiles
+    .map((f) => JSON.stringify({ name: f.name, path: f.path }))
+    .join(",\n  ");
 
   return `请对以下配置文件列表进行分组：
 
@@ -104,11 +104,13 @@ export async function groupBoundaryConfigs(
 
   // 单文件或少量文件：不分组，直接返回
   if (configFiles.length <= 3) {
-    return [{
-      group_name: '配置文件',
-      group_description: '项目配置文件',
-      files: configFiles,
-    }];
+    return [
+      {
+        group_name: "配置文件",
+        group_description: "项目配置文件",
+        files: configFiles,
+      },
+    ];
   }
 
   const userPrompt = buildGroupingUserPrompt(configFiles);
@@ -136,12 +138,12 @@ function parseGroupingOutput(rawText: string): GroupingOutput {
   let jsonText = rawText.trim();
 
   // 移除 markdown code blocks
-  if (jsonText.startsWith('```json')) {
+  if (jsonText.startsWith("```json")) {
     jsonText = jsonText.slice(7);
-  } else if (jsonText.startsWith('```')) {
+  } else if (jsonText.startsWith("```")) {
     jsonText = jsonText.slice(3);
   }
-  if (jsonText.endsWith('```')) {
+  if (jsonText.endsWith("```")) {
     jsonText = jsonText.slice(0, -3);
   }
   jsonText = jsonText.trim();
@@ -226,9 +228,7 @@ export function buildBoundaryGenerationPrompt(group: BoundaryGroup): {
 
 只输出 JSON，不输出解释或注释。`;
 
-  const fileList = group.files.map(f =>
-    `- ${f.name} (${f.path})`
-  ).join('\n');
+  const fileList = group.files.map((f) => `- ${f.name} (${f.path})`).join("\n");
 
   const userPrompt = `分析以下 ${group.group_name}：
 

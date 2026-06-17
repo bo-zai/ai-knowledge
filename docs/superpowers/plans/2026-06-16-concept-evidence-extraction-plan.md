@@ -49,6 +49,7 @@ tests/unit/evidence/extractors/concept/
 ### Task 1: 类型定义
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/types.ts`
 
 - [ ] **Step 1: 创建类型文件，定义核心类型**
@@ -61,20 +62,20 @@ tests/unit/evidence/extractors/concept/
  */
 export interface ConceptCandidate {
   // 基础信息
-  candidateId: string;              // CAND-{table-name}
-  nameCandidates: string[];         // 候选概念名称
-  confidence: number;               // 置信度 0-1
+  candidateId: string; // CAND-{table-name}
+  nameCandidates: string[]; // 候选概念名称
+  confidence: number; // 置信度 0-1
   confidenceBreakdown: {
-    traceDepth: number;             // 追溯深度（完整度）0.5-1.0
-    crossModule: number;            // 跨模块加权 0-0.2
-    multiEntryPoint: number;        // 多入口覆盖 0-0.15
-    tableRelation: number;          // 表关联密度 0-0.1
+    traceDepth: number; // 追溯深度（完整度）0.5-1.0
+    crossModule: number; // 跨模块加权 0-0.2
+    multiEntryPoint: number; // 多入口覆盖 0-0.15
+    tableRelation: number; // 表关联密度 0-0.1
   };
 
   // 模块信息
-  modulePath: string;               // 主模块路径
-  moduleName: string;               // 主模块名
-  isCrossModule: boolean;           // 是否跨模块候选
+  modulePath: string; // 主模块路径
+  moduleName: string; // 主模块名
+  isCrossModule: boolean; // 是否跨模块候选
 
   // 表锚点信息
   tableAnchor: TableAnchor;
@@ -86,19 +87,23 @@ export interface ConceptCandidate {
   gitCommits: GitCommitEvidence[];
 
   // 标记信息
-  suspiciousMark?: 'transmission_class' | 'config_class' | 'simple_enum' | 'external_enum_usage';
+  suspiciousMark?:
+    | "transmission_class"
+    | "config_class"
+    | "simple_enum"
+    | "external_enum_usage";
 }
 
 /**
  * 表锚点 - 跨模块聚合的核心锚点
  */
 export interface TableAnchor {
-  tableName: string;                // 数据库表名（唯一锚点）
+  tableName: string; // 数据库表名（唯一锚点）
   schema?: string;
   columns: string[];
 
   traceSources: TableTraceSource[];
-  isCrossModule: boolean;           // traceSources 来自多个模块
+  isCrossModule: boolean; // traceSources 来自多个模块
   moduleCount: number;
   moduleNames: string[];
 
@@ -123,14 +128,14 @@ export interface TableTraceSource {
  * 入口点信息
  */
 export interface EntryPointInfo {
-  kind: 'controller' | 'scheduled' | 'mq_consumer';
+  kind: "controller" | "scheduled" | "mq_consumer";
   className: string;
   filePath: string;
   moduleName: string;
   modulePath: string;
   methodName?: string;
   startLine: number;
-  signature?: string;             // @GetMapping("/product/list")
+  signature?: string; // @GetMapping("/product/list")
 }
 
 /**
@@ -199,25 +204,25 @@ export interface EntityInfo {
  */
 export interface GitCommitEvidence {
   commitHash: string;
-  commitMessage: string;            // 业务描述
+  commitMessage: string; // 业务描述
   commitDate: string;
   author?: string;
 
   changedFiles: {
     filePath: string;
     moduleName: string;
-    changeType: 'added' | 'modified' | 'deleted';
+    changeType: "added" | "modified" | "deleted";
   }[];
 
-  relevanceScore: number;           // 与候选相关度 0-1
+  relevanceScore: number; // 与候选相关度 0-1
 }
 
 /**
  * 业务域定义
  */
 export interface BusinessDomain {
-  domainId: string;                 // domain-{table-name}
-  domainName: string;               // 业务域名称
+  domainId: string; // domain-{table-name}
+  domainName: string; // 业务域名称
 
   coreTables: TableAnchor[];
   relatedTables: TableAnchor[];
@@ -225,7 +230,7 @@ export interface BusinessDomain {
   coveredModules: {
     moduleName: string;
     modulePath: string;
-    role: 'primary' | 'supporting';
+    role: "primary" | "supporting";
     entryPointCount: number;
   }[];
 
@@ -238,7 +243,7 @@ export interface BusinessDomain {
  * 发现途径结果
  */
 export interface DiscoveryPathResult {
-  pathway: 'controller' | 'scheduled' | 'mq_consumer';
+  pathway: "controller" | "scheduled" | "mq_consumer";
   entryPoints: EntryPointInfo[];
   tracePaths: ConceptTracePath[];
   errors: string[];
@@ -253,7 +258,10 @@ export interface LanguageAdapter {
   traceToService(entryPoint: EntryPointInfo): Promise<ServiceChainNode[]>;
   traceToMapper(serviceNode: ServiceChainNode): Promise<MapperInfo[]>;
   extractTableFromMapper(mapper: MapperInfo): Promise<TableInfo[]>;
-  findEntityForTable(table: TableInfo, modulePath: string): Promise<EntityInfo | undefined>;
+  findEntityForTable(
+    table: TableInfo,
+    modulePath: string,
+  ): Promise<EntityInfo | undefined>;
 }
 ```
 
@@ -279,6 +287,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 2: Java 语言适配器
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/language-adapters/java-adapter.ts`
 - Create: `src/evidence/extractors/concept/language-adapters/index.ts`
 
@@ -287,20 +296,30 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/language-adapters/java-adapter.ts
 
-import type { LanguageAdapter, EntryPointInfo, ServiceChainNode, MapperInfo, TableInfo, EntityInfo } from '../types.js';
-import type { GraphQuerier } from '../../../code-extractor/graph-querier.js';
-import type { ModuleTopology } from '../../../module-topology.js';
-import { parseMapperXml, extractTablesFromSql } from '../../../mybatis/mapper-parser.js';
-import { glob } from 'glob';
-import fs from 'fs/promises';
-import path from 'path';
+import type {
+  LanguageAdapter,
+  EntryPointInfo,
+  ServiceChainNode,
+  MapperInfo,
+  TableInfo,
+  EntityInfo,
+} from "../types.js";
+import type { GraphQuerier } from "../../../code-extractor/graph-querier.js";
+import type { ModuleTopology } from "../../../module-topology.js";
+import {
+  parseMapperXml,
+  extractTablesFromSql,
+} from "../../../mybatis/mapper-parser.js";
+import { glob } from "glob";
+import fs from "fs/promises";
+import path from "path";
 
 /**
  * Java 语言适配器
  * 支持注解检测、MyBatis Mapper 解析、Entity 定位
  */
 export class JavaAdapter implements LanguageAdapter {
-  language = 'java';
+  language = "java";
 
   private graphQuerier: GraphQuerier;
   private topology: ModuleTopology;
@@ -334,7 +353,9 @@ export class JavaAdapter implements LanguageAdapter {
   /**
    * 检测 Controller 入口点
    */
-  private async detectControllers(modulePath: string): Promise<EntryPointInfo[]> {
+  private async detectControllers(
+    modulePath: string,
+  ): Promise<EntryPointInfo[]> {
     const cypher = `
       MATCH (c:Class)-[:HAS_ANNOTATION]->(a:Annotation)
       WHERE a.name IN ['RestController', 'Controller']
@@ -348,24 +369,28 @@ export class JavaAdapter implements LanguageAdapter {
     `;
 
     const queryResult = await this.graphQuerier.query(cypher, { modulePath });
-    const moduleName = this.topology.getModuleName(modulePath) || 'unknown';
+    const moduleName = this.topology.getModuleName(modulePath) || "unknown";
 
-    return queryResult.map(row => ({
-      kind: 'controller' as const,
+    return queryResult.map((row) => ({
+      kind: "controller" as const,
       className: row.className,
       filePath: row.filePath,
       moduleName,
       modulePath,
       methodName: row.methodName,
       startLine: row.methodStartLine || row.startLine,
-      signature: row.annotationValue ? `@${row.annotationName}("${row.annotationValue}")` : undefined,
+      signature: row.annotationValue
+        ? `@${row.annotationName}("${row.annotationValue}")`
+        : undefined,
     }));
   }
 
   /**
    * 检测 Scheduled 入口点
    */
-  private async detectScheduledMethods(modulePath: string): Promise<EntryPointInfo[]> {
+  private async detectScheduledMethods(
+    modulePath: string,
+  ): Promise<EntryPointInfo[]> {
     const cypher = `
       MATCH (c:Class)-[:HAS_METHOD]->(m:Method)-[:HAS_ANNOTATION]->(a:Annotation)
       WHERE a.name = 'Scheduled'
@@ -376,24 +401,28 @@ export class JavaAdapter implements LanguageAdapter {
     `;
 
     const queryResult = await this.graphQuerier.query(cypher, { modulePath });
-    const moduleName = this.topology.getModuleName(modulePath) || 'unknown';
+    const moduleName = this.topology.getModuleName(modulePath) || "unknown";
 
-    return queryResult.map(row => ({
-      kind: 'scheduled' as const,
+    return queryResult.map((row) => ({
+      kind: "scheduled" as const,
       className: row.className,
       filePath: row.filePath,
       moduleName,
       modulePath,
       methodName: row.methodName,
       startLine: row.startLine,
-      signature: row.scheduleValue ? `@Scheduled(${row.scheduleValue})` : '@Scheduled',
+      signature: row.scheduleValue
+        ? `@Scheduled(${row.scheduleValue})`
+        : "@Scheduled",
     }));
   }
 
   /**
    * 检测 MQ Consumer 入口点
    */
-  private async detectMqConsumers(modulePath: string): Promise<EntryPointInfo[]> {
+  private async detectMqConsumers(
+    modulePath: string,
+  ): Promise<EntryPointInfo[]> {
     const cypher = `
       MATCH (c:Class)-[:HAS_ANNOTATION]->(a:Annotation)
       WHERE a.name IN ['RocketMQMessageListener', 'KafkaListener', 'RabbitListener']
@@ -406,24 +435,28 @@ export class JavaAdapter implements LanguageAdapter {
     `;
 
     const queryResult = await this.graphQuerier.query(cypher, { modulePath });
-    const moduleName = this.topology.getModuleName(modulePath) || 'unknown';
+    const moduleName = this.topology.getModuleName(modulePath) || "unknown";
 
-    return queryResult.map(row => ({
-      kind: 'mq_consumer' as const,
+    return queryResult.map((row) => ({
+      kind: "mq_consumer" as const,
       className: row.className,
       filePath: row.filePath,
       moduleName,
       modulePath,
       methodName: row.methodName,
       startLine: row.methodStartLine || row.startLine,
-      signature: row.topicValue ? `@${row.annotationName}(topic="${row.topicValue}")` : undefined,
+      signature: row.topicValue
+        ? `@${row.annotationName}(topic="${row.topicValue}")`
+        : undefined,
     }));
   }
 
   /**
    * 从入口点追溯到 Service 层
    */
-  async traceToService(entryPoint: EntryPointInfo): Promise<ServiceChainNode[]> {
+  async traceToService(
+    entryPoint: EntryPointInfo,
+  ): Promise<ServiceChainNode[]> {
     const cypher = `
       MATCH (entry:Class {name: $className})
       OPTIONAL MATCH (entry)-[:HAS_METHOD]->(m:Method {name: $methodName})
@@ -441,14 +474,17 @@ export class JavaAdapter implements LanguageAdapter {
     });
 
     const chain: ServiceChainNode[] = [];
-    const moduleName = this.topology.getModuleName(entryPoint.modulePath) || 'unknown';
+    const moduleName =
+      this.topology.getModuleName(entryPoint.modulePath) || "unknown";
 
     for (const row of queryResult) {
       if (row.className) {
         chain.push({
           className: row.className,
           filePath: row.filePath,
-          moduleName: row.modulePath ? this.topology.getModuleName(row.modulePath) || moduleName : moduleName,
+          moduleName: row.modulePath
+            ? this.topology.getModuleName(row.modulePath) || moduleName
+            : moduleName,
           modulePath: row.modulePath || entryPoint.modulePath,
           methodName: row.methodName,
           startLine: row.startLine,
@@ -479,7 +515,8 @@ export class JavaAdapter implements LanguageAdapter {
     });
 
     const mappers: MapperInfo[] = [];
-    const moduleName = this.topology.getModuleName(serviceNode.modulePath) || 'unknown';
+    const moduleName =
+      this.topology.getModuleName(serviceNode.modulePath) || "unknown";
 
     for (const row of queryResult) {
       if (row.className) {
@@ -488,7 +525,9 @@ export class JavaAdapter implements LanguageAdapter {
         mappers.push({
           className: row.className,
           filePath: row.filePath,
-          moduleName: row.modulePath ? this.topology.getModuleName(row.modulePath) || moduleName : moduleName,
+          moduleName: row.modulePath
+            ? this.topology.getModuleName(row.modulePath) || moduleName
+            : moduleName,
           modulePath: row.modulePath || serviceNode.modulePath,
           xmlPath,
           sqlIds: row.methodName ? [row.methodName] : [],
@@ -502,19 +541,24 @@ export class JavaAdapter implements LanguageAdapter {
   /**
    * 查找 Mapper XML 文件
    */
-  private async findMapperXml(javaPath: string, mapperClassName: string): Promise<string | undefined> {
+  private async findMapperXml(
+    javaPath: string,
+    mapperClassName: string,
+  ): Promise<string | undefined> {
     const modulePath = this.topology.getModulePath(javaPath);
     if (!modulePath) return undefined;
 
-    const mapperName = mapperClassName.replace('Mapper', '');
+    const mapperName = mapperClassName.replace("Mapper", "");
     const xmlPattern = `${modulePath}/**/mapper/**/*.xml`;
 
     try {
       const xmlFiles = await glob(xmlPattern, { windowsPathsNoEscape: true });
       for (const xmlFile of xmlFiles) {
-        const content = await fs.readFile(xmlFile, 'utf-8');
-        if (content.includes(`<mapper namespace="${mapperClassName}">`) ||
-            content.includes(`namespace="${mapperClassName}"`)) {
+        const content = await fs.readFile(xmlFile, "utf-8");
+        if (
+          content.includes(`<mapper namespace="${mapperClassName}">`) ||
+          content.includes(`namespace="${mapperClassName}"`)
+        ) {
           return xmlFile;
         }
       }
@@ -533,14 +577,16 @@ export class JavaAdapter implements LanguageAdapter {
 
     if (mapper.xmlPath) {
       try {
-        const xmlContent = await fs.readFile(mapper.xmlPath, 'utf-8');
+        const xmlContent = await fs.readFile(mapper.xmlPath, "utf-8");
         const parsed = parseMapperXml(xmlContent);
-        const sqlTables = extractTablesFromSql(parsed.sqlStatements.join('\n'));
-        tables.push(...sqlTables.map(t => ({
-          tableName: t,
-          schema: undefined,
-          columns: [],
-        })));
+        const sqlTables = extractTablesFromSql(parsed.sqlStatements.join("\n"));
+        tables.push(
+          ...sqlTables.map((t) => ({
+            tableName: t,
+            schema: undefined,
+            columns: [],
+          })),
+        );
       } catch {
         // 解析失败，返回空数组
       }
@@ -549,11 +595,13 @@ export class JavaAdapter implements LanguageAdapter {
     // 如果 XML 未找到，尝试从 Mapper 接口方法名推断
     if (tables.length === 0 && mapper.sqlIds.length > 0) {
       const inferredTables = this.inferTableFromMethodName(mapper.sqlIds);
-      tables.push(...inferredTables.map(t => ({
-        tableName: t,
-        schema: undefined,
-        columns: [],
-      })));
+      tables.push(
+        ...inferredTables.map((t) => ({
+          tableName: t,
+          schema: undefined,
+          columns: [],
+        })),
+      );
     }
 
     return tables;
@@ -587,7 +635,10 @@ export class JavaAdapter implements LanguageAdapter {
   /**
    * 根据表名查找 Entity
    */
-  async findEntityForTable(table: TableInfo, modulePath: string): Promise<EntityInfo | undefined> {
+  async findEntityForTable(
+    table: TableInfo,
+    modulePath: string,
+  ): Promise<EntityInfo | undefined> {
     const tableName = table.tableName;
     const entityNameCandidates = [
       tableName,
@@ -615,7 +666,7 @@ export class JavaAdapter implements LanguageAdapter {
     if (queryResult.length === 0) return undefined;
 
     const row = queryResult[0];
-    const moduleName = this.topology.getModuleName(modulePath) || 'unknown';
+    const moduleName = this.topology.getModuleName(modulePath) || "unknown";
 
     return {
       className: row.className,
@@ -631,16 +682,24 @@ export class JavaAdapter implements LanguageAdapter {
    * 转换为驼峰命名
    */
   private toCamelCase(name: string): string {
-    const parts = name.split('_');
-    return parts.map((p, i) => i === 0 ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('');
+    const parts = name.split("_");
+    return parts
+      .map((p, i) =>
+        i === 0
+          ? p.toLowerCase()
+          : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(),
+      )
+      .join("");
   }
 
   /**
    * 转换为 Pascal Case
    */
   private toPascalCase(name: string): string {
-    const parts = name.split('_');
-    return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('');
+    const parts = name.split("_");
+    return parts
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join("");
   }
 }
 ```
@@ -650,17 +709,17 @@ export class JavaAdapter implements LanguageAdapter {
 ```typescript
 // src/evidence/extractors/concept/language-adapters/index.ts
 
-import type { LanguageAdapter } from '../types.js';
-import { JavaAdapter } from './java-adapter.js';
-import type { GraphQuerier } from '../../../code-extractor/graph-querier.js';
-import type { ModuleTopology } from '../../../module-topology.js';
+import type { LanguageAdapter } from "../types.js";
+import { JavaAdapter } from "./java-adapter.js";
+import type { GraphQuerier } from "../../../code-extractor/graph-querier.js";
+import type { ModuleTopology } from "../../../module-topology.js";
 
 export function createLanguageAdapter(
   language: string,
   graphQuerier: GraphQuerier,
   topology: ModuleTopology,
 ): LanguageAdapter | undefined {
-  if (language === 'java') {
+  if (language === "java") {
     return new JavaAdapter(graphQuerier, topology);
   }
   // 其他语言适配器可以在此注册
@@ -696,6 +755,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 4: Scheduled 和 MQ Consumer 路径发现
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/discovery-paths/scheduled-path.ts`
 - Create: `src/evidence/extractors/concept/discovery-paths/mq-consumer-path.ts`
 - Create: `src/evidence/extractors/concept/discovery-paths/index.ts`
@@ -705,8 +765,12 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/discovery-paths/scheduled-path.ts
 
-import type { DiscoveryPathResult, ConceptTracePath, EntryPointInfo } from '../types.js';
-import type { LanguageAdapter } from '../language-adapters/index.js';
+import type {
+  DiscoveryPathResult,
+  ConceptTracePath,
+  EntryPointInfo,
+} from "../types.js";
+import type { LanguageAdapter } from "../language-adapters/index.js";
 
 /**
  * Scheduled 路径发现
@@ -727,7 +791,9 @@ export class ScheduledPathDiscovery {
 
     try {
       const entryPoints = await this.adapter.detectEntryPoints(this.modulePath);
-      const scheduledEntries = entryPoints.filter(ep => ep.kind === 'scheduled');
+      const scheduledEntries = entryPoints.filter(
+        (ep) => ep.kind === "scheduled",
+      );
 
       for (const entryPoint of scheduledEntries) {
         try {
@@ -737,7 +803,9 @@ export class ScheduledPathDiscovery {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`Scheduled ${entryPoint.className}.${entryPoint.methodName}: ${msg}`);
+          errors.push(
+            `Scheduled ${entryPoint.className}.${entryPoint.methodName}: ${msg}`,
+          );
         }
       }
     } catch (err) {
@@ -746,14 +814,16 @@ export class ScheduledPathDiscovery {
     }
 
     return {
-      pathway: 'scheduled',
-      entryPoints: tracePaths.flatMap(tp => tp.entryPoints),
+      pathway: "scheduled",
+      entryPoints: tracePaths.flatMap((tp) => tp.entryPoints),
       tracePaths,
       errors,
     };
   }
 
-  private async traceFromEntryPoint(entryPoint: EntryPointInfo): Promise<ConceptTracePath> {
+  private async traceFromEntryPoint(
+    entryPoint: EntryPointInfo,
+  ): Promise<ConceptTracePath> {
     const tracePath: ConceptTracePath = {
       entryPoints: [entryPoint],
       serviceChain: [],
@@ -774,7 +844,10 @@ export class ScheduledPathDiscovery {
         tracePath.tables.push(...tables);
 
         for (const table of tables) {
-          const entity = await this.adapter.findEntityForTable(table, entryPoint.modulePath);
+          const entity = await this.adapter.findEntityForTable(
+            table,
+            entryPoint.modulePath,
+          );
           if (entity) {
             tracePath.entities.push(entity);
           }
@@ -792,8 +865,12 @@ export class ScheduledPathDiscovery {
 ```typescript
 // src/evidence/extractors/concept/discovery-paths/mq-consumer-path.ts
 
-import type { DiscoveryPathResult, ConceptTracePath, EntryPointInfo } from '../types.js';
-import type { LanguageAdapter } from '../language-adapters/index.js';
+import type {
+  DiscoveryPathResult,
+  ConceptTracePath,
+  EntryPointInfo,
+} from "../types.js";
+import type { LanguageAdapter } from "../language-adapters/index.js";
 
 /**
  * MQ Consumer 路径发现
@@ -814,7 +891,7 @@ export class MqConsumerPathDiscovery {
 
     try {
       const entryPoints = await this.adapter.detectEntryPoints(this.modulePath);
-      const mqEntries = entryPoints.filter(ep => ep.kind === 'mq_consumer');
+      const mqEntries = entryPoints.filter((ep) => ep.kind === "mq_consumer");
 
       for (const entryPoint of mqEntries) {
         try {
@@ -824,7 +901,9 @@ export class MqConsumerPathDiscovery {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`MQ ${entryPoint.className}.${entryPoint.methodName}: ${msg}`);
+          errors.push(
+            `MQ ${entryPoint.className}.${entryPoint.methodName}: ${msg}`,
+          );
         }
       }
     } catch (err) {
@@ -833,14 +912,16 @@ export class MqConsumerPathDiscovery {
     }
 
     return {
-      pathway: 'mq_consumer',
-      entryPoints: tracePaths.flatMap(tp => tp.entryPoints),
+      pathway: "mq_consumer",
+      entryPoints: tracePaths.flatMap((tp) => tp.entryPoints),
       tracePaths,
       errors,
     };
   }
 
-  private async traceFromEntryPoint(entryPoint: EntryPointInfo): Promise<ConceptTracePath> {
+  private async traceFromEntryPoint(
+    entryPoint: EntryPointInfo,
+  ): Promise<ConceptTracePath> {
     const tracePath: ConceptTracePath = {
       entryPoints: [entryPoint],
       serviceChain: [],
@@ -861,7 +942,10 @@ export class MqConsumerPathDiscovery {
         tracePath.tables.push(...tables);
 
         for (const table of tables) {
-          const entity = await this.adapter.findEntityForTable(table, entryPoint.modulePath);
+          const entity = await this.adapter.findEntityForTable(
+            table,
+            entryPoint.modulePath,
+          );
           if (entity) {
             tracePath.entities.push(entity);
           }
@@ -879,13 +963,13 @@ export class MqConsumerPathDiscovery {
 ```typescript
 // src/evidence/extractors/concept/discovery-paths/index.ts
 
-import type { LanguageAdapter } from '../types.js';
-import type { DiscoveryPathResult } from '../types.js';
-import { ControllerPathDiscovery } from './controller-path.js';
-import { ScheduledPathDiscovery } from './scheduled-path.js';
-import { MqConsumerPathDiscovery } from './mq-consumer-path.js';
+import type { LanguageAdapter } from "../types.js";
+import type { DiscoveryPathResult } from "../types.js";
+import { ControllerPathDiscovery } from "./controller-path.js";
+import { ScheduledPathDiscovery } from "./scheduled-path.js";
+import { MqConsumerPathDiscovery } from "./mq-consumer-path.js";
 
-export type DiscoveryPathway = 'controller' | 'scheduled' | 'mq_consumer';
+export type DiscoveryPathway = "controller" | "scheduled" | "mq_consumer";
 
 export interface DiscoveryRunner {
   pathway: DiscoveryPathway;
@@ -898,16 +982,20 @@ export function createDiscoveryRunner(
   modulePath: string,
 ): DiscoveryRunner {
   switch (pathway) {
-    case 'controller':
+    case "controller":
       return new ControllerPathDiscovery(adapter, modulePath);
-    case 'scheduled':
+    case "scheduled":
       return new ScheduledPathDiscovery(adapter, modulePath);
-    case 'mq_consumer':
+    case "mq_consumer":
       return new MqConsumerPathDiscovery(adapter, modulePath);
   }
 }
 
-export { ControllerPathDiscovery, ScheduledPathDiscovery, MqConsumerPathDiscovery };
+export {
+  ControllerPathDiscovery,
+  ScheduledPathDiscovery,
+  MqConsumerPathDiscovery,
+};
 ```
 
 - [ ] **Step 4: 提交**
@@ -926,6 +1014,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 5: 表锚点聚合器
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/table-anchor-aggregator.ts`
 
 - [ ] **Step 1: 创建表锚点聚合器**
@@ -933,7 +1022,12 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/table-anchor-aggregator.ts
 
-import type { TableAnchor, TableTraceSource, ConceptTracePath, DiscoveryPathResult } from './types.js';
+import type {
+  TableAnchor,
+  TableTraceSource,
+  ConceptTracePath,
+  DiscoveryPathResult,
+} from "./types.js";
 
 /**
  * 表锚点聚合器
@@ -967,13 +1061,13 @@ export class TableAnchorAggregator {
 
       // 构建 TraceSource
       const traceSource: TableTraceSource = {
-        modulePath: tracePath.entryPoints[0]?.modulePath || '',
-        moduleName: tracePath.entryPoints[0]?.moduleName || 'unknown',
-        entityClassName: tracePath.entities[0]?.className || '',
-        entityFilePath: tracePath.entities[0]?.filePath || '',
+        modulePath: tracePath.entryPoints[0]?.modulePath || "",
+        moduleName: tracePath.entryPoints[0]?.moduleName || "unknown",
+        entityClassName: tracePath.entities[0]?.className || "",
+        entityFilePath: tracePath.entities[0]?.filePath || "",
         entryPoints: tracePath.entryPoints,
-        mapperClassName: tracePath.mappers[0]?.className || '',
-        mapperFilePath: tracePath.mappers[0]?.filePath || '',
+        mapperClassName: tracePath.mappers[0]?.className || "",
+        mapperFilePath: tracePath.mappers[0]?.filePath || "",
         confidence: this.computeTraceSourceConfidence(tracePath),
       };
 
@@ -995,7 +1089,9 @@ export class TableAnchorAggregator {
 
       // 添加 TraceSource（去重）
       const existingSource = anchor.traceSources.find(
-        s => s.modulePath === traceSource.modulePath && s.mapperClassName === traceSource.mapperClassName
+        (s) =>
+          s.modulePath === traceSource.modulePath &&
+          s.mapperClassName === traceSource.mapperClassName,
       );
       if (!existingSource) {
         anchor.traceSources.push(traceSource);
@@ -1013,12 +1109,13 @@ export class TableAnchorAggregator {
     let score = 0.5; // 基础分数
 
     // 完整追溯深度加分
-    if (tracePath.serviceChain && tracePath.serviceChain.length > 0) score += 0.1;
+    if (tracePath.serviceChain && tracePath.serviceChain.length > 0)
+      score += 0.1;
     if (tracePath.mappers.length > 0) score += 0.15;
     if (tracePath.entities.length > 0) score += 0.15;
 
     // 多入口覆盖加分
-    const entryPointTypes = new Set(tracePath.entryPoints.map(ep => ep.kind));
+    const entryPointTypes = new Set(tracePath.entryPoints.map((ep) => ep.kind));
     score += Math.min(0.1, entryPointTypes.size * 0.03);
 
     return Math.min(1, score);
@@ -1028,7 +1125,7 @@ export class TableAnchorAggregator {
    * 更新跨模块信息
    */
   private updateCrossModuleInfo(anchor: TableAnchor): void {
-    const moduleSet = new Set(anchor.traceSources.map(s => s.moduleName));
+    const moduleSet = new Set(anchor.traceSources.map((s) => s.moduleName));
     anchor.moduleNames = Array.from(moduleSet);
     anchor.moduleCount = moduleSet.size;
     anchor.isCrossModule = moduleSet.size > 1;
@@ -1042,13 +1139,17 @@ export class TableAnchorAggregator {
    */
   computeAggregatedConfidence(anchor: TableAnchor): number {
     // 基础追溯深度（平均）
-    const avgTraceDepth = anchor.traceSources.reduce((sum, s) => sum + s.confidence, 0) / anchor.traceSources.length;
+    const avgTraceDepth =
+      anchor.traceSources.reduce((sum, s) => sum + s.confidence, 0) /
+      anchor.traceSources.length;
 
     // 跨模块加权
     const crossModuleBonus = anchor.isCrossModule ? 0.2 : 0;
 
     // 多入口覆盖
-    const allEntryKinds = new Set(anchor.traceSources.flatMap(s => s.entryPoints.map(e => e.kind)));
+    const allEntryKinds = new Set(
+      anchor.traceSources.flatMap((s) => s.entryPoints.map((e) => e.kind)),
+    );
     const multiEntryPointBonus = Math.min(0.15, allEntryKinds.size * 0.05);
 
     return Math.min(1, avgTraceDepth + crossModuleBonus + multiEntryPointBonus);
@@ -1073,6 +1174,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 6: 并行发现运行器
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/parallel-discovery-runner.ts`
 - Create: `src/evidence/extractors/concept/index.ts`
 
@@ -1081,13 +1183,18 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/parallel-discovery-runner.ts
 
-import type { TableAnchor, ConceptCandidate, DiscoveryPathResult, DiscoveryPathway } from './types.js';
-import type { LanguageAdapter } from './language-adapters/index.js';
-import { createDiscoveryRunner } from './discovery-paths/index.js';
-import { TableAnchorAggregator } from './table-anchor-aggregator.js';
-import { TableRelationSupplement } from './table-relation-supplement.js';
-import { GitCommitEnhancer } from './git-commit-enhancer.js';
-import { BusinessDomainDefiner } from './business-domain-definer.js';
+import type {
+  TableAnchor,
+  ConceptCandidate,
+  DiscoveryPathResult,
+  DiscoveryPathway,
+} from "./types.js";
+import type { LanguageAdapter } from "./language-adapters/index.js";
+import { createDiscoveryRunner } from "./discovery-paths/index.js";
+import { TableAnchorAggregator } from "./table-anchor-aggregator.js";
+import { TableRelationSupplement } from "./table-relation-supplement.js";
+import { GitCommitEnhancer } from "./git-commit-enhancer.js";
+import { BusinessDomainDefiner } from "./business-domain-definer.js";
 
 /**
  * 并行发现运行器配置
@@ -1134,11 +1241,18 @@ export class ParallelDiscoveryRunner {
     const allDiscoveryResults: DiscoveryPathResult[] = [];
 
     // 默认使用全部三种途径
-    const pathways = this.config.pathways || ['controller', 'scheduled', 'mq_consumer'];
+    const pathways = this.config.pathways || [
+      "controller",
+      "scheduled",
+      "mq_consumer",
+    ];
 
     // 对每个模块并行执行发现
     for (const modulePath of this.config.modulePaths) {
-      const moduleResults = await this.runDiscoveryForModule(modulePath, pathways);
+      const moduleResults = await this.runDiscoveryForModule(
+        modulePath,
+        pathways,
+      );
       allDiscoveryResults.push(...moduleResults.results);
       errors.push(...moduleResults.errors);
     }
@@ -1177,16 +1291,21 @@ export class ParallelDiscoveryRunner {
     const errors: string[] = [];
 
     // 并行执行所有途径
-    const runners = pathways.map(pathway => createDiscoveryRunner(pathway, this.adapter, modulePath));
+    const runners = pathways.map((pathway) =>
+      createDiscoveryRunner(pathway, this.adapter, modulePath),
+    );
 
-    const settled = await Promise.allSettled(runners.map(r => r.discover()));
+    const settled = await Promise.allSettled(runners.map((r) => r.discover()));
 
     for (const result of settled) {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         results.push(result.value);
         errors.push(...result.value.errors);
       } else {
-        const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        const msg =
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
         errors.push(`Discovery failed: ${msg}`);
       }
     }
@@ -1201,14 +1320,14 @@ export class ParallelDiscoveryRunner {
 ```typescript
 // src/evidence/extractors/concept/index.ts
 
-export * from './types.js';
-export * from './language-adapters/index.js';
-export * from './discovery-paths/index.js';
-export * from './table-anchor-aggregator.js';
-export * from './parallel-discovery-runner.js';
-export * from './table-relation-supplement.js';
-export * from './git-commit-enhancer.js';
-export * from './business-domain-definer.js';
+export * from "./types.js";
+export * from "./language-adapters/index.js";
+export * from "./discovery-paths/index.js";
+export * from "./table-anchor-aggregator.js";
+export * from "./parallel-discovery-runner.js";
+export * from "./table-relation-supplement.js";
+export * from "./git-commit-enhancer.js";
+export * from "./business-domain-definer.js";
 ```
 
 - [ ] **Step 3: 提交**
@@ -1227,6 +1346,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 7: 表关联补充和 Service 调用链聚类
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/table-relation-supplement.ts`
 - Create: `src/evidence/extractors/concept/service-call-cluster.ts`
 
@@ -1235,8 +1355,8 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/table-relation-supplement.ts
 
-import type { TableAnchor, TableInfo } from './types.js';
-import type { GraphQuerier } from '../../code-extractor/graph-querier.js';
+import type { TableAnchor, TableInfo } from "./types.js";
+import type { GraphQuerier } from "../../code-extractor/graph-querier.js";
 
 /**
  * 表关联补充器
@@ -1260,7 +1380,9 @@ export class TableRelationSupplement {
       const fkTables = await this.discoverForeignKeyTables(anchor.tableName);
       for (const fkTable of fkTables) {
         // 如果关联表不在 anchors 中，添加为相关表
-        const existingAnchor = supplemented.find(a => a.tableName === fkTable.tableName);
+        const existingAnchor = supplemented.find(
+          (a) => a.tableName === fkTable.tableName,
+        );
         if (!existingAnchor) {
           supplemented.push({
             tableName: fkTable.tableName,
@@ -1286,7 +1408,9 @@ export class TableRelationSupplement {
   /**
    * 通过 Cypher 查询发现外键关联表
    */
-  private async discoverForeignKeyTables(tableName: string): Promise<TableInfo[]> {
+  private async discoverForeignKeyTables(
+    tableName: string,
+  ): Promise<TableInfo[]> {
     const cypher = `
       MATCH (t:Table {name: $tableName})
       OPTIONAL MATCH (t)-[:HAS_FOREIGN_KEY]->(fk:ForeignKey)
@@ -1297,8 +1421,8 @@ export class TableRelationSupplement {
     try {
       const result = await this.graphQuerier.query(cypher, { tableName });
       return result
-        .filter(row => row.tableName)
-        .map(row => ({
+        .filter((row) => row.tableName)
+        .map((row) => ({
           tableName: row.tableName,
           schema: row.schema,
           columns: row.columns || [],
@@ -1315,7 +1439,7 @@ export class TableRelationSupplement {
 ```typescript
 // src/evidence/extractors/concept/service-call-cluster.ts
 
-import type { ServiceChainNode, EntryPointInfo } from './types.js';
+import type { ServiceChainNode, EntryPointInfo } from "./types.js";
 
 /**
  * Service 调用链聚类结果
@@ -1357,7 +1481,7 @@ export class ServiceCallCluster {
 
         // 添加调用者信息（需要从 entryKey 解析）
         // entryKey 格式假设为 "className.methodName"
-        const [callerClass, callerMethod] = entryKey.split('.');
+        const [callerClass, callerMethod] = entryKey.split(".");
         const moduleName = node.moduleName;
 
         if (!cluster.moduleNames.includes(moduleName)) {
@@ -1392,6 +1516,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 8: Git Commit 增强器和业务域定义
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/git-commit-enhancer.ts`
 - Create: `src/evidence/extractors/concept/business-domain-definer.ts`
 
@@ -1400,8 +1525,12 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/git-commit-enhancer.ts
 
-import type { TableAnchor, ConceptCandidate, GitCommitEvidence } from './types.js';
-import { simpleGit } from 'simple-git';
+import type {
+  TableAnchor,
+  ConceptCandidate,
+  GitCommitEvidence,
+} from "./types.js";
+import { simpleGit } from "simple-git";
 
 /**
  * Git Commit 增强器
@@ -1428,13 +1557,22 @@ export class GitCommitEnhancer {
         nameCandidates: this.generateNameCandidates(anchor),
         confidence: anchor.aggregatedConfidence,
         confidenceBreakdown: {
-          traceDepth: anchor.traceSources.reduce((sum, s) => sum + s.confidence, 0) / anchor.traceSources.length,
+          traceDepth:
+            anchor.traceSources.reduce((sum, s) => sum + s.confidence, 0) /
+            anchor.traceSources.length,
           crossModule: anchor.isCrossModule ? 0.2 : 0,
-          multiEntryPoint: Math.min(0.15, new Set(anchor.traceSources.flatMap(s => s.entryPoints.map(e => e.kind))).size * 0.05),
+          multiEntryPoint: Math.min(
+            0.15,
+            new Set(
+              anchor.traceSources.flatMap((s) =>
+                s.entryPoints.map((e) => e.kind),
+              ),
+            ).size * 0.05,
+          ),
           tableRelation: 0, // 由 TableRelationSupplement 设置
         },
-        modulePath: anchor.traceSources[0]?.modulePath || '',
-        moduleName: anchor.traceSources[0]?.moduleName || 'unknown',
+        modulePath: anchor.traceSources[0]?.modulePath || "",
+        moduleName: anchor.traceSources[0]?.moduleName || "unknown",
         isCrossModule: anchor.isCrossModule,
         tableAnchor: anchor,
         tracePath: this.buildTracePath(anchor),
@@ -1450,7 +1588,9 @@ export class GitCommitEnhancer {
   /**
    * 提取与表锚点相关的 Git commit
    */
-  private async extractGitCommits(anchor: TableAnchor): Promise<GitCommitEvidence[]> {
+  private async extractGitCommits(
+    anchor: TableAnchor,
+  ): Promise<GitCommitEvidence[]> {
     const git = simpleGit(this.repoPath);
     const commits: GitCommitEvidence[] = [];
 
@@ -1473,24 +1613,29 @@ export class GitCommitEnhancer {
         const changedFiles = await git.diffSummary([commit.hash]);
 
         const relevantChangedFiles = changedFiles.files
-          .filter(f => relevantFiles.has(f.file))
-          .map(f => ({
+          .filter((f) => relevantFiles.has(f.file))
+          .map((f) => ({
             filePath: f.file,
             moduleName: this.extractModuleName(f.file),
-            changeType: 'modified' as const,
+            changeType: "modified" as const,
           }));
 
         if (relevantChangedFiles.length > 0) {
           // 计算相关度
           let relevanceScore = 0;
           for (const f of relevantChangedFiles) {
-            if (f.filePath.includes('entity') || f.filePath.includes('domain')) relevanceScore += 0.3;
-            if (f.filePath.includes('mapper')) relevanceScore += 0.25;
-            if (f.filePath.includes('controller')) relevanceScore += 0.2;
+            if (f.filePath.includes("entity") || f.filePath.includes("domain"))
+              relevanceScore += 0.3;
+            if (f.filePath.includes("mapper")) relevanceScore += 0.25;
+            if (f.filePath.includes("controller")) relevanceScore += 0.2;
           }
 
           // commit message 包含表名加分
-          if (commit.message.toLowerCase().includes(anchor.tableName.toLowerCase())) {
+          if (
+            commit.message
+              .toLowerCase()
+              .includes(anchor.tableName.toLowerCase())
+          ) {
             relevanceScore += 0.2;
           }
 
@@ -1506,7 +1651,9 @@ export class GitCommitEnhancer {
       }
 
       // 按相关度排序，取前 10 条
-      return commits.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, 10);
+      return commits
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, 10);
     } catch {
       return [];
     }
@@ -1516,12 +1663,12 @@ export class GitCommitEnhancer {
    * 从文件路径提取模块名
    */
   private extractModuleName(filePath: string): string {
-    const parts = filePath.split('/');
-    const moduleIndex = parts.findIndex(p => p === 'src' || p === 'modules');
+    const parts = filePath.split("/");
+    const moduleIndex = parts.findIndex((p) => p === "src" || p === "modules");
     if (moduleIndex >= 0 && moduleIndex + 1 < parts.length) {
       return parts[moduleIndex + 1];
     }
-    return 'unknown';
+    return "unknown";
   }
 
   /**
@@ -1531,14 +1678,20 @@ export class GitCommitEnhancer {
     const tableName = anchor.tableName;
 
     // 转换为驼峰
-    const camelName = tableName.split('_').map((p, i) =>
-      i === 0 ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
-    ).join('');
+    const camelName = tableName
+      .split("_")
+      .map((p, i) =>
+        i === 0
+          ? p.toLowerCase()
+          : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(),
+      )
+      .join("");
 
     // 转换为 Pascal
-    const pascalName = tableName.split('_').map(p =>
-      p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
-    ).join('');
+    const pascalName = tableName
+      .split("_")
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join("");
 
     return [tableName, camelName, pascalName];
   }
@@ -1553,7 +1706,13 @@ export class GitCommitEnhancer {
         entryPoints: [],
         serviceChain: [],
         mappers: [],
-        tables: [{ tableName: anchor.tableName, schema: anchor.schema, columns: anchor.columns }],
+        tables: [
+          {
+            tableName: anchor.tableName,
+            schema: anchor.schema,
+            columns: anchor.columns,
+          },
+        ],
         entities: [],
       };
     }
@@ -1561,23 +1720,33 @@ export class GitCommitEnhancer {
     return {
       entryPoints: firstSource.entryPoints,
       serviceChain: [],
-      mappers: [{
-        className: firstSource.mapperClassName,
-        filePath: firstSource.mapperFilePath,
-        moduleName: firstSource.moduleName,
-        modulePath: firstSource.modulePath,
-        xmlPath: undefined,
-        sqlIds: [],
-      }],
-      tables: [{ tableName: anchor.tableName, schema: anchor.schema, columns: anchor.columns }],
-      entities: [{
-        className: firstSource.entityClassName,
-        filePath: firstSource.entityFilePath,
-        moduleName: firstSource.moduleName,
-        modulePath: firstSource.modulePath,
-        fields: [],
-        startLine: 0,
-      }],
+      mappers: [
+        {
+          className: firstSource.mapperClassName,
+          filePath: firstSource.mapperFilePath,
+          moduleName: firstSource.moduleName,
+          modulePath: firstSource.modulePath,
+          xmlPath: undefined,
+          sqlIds: [],
+        },
+      ],
+      tables: [
+        {
+          tableName: anchor.tableName,
+          schema: anchor.schema,
+          columns: anchor.columns,
+        },
+      ],
+      entities: [
+        {
+          className: firstSource.entityClassName,
+          filePath: firstSource.entityFilePath,
+          moduleName: firstSource.moduleName,
+          modulePath: firstSource.modulePath,
+          fields: [],
+          startLine: 0,
+        },
+      ],
     };
   }
 }
@@ -1588,7 +1757,7 @@ export class GitCommitEnhancer {
 ```typescript
 // src/evidence/extractors/concept/business-domain-definer.ts
 
-import type { ConceptCandidate, BusinessDomain, TableAnchor } from './types.js';
+import type { ConceptCandidate, BusinessDomain, TableAnchor } from "./types.js";
 
 /**
  * 业务域定义器
@@ -1627,12 +1796,17 @@ export class BusinessDomainDefiner {
 
       // 添加覆盖模块
       for (const source of candidate.tableAnchor.traceSources) {
-        const existingModule = domain.coveredModules.find(m => m.moduleName === source.moduleName);
+        const existingModule = domain.coveredModules.find(
+          (m) => m.moduleName === source.moduleName,
+        );
         if (!existingModule) {
           domain.coveredModules.push({
             moduleName: source.moduleName,
             modulePath: source.modulePath,
-            role: source.moduleName === candidate.moduleName ? 'primary' : 'supporting',
+            role:
+              source.moduleName === candidate.moduleName
+                ? "primary"
+                : "supporting",
             entryPointCount: source.entryPoints.length,
           });
         } else {
@@ -1649,7 +1823,7 @@ export class BusinessDomainDefiner {
 
     // 去重 Git commits
     for (const domain of domainMap.values()) {
-      const uniqueCommits = new Map<string, typeof domain.gitCommits[0]>();
+      const uniqueCommits = new Map<string, (typeof domain.gitCommits)[0]>();
       for (const commit of domain.gitCommits) {
         uniqueCommits.set(commit.commitHash, commit);
       }
@@ -1668,9 +1842,10 @@ export class BusinessDomainDefiner {
     const tableName = candidate.tableAnchor.tableName;
 
     // 去除下划线，转为 Pascal
-    const pascalName = tableName.split('_').map(p =>
-      p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
-    ).join('');
+    const pascalName = tableName
+      .split("_")
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+      .join("");
 
     // 添加 Management 后缀
     return `${pascalName} Management`;
@@ -1694,6 +1869,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 9: ConceptVerifier 验证类
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept-verifier.ts`
 
 - [ ] **Step 1: 创建验证类**
@@ -1701,7 +1877,12 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept-verifier.ts
 
-import type { TableAnchor, ConceptCandidate, ConceptTracePath, DiscoveryPathResult } from './extractors/concept/types.js';
+import type {
+  TableAnchor,
+  ConceptCandidate,
+  ConceptTracePath,
+  DiscoveryPathResult,
+} from "./extractors/concept/types.js";
 
 /**
  * Concept 验证结果
@@ -1757,7 +1938,8 @@ export class ConceptVerifier {
     const mockDiscoveryResults = this.createMockDiscoveryResults();
 
     // 2. 验证聚合逻辑
-    const { tableAnchors, aggregatorAssertions } = this.verifyAggregation(mockDiscoveryResults);
+    const { tableAnchors, aggregatorAssertions } =
+      this.verifyAggregation(mockDiscoveryResults);
     assertions.push(...aggregatorAssertions);
 
     // 3. 验证置信度计算
@@ -1770,9 +1952,13 @@ export class ConceptVerifier {
     assertions.push(...candidateAssertions);
 
     // 5. 生成摘要
-    const summary = this.generateSummary(tableAnchors, candidates, mockDiscoveryResults);
+    const summary = this.generateSummary(
+      tableAnchors,
+      candidates,
+      mockDiscoveryResults,
+    );
 
-    const success = assertions.every(a => a.passed);
+    const success = assertions.every((a) => a.passed);
 
     return {
       success,
@@ -1795,172 +1981,230 @@ export class ConceptVerifier {
 
     // 模拟 mall-group 的 Controller 追溯
     results.push({
-      pathway: 'controller',
-      entryPoints: [{
-        kind: 'controller',
-        className: 'ProductController',
-        filePath: 'mall-admin/src/main/java/com/mall/admin/controller/ProductController.java',
-        moduleName: 'mall-admin',
-        modulePath: 'mall-admin',
-        methodName: 'list',
-        startLine: 25,
-        signature: '@GetMapping("/product/list")',
-      }],
-      tracePaths: [{
-        entryPoints: [{
-          kind: 'controller',
-          className: 'ProductController',
-          filePath: 'mall-admin/src/main/java/com/mall/admin/controller/ProductController.java',
-          moduleName: 'mall-admin',
-          modulePath: 'mall-admin',
-          methodName: 'list',
+      pathway: "controller",
+      entryPoints: [
+        {
+          kind: "controller",
+          className: "ProductController",
+          filePath:
+            "mall-admin/src/main/java/com/mall/admin/controller/ProductController.java",
+          moduleName: "mall-admin",
+          modulePath: "mall-admin",
+          methodName: "list",
           startLine: 25,
           signature: '@GetMapping("/product/list")',
-        }],
-        serviceChain: [{
-          className: 'ProductService',
-          filePath: 'mall-admin/src/main/java/com/mall/admin/service/ProductService.java',
-          moduleName: 'mall-admin',
-          modulePath: 'mall-admin',
-          methodName: 'listProducts',
-          startLine: 30,
-        }],
-        mappers: [{
-          className: 'ProductMapper',
-          filePath: 'mall-admin/src/main/java/com/mall/admin/mapper/ProductMapper.java',
-          moduleName: 'mall-admin',
-          modulePath: 'mall-admin',
-          xmlPath: 'mall-admin/src/main/resources/mapper/ProductMapper.xml',
-          sqlIds: ['selectProductList'],
-        }],
-        tables: [{
-          tableName: 'pms_product',
-          schema: 'mall',
-          columns: ['id', 'name', 'category_id', 'price', 'stock'],
-        }],
-        entities: [{
-          className: 'Product',
-          filePath: 'mall-admin/src/main/java/com/mall/admin/entity/Product.java',
-          moduleName: 'mall-admin',
-          modulePath: 'mall-admin',
-          fields: ['id', 'name', 'categoryId', 'price', 'stock'],
-          startLine: 10,
-        }],
-      }],
+        },
+      ],
+      tracePaths: [
+        {
+          entryPoints: [
+            {
+              kind: "controller",
+              className: "ProductController",
+              filePath:
+                "mall-admin/src/main/java/com/mall/admin/controller/ProductController.java",
+              moduleName: "mall-admin",
+              modulePath: "mall-admin",
+              methodName: "list",
+              startLine: 25,
+              signature: '@GetMapping("/product/list")',
+            },
+          ],
+          serviceChain: [
+            {
+              className: "ProductService",
+              filePath:
+                "mall-admin/src/main/java/com/mall/admin/service/ProductService.java",
+              moduleName: "mall-admin",
+              modulePath: "mall-admin",
+              methodName: "listProducts",
+              startLine: 30,
+            },
+          ],
+          mappers: [
+            {
+              className: "ProductMapper",
+              filePath:
+                "mall-admin/src/main/java/com/mall/admin/mapper/ProductMapper.java",
+              moduleName: "mall-admin",
+              modulePath: "mall-admin",
+              xmlPath: "mall-admin/src/main/resources/mapper/ProductMapper.xml",
+              sqlIds: ["selectProductList"],
+            },
+          ],
+          tables: [
+            {
+              tableName: "pms_product",
+              schema: "mall",
+              columns: ["id", "name", "category_id", "price", "stock"],
+            },
+          ],
+          entities: [
+            {
+              className: "Product",
+              filePath:
+                "mall-admin/src/main/java/com/mall/admin/entity/Product.java",
+              moduleName: "mall-admin",
+              modulePath: "mall-admin",
+              fields: ["id", "name", "categoryId", "price", "stock"],
+              startLine: 10,
+            },
+          ],
+        },
+      ],
       errors: [],
     });
 
     // 模拟 music-education 的跨模块追溯
     results.push({
-      pathway: 'controller',
-      entryPoints: [{
-        kind: 'controller',
-        className: 'CourseController',
-        filePath: 'music-course/src/main/java/com/music/course/controller/CourseController.java',
-        moduleName: 'music-course',
-        modulePath: 'music-course',
-        methodName: 'getCourseDetail',
-        startLine: 45,
-        signature: '@GetMapping("/course/detail")',
-      }],
-      tracePaths: [{
-        entryPoints: [{
-          kind: 'controller',
-          className: 'CourseController',
-          filePath: 'music-course/src/main/java/com/music/course/controller/CourseController.java',
-          moduleName: 'music-course',
-          modulePath: 'music-course',
-          methodName: 'getCourseDetail',
+      pathway: "controller",
+      entryPoints: [
+        {
+          kind: "controller",
+          className: "CourseController",
+          filePath:
+            "music-course/src/main/java/com/music/course/controller/CourseController.java",
+          moduleName: "music-course",
+          modulePath: "music-course",
+          methodName: "getCourseDetail",
           startLine: 45,
           signature: '@GetMapping("/course/detail")',
-        }],
-        serviceChain: [{
-          className: 'CourseService',
-          filePath: 'music-course/src/main/java/com/music/course/service/CourseService.java',
-          moduleName: 'music-course',
-          modulePath: 'music-course',
-          methodName: 'getCourseDetail',
-          startLine: 50,
-        }],
-        mappers: [{
-          className: 'CourseMapper',
-          filePath: 'music-course/src/main/java/com/music/course/mapper/CourseMapper.java',
-          moduleName: 'music-course',
-          modulePath: 'music-course',
-          xmlPath: 'music-course/src/main/resources/mapper/CourseMapper.xml',
-          sqlIds: ['selectCourseById'],
-        }],
-        tables: [{
-          tableName: 'edu_course',
-          schema: 'education',
-          columns: ['id', 'title', 'teacher_id', 'price', 'status'],
-        }],
-        entities: [{
-          className: 'Course',
-          filePath: 'music-course/src/main/java/com/music/course/entity/Course.java',
-          moduleName: 'music-course',
-          modulePath: 'music-course',
-          fields: ['id', 'title', 'teacherId', 'price', 'status'],
-          startLine: 15,
-        }],
-      }],
+        },
+      ],
+      tracePaths: [
+        {
+          entryPoints: [
+            {
+              kind: "controller",
+              className: "CourseController",
+              filePath:
+                "music-course/src/main/java/com/music/course/controller/CourseController.java",
+              moduleName: "music-course",
+              modulePath: "music-course",
+              methodName: "getCourseDetail",
+              startLine: 45,
+              signature: '@GetMapping("/course/detail")',
+            },
+          ],
+          serviceChain: [
+            {
+              className: "CourseService",
+              filePath:
+                "music-course/src/main/java/com/music/course/service/CourseService.java",
+              moduleName: "music-course",
+              modulePath: "music-course",
+              methodName: "getCourseDetail",
+              startLine: 50,
+            },
+          ],
+          mappers: [
+            {
+              className: "CourseMapper",
+              filePath:
+                "music-course/src/main/java/com/music/course/mapper/CourseMapper.java",
+              moduleName: "music-course",
+              modulePath: "music-course",
+              xmlPath:
+                "music-course/src/main/resources/mapper/CourseMapper.xml",
+              sqlIds: ["selectCourseById"],
+            },
+          ],
+          tables: [
+            {
+              tableName: "edu_course",
+              schema: "education",
+              columns: ["id", "title", "teacher_id", "price", "status"],
+            },
+          ],
+          entities: [
+            {
+              className: "Course",
+              filePath:
+                "music-course/src/main/java/com/music/course/entity/Course.java",
+              moduleName: "music-course",
+              modulePath: "music-course",
+              fields: ["id", "title", "teacherId", "price", "status"],
+              startLine: 15,
+            },
+          ],
+        },
+      ],
       errors: [],
     });
 
     // 模拟跨模块：另一个模块也访问 edu_course 表
     results.push({
-      pathway: 'scheduled',
-      entryPoints: [{
-        kind: 'scheduled',
-        className: 'CourseSyncScheduler',
-        filePath: 'music-sync/src/main/java/com/music/sync/scheduler/CourseSyncScheduler.java',
-        moduleName: 'music-sync',
-        modulePath: 'music-sync',
-        methodName: 'syncCourses',
-        startLine: 20,
-        signature: '@Scheduled(cron="0 0 2 * * ?")',
-      }],
-      tracePaths: [{
-        entryPoints: [{
-          kind: 'scheduled',
-          className: 'CourseSyncScheduler',
-          filePath: 'music-sync/src/main/java/com/music/sync/scheduler/CourseSyncScheduler.java',
-          moduleName: 'music-sync',
-          modulePath: 'music-sync',
-          methodName: 'syncCourses',
+      pathway: "scheduled",
+      entryPoints: [
+        {
+          kind: "scheduled",
+          className: "CourseSyncScheduler",
+          filePath:
+            "music-sync/src/main/java/com/music/sync/scheduler/CourseSyncScheduler.java",
+          moduleName: "music-sync",
+          modulePath: "music-sync",
+          methodName: "syncCourses",
           startLine: 20,
           signature: '@Scheduled(cron="0 0 2 * * ?")',
-        }],
-        serviceChain: [{
-          className: 'CourseSyncService',
-          filePath: 'music-sync/src/main/java/com/music/sync/service/CourseSyncService.java',
-          moduleName: 'music-sync',
-          modulePath: 'music-sync',
-          methodName: 'syncCourses',
-          startLine: 25,
-        }],
-        mappers: [{
-          className: 'CourseMapper',
-          filePath: 'music-sync/src/main/java/com/music/sync/mapper/CourseMapper.java',
-          moduleName: 'music-sync',
-          modulePath: 'music-sync',
-          xmlPath: 'music-sync/src/main/resources/mapper/CourseMapper.xml',
-          sqlIds: ['selectAllCourses', 'updateCourseStatus'],
-        }],
-        tables: [{
-          tableName: 'edu_course',
-          schema: 'education',
-          columns: ['id', 'title', 'teacher_id', 'price', 'status'],
-        }],
-        entities: [{
-          className: 'Course',
-          filePath: 'music-sync/src/main/java/com/music/sync/entity/Course.java',
-          moduleName: 'music-sync',
-          modulePath: 'music-sync',
-          fields: ['id', 'title', 'teacherId', 'price', 'status'],
-          startLine: 10,
-        }],
-      }],
+        },
+      ],
+      tracePaths: [
+        {
+          entryPoints: [
+            {
+              kind: "scheduled",
+              className: "CourseSyncScheduler",
+              filePath:
+                "music-sync/src/main/java/com/music/sync/scheduler/CourseSyncScheduler.java",
+              moduleName: "music-sync",
+              modulePath: "music-sync",
+              methodName: "syncCourses",
+              startLine: 20,
+              signature: '@Scheduled(cron="0 0 2 * * ?")',
+            },
+          ],
+          serviceChain: [
+            {
+              className: "CourseSyncService",
+              filePath:
+                "music-sync/src/main/java/com/music/sync/service/CourseSyncService.java",
+              moduleName: "music-sync",
+              modulePath: "music-sync",
+              methodName: "syncCourses",
+              startLine: 25,
+            },
+          ],
+          mappers: [
+            {
+              className: "CourseMapper",
+              filePath:
+                "music-sync/src/main/java/com/music/sync/mapper/CourseMapper.java",
+              moduleName: "music-sync",
+              modulePath: "music-sync",
+              xmlPath: "music-sync/src/main/resources/mapper/CourseMapper.xml",
+              sqlIds: ["selectAllCourses", "updateCourseStatus"],
+            },
+          ],
+          tables: [
+            {
+              tableName: "edu_course",
+              schema: "education",
+              columns: ["id", "title", "teacher_id", "price", "status"],
+            },
+          ],
+          entities: [
+            {
+              className: "Course",
+              filePath:
+                "music-sync/src/main/java/com/music/sync/entity/Course.java",
+              moduleName: "music-sync",
+              modulePath: "music-sync",
+              fields: ["id", "title", "teacherId", "price", "status"],
+              startLine: 10,
+            },
+          ],
+        },
+      ],
       errors: [],
     });
 
@@ -1998,17 +2242,17 @@ export class ConceptVerifier {
           const source = {
             modulePath: tracePath.entryPoints[0].modulePath,
             moduleName: tracePath.entryPoints[0].moduleName,
-            entityClassName: tracePath.entities[0]?.className || '',
-            entityFilePath: tracePath.entities[0]?.filePath || '',
+            entityClassName: tracePath.entities[0]?.className || "",
+            entityFilePath: tracePath.entities[0]?.filePath || "",
             entryPoints: tracePath.entryPoints,
-            mapperClassName: tracePath.mappers[0]?.className || '',
-            mapperFilePath: tracePath.mappers[0]?.filePath || '',
+            mapperClassName: tracePath.mappers[0]?.className || "",
+            mapperFilePath: tracePath.mappers[0]?.filePath || "",
             confidence: 0.8,
           };
           anchor.traceSources.push(source);
 
           // 更新跨模块信息
-          const modules = new Set(anchor.traceSources.map(s => s.moduleName));
+          const modules = new Set(anchor.traceSources.map((s) => s.moduleName));
           anchor.moduleNames = Array.from(modules);
           anchor.moduleCount = modules.size;
           anchor.isCrossModule = modules.size > 1;
@@ -2023,22 +2267,24 @@ export class ConceptVerifier {
 
     // 断言 1: 应有 2 个表锚点
     assertions.push({
-      name: 'table_anchor_count',
+      name: "table_anchor_count",
       passed: tableAnchors.length === 2,
       message: `Expected 2 table anchors, got ${tableAnchors.length}`,
     });
 
     // 断言 2: edu_course 应为跨模块
-    const eduCourseAnchor = tableAnchors.find(a => a.tableName === 'edu_course');
+    const eduCourseAnchor = tableAnchors.find(
+      (a) => a.tableName === "edu_course",
+    );
     assertions.push({
-      name: 'cross_module_detection',
+      name: "cross_module_detection",
       passed: eduCourseAnchor?.isCrossModule === true,
       message: `edu_course should be cross-module: ${eduCourseAnchor?.isCrossModule}`,
     });
 
     // 断言 3: edu_course 应有 2 个模块
     assertions.push({
-      name: 'module_count',
+      name: "module_count",
       passed: eduCourseAnchor?.moduleCount === 2,
       message: `edu_course should have 2 modules: ${eduCourseAnchor?.moduleCount}`,
     });
@@ -2049,7 +2295,9 @@ export class ConceptVerifier {
   /**
    * 验证置信度计算
    */
-  private verifyConfidenceCalculation(anchors: TableAnchor[]): { name: string; passed: boolean; message: string }[] {
+  private verifyConfidenceCalculation(
+    anchors: TableAnchor[],
+  ): { name: string; passed: boolean; message: string }[] {
     const assertions: { name: string; passed: boolean; message: string }[] = [];
 
     // 计算置信度
@@ -2059,20 +2307,20 @@ export class ConceptVerifier {
       anchor.aggregatedConfidence = 0.7 + crossModuleBonus;
     }
 
-    const eduCourseAnchor = anchors.find(a => a.tableName === 'edu_course');
+    const eduCourseAnchor = anchors.find((a) => a.tableName === "edu_course");
 
     // 断言: 跨模块表置信度应 >= 0.9
     assertions.push({
-      name: 'cross_module_confidence',
+      name: "cross_module_confidence",
       passed: (eduCourseAnchor?.aggregatedConfidence ?? 0) >= 0.9,
       message: `Cross-module confidence should be >= 0.9: ${eduCourseAnchor?.aggregatedConfidence}`,
     });
 
-    const pmsProductAnchor = anchors.find(a => a.tableName === 'pms_product');
+    const pmsProductAnchor = anchors.find((a) => a.tableName === "pms_product");
 
     // 断言: 单模块表置信度应约为 0.7
     assertions.push({
-      name: 'single_module_confidence',
+      name: "single_module_confidence",
       passed: (pmsProductAnchor?.aggregatedConfidence ?? 0) >= 0.7,
       message: `Single-module confidence should be ~0.7: ${pmsProductAnchor?.aggregatedConfidence}`,
     });
@@ -2084,14 +2332,17 @@ export class ConceptVerifier {
    * 生成 Mock 候选
    */
   private generateMockCandidates(anchors: TableAnchor[]): ConceptCandidate[] {
-    return anchors.map(anchor => ({
+    return anchors.map((anchor) => ({
       candidateId: `CAND-${anchor.tableName}`,
       nameCandidates: [anchor.tableName, this.toCamelCase(anchor.tableName)],
       confidence: anchor.aggregatedConfidence,
       confidenceBreakdown: {
         traceDepth: 0.7,
         crossModule: anchor.isCrossModule ? 0.2 : 0,
-        multiEntryPoint: anchor.traceSources.flatMap(s => s.entryPoints).length > 1 ? 0.1 : 0,
+        multiEntryPoint:
+          anchor.traceSources.flatMap((s) => s.entryPoints).length > 1
+            ? 0.1
+            : 0,
         tableRelation: 0,
       },
       modulePath: anchor.traceSources[0].modulePath,
@@ -2099,7 +2350,7 @@ export class ConceptVerifier {
       isCrossModule: anchor.isCrossModule,
       tableAnchor: anchor,
       tracePath: {
-        entryPoints: anchor.traceSources.flatMap(s => s.entryPoints),
+        entryPoints: anchor.traceSources.flatMap((s) => s.entryPoints),
         serviceChain: [],
         mappers: [],
         tables: [{ tableName: anchor.tableName }],
@@ -2112,20 +2363,22 @@ export class ConceptVerifier {
   /**
    * 验证候选
    */
-  private verifyCandidates(candidates: ConceptCandidate[]): { name: string; passed: boolean; message: string }[] {
+  private verifyCandidates(
+    candidates: ConceptCandidate[],
+  ): { name: string; passed: boolean; message: string }[] {
     const assertions: { name: string; passed: boolean; message: string }[] = [];
 
     // 断言: 候选 ID 格式正确
     assertions.push({
-      name: 'candidate_id_format',
-      passed: candidates.every(c => c.candidateId.startsWith('CAND-')),
+      name: "candidate_id_format",
+      passed: candidates.every((c) => c.candidateId.startsWith("CAND-")),
       message: `All candidate IDs should start with CAND-`,
     });
 
     // 断言: 跨模块候选标记正确
-    const crossModuleCandidates = candidates.filter(c => c.isCrossModule);
+    const crossModuleCandidates = candidates.filter((c) => c.isCrossModule);
     assertions.push({
-      name: 'cross_module_candidate_count',
+      name: "cross_module_candidate_count",
       passed: crossModuleCandidates.length === 1,
       message: `Should have 1 cross-module candidate: ${crossModuleCandidates.length}`,
     });
@@ -2140,14 +2393,14 @@ export class ConceptVerifier {
     anchors: TableAnchor[],
     candidates: ConceptCandidate[],
     results: DiscoveryPathResult[],
-  ): ConceptVerificationResult['summary'] {
-    const crossModuleTables = anchors.filter(a => a.isCrossModule).length;
+  ): ConceptVerificationResult["summary"] {
+    const crossModuleTables = anchors.filter((a) => a.isCrossModule).length;
     const pathwayStats = {
-      controller: results.filter(r => r.pathway === 'controller').length,
-      scheduled: results.filter(r => r.pathway === 'scheduled').length,
-      mqConsumer: results.filter(r => r.pathway === 'mq_consumer').length,
+      controller: results.filter((r) => r.pathway === "controller").length,
+      scheduled: results.filter((r) => r.pathway === "scheduled").length,
+      mqConsumer: results.filter((r) => r.pathway === "mq_consumer").length,
     };
-    const totalEntryPoints = results.flatMap(r => r.entryPoints).length;
+    const totalEntryPoints = results.flatMap((r) => r.entryPoints).length;
 
     return {
       totalTables: anchors.length,
@@ -2162,9 +2415,14 @@ export class ConceptVerifier {
    * 转换为驼峰命名
    */
   private toCamelCase(name: string): string {
-    return name.split('_').map((p, i) =>
-      i === 0 ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()
-    ).join('');
+    return name
+      .split("_")
+      .map((p, i) =>
+        i === 0
+          ? p.toLowerCase()
+          : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(),
+      )
+      .join("");
   }
 }
 ```
@@ -2186,6 +2444,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ### Task 10: 单元测试和集成验证
 
 **Files:**
+
 - Create: `tests/unit/evidence/extractors/concept/concept-verifier.test.ts`
 - Create: `tests/unit/evidence/extractors/concept/fixtures/mall-group-trace-path.json`
 - Create: `tests/unit/evidence/extractors/concept/fixtures/music-education-trace-path.json`
@@ -2197,12 +2456,16 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // tests/unit/evidence/extractors/concept/concept-verifier.test.ts
 
-import { ConceptVerifier } from '../../../../src/evidence/extractors/concept-verifier.js';
-import { describe, it, expect } from 'vitest';
+import { ConceptVerifier } from "../../../../src/evidence/extractors/concept-verifier.js";
+import { describe, it, expect } from "vitest";
 
-describe('ConceptVerifier', () => {
-  it('should verify mock discovery results', async () => {
-    const verifier = new ConceptVerifier('/mock/repo', ['mall-admin', 'music-course', 'music-sync']);
+describe("ConceptVerifier", () => {
+  it("should verify mock discovery results", async () => {
+    const verifier = new ConceptVerifier("/mock/repo", [
+      "mall-admin",
+      "music-course",
+      "music-sync",
+    ]);
     const result = await verifier.verify();
 
     expect(result.success).toBe(true);
@@ -2211,19 +2474,31 @@ describe('ConceptVerifier', () => {
     expect(result.assertions).toHaveLength(8);
   });
 
-  it('should detect cross-module tables correctly', async () => {
-    const verifier = new ConceptVerifier('/mock/repo', ['mall-admin', 'music-course', 'music-sync']);
+  it("should detect cross-module tables correctly", async () => {
+    const verifier = new ConceptVerifier("/mock/repo", [
+      "mall-admin",
+      "music-course",
+      "music-sync",
+    ]);
     const result = await verifier.verify();
 
-    const crossModuleAssertion = result.assertions.find(a => a.name === 'cross_module_detection');
+    const crossModuleAssertion = result.assertions.find(
+      (a) => a.name === "cross_module_detection",
+    );
     expect(crossModuleAssertion?.passed).toBe(true);
   });
 
-  it('should calculate confidence correctly', async () => {
-    const verifier = new ConceptVerifier('/mock/repo', ['mall-admin', 'music-course', 'music-sync']);
+  it("should calculate confidence correctly", async () => {
+    const verifier = new ConceptVerifier("/mock/repo", [
+      "mall-admin",
+      "music-course",
+      "music-sync",
+    ]);
     const result = await verifier.verify();
 
-    const confidenceAssertion = result.assertions.find(a => a.name === 'cross_module_confidence');
+    const confidenceAssertion = result.assertions.find(
+      (a) => a.name === "cross_module_confidence",
+    );
     expect(confidenceAssertion?.passed).toBe(true);
   });
 });
@@ -2349,12 +2624,16 @@ describe('ConceptVerifier', () => {
 ```typescript
 // tests/unit/evidence/extractors/concept/integration/mall-group-verification.test.ts
 
-import { ConceptVerifier } from '../../../../src/evidence/extractors/concept-verifier.js';
-import { describe, it, expect } from 'vitest';
+import { ConceptVerifier } from "../../../../src/evidence/extractors/concept-verifier.js";
+import { describe, it, expect } from "vitest";
 
-describe('Mall-Group Integration Verification', () => {
-  it('should verify mall-group project', async () => {
-    const verifier = new ConceptVerifier('/mock/mall-group', ['mall-admin', 'mall-portal', 'mall-search']);
+describe("Mall-Group Integration Verification", () => {
+  it("should verify mall-group project", async () => {
+    const verifier = new ConceptVerifier("/mock/mall-group", [
+      "mall-admin",
+      "mall-portal",
+      "mall-search",
+    ]);
     const result = await verifier.verify();
 
     // 验证基本统计
@@ -2362,7 +2641,9 @@ describe('Mall-Group Integration Verification', () => {
     expect(result.summary.totalCandidates).toBeGreaterThanOrEqual(1);
 
     // 验证追溯路径完整性
-    expect(result.details.discoveryResults.every(r => r.tracePaths.length > 0)).toBe(true);
+    expect(
+      result.details.discoveryResults.every((r) => r.tracePaths.length > 0),
+    ).toBe(true);
 
     // 验证错误处理
     expect(result.details.errors.length).toBe(0);
@@ -2373,23 +2654,31 @@ describe('Mall-Group Integration Verification', () => {
 ```typescript
 // tests/unit/evidence/extractors/concept/integration/music-education-verification.test.ts
 
-import { ConceptVerifier } from '../../../../src/evidence/extractors/concept-verifier.js';
-import { describe, it, expect } from 'vitest';
+import { ConceptVerifier } from "../../../../src/evidence/extractors/concept-verifier.js";
+import { describe, it, expect } from "vitest";
 
-describe('Music-Education Integration Verification', () => {
-  it('should verify music-education project', async () => {
-    const verifier = new ConceptVerifier('/mock/music-education', ['music-course', 'music-sync', 'music-teacher']);
+describe("Music-Education Integration Verification", () => {
+  it("should verify music-education project", async () => {
+    const verifier = new ConceptVerifier("/mock/music-education", [
+      "music-course",
+      "music-sync",
+      "music-teacher",
+    ]);
     const result = await verifier.verify();
 
     // 验证跨模块检测
-    const eduCourseAnchor = result.details.tableAnchors.find(a => a.tableName === 'edu_course');
+    const eduCourseAnchor = result.details.tableAnchors.find(
+      (a) => a.tableName === "edu_course",
+    );
     expect(eduCourseAnchor?.isCrossModule).toBe(true);
 
     // 验证置信度计算
     expect(eduCourseAnchor?.aggregatedConfidence).toBeGreaterThanOrEqual(0.9);
 
     // 验证候选生成
-    const eduCourseCandidate = result.details.candidates.find(c => c.tableAnchor.tableName === 'edu_course');
+    const eduCourseCandidate = result.details.candidates.find(
+      (c) => c.tableAnchor.tableName === "edu_course",
+    );
     expect(eduCourseCandidate?.isCrossModule).toBe(true);
   });
 });
@@ -2419,17 +2708,20 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ## Self-Review Checklist
 
 **1. Spec Coverage:**
+
 - [x] Task 1-8 covers core types, adapters, discovery paths, aggregation, confidence calculation
 - [x] Task 9 covers standalone verification without LLM
 - [x] Task 10 covers unit and integration tests
 - [x] All design requirements from spec implemented
 
 **2. Placeholder Scan:**
+
 - [x] No "TBD", "TODO", or "implement later" found
 - [x] All code blocks complete
 - [x] All commands exact
 
 **3. Type Consistency:**
+
 - [x] TableAnchor used consistently across all tasks
 - [x] ConceptCandidate.confidenceBreakdown matches spec
 - [x] EntryPointInfo.kind consistent across discovery paths
@@ -2446,6 +2738,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 **Which approach?**
 
 **Files:**
+
 - Create: `src/evidence/extractors/concept/discovery-paths/controller-path.ts`
 
 - [ ] **Step 1: 创建 Controller 路径发现器**
@@ -2453,8 +2746,16 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```typescript
 // src/evidence/extractors/concept/discovery-paths/controller-path.ts
 
-import type { DiscoveryPathResult, ConceptTracePath, EntryPointInfo, ServiceChainNode, MapperInfo, TableInfo, EntityInfo } from '../types.js';
-import type { LanguageAdapter } from '../language-adapters/index.js';
+import type {
+  DiscoveryPathResult,
+  ConceptTracePath,
+  EntryPointInfo,
+  ServiceChainNode,
+  MapperInfo,
+  TableInfo,
+  EntityInfo,
+} from "../types.js";
+import type { LanguageAdapter } from "../language-adapters/index.js";
 
 /**
  * Controller 路径发现
@@ -2479,7 +2780,9 @@ export class ControllerPathDiscovery {
     try {
       // 1. 检测所有 Controller 入口点
       const entryPoints = await this.adapter.detectEntryPoints(this.modulePath);
-      const controllerEntries = entryPoints.filter(ep => ep.kind === 'controller');
+      const controllerEntries = entryPoints.filter(
+        (ep) => ep.kind === "controller",
+      );
 
       // 2. 对每个入口点执行完整追溯
       for (const entryPoint of controllerEntries) {
@@ -2490,7 +2793,9 @@ export class ControllerPathDiscovery {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`Controller ${entryPoint.className}.${entryPoint.methodName}: ${msg}`);
+          errors.push(
+            `Controller ${entryPoint.className}.${entryPoint.methodName}: ${msg}`,
+          );
         }
       }
     } catch (err) {
@@ -2499,8 +2804,8 @@ export class ControllerPathDiscovery {
     }
 
     return {
-      pathway: 'controller',
-      entryPoints: tracePaths.flatMap(tp => tp.entryPoints),
+      pathway: "controller",
+      entryPoints: tracePaths.flatMap((tp) => tp.entryPoints),
       tracePaths,
       errors,
     };
@@ -2509,7 +2814,9 @@ export class ControllerPathDiscovery {
   /**
    * 从单个入口点执行完整追溯
    */
-  private async traceFromEntryPoint(entryPoint: EntryPointInfo): Promise<ConceptTracePath> {
+  private async traceFromEntryPoint(
+    entryPoint: EntryPointInfo,
+  ): Promise<ConceptTracePath> {
     const tracePath: ConceptTracePath = {
       entryPoints: [entryPoint],
       serviceChain: [],
@@ -2534,7 +2841,10 @@ export class ControllerPathDiscovery {
 
         // 5. 对每个表查找 Entity
         for (const table of tables) {
-          const entity = await this.adapter.findEntityForTable(table, entryPoint.modulePath);
+          const entity = await this.adapter.findEntityForTable(
+            table,
+            entryPoint.modulePath,
+          );
           if (entity) {
             tracePath.entities.push(entity);
           }

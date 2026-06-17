@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const catalogObjectSchema = z.object({
-  type: z.enum(['TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB']),
+  type: z.enum(["TERM", "CON", "FLOW", "MOD", "OPEN", "OWN", "VER", "DB"]),
   path: z.string().min(1),
   slice_ids: z.array(z.string()),
 });

@@ -12,7 +12,7 @@
  * Credit: Type resolution approach adapted from @xFlaviews' PR #83.
  */
 
-import type { SyntaxNode } from '../utils/ast-helpers.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
 import type {
   LanguageTypeConfig,
   ParameterExtractor,
@@ -24,23 +24,25 @@ import type {
   ForLoopExtractor,
   LiteralTypeInferrer,
   ConstructorTypeDetector,
-} from './types.js';
+} from "./types.js";
 import {
   extractSimpleTypeName,
   extractVarName,
   extractElementTypeFromString,
   resolveIterableElementType,
-} from './shared.js';
-import { findChild } from '../utils/ast-helpers.js';
+} from "./shared.js";
+import { findChild } from "../utils/ast-helpers.js";
 
 // ── Node types ──────────────────────────────────────────────────────────
 
 const DART_DECLARATION_NODE_TYPES: ReadonlySet<string> = new Set([
-  'initialized_variable_definition',
-  'initialized_identifier',
+  "initialized_variable_definition",
+  "initialized_identifier",
 ]);
 
-const DART_FOR_LOOP_NODE_TYPES: ReadonlySet<string> = new Set(['for_statement']);
+const DART_FOR_LOOP_NODE_TYPES: ReadonlySet<string> = new Set([
+  "for_statement",
+]);
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -51,26 +53,28 @@ interface DartRHS {
   isAwait: boolean;
 }
 
-function parseDartRHSChildren(children: Iterable<SyntaxNode>): Omit<DartRHS, 'isAwait'> {
+function parseDartRHSChildren(
+  children: Iterable<SyntaxNode>,
+): Omit<DartRHS, "isAwait"> {
   let callee: string | undefined;
   let member: string | undefined;
   let hasCall = false;
 
   for (const child of children) {
-    if (child.type === 'identifier' && !callee) {
+    if (child.type === "identifier" && !callee) {
       callee = child.text;
       continue;
     }
-    if (child.type === 'selector') {
+    if (child.type === "selector") {
       const uas =
-        findChild(child, 'unconditional_assignable_selector') ??
-        findChild(child, 'conditional_assignable_selector');
+        findChild(child, "unconditional_assignable_selector") ??
+        findChild(child, "conditional_assignable_selector");
       if (uas) {
-        const id = findChild(uas, 'identifier');
+        const id = findChild(uas, "identifier");
         if (id && !member) member = id.text;
         continue;
       }
-      if (findChild(child, 'argument_part')) {
+      if (findChild(child, "argument_part")) {
         hasCall = true;
         continue;
       }
@@ -86,7 +90,7 @@ function parseDartRHS(node: SyntaxNode): DartRHS {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
-    if (!child.isNamed && child.text === '=') {
+    if (!child.isNamed && child.text === "=") {
       foundEquals = true;
       continue;
     }
@@ -96,13 +100,13 @@ function parseDartRHS(node: SyntaxNode): DartRHS {
   if (rhsChildren.length === 0) return { hasCall: false, isAwait: false };
 
   const first = rhsChildren[0];
-  if (first.type === 'unary_expression') {
-    const awaitExpr = findChild(first, 'await_expression');
+  if (first.type === "unary_expression") {
+    const awaitExpr = findChild(first, "await_expression");
     if (awaitExpr) {
       const innerChildren: SyntaxNode[] = [];
       for (let i = 0; i < awaitExpr.namedChildCount; i++) {
         const c = awaitExpr.namedChild(i);
-        if (c && c.type !== 'await') innerChildren.push(c);
+        if (c && c.type !== "await") innerChildren.push(c);
       }
       return { ...parseDartRHSChildren(innerChildren), isAwait: true };
     }
@@ -112,7 +116,9 @@ function parseDartRHS(node: SyntaxNode): DartRHS {
 }
 
 function hasDartTypeAnnotation(node: SyntaxNode): boolean {
-  return !!(findChild(node, 'type_identifier') || findChild(node, 'nullable_type'));
+  return !!(
+    findChild(node, "type_identifier") || findChild(node, "nullable_type")
+  );
 }
 
 // ── Tier 0: Explicit Type Annotations ───────────────────────────────────
@@ -122,33 +128,33 @@ const extractDartDeclaration: TypeBindingExtractor = (
   env: Map<string, string>,
 ): void => {
   // initialized_identifier: comma-separated variable (String a, b, c) — type is on parent
-  if (node.type === 'initialized_identifier') {
+  if (node.type === "initialized_identifier") {
     const parent = node.parent;
     if (!parent) return;
-    let typeNode = findChild(parent, 'type_identifier');
+    let typeNode = findChild(parent, "type_identifier");
     if (!typeNode) {
-      const nullable = findChild(parent, 'nullable_type');
-      if (nullable) typeNode = findChild(nullable, 'type_identifier');
+      const nullable = findChild(parent, "nullable_type");
+      if (nullable) typeNode = findChild(nullable, "type_identifier");
     }
     if (!typeNode) return;
     const typeName = extractSimpleTypeName(typeNode);
-    if (!typeName || typeName === 'dynamic') return;
-    const nameNode = findChild(node, 'identifier');
+    if (!typeName || typeName === "dynamic") return;
+    const nameNode = findChild(node, "identifier");
     if (!nameNode) return;
     const varName = extractVarName(nameNode);
     if (varName) env.set(varName, typeName);
     return;
   }
 
-  let typeNode = findChild(node, 'type_identifier');
+  let typeNode = findChild(node, "type_identifier");
   if (!typeNode) {
-    const nullable = findChild(node, 'nullable_type');
-    if (nullable) typeNode = findChild(nullable, 'type_identifier');
+    const nullable = findChild(node, "nullable_type");
+    if (nullable) typeNode = findChild(nullable, "type_identifier");
   }
   if (!typeNode) return;
   const typeName = extractSimpleTypeName(typeNode);
-  if (!typeName || typeName === 'dynamic') return;
-  const nameNode = node.childForFieldName('name');
+  if (!typeName || typeName === "dynamic") return;
+  const nameNode = node.childForFieldName("name");
   if (!nameNode) return;
   const varName = extractVarName(nameNode);
   if (varName) env.set(varName, typeName);
@@ -158,15 +164,15 @@ const extractDartParameter: ParameterExtractor = (
   node: SyntaxNode,
   env: Map<string, string>,
 ): void => {
-  let typeNode = findChild(node, 'type_identifier');
+  let typeNode = findChild(node, "type_identifier");
   if (!typeNode) {
-    const nullable = findChild(node, 'nullable_type');
-    if (nullable) typeNode = findChild(nullable, 'type_identifier');
+    const nullable = findChild(node, "nullable_type");
+    if (nullable) typeNode = findChild(nullable, "type_identifier");
   }
   if (!typeNode) return;
   const typeName = extractSimpleTypeName(typeNode);
-  if (!typeName || typeName === 'dynamic') return;
-  const nameNode = node.childForFieldName('name');
+  if (!typeName || typeName === "dynamic") return;
+  const nameNode = node.childForFieldName("name");
   if (!nameNode) return;
   const varName = extractVarName(nameNode);
   if (varName) env.set(varName, typeName);
@@ -179,10 +185,10 @@ const extractDartInitializer: InitializerExtractor = (
   env: Map<string, string>,
   classNames: ClassNameLookup,
 ): void => {
-  if (node.type !== 'initialized_variable_definition') return;
+  if (node.type !== "initialized_variable_definition") return;
   if (hasDartTypeAnnotation(node)) return;
 
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   if (!nameNode) return;
   const varName = extractVarName(nameNode);
   if (!varName || env.has(varName)) return;
@@ -203,10 +209,10 @@ const extractDartInitializer: InitializerExtractor = (
 // ── Constructor Binding Scan ────────────────────────────────────────────
 
 const scanDartConstructorBinding: ConstructorBindingScanner = (node) => {
-  if (node.type !== 'initialized_variable_definition') return undefined;
+  if (node.type !== "initialized_variable_definition") return undefined;
   if (hasDartTypeAnnotation(node)) return undefined;
 
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   if (!nameNode) return undefined;
   const varName = nameNode.text;
   if (!varName) return undefined;
@@ -222,8 +228,11 @@ const scanDartConstructorBinding: ConstructorBindingScanner = (node) => {
 
 // ── Virtual Dispatch ────────────────────────────────────────────────────
 
-const detectDartConstructorType: ConstructorTypeDetector = (node, classNames) => {
-  if (node.type !== 'initialized_variable_definition') return undefined;
+const detectDartConstructorType: ConstructorTypeDetector = (
+  node,
+  classNames,
+) => {
+  if (node.type !== "initialized_variable_definition") return undefined;
 
   const rhs = parseDartRHS(node);
   if (!rhs.callee || !rhs.hasCall) return undefined;
@@ -238,18 +247,18 @@ const detectDartConstructorType: ConstructorTypeDetector = (node, classNames) =>
 
 const inferDartLiteralType: LiteralTypeInferrer = (node) => {
   switch (node.type) {
-    case 'decimal_integer_literal':
-    case 'hex_integer_literal':
-      return 'int';
-    case 'decimal_floating_point_literal':
-      return 'double';
-    case 'string_literal':
-      return 'String';
-    case 'true':
-    case 'false':
-      return 'bool';
-    case 'null_literal':
-      return 'null';
+    case "decimal_integer_literal":
+    case "hex_integer_literal":
+      return "int";
+    case "decimal_floating_point_literal":
+      return "double";
+    case "string_literal":
+      return "String";
+    case "true":
+    case "false":
+      return "bool";
+    case "null_literal":
+      return "null";
     default:
       return undefined;
   }
@@ -257,11 +266,14 @@ const inferDartLiteralType: LiteralTypeInferrer = (node) => {
 
 // ── Tier 2: Assignment Chain Propagation ─────────────────────────────────
 
-const extractDartPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv) => {
-  if (node.type !== 'initialized_variable_definition') return undefined;
+const extractDartPendingAssignment: PendingAssignmentExtractor = (
+  node,
+  scopeEnv,
+) => {
+  if (node.type !== "initialized_variable_definition") return undefined;
   if (hasDartTypeAnnotation(node)) return undefined;
 
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   if (!nameNode) return undefined;
   const lhs = nameNode.text;
   if (!lhs || scopeEnv.has(lhs)) return undefined;
@@ -269,23 +281,37 @@ const extractDartPendingAssignment: PendingAssignmentExtractor = (node, scopeEnv
   const rhs = parseDartRHS(node);
   if (!rhs.callee) return undefined;
 
-  if (!rhs.hasCall && !rhs.member) return { kind: 'copy', lhs, rhs: rhs.callee };
+  if (!rhs.hasCall && !rhs.member)
+    return { kind: "copy", lhs, rhs: rhs.callee };
   if (!rhs.hasCall && rhs.member)
-    return { kind: 'fieldAccess', lhs, receiver: rhs.callee, field: rhs.member };
-  if (rhs.hasCall && !rhs.member) return { kind: 'callResult', lhs, callee: rhs.callee };
+    return {
+      kind: "fieldAccess",
+      lhs,
+      receiver: rhs.callee,
+      field: rhs.member,
+    };
+  if (rhs.hasCall && !rhs.member)
+    return { kind: "callResult", lhs, callee: rhs.callee };
   if (rhs.hasCall && rhs.member)
-    return { kind: 'methodCallResult', lhs, receiver: rhs.callee, method: rhs.member };
+    return {
+      kind: "methodCallResult",
+      lhs,
+      receiver: rhs.callee,
+      method: rhs.member,
+    };
 
   return undefined;
 };
 
 // ── For-Loop Element Type Resolution ────────────────────────────────────
 
-function extractDartElementTypeFromTypeNode(typeNode: SyntaxNode): string | undefined {
-  if (typeNode.type === 'type_identifier') {
+function extractDartElementTypeFromTypeNode(
+  typeNode: SyntaxNode,
+): string | undefined {
+  if (typeNode.type === "type_identifier") {
     const parent = typeNode.parent;
     if (parent) {
-      const args = findChild(parent, 'type_arguments');
+      const args = findChild(parent, "type_arguments");
       if (args && args.namedChildCount >= 1) {
         const lastArg = args.namedChild(args.namedChildCount - 1);
         if (lastArg) return extractSimpleTypeName(lastArg);
@@ -296,18 +322,18 @@ function extractDartElementTypeFromTypeNode(typeNode: SyntaxNode): string | unde
 }
 
 const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
-  if (node.type !== 'for_statement') return;
+  if (node.type !== "for_statement") return;
   const { scopeEnv, declarationTypeNodes, scope, returnTypeLookup } = ctx;
 
-  const loopParts = findChild(node, 'for_loop_parts');
+  const loopParts = findChild(node, "for_loop_parts");
   if (!loopParts) return;
 
-  const nameNode = loopParts.childForFieldName('name');
+  const nameNode = loopParts.childForFieldName("name");
   if (!nameNode) return;
   const loopVarName = nameNode.text;
   if (!loopVarName) return;
 
-  const typeNode = findChild(loopParts, 'type_identifier');
+  const typeNode = findChild(loopParts, "type_identifier");
   if (typeNode) {
     const typeName = extractSimpleTypeName(typeNode);
     if (typeName && !scopeEnv.has(loopVarName)) {
@@ -316,18 +342,18 @@ const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
     return;
   }
 
-  const iterableNode = loopParts.childForFieldName('value');
+  const iterableNode = loopParts.childForFieldName("value");
   if (!iterableNode) return;
 
   let iterableName: string | undefined;
   let callExprElementType: string | undefined;
 
-  if (iterableNode.type === 'identifier') {
+  if (iterableNode.type === "identifier") {
     iterableName = iterableNode.text;
-  } else if (iterableNode.type === 'unary_expression') {
-    const awaitExpr = findChild(iterableNode, 'await_expression');
+  } else if (iterableNode.type === "unary_expression") {
+    const awaitExpr = findChild(iterableNode, "await_expression");
     if (awaitExpr) {
-      const innerIdent = findChild(awaitExpr, 'identifier');
+      const innerIdent = findChild(awaitExpr, "identifier");
       if (innerIdent) iterableName = innerIdent.text;
     }
     if (!iterableName) return;
@@ -338,8 +364,8 @@ const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
     let memberName: string | undefined;
 
     const selectorParent =
-      iterableNode.type === 'unary_expression'
-        ? findChild(iterableNode, 'await_expression')
+      iterableNode.type === "unary_expression"
+        ? findChild(iterableNode, "await_expression")
         : loopParts;
     if (!selectorParent) return;
 
@@ -347,7 +373,7 @@ const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
     for (let i = 0; i < selectorParent.childCount; i++) {
       const child = selectorParent.child(i);
       if (!child) continue;
-      if (child.type === 'identifier' && child.text === iterableName) {
+      if (child.type === "identifier" && child.text === iterableName) {
         foundIterable = true;
         continue;
       }
@@ -356,16 +382,16 @@ const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
         continue;
       }
       if (!foundIterable) continue;
-      if (child.type === 'selector') {
+      if (child.type === "selector") {
         const uas =
-          findChild(child, 'unconditional_assignable_selector') ??
-          findChild(child, 'conditional_assignable_selector');
+          findChild(child, "unconditional_assignable_selector") ??
+          findChild(child, "conditional_assignable_selector");
         if (uas) {
-          const id = findChild(uas, 'identifier');
+          const id = findChild(uas, "identifier");
           if (id) memberName = id.text;
           continue;
         }
-        if (findChild(child, 'argument_part')) {
+        if (findChild(child, "argument_part")) {
           hasCallSelector = true;
         }
       }
@@ -374,7 +400,8 @@ const extractDartForLoopBinding: ForLoopExtractor = (node, ctx): void => {
     if (hasCallSelector) {
       const callee = memberName ?? iterableName;
       const rawReturn = returnTypeLookup.lookupRawReturnType(callee);
-      if (rawReturn) callExprElementType = extractElementTypeFromString(rawReturn);
+      if (rawReturn)
+        callExprElementType = extractElementTypeFromString(rawReturn);
     }
   }
 

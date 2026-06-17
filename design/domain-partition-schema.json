@@ -11,7 +11,14 @@
         "tableName": { "type": "string", "description": "表名（必须）" },
         "role": {
           "type": "string",
-          "enum": ["primary", "related", "shard", "junction_table", "view_reference", "config_table"],
+          "enum": [
+            "primary",
+            "related",
+            "shard",
+            "junction_table",
+            "view_reference",
+            "config_table"
+          ],
           "description": "表角色（必须）"
         },
         "tableType": {
@@ -20,9 +27,18 @@
           "default": "table",
           "description": "表类型（必须，视图场景）"
         },
-        "relationType": { "type": "string", "description": "关联类型：foreign_key（必须，关联表）" },
-        "foreignKey": { "type": "string", "description": "外键关系（必须，关联表）" },
-        "shardGroup": { "type": "string", "description": "分表组标识（必须，分表场景）" },
+        "relationType": {
+          "type": "string",
+          "description": "关联类型：foreign_key（必须，关联表）"
+        },
+        "foreignKey": {
+          "type": "string",
+          "description": "外键关系（必须，关联表）"
+        },
+        "shardGroup": {
+          "type": "string",
+          "description": "分表组标识（必须，分表场景）"
+        },
         "junctionBetween": {
           "type": "object",
           "properties": {
@@ -47,7 +63,10 @@
       "properties": {
         "targetDomain": { "type": "string", "description": "目标域（必须）" },
         "className": { "type": "string", "description": "调用的类名（必须）" },
-        "methodName": { "type": "string", "description": "调用的方法名（必须）" },
+        "methodName": {
+          "type": "string",
+          "description": "调用的方法名（必须）"
+        },
         "callPurpose": { "type": "string", "description": "调用目的（可选）" }
       },
       "required": ["targetDomain", "className", "methodName"]
@@ -57,7 +76,10 @@
       "type": "object",
       "properties": {
         "className": { "type": "string", "description": "类名（必须）" },
-        "interfaceName": { "type": "string", "description": "接口名（必须，多态场景）" },
+        "interfaceName": {
+          "type": "string",
+          "description": "接口名（必须，多态场景）"
+        },
         "implementationType": {
           "type": "string",
           "enum": ["impl", "abstract", "delegate"],
@@ -69,7 +91,10 @@
           "enum": ["core_logic", "data_layer", "cross_domain_call"],
           "description": "角色（必须）"
         },
-        "crossDomainHint": { "type": "string", "description": "跨域提示（必须，跨域场景）" }
+        "crossDomainHint": {
+          "type": "string",
+          "description": "跨域提示（必须，跨域场景）"
+        }
       },
       "required": ["className", "filePath", "role"]
     },
@@ -91,7 +116,10 @@
         "methodName": { "type": "string", "description": "方法名（必须）" },
         "filePath": { "type": "string", "description": "文件路径（必须）" },
         "startLine": { "type": "integer", "description": "起始行号（必须）" },
-        "signature": { "type": "string", "description": "签名，如 @GetMapping(\"/list\")（必须）" },
+        "signature": {
+          "type": "string",
+          "description": "签名，如 @GetMapping(\"/list\")（必须）"
+        },
         "module": { "type": "string", "description": "所属模块（必须）" },
         "callChain": {
           "type": "array",
@@ -103,9 +131,18 @@
           "items": { "$ref": "#/definitions/CrossDomainCall" },
           "description": "跨域调用（必须）"
         },
-        "noServiceLayer": { "type": "boolean", "description": "标记无 Service 层（必须，纯 Mapper 场景）" },
-        "mqType": { "type": "string", "description": "MQ 类型（必须，MQ Consumer 场景）" },
-        "mqTopic": { "type": "string", "description": "MQ topic（必须，MQ Consumer 场景）" }
+        "noServiceLayer": {
+          "type": "boolean",
+          "description": "标记无 Service 层（必须，纯 Mapper 场景）"
+        },
+        "mqType": {
+          "type": "string",
+          "description": "MQ 类型（必须，MQ Consumer 场景）"
+        },
+        "mqTopic": {
+          "type": "string",
+          "description": "MQ topic（必须，MQ Consumer 场景）"
+        }
       },
       "required": ["kind", "className", "filePath", "module", "callChain"]
     },
@@ -114,11 +151,20 @@
       "type": "object",
       "properties": {
         "className": { "type": "string", "description": "类名（必须）" },
-        "interfaceName": { "type": "string", "description": "接口名（必须，接口场景）" },
-        "implementationType": { "type": "string", "description": "实现类型（必须，多态场景）" },
+        "interfaceName": {
+          "type": "string",
+          "description": "接口名（必须，接口场景）"
+        },
+        "implementationType": {
+          "type": "string",
+          "description": "实现类型（必须，多态场景）"
+        },
         "filePath": { "type": "string", "description": "文件路径（必须）" },
         "module": { "type": "string", "description": "所属模块（必须）" },
-        "polymorphismGroup": { "type": "string", "description": "多态分组标识（必须，多态场景）" }
+        "polymorphismGroup": {
+          "type": "string",
+          "description": "多态分组标识（必须，多态场景）"
+        }
       },
       "required": ["className", "filePath", "module"]
     },
@@ -166,7 +212,12 @@
         "path": { "type": "string", "description": "模块路径（必须）" },
         "role": {
           "type": "string",
-          "enum": ["entry_and_logic_provider", "entry_provider", "logic_provider", "data_provider"],
+          "enum": [
+            "entry_and_logic_provider",
+            "entry_provider",
+            "logic_provider",
+            "data_provider"
+          ],
           "description": "模块角色（必须）"
         }
       },
@@ -184,7 +235,10 @@
           "items": {
             "type": "object",
             "properties": {
-              "backendApiId": { "type": "string", "description": "对应后端入口点（必须）" }
+              "backendApiId": {
+                "type": "string",
+                "description": "对应后端入口点（必须）"
+              }
             },
             "required": ["backendApiId"]
           },
@@ -211,8 +265,14 @@
     "FrontendBackendLink": {
       "type": "object",
       "properties": {
-        "frontendPageName": { "type": "string", "description": "前端页面名（必须）" },
-        "frontendModule": { "type": "string", "description": "前端模块（必须）" },
+        "frontendPageName": {
+          "type": "string",
+          "description": "前端页面名（必须）"
+        },
+        "frontendModule": {
+          "type": "string",
+          "description": "前端模块（必须）"
+        },
         "backendApiIds": {
           "type": "array",
           "items": { "type": "string" },
@@ -224,7 +284,12 @@
           "description": "关联类型（必须）"
         }
       },
-      "required": ["frontendPageName", "frontendModule", "backendApiIds", "linkType"]
+      "required": [
+        "frontendPageName",
+        "frontendModule",
+        "backendApiIds",
+        "linkType"
+      ]
     },
 
     "NoEntryTable": {
@@ -236,7 +301,10 @@
           "enum": ["config_table", "dict_table", "system_table"],
           "description": "表类型（必须）"
         },
-        "suggestedDomain": { "type": "string", "description": "建议业务域（必须）" }
+        "suggestedDomain": {
+          "type": "string",
+          "description": "建议业务域（必须）"
+        }
       },
       "required": ["tableName", "tableType"]
     },

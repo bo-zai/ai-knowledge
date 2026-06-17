@@ -9,7 +9,10 @@ export function recordKotlinCacheMiss(): void {
   misses += 1;
 }
 
-export function getKotlinCaptureCacheStats(): { readonly hits: number; readonly misses: number } {
+export function getKotlinCaptureCacheStats(): {
+  readonly hits: number;
+  readonly misses: number;
+} {
   return { hits, misses };
 }
 

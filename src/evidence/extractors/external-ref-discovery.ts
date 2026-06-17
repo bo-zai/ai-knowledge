@@ -5,8 +5,8 @@
  * 核心思路：分析点号访问表达式，检查符号是否来自外部包。
  */
 
-import { logger } from '../../shared/logger.js';
-import type { LanguageAdapter } from './language-adapters/index.js';
+import { logger } from "../../shared/logger.js";
+import type { LanguageAdapter } from "./language-adapters/index.js";
 
 /**
  * 外部引用候选
@@ -48,8 +48,8 @@ export function discoverExternalReferences(
 
     // 3. 过滤出不在本项目定义的引用
     for (const ref of dotAccesses) {
-      const parts = ref.split('.');
-      if (parts.length < 2) continue;  // 至少两级访问才可能是枚举
+      const parts = ref.split(".");
+      if (parts.length < 2) continue; // 至少两级访问才可能是枚举
 
       const rootSymbol = parts[0];
 
@@ -75,7 +75,9 @@ export function discoverExternalReferences(
   // 去重（同一符号在多处引用）
   const uniqueCandidates = deduplicateByRootSymbol(candidates);
 
-  logger.info(`ExternalRef: discovered ${uniqueCandidates.length} unique external references`);
+  logger.info(
+    `ExternalRef: discovered ${uniqueCandidates.length} unique external references`,
+  );
 
   return uniqueCandidates;
 }
@@ -83,9 +85,13 @@ export function discoverExternalReferences(
 /**
  * 从代码中提取引用上下文
  */
-function extractContext(code: string, ref: string, contextLength: number): string {
+function extractContext(
+  code: string,
+  ref: string,
+  contextLength: number,
+): string {
   const refIndex = code.indexOf(ref);
-  if (refIndex === -1) return '';
+  if (refIndex === -1) return "";
 
   const start = Math.max(0, refIndex - contextLength);
   const end = Math.min(code.length, refIndex + ref.length + contextLength);
@@ -96,7 +102,9 @@ function extractContext(code: string, ref: string, contextLength: number): strin
 /**
  * 按根符号去重
  */
-function deduplicateByRootSymbol(candidates: ExternalRefCandidate[]): ExternalRefCandidate[] {
+function deduplicateByRootSymbol(
+  candidates: ExternalRefCandidate[],
+): ExternalRefCandidate[] {
   const seen = new Set<string>();
   const unique: ExternalRefCandidate[] = [];
 

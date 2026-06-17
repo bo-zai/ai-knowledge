@@ -21,7 +21,7 @@
  * (defined in `./types.ts`).
  */
 
-import type { Range, ScopeId } from './types.js';
+import type { Range, ScopeId } from "./types.js";
 
 /**
  * What kind of usage this reference represents — the graph-edge kind
@@ -31,12 +31,12 @@ import type { Range, ScopeId } from './types.js';
  * resolution phase can pass it through without re-classification.
  */
 export type ReferenceKind =
-  | 'call'
-  | 'read'
-  | 'write'
-  | 'type-reference'
-  | 'inherits'
-  | 'import-use';
+  | "call"
+  | "read"
+  | "write"
+  | "type-reference"
+  | "inherits"
+  | "import-use";
 
 /**
  * How a call site binds its target. Informs `Registry.lookup` Step 2
@@ -48,7 +48,7 @@ export type ReferenceKind =
  *
  * Only meaningful for `kind === 'call'`; ignored for reads/writes.
  */
-export type CallForm = 'free' | 'member' | 'constructor' | 'index';
+export type CallForm = "free" | "member" | "constructor" | "index";
 
 export interface ReferenceSite {
   /** The name being referenced (e.g., `'save'`, `'User'`, `'count'`). */

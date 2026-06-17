@@ -5,8 +5,8 @@
  * Always reads from the database (no cached state to drift).
  */
 
-import { queryFTS } from '../lbug/lbug-adapter.js';
-import { FTS_INDEXES } from './fts-schema.js';
+import { queryFTS } from "../lbug/lbug-adapter.js";
+import { FTS_INDEXES } from "./fts-schema.js";
 
 export interface BM25SearchResult {
   filePath: string;
@@ -27,7 +27,7 @@ async function queryFTSViaExecutor(
   limit: number,
 ): Promise<Array<{ filePath: string; score: number; nodeId: string }>> {
   // Escape single quotes and backslashes to prevent Cypher injection
-  const escapedQuery = query.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  const escapedQuery = query.replace(/\\/g, "\\\\").replace(/'/g, "''");
   const cypher = `
     CALL QUERY_FTS_INDEX('${tableName}', '${indexName}', '${escapedQuery}', conjunctive := false)
     RETURN node, score
@@ -40,9 +40,9 @@ async function queryFTSViaExecutor(
       const node = row.node || row[0] || {};
       const score = row.score ?? row[1] ?? 0;
       return {
-        filePath: node.filePath || '',
-        score: typeof score === 'number' ? score : parseFloat(score) || 0,
-        nodeId: node.nodeId || node.id || '',
+        filePath: node.filePath || "",
+        score: typeof score === "number" ? score : parseFloat(score) || 0,
+        nodeId: node.nodeId || node.id || "",
       };
     });
   } catch {
@@ -72,27 +72,36 @@ export const searchFTSFromLbug = async (
     // Use MCP connection pool via dynamic import
     // IMPORTANT: FTS queries run sequentially to avoid connection contention.
     // The MCP pool supports multiple connections, but FTS is best run serially.
-    const poolMod = await import('../lbug/pool-adapter.js');
+    const poolMod = await import("../lbug/pool-adapter.js");
     const { executeQuery } = poolMod;
     const executor = (cypher: string) => executeQuery(repoId, cypher);
 
     for (const { table, indexName } of FTS_INDEXES) {
-      resultsByIndex.push(await queryFTSViaExecutor(executor, table, indexName, query, limit));
+      resultsByIndex.push(
+        await queryFTSViaExecutor(executor, table, indexName, query, limit),
+      );
     }
   } else {
     // Use core lbug adapter (CLI / pipeline context) — also sequential for safety.
     for (const { table, indexName } of FTS_INDEXES) {
-      resultsByIndex.push(await queryFTS(table, indexName, query, limit, false).catch(() => []));
+      resultsByIndex.push(
+        await queryFTS(table, indexName, query, limit, false).catch(() => []),
+      );
     }
   }
 
   // Collect all node scores per filePath to track which nodes actually matched
-  const fileNodeScores = new Map<string, Array<{ score: number; nodeId: string }>>();
+  const fileNodeScores = new Map<
+    string,
+    Array<{ score: number; nodeId: string }>
+  >();
 
   const addResults = (results: any[]) => {
     for (const r of results) {
       if (!fileNodeScores.has(r.filePath)) fileNodeScores.set(r.filePath, []);
-      fileNodeScores.get(r.filePath)!.push({ score: r.score, nodeId: r.nodeId });
+      fileNodeScores
+        .get(r.filePath)!
+        .push({ score: r.score, nodeId: r.nodeId });
     }
   };
 
@@ -101,7 +110,10 @@ export const searchFTSFromLbug = async (
   // Sum the top-3 highest-scoring nodes per file and collect their nodeIds.
   // Summing all nodes naively inflates scores for files with many mediocre
   // matches (e.g. test files) over files with a single highly-relevant symbol.
-  const merged = new Map<string, { filePath: string; score: number; nodeIds: string[] }>();
+  const merged = new Map<
+    string,
+    { filePath: string; score: number; nodeIds: string[] }
+  >();
   for (const [filePath, entries] of fileNodeScores) {
     const top3 = [...entries].sort((a, b) => b.score - a.score).slice(0, 3);
     merged.set(filePath, {

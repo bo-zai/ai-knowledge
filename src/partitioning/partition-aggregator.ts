@@ -23,9 +23,9 @@ import type {
   DomainMergeDecision,
   PartitionCandidate,
   DomainClusterInput,
-} from './types.js';
-import { createHash } from 'crypto';
-import { logger } from '../shared/logger.js';
+} from "./types.js";
+import { createHash } from "crypto";
+import { logger } from "../shared/logger.js";
 
 /**
  * 从域名生成有效的 partitionId
@@ -35,40 +35,40 @@ import { logger } from '../shared/logger.js';
 function generatePartitionId(domainName: string, anchorTable: string): string {
   // 中文到英文/拼音的映射表
   const domainNameMap: Record<string, string> = {
-    '教学域': 'teaching',
-    '商城域': 'mall',
-    '用户与认证域': 'user_auth',
-    '积分运营域': 'integral',
-    '新闻资讯域': 'news',
-    '横幅管理域': 'banner',
-    '订单管理域': 'order',
-    '支付域': 'payment',
-    '课程域': 'course',
-    '用户域': 'user',
-    '认证域': 'auth',
-    '商品域': 'goods',
-    '购物车域': 'cart',
-    '优惠券域': 'coupon',
-    '地址域': 'address',
-    '分类域': 'category',
-    '模板域': 'template',
-    '班级域': 'class',
-    '学生域': 'student',
-    '教师域': 'teacher',
-    '记录域': 'record',
-    '上传域': 'upload',
-    '会员域': 'member',
-    '首页域': 'index',
-    '宠物域': 'pet',
-    '健康域': 'health',
-    '运营域': 'operation',
-    '区域域': 'region',
-    '商品产品域': 'goods_product',
-    '课程模板域': 'course_template',
-    '用户课程域': 'user_course',
-    '用户班级域': 'user_class',
-    '用户时间表域': 'user_timetable',
-    '教学内容域': 'teach_content',
+    教学域: "teaching",
+    商城域: "mall",
+    用户与认证域: "user_auth",
+    积分运营域: "integral",
+    新闻资讯域: "news",
+    横幅管理域: "banner",
+    订单管理域: "order",
+    支付域: "payment",
+    课程域: "course",
+    用户域: "user",
+    认证域: "auth",
+    商品域: "goods",
+    购物车域: "cart",
+    优惠券域: "coupon",
+    地址域: "address",
+    分类域: "category",
+    模板域: "template",
+    班级域: "class",
+    学生域: "student",
+    教师域: "teacher",
+    记录域: "record",
+    上传域: "upload",
+    会员域: "member",
+    首页域: "index",
+    宠物域: "pet",
+    健康域: "health",
+    运营域: "operation",
+    区域域: "region",
+    商品产品域: "goods_product",
+    课程模板域: "course_template",
+    用户课程域: "user_course",
+    用户班级域: "user_class",
+    用户时间表域: "user_timetable",
+    教学内容域: "teach_content",
   };
 
   // 尝试从映射表获取
@@ -78,7 +78,7 @@ function generatePartitionId(domainName: string, anchorTable: string): string {
   }
 
   // 尝试从 domainName 提取关键词（去除"域"后缀）
-  const baseName = domainName.replace(/域$/i, '').toLowerCase();
+  const baseName = domainName.replace(/域$/i, "").toLowerCase();
 
   // 如果是纯英文，直接使用
   if (/^[a-z0-9_]+$/.test(baseName)) {
@@ -86,7 +86,7 @@ function generatePartitionId(domainName: string, anchorTable: string): string {
   }
 
   // 否则使用 anchorTable 作为 fallback
-  const sanitizedAnchor = anchorTable.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const sanitizedAnchor = anchorTable.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   return `domain:${sanitizedAnchor}`;
 }
 
@@ -94,7 +94,7 @@ function generatePartitionId(domainName: string, anchorTable: string): string {
  * PartitionAggregator - Partition 聚合器
  */
 export class PartitionAggregator {
-  private readonly algorithmVersion: string = '1.0.0';
+  private readonly algorithmVersion: string = "1.0.0";
 
   /**
    * 聚合追溯结果为 DomainPartition
@@ -126,7 +126,9 @@ export class PartitionAggregator {
   /**
    * 按表分组追溯结果
    */
-  private groupByTables(traceResults: TraceResult[]): Map<string, TraceResult[]> {
+  private groupByTables(
+    traceResults: TraceResult[],
+  ): Map<string, TraceResult[]> {
     const tableGroups = new Map<string, TraceResult[]>();
 
     for (const result of traceResults) {
@@ -147,7 +149,10 @@ export class PartitionAggregator {
   /**
    * 构建单个 Partition
    */
-  private buildPartition(anchorTable: string, results: TraceResult[]): DomainPartition {
+  private buildPartition(
+    anchorTable: string,
+    results: TraceResult[],
+  ): DomainPartition {
     // 合并所有追溯结果
     const mergedTables: TableInfo[] = [];
     const mergedEntryPoints: EntryPoint[] = [];
@@ -209,22 +214,22 @@ export class PartitionAggregator {
         moduleSet.add(moduleName);
         backendModules.push({
           name: moduleName,
-          path: result.entryPoint.filePath.split('/').slice(0, -1).join('/'),
+          path: result.entryPoint.filePath.split("/").slice(0, -1).join("/"),
           role: this.determineModuleRole(result.entryPoint),
         });
       }
     }
 
     // 确定主表角色
-    const primaryTable = mergedTables.find(t => t.tableName === anchorTable);
+    const primaryTable = mergedTables.find((t) => t.tableName === anchorTable);
     if (primaryTable) {
-      primaryTable.role = 'primary';
+      primaryTable.role = "primary";
     }
 
     // 其他表标记为 related
     for (const table of mergedTables) {
-      if (table.tableName !== anchorTable && table.role === 'primary') {
-        table.role = 'related';
+      if (table.tableName !== anchorTable && table.role === "primary") {
+        table.role = "related";
       }
     }
 
@@ -236,7 +241,11 @@ export class PartitionAggregator {
     };
 
     // 计算 partitionHash
-    const partitionHash = this.computePartitionHash(anchorTable, mergedTables, mergedEntryPoints);
+    const partitionHash = this.computePartitionHash(
+      anchorTable,
+      mergedTables,
+      mergedEntryPoints,
+    );
 
     // 构建 DomainPartition
     const partition: DomainPartition = {
@@ -254,7 +263,7 @@ export class PartitionAggregator {
       },
 
       contentHash: this.computeContentHash(mergedEntryPoints, mergedMappers),
-      lastCommitHash: '', // 后续填充
+      lastCommitHash: "", // 后续填充
       updatedAt: new Date().toISOString(),
     };
 
@@ -264,7 +273,9 @@ export class PartitionAggregator {
   /**
    * 合并关联 Partition（外键、分表）
    */
-  private mergeRelatedPartitions(partitions: DomainPartition[]): DomainPartition[] {
+  private mergeRelatedPartitions(
+    partitions: DomainPartition[],
+  ): DomainPartition[] {
     const result: DomainPartition[] = [];
     const merged = new Set<string>();
 
@@ -305,14 +316,20 @@ export class PartitionAggregator {
   private shouldMerge(a: DomainPartition, b: DomainPartition): boolean {
     // 1. 外键关系：a 有表指向 b 的主表
     for (const table of a.tables) {
-      if (table.foreignKey && table.foreignKey.includes(b.tables[0]?.tableName)) {
+      if (
+        table.foreignKey &&
+        table.foreignKey.includes(b.tables[0]?.tableName)
+      ) {
         return true;
       }
     }
 
     // 2. 分表关系：a 的表是 b 主表的分表
     for (const table of a.tables) {
-      if (table.role === 'shard' && table.shardGroup === b.tables[0]?.tableName) {
+      if (
+        table.role === "shard" &&
+        table.shardGroup === b.tables[0]?.tableName
+      ) {
         return true;
       }
     }
@@ -332,8 +349,12 @@ export class PartitionAggregator {
   /**
    * 合并多个 Partition
    */
-  private mergeMultiplePartitions(partitions: DomainPartition[]): DomainPartition {
-    const anchorTable = partitions[0].tables.find(t => t.role === 'primary')?.tableName ?? partitions[0].tables[0].tableName;
+  private mergeMultiplePartitions(
+    partitions: DomainPartition[],
+  ): DomainPartition {
+    const anchorTable =
+      partitions[0].tables.find((t) => t.role === "primary")?.tableName ??
+      partitions[0].tables[0].tableName;
 
     const mergedTables: TableInfo[] = [];
     const mergedEntryPoints: EntryPoint[] = [];
@@ -354,8 +375,11 @@ export class PartitionAggregator {
         if (!tableSet.has(table.tableName)) {
           tableSet.add(table.tableName);
           // 主表只保留第一个
-          if (table.role === 'primary' && mergedTables.some(t => t.role === 'primary')) {
-            table.role = 'related';
+          if (
+            table.role === "primary" &&
+            mergedTables.some((t) => t.role === "primary")
+          ) {
+            table.role = "related";
           }
           mergedTables.push(table);
         }
@@ -400,7 +424,11 @@ export class PartitionAggregator {
 
     return {
       partitionId: `domain:${anchorTable}`,
-      partitionHash: this.computePartitionHash(anchorTable, mergedTables, mergedEntryPoints),
+      partitionHash: this.computePartitionHash(
+        anchorTable,
+        mergedTables,
+        mergedEntryPoints,
+      ),
       algorithmVersion: this.algorithmVersion,
 
       tables: mergedTables,
@@ -419,7 +447,7 @@ export class PartitionAggregator {
       },
 
       contentHash: this.computeContentHash(mergedEntryPoints, mergedMappers),
-      lastCommitHash: '',
+      lastCommitHash: "",
       updatedAt: new Date().toISOString(),
     };
   }
@@ -435,7 +463,13 @@ export class PartitionAggregator {
     const entityCount = partition.sharedResources?.entities?.length ?? 0;
 
     // 追溯深度（0.5 - 1.0）
-    const traceDepth = Math.min(1, 0.5 + (serviceCount > 0 ? 0.2 : 0) + (mapperCount > 0 ? 0.2 : 0) + (entityCount > 0 ? 0.1 : 0));
+    const traceDepth = Math.min(
+      1,
+      0.5 +
+        (serviceCount > 0 ? 0.2 : 0) +
+        (mapperCount > 0 ? 0.2 : 0) +
+        (entityCount > 0 ? 0.1 : 0),
+    );
 
     // 跨模块加成（0 - 0.2）
     const crossModule = moduleCount > 1 ? 0.2 : 0;
@@ -444,7 +478,10 @@ export class PartitionAggregator {
     const multiEntryPoint = Math.min(0.15, (entryPointCount - 1) * 0.05);
 
     // 表关联加成（0 - 0.1）
-    const tableRelation = partition.tables.length > 1 ? Math.min(0.1, (partition.tables.length - 1) * 0.02) : 0;
+    const tableRelation =
+      partition.tables.length > 1
+        ? Math.min(0.1, (partition.tables.length - 1) * 0.02)
+        : 0;
 
     partition.confidenceBreakdown = {
       traceDepth,
@@ -462,60 +499,76 @@ export class PartitionAggregator {
 
     for (const ep of partition.entryPoints) {
       for (const call of ep.crossDomainCalls ?? []) {
-        if (!crossDomainRefs.some(ref => ref.targetDomain === call.targetDomain)) {
+        if (
+          !crossDomainRefs.some((ref) => ref.targetDomain === call.targetDomain)
+        ) {
           crossDomainRefs.push({
             targetDomain: call.targetDomain,
-            relationType: 'service_call',
+            relationType: "service_call",
           });
         }
       }
     }
 
-    partition.crossDomainRefs = crossDomainRefs.length > 0 ? crossDomainRefs : undefined;
+    partition.crossDomainRefs =
+      crossDomainRefs.length > 0 ? crossDomainRefs : undefined;
   }
 
   /**
    * 确定模块角色
    */
-  private determineModuleRole(entryPoint: EntryPoint): 'entry_and_logic_provider' | 'entry_provider' | 'logic_provider' | 'data_provider' {
+  private determineModuleRole(
+    entryPoint: EntryPoint,
+  ):
+    | "entry_and_logic_provider"
+    | "entry_provider"
+    | "logic_provider"
+    | "data_provider" {
     const kind = entryPoint.kind;
 
-    if (kind === 'controller') {
-      return 'entry_and_logic_provider';
+    if (kind === "controller") {
+      return "entry_and_logic_provider";
     }
 
-    if (kind === 'scheduled' || kind === 'mq_consumer') {
-      return 'entry_provider';
+    if (kind === "scheduled" || kind === "mq_consumer") {
+      return "entry_provider";
     }
 
-    return 'entry_provider';
+    return "entry_provider";
   }
 
   /**
    * 计算 Partition Hash
    */
-  private computePartitionHash(anchorTable: string, tables: TableInfo[], entryPoints: EntryPoint[]): string {
+  private computePartitionHash(
+    anchorTable: string,
+    tables: TableInfo[],
+    entryPoints: EntryPoint[],
+  ): string {
     const data = JSON.stringify({
       anchorTable,
       tableCount: tables.length,
       entryPointCount: entryPoints.length,
-      tableNames: tables.map(t => t.tableName).sort(),
+      tableNames: tables.map((t) => t.tableName).sort(),
     });
 
-    return `sha256:${createHash('sha256').update(data).digest('hex').slice(0, 16)}`;
+    return `sha256:${createHash("sha256").update(data).digest("hex").slice(0, 16)}`;
   }
 
   /**
    * 计算 Content Hash
    */
-  private computeContentHash(entryPoints: EntryPoint[], mappers: MapperInfo[]): string {
+  private computeContentHash(
+    entryPoints: EntryPoint[],
+    mappers: MapperInfo[],
+  ): string {
     const filePaths = [
-      ...entryPoints.map(ep => ep.filePath),
-      ...mappers.map(m => m.filePath),
+      ...entryPoints.map((ep) => ep.filePath),
+      ...mappers.map((m) => m.filePath),
     ].sort();
 
     const data = JSON.stringify(filePaths);
-    return `sha256:${createHash('sha256').update(data).digest('hex').slice(0, 16)}`;
+    return `sha256:${createHash("sha256").update(data).digest("hex").slice(0, 16)}`;
   }
 }
 
@@ -534,12 +587,12 @@ export function createPartitionAggregator(): PartitionAggregator {
 export function aggregateWithLLMDecisions(
   traceResults: TraceResult[],
   candidates: PartitionCandidate[],
-  decisions: DomainMergeDecision[]
+  decisions: DomainMergeDecision[],
 ): DomainPartition[] {
   const partitions: DomainPartition[] = [];
 
   // 构建入口点到 TraceResult 的映射（标准化路径格式）
-  const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+  const normalizePath = (p: string) => p.replace(/\\/g, "/").toLowerCase();
 
   const entryPointToResult = new Map<string, TraceResult>();
   for (const result of traceResults) {
@@ -565,8 +618,8 @@ export function aggregateWithLLMDecisions(
 
     // 如果入口点匹配失败，回退到 anchorTable 匹配
     if (results.length === 0) {
-      const matchingResults = traceResults.filter(r =>
-        r.tables.some(t => t.tableName === candidate.anchorTable)
+      const matchingResults = traceResults.filter((r) =>
+        r.tables.some((t) => t.tableName === candidate.anchorTable),
       );
       results.push(...matchingResults);
     }
@@ -579,7 +632,7 @@ export function aggregateWithLLMDecisions(
     const mergedPartition = mergeCandidatesByDecision(
       decision,
       candidates,
-      candidateToResults
+      candidateToResults,
     );
 
     if (mergedPartition) {
@@ -596,7 +649,9 @@ export function aggregateWithLLMDecisions(
     computeCrossDomainRefsForPartition(partition);
   }
 
-  logger.info(`LLM aggregation: ${decisions.length} decisions → ${partitions.length} partitions`);
+  logger.info(
+    `LLM aggregation: ${decisions.length} decisions → ${partitions.length} partitions`,
+  );
 
   return partitions;
 }
@@ -607,7 +662,7 @@ export function aggregateWithLLMDecisions(
 function mergeCandidatesByDecision(
   decision: DomainMergeDecision,
   candidates: PartitionCandidate[],
-  candidateToResults: Map<string, TraceResult[]>
+  candidateToResults: Map<string, TraceResult[]>,
 ): DomainPartition | null {
   if (decision.mergeGroup.length === 0) return null;
 
@@ -683,26 +738,29 @@ function mergeCandidatesByDecision(
       moduleSet.add(moduleName);
       mergedModules.push({
         name: moduleName,
-        path: result.entryPoint.filePath.split('/').slice(0, -1).join('/'),
+        path: result.entryPoint.filePath.split("/").slice(0, -1).join("/"),
         role: determineModuleRole(result.entryPoint),
       });
     }
   }
 
   // 确定 anchorTable（使用第一个候选的 anchorTable）
-  const firstCandidate = candidates.find(c => c.candidateId === decision.mergeGroup[0]);
-  const anchorTable = firstCandidate?.anchorTable ?? mergedTables[0]?.tableName ?? 'unknown';
+  const firstCandidate = candidates.find(
+    (c) => c.candidateId === decision.mergeGroup[0],
+  );
+  const anchorTable =
+    firstCandidate?.anchorTable ?? mergedTables[0]?.tableName ?? "unknown";
 
   // 设置主表角色
-  const primaryTable = mergedTables.find(t => t.tableName === anchorTable);
+  const primaryTable = mergedTables.find((t) => t.tableName === anchorTable);
   if (primaryTable) {
-    primaryTable.role = 'primary';
+    primaryTable.role = "primary";
   }
 
   // 其他表标记为 related
   for (const table of mergedTables) {
-    if (table.tableName !== anchorTable && table.role === 'primary') {
-      table.role = 'related';
+    if (table.tableName !== anchorTable && table.role === "primary") {
+      table.role = "related";
     }
   }
 
@@ -711,8 +769,12 @@ function mergeCandidatesByDecision(
 
   return {
     partitionId,
-    partitionHash: computePartitionHash(anchorTable, mergedTables, mergedEntryPoints),
-    algorithmVersion: '2.0.0-llm',
+    partitionHash: computePartitionHash(
+      anchorTable,
+      mergedTables,
+      mergedEntryPoints,
+    ),
+    algorithmVersion: "2.0.0-llm",
 
     tables: mergedTables,
     entryPoints: mergedEntryPoints,
@@ -724,14 +786,19 @@ function mergeCandidatesByDecision(
     backendModules: mergedModules,
 
     confidenceBreakdown: {
-      traceDepth: Math.min(1, 0.5 + (mergedServices.length > 0 ? 0.2 : 0) + (mergedMappers.length > 0 ? 0.2 : 0)),
+      traceDepth: Math.min(
+        1,
+        0.5 +
+          (mergedServices.length > 0 ? 0.2 : 0) +
+          (mergedMappers.length > 0 ? 0.2 : 0),
+      ),
       crossModule: moduleSet.size > 1 ? 0.2 : 0,
       multiEntryPoint: Math.min(0.15, (mergedEntryPoints.length - 1) * 0.05),
       llmConfidence: decision.confidence,
     },
 
     contentHash: computeContentHash(mergedEntryPoints, mergedMappers),
-    lastCommitHash: '',
+    lastCommitHash: "",
     updatedAt: new Date().toISOString(),
   };
 }
@@ -744,58 +811,74 @@ function computeCrossDomainRefsForPartition(partition: DomainPartition): void {
 
   for (const ep of partition.entryPoints) {
     for (const call of ep.crossDomainCalls ?? []) {
-      if (!crossDomainRefs.some(ref => ref.targetDomain === call.targetDomain)) {
+      if (
+        !crossDomainRefs.some((ref) => ref.targetDomain === call.targetDomain)
+      ) {
         crossDomainRefs.push({
           targetDomain: call.targetDomain,
-          relationType: 'service_call',
+          relationType: "service_call",
         });
       }
     }
   }
 
-  partition.crossDomainRefs = crossDomainRefs.length > 0 ? crossDomainRefs : undefined;
+  partition.crossDomainRefs =
+    crossDomainRefs.length > 0 ? crossDomainRefs : undefined;
 }
 
 /**
  * 确定模块角色（独立函数）
  */
-function determineModuleRole(entryPoint: EntryPoint): 'entry_and_logic_provider' | 'entry_provider' | 'logic_provider' | 'data_provider' {
+function determineModuleRole(
+  entryPoint: EntryPoint,
+):
+  | "entry_and_logic_provider"
+  | "entry_provider"
+  | "logic_provider"
+  | "data_provider" {
   const kind = entryPoint.kind;
 
-  if (kind === 'controller') {
-    return 'entry_and_logic_provider';
+  if (kind === "controller") {
+    return "entry_and_logic_provider";
   }
 
-  if (kind === 'scheduled' || kind === 'mq_consumer') {
-    return 'entry_provider';
+  if (kind === "scheduled" || kind === "mq_consumer") {
+    return "entry_provider";
   }
 
-  return 'entry_provider';
+  return "entry_provider";
 }
 
 /**
  * 计算 Partition Hash（独立函数）
  */
-function computePartitionHash(anchorTable: string, tables: TableInfo[], entryPoints: EntryPoint[]): string {
+function computePartitionHash(
+  anchorTable: string,
+  tables: TableInfo[],
+  entryPoints: EntryPoint[],
+): string {
   const data = JSON.stringify({
     anchorTable,
     tableCount: tables.length,
     entryPointCount: entryPoints.length,
-    tableNames: tables.map(t => t.tableName).sort(),
+    tableNames: tables.map((t) => t.tableName).sort(),
   });
 
-  return `sha256:${createHash('sha256').update(data).digest('hex').slice(0, 16)}`;
+  return `sha256:${createHash("sha256").update(data).digest("hex").slice(0, 16)}`;
 }
 
 /**
  * 计算 Content Hash（独立函数）
  */
-function computeContentHash(entryPoints: EntryPoint[], mappers: MapperInfo[]): string {
+function computeContentHash(
+  entryPoints: EntryPoint[],
+  mappers: MapperInfo[],
+): string {
   const filePaths = [
-    ...entryPoints.map(ep => ep.filePath),
-    ...mappers.map(m => m.filePath),
+    ...entryPoints.map((ep) => ep.filePath),
+    ...mappers.map((m) => m.filePath),
   ].sort();
 
   const data = JSON.stringify(filePaths);
-  return `sha256:${createHash('sha256').update(data).digest('hex').slice(0, 16)}`;
+  return `sha256:${createHash("sha256").update(data).digest("hex").slice(0, 16)}`;
 }

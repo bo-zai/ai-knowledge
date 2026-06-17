@@ -1,5 +1,5 @@
-import { AppError } from '../shared/errors.js';
-import { logger } from '../shared/logger.js';
+import { AppError } from "../shared/errors.js";
+import { logger } from "../shared/logger.js";
 
 export interface RetryConfig {
   maxRetries: number;
@@ -32,7 +32,10 @@ export async function withRetry<T>(
       }
     }
   }
-  throw new AppError(`Operation failed after ${config.maxRetries} retries: ${lastError?.message}`, 'MAX_RETRIES_EXCEEDED');
+  throw new AppError(
+    `Operation failed after ${config.maxRetries} retries: ${lastError?.message}`,
+    "MAX_RETRIES_EXCEEDED",
+  );
 }
 
 function sleep(ms: number): Promise<void> {

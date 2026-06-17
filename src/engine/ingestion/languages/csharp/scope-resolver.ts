@@ -6,32 +6,35 @@
  * canonical shape.
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import { SupportedLanguages } from '../../../shared/index.js';
-import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
-import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
-import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
-import { csharpProvider } from '../csharp.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import { SupportedLanguages } from "../../../shared/index.js";
+import {
+  buildMro,
+  defaultLinearize,
+} from "../../scope-resolution/passes/mro.js";
+import { populateClassOwnedMembers } from "../../scope-resolution/scope/walkers.js";
+import type { ScopeResolver } from "../../scope-resolution/contract/scope-resolver.js";
+import { csharpProvider } from "../csharp.js";
 import {
   csharpArityCompatibility,
   csharpMergeBindings,
   resolveCsharpImportTarget,
   type CsharpResolveContext,
-} from './index.js';
-import { populateCsharpNamespaceSiblings } from './namespace-siblings.js';
-import { unwrapCsharpCollectionAccessor } from './accessor-unwrap.js';
+} from "./index.js";
+import { populateCsharpNamespaceSiblings } from "./namespace-siblings.js";
+import { unwrapCsharpCollectionAccessor } from "./accessor-unwrap.js";
 
 const csharpScopeResolver: ScopeResolver = {
   language: SupportedLanguages.CSharp,
   languageProvider: csharpProvider,
-  importEdgeReason: 'csharp-scope: using',
+  importEdgeReason: "csharp-scope: using",
 
   resolveImportTarget: (targetRaw, fromFile, allFilePaths) => {
     const ws: CsharpResolveContext = { fromFile, allFilePaths };
     // `WorkspaceIndex` is an opaque `unknown` placeholder in the
     // shared contract, so `ws` passes structurally without a cast.
     return resolveCsharpImportTarget(
-      { kind: 'namespace', localName: '_', importedName: '_', targetRaw },
+      { kind: "namespace", localName: "_", importedName: "_", targetRaw },
       ws,
     );
   },
@@ -39,11 +42,14 @@ const csharpScopeResolver: ScopeResolver = {
   // C# shadowing: local > using > using static. The per-scope id is
   // unused by the C# implementation (shadowing is computed purely
   // from the binding tier), so we don't need to synthesize a Scope.
-  mergeBindings: (existing, incoming) => [...csharpMergeBindings([...existing, ...incoming])],
+  mergeBindings: (existing, incoming) => [
+    ...csharpMergeBindings([...existing, ...incoming]),
+  ],
 
   // Adapter: csharpArityCompatibility uses (def, callsite); the
   // contract is (callsite, def).
-  arityCompatibility: (callsite, def) => csharpArityCompatibility(def, callsite),
+  arityCompatibility: (callsite, def) =>
+    csharpArityCompatibility(def, callsite),
 
   buildMro: (graph, parsedFiles, nodeLookup) =>
     buildMro(graph, parsedFiles, nodeLookup, defaultLinearize),
@@ -53,7 +59,7 @@ const csharpScopeResolver: ScopeResolver = {
   // C# uses `base` for super-class dispatch, not `super`. Match as a
   // plain identifier (no `()` call like Python's `super(...)`) — `base`
   // is a keyword-like receiver, not a callable.
-  isSuperReceiver: (text) => text.trim() === 'base',
+  isSuperReceiver: (text) => text.trim() === "base",
 
   // Same-namespace cross-file visibility — C# makes every type
   // declared in `namespace X` visible to other files declaring the

@@ -4,7 +4,7 @@
  * Controls when LLM supplement is triggered and cost limits.
  */
 
-import type { KnowledgeType } from '../../../schemas/knowledge-type.js';
+import type { KnowledgeType } from "../../../schemas/knowledge-type.js";
 
 export const HYBRID_CONFIG = {
   /** Enable LLM supplement globally */
@@ -39,49 +39,58 @@ export const HYBRID_CONFIG = {
 /**
  * Knowledge type specific supplement strategies
  */
-export const TYPE_SUPPLEMENT_STRATEGY: Partial<Record<KnowledgeType, {
-  focusAreas: readonly string[];
-  promptTemplate: string;
-}>> = {
+export const TYPE_SUPPLEMENT_STRATEGY: Partial<
+  Record<
+    KnowledgeType,
+    {
+      focusAreas: readonly string[];
+      promptTemplate: string;
+    }
+  >
+> = {
   /** DATA_MODEL: Use LLM for entity relationships and constraints */
   DATA_MODEL: {
-    focusAreas: ['relations', 'constraints', 'validationRules'],
-    promptTemplate: 'data-model-supplement',
+    focusAreas: ["relations", "constraints", "validationRules"],
+    promptTemplate: "data-model-supplement",
   },
 
   /** CAPABILITY: Use LLM for operation descriptions and domain hints */
   CAPABILITY: {
-    focusAreas: ['operationDescriptions', 'domainContext', 'businessValue'],
-    promptTemplate: 'capability-supplement',
+    focusAreas: ["operationDescriptions", "domainContext", "businessValue"],
+    promptTemplate: "capability-supplement",
   },
 
   /** RELATION: Use LLM for service interaction patterns */
   RELATION: {
-    focusAreas: ['interactionPattern', 'dataFlow', 'dependencyReason'],
-    promptTemplate: 'relation-supplement',
+    focusAreas: ["interactionPattern", "dataFlow", "dependencyReason"],
+    promptTemplate: "relation-supplement",
   },
 
   /** WORKFLOW: Use LLM for step descriptions and conditions */
   WORKFLOW: {
-    focusAreas: ['stepDescriptions', 'conditions', 'triggers'],
-    promptTemplate: 'workflow-supplement',
+    focusAreas: ["stepDescriptions", "conditions", "triggers"],
+    promptTemplate: "workflow-supplement",
   },
 
   /** BOUNDARY: Use LLM for boundary rationale */
   BOUNDARY: {
-    focusAreas: ['boundaryRationale', 'crossingPoints', 'enforcementRules'],
-    promptTemplate: 'boundary-supplement',
+    focusAreas: ["boundaryRationale", "crossingPoints", "enforcementRules"],
+    promptTemplate: "boundary-supplement",
   },
 
   /** CONSTRAINT: Use LLM for constraint context */
   CONSTRAINT: {
-    focusAreas: ['constraintContext', 'enforcementMechanism', 'violationHandling'],
-    promptTemplate: 'constraint-supplement',
+    focusAreas: [
+      "constraintContext",
+      "enforcementMechanism",
+      "violationHandling",
+    ],
+    promptTemplate: "constraint-supplement",
   },
 
   /** EXTERNAL: Use LLM for integration patterns */
   EXTERNAL: {
-    focusAreas: ['integrationPattern', 'errorHandling', 'fallbackStrategy'],
-    promptTemplate: 'external-supplement',
+    focusAreas: ["integrationPattern", "errorHandling", "fallbackStrategy"],
+    promptTemplate: "external-supplement",
   },
 } as const;

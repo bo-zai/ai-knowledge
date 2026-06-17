@@ -13,15 +13,18 @@ import {
   buildImportedReturnTypes,
   buildImportedRawReturnTypes,
   type ExportedTypeMap,
-} from '../call-processor.js';
-import type { createResolutionContext } from '../model/resolution-context.js';
-import { createASTCache } from '../ast-cache.js';
-import { type PipelineProgress, getLanguageFromFilename } from '../../shared/index.js';
-import { readFileContents } from '../filesystem-walker.js';
-import { isLanguageAvailable } from '../../tree-sitter/parser-loader.js';
-import { topologicalLevelSort } from '../utils/graph-sort.js';
-import type { KnowledgeGraph } from '../../graph/types.js';
-import { isDev } from '../utils/env.js';
+} from "../call-processor.js";
+import type { createResolutionContext } from "../model/resolution-context.js";
+import { createASTCache } from "../ast-cache.js";
+import {
+  type PipelineProgress,
+  getLanguageFromFilename,
+} from "../../shared/index.js";
+import { readFileContents } from "../filesystem-walker.js";
+import { isLanguageAvailable } from "../../tree-sitter/parser-loader.js";
+import { topologicalLevelSort } from "../utils/graph-sort.js";
+import type { KnowledgeGraph } from "../../graph/types.js";
+import { isDev } from "../utils/env.js";
 
 /** Max AST trees to keep in LRU cache for cross-file binding propagation. */
 const AST_CACHE_CAP = 50;
@@ -45,7 +48,8 @@ export async function runCrossFileBindingPropagation(
   pipelineStart: number,
   onProgress: (progress: PipelineProgress) => void,
 ): Promise<number> {
-  if (parseExportedTypeMap.size === 0 || ctx.namedImportMap.size === 0) return 0;
+  if (parseExportedTypeMap.size === 0 || ctx.namedImportMap.size === 0)
+    return 0;
 
   // Build a local mutable working copy. Per-file re-resolution below mutates
   // this map (each `processCalls` writes that file's exports back into it so
@@ -60,11 +64,16 @@ export async function runCrossFileBindingPropagation(
   const { levels, cycleCount } = topologicalLevelSort(ctx.importMap);
 
   if (isDev && cycleCount > 0) {
-    console.log(`🔄 ${cycleCount} files in import cycles (processed last in undefined order)`);
+    console.log(
+      `🔄 ${cycleCount} files in import cycles (processed last in undefined order)`,
+    );
   }
 
   let filesWithGaps = 0;
-  const gapThreshold = Math.max(1, Math.ceil(totalFiles * CROSS_FILE_SKIP_THRESHOLD));
+  const gapThreshold = Math.max(
+    1,
+    Math.ceil(totalFiles * CROSS_FILE_SKIP_THRESHOLD),
+  );
   outer: for (const level of levels) {
     for (const filePath of level) {
       const imports = ctx.namedImportMap.get(filePath);
@@ -75,7 +84,10 @@ export async function runCrossFileBindingPropagation(
           filesWithGaps++;
           break;
         }
-        const def = ctx.model.symbols.lookupExactFull(binding.sourcePath, binding.exportedName);
+        const def = ctx.model.symbols.lookupExactFull(
+          binding.sourcePath,
+          binding.exportedName,
+        );
         if (def?.returnType) {
           filesWithGaps++;
           break;
@@ -104,10 +116,14 @@ export async function runCrossFileBindingPropagation(
   // this out into its own phase, also rename `parse-impl.ts` per-chunk
   // progress events accordingly.
   onProgress({
-    phase: 'parsing',
+    phase: "parsing",
     percent: 82,
     message: `Cross-file type propagation (${filesWithGaps}+ files)...`,
-    stats: { filesProcessed: totalFiles, totalFiles, nodesCreated: graph.nodeCount },
+    stats: {
+      filesProcessed: totalFiles,
+      totalFiles,
+      nodesCreated: graph.nodeCount,
+    },
   });
 
   let crossFileResolved = 0;
@@ -122,7 +138,11 @@ export async function runCrossFileBindingPropagation(
       importedRawReturns: ReadonlyMap<string, string>;
     }[] = [];
     for (const filePath of level) {
-      if (crossFileResolved + levelCandidates.length >= MAX_CROSS_FILE_REPROCESS) break;
+      if (
+        crossFileResolved + levelCandidates.length >=
+        MAX_CROSS_FILE_REPROCESS
+      )
+        break;
       const imports = ctx.namedImportMap.get(filePath);
       if (!imports) continue;
 
@@ -151,7 +171,12 @@ export async function runCrossFileBindingPropagation(
       const lang = getLanguageFromFilename(filePath);
       if (!lang || !isLanguageAvailable(lang)) continue;
 
-      levelCandidates.push({ filePath, seeded, importedReturns, importedRawReturns });
+      levelCandidates.push({
+        filePath,
+        seeded,
+        importedReturns,
+        importedRawReturns,
+      });
     }
 
     if (levelCandidates.length === 0) continue;
@@ -159,7 +184,12 @@ export async function runCrossFileBindingPropagation(
     const levelPaths = levelCandidates.map((c) => c.filePath);
     const contentMap = await readFileContents(repoPath, levelPaths);
 
-    for (const { filePath, seeded, importedReturns, importedRawReturns } of levelCandidates) {
+    for (const {
+      filePath,
+      seeded,
+      importedReturns,
+      importedRawReturns,
+    } of levelCandidates) {
       const content = contentMap.get(filePath);
       if (!content) continue;
 
@@ -167,12 +197,18 @@ export async function runCrossFileBindingPropagation(
       const bindings = new Map<string, ReadonlyMap<string, string>>();
       if (seeded.size > 0) bindings.set(filePath, seeded);
 
-      const importedReturnTypesMap = new Map<string, ReadonlyMap<string, string>>();
+      const importedReturnTypesMap = new Map<
+        string,
+        ReadonlyMap<string, string>
+      >();
       if (importedReturns.size > 0) {
         importedReturnTypesMap.set(filePath, importedReturns);
       }
 
-      const importedRawReturnTypesMap = new Map<string, ReadonlyMap<string, string>>();
+      const importedRawReturnTypesMap = new Map<
+        string,
+        ReadonlyMap<string, string>
+      >();
       if (importedRawReturns.size > 0) {
         importedRawReturnTypesMap.set(filePath, importedRawReturns);
       }
@@ -186,14 +222,18 @@ export async function runCrossFileBindingPropagation(
         exportedTypeMap,
         bindings.size > 0 ? bindings : undefined,
         importedReturnTypesMap.size > 0 ? importedReturnTypesMap : undefined,
-        importedRawReturnTypesMap.size > 0 ? importedRawReturnTypesMap : undefined,
+        importedRawReturnTypesMap.size > 0
+          ? importedRawReturnTypesMap
+          : undefined,
       );
       crossFileResolved++;
     }
 
     if (crossFileResolved >= MAX_CROSS_FILE_REPROCESS) {
       if (isDev)
-        console.log(`⚠️ Cross-file re-resolution capped at ${MAX_CROSS_FILE_REPROCESS} files`);
+        console.log(
+          `⚠️ Cross-file re-resolution capped at ${MAX_CROSS_FILE_REPROCESS} files`,
+        );
       break;
     }
   }
@@ -203,7 +243,8 @@ export async function runCrossFileBindingPropagation(
   if (isDev) {
     const elapsed = Date.now() - crossFileStart;
     const totalElapsed = Date.now() - pipelineStart;
-    const reResolutionPct = totalElapsed > 0 ? ((elapsed / totalElapsed) * 100).toFixed(1) : '0';
+    const reResolutionPct =
+      totalElapsed > 0 ? ((elapsed / totalElapsed) * 100).toFixed(1) : "0";
     console.log(
       `🔗 Cross-file re-resolution: ${crossFileResolved} candidates re-processed` +
         ` in ${elapsed}ms (${reResolutionPct}% of total ingestion time so far)`,

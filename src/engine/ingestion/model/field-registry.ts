@@ -5,7 +5,7 @@
  * Stores Property symbols keyed by `ownerNodeId\0fieldName` for O(1) lookup.
  */
 
-import type { SymbolDefinition } from '../../shared/index.js';
+import type { SymbolDefinition } from "../../shared/index.js";
 
 // ---------------------------------------------------------------------------
 // Public read-only interface
@@ -13,7 +13,10 @@ import type { SymbolDefinition } from '../../shared/index.js';
 
 export interface FieldRegistry {
   /** Look up a field/property by its owning class nodeId and field name. */
-  lookupFieldByOwner(ownerNodeId: string, fieldName: string): SymbolDefinition | undefined;
+  lookupFieldByOwner(
+    ownerNodeId: string,
+    fieldName: string,
+  ): SymbolDefinition | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,7 +44,11 @@ export const createFieldRegistry = (): MutableFieldRegistry => {
     return fieldByOwner.get(`${ownerNodeId}\0${fieldName}`);
   };
 
-  const register = (ownerNodeId: string, fieldName: string, def: SymbolDefinition): void => {
+  const register = (
+    ownerNodeId: string,
+    fieldName: string,
+    def: SymbolDefinition,
+  ): void => {
     fieldByOwner.set(`${ownerNodeId}\0${fieldName}`, def);
   };
 

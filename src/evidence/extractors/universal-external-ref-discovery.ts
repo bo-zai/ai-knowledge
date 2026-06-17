@@ -9,11 +9,18 @@
  * - 不依赖候选列表：独立扫描，不受 LIMIT 限制
  */
 
-import { logger } from '../../shared/logger.js';
-import { discoverExternalReferences, type ExternalRefCandidate } from './external-ref-discovery.js';
-import { getLanguageAdapter, type LanguageAdapter, type InternalEnum } from './language-adapters/index.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import type { ConceptCandidate, SuspiciousMark } from '../concept-filter.js';
+import { logger } from "../../shared/logger.js";
+import {
+  discoverExternalReferences,
+  type ExternalRefCandidate,
+} from "./external-ref-discovery.js";
+import {
+  getLanguageAdapter,
+  type LanguageAdapter,
+  type InternalEnum,
+} from "./language-adapters/index.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import type { ConceptCandidate, SuspiciousMark } from "../concept-filter.js";
 
 /**
  * 扫描配置
@@ -31,7 +38,7 @@ export interface ScanConfig {
  * 默认扫描配置
  */
 const DEFAULT_SCAN_CONFIG: ScanConfig = {
-  fileExtensions: ['.java', '.py', '.go', '.ts', '.tsx', '.js', '.jsx'],
+  fileExtensions: [".java", ".py", ".go", ".ts", ".tsx", ".js", ".jsx"],
   excludePatterns: [
     /test/i,
     /spec/i,
@@ -58,7 +65,7 @@ export async function discoverUniversalExternalRefs(
   lbugPath: string,
   repoPath: string,
   executeQuery: ReadOnlyQueryExecutor,
-  language: string = 'java',
+  language: string = "java",
   config: Partial<ScanConfig> = {},
 ): Promise<ConceptCandidate[]> {
   const scanConfig = { ...DEFAULT_SCAN_CONFIG, ...config };
@@ -72,7 +79,9 @@ export async function discoverUniversalExternalRefs(
 
   // 2. 从图谱查询本项目定义的类名集合
   const definedClasses = await queryDefinedClasses(executeQuery);
-  logger.info(`UniversalExternalRef: ${definedClasses.size} classes defined in project`);
+  logger.info(
+    `UniversalExternalRef: ${definedClasses.size} classes defined in project`,
+  );
 
   // 3. 从图谱查询所有代码文件路径
   const filePaths = await queryAllCodeFiles(executeQuery, scanConfig);
@@ -83,11 +92,19 @@ export async function discoverUniversalExternalRefs(
   }
 
   // 4. 批量提取代码内容
-  const codeSnippets = await extractCodeContents(filePaths, lbugPath, executeQuery);
+  const codeSnippets = await extractCodeContents(
+    filePaths,
+    lbugPath,
+    executeQuery,
+  );
   logger.info(`UniversalExternalRef: ${codeSnippets.size} files extracted`);
 
   // 5. 发现外部引用
-  const externalRefs = discoverExternalReferences(codeSnippets, definedClasses, adapter);
+  const externalRefs = discoverExternalReferences(
+    codeSnippets,
+    definedClasses,
+    adapter,
+  );
 
   // 5.1 发现内部定义的枚举（通过适配器，确保语言通用性）
   const internalEnums: InternalEnum[] = [];
@@ -96,7 +113,10 @@ export async function discoverUniversalExternalRefs(
       const found = adapter.discoverInternalEnums(code);
       for (const enumInfo of found) {
         // 过滤不值得生成的枚举（通过适配器判断）
-        if (adapter.isInternalEnumWorthGenerating?.(enumInfo) ?? enumInfo.values.length >= 3) {
+        if (
+          adapter.isInternalEnumWorthGenerating?.(enumInfo) ??
+          enumInfo.values.length >= 3
+        ) {
           internalEnums.push({
             ...enumInfo,
             contextSnippet: enumInfo.contextSnippet || code.slice(0, 200),
@@ -107,26 +127,28 @@ export async function discoverUniversalExternalRefs(
   }
 
   // 6. 转换为概念候选格式
-  const candidates: ConceptCandidate[] = externalRefs.map(ref => ({
+  const candidates: ConceptCandidate[] = externalRefs.map((ref) => ({
     className: ref.rootSymbol,
     filePath: ref.location,
     codeSnippet: ref.contextSnippet,
     enumValues: undefined,
-    suspiciousMark: 'external_enum_usage' as SuspiciousMark,
+    suspiciousMark: "external_enum_usage" as SuspiciousMark,
   }));
 
   // 6.1 合并内部枚举候选
   for (const internal of internalEnums) {
     candidates.push({
       className: internal.name,
-      filePath: '',  // 内部枚举可能跨文件，需要单独处理
+      filePath: "", // 内部枚举可能跨文件，需要单独处理
       codeSnippet: internal.contextSnippet,
       enumValues: internal.values,
       suspiciousMark: undefined,
     });
   }
 
-  logger.info(`UniversalExternalRef: discovered ${externalRefs.length} external refs + ${internalEnums.length} internal enums`);
+  logger.info(
+    `UniversalExternalRef: discovered ${externalRefs.length} external refs + ${internalEnums.length} internal enums`,
+  );
 
   return candidates;
 }
@@ -140,8 +162,8 @@ async function queryAllCodeFiles(
 ): Promise<string[]> {
   // 构建排除路径条件
   const excludeConditions = config.excludePatterns
-    .map(p => `NOT c.filePath =~ '(?i).*${p.source}.*'`)
-    .join('\n    AND ');
+    .map((p) => `NOT c.filePath =~ '(?i).*${p.source}.*'`)
+    .join("\n    AND ");
 
   const cypher = `
     MATCH (c:Class)
@@ -181,7 +203,7 @@ async function extractCodeContents(
   const batchSize = 50;
   for (let i = 0; i < filePaths.length; i += batchSize) {
     const batch = filePaths.slice(i, i + batchSize);
-    const filePathList = batch.map(fp => `"${fp}"`).join(', ');
+    const filePathList = batch.map((fp) => `"${fp}"`).join(", ");
 
     const cypher = `
       MATCH (c:Class)
@@ -191,7 +213,13 @@ async function extractCodeContents(
 
     const results = await executeQuery(cypher);
 
-    for (const row of results as Array<{ filePath: string; name: string; content?: string; startLine?: number; endLine?: number }>) {
+    for (const row of results as Array<{
+      filePath: string;
+      name: string;
+      content?: string;
+      startLine?: number;
+      endLine?: number;
+    }>) {
       if (row.content) {
         // 如果已有该文件的代码片段，合并或取较长的
         const existing = codeSnippets.get(row.filePath);
@@ -202,7 +230,9 @@ async function extractCodeContents(
     }
   }
 
-  logger.debug(`UniversalExternalRef: extracted ${codeSnippets.size} file contents from graph`);
+  logger.debug(
+    `UniversalExternalRef: extracted ${codeSnippets.size} file contents from graph`,
+  );
 
   return codeSnippets;
 }
@@ -210,7 +240,9 @@ async function extractCodeContents(
 /**
  * 从图谱查询本项目定义的类名集合
  */
-async function queryDefinedClasses(executeQuery: ReadOnlyQueryExecutor): Promise<Set<string>> {
+async function queryDefinedClasses(
+  executeQuery: ReadOnlyQueryExecutor,
+): Promise<Set<string>> {
   const cypher = `
     MATCH (c:Class)
     WHERE NOT c.filePath =~ '(?i).*(node_modules|target|build|dist|test|spec).*'

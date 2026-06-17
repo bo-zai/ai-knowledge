@@ -5,6 +5,7 @@
 你需要为一个 CLI 工具项目生成架构概览知识。架构概览帮助 AI Agent 快速建立对项目的全局认知，并指导编码时的代码定位。
 
 架构概览回答的问题：
+
 - 这个项目是什么类型？使用什么技术栈？
 - 命令组织方式是什么？（每个命令独立文件还是集中定义）
 - 新命令应该放哪？
@@ -74,6 +75,7 @@
 格式：`技术栈 + CLI 工具 + 主要功能`
 
 示例：
+
 - 正确："TypeScript CLI 工具，提供代码模板生成能力"
 - 错误："TypeScript CLI 工具，采用 Commander.js 和模块化命令组织"（过于技术化）
 
@@ -92,6 +94,7 @@
 从 src_dir_tree 证据中推断命令组织模式，有以下三种：
 
 **独立文件模式**：
+
 - 特征：commands/ 目录下每个命令一个独立文件
 - 示例结构：
   ```
@@ -104,6 +107,7 @@
   ```
 
 **集中定义模式**：
+
 - 特征：所有命令在一个文件中定义（通常是 cli.ts 或 index.ts）
 - 示例结构：
   ```
@@ -113,6 +117,7 @@
   ```
 
 **模块化模式**：
+
 - 特征：每个命令是一个模块/类，有统一的命令注册机制
 - 示例结构：
   ```
@@ -128,6 +133,7 @@
   ```
 
 **判断方法**：
+
 1. 查看 src_dir_tree 中是否存在 commands/ 目录
 2. 如果 commands/ 下有多个独立文件（generate.ts、build.ts）→ 独立文件模式
 3. 如果没有 commands/ 目录，命令逻辑在 cli.ts 或单一文件 → 集中定义模式
@@ -141,28 +147,58 @@
 
 采用表格形式，每个条目包含三个字段：
 
-| 字段 | 要求 |
-|------|------|
-| layer | 分层名称：Commands、CLI Entry、Utils、Lib 等 |
-| directory_path | 完整目录路径，从证据中提取 |
-| coding_guide | 编码时指导——新代码放哪 |
+| 字段           | 要求                                         |
+| -------------- | -------------------------------------------- |
+| layer          | 分层名称：Commands、CLI Entry、Utils、Lib 等 |
+| directory_path | 完整目录路径，从证据中提取                   |
+| coding_guide   | 编码时指导——新代码放哪                       |
 
 **独立文件模式示例**：
+
 ```json
 [
-  { "layer": "Commands", "directory_path": "src/commands/", "coding_guide": "新命令在此创建独立文件，如 src/commands/publish.ts" },
-  { "layer": "CLI Entry", "directory_path": "src/cli.ts", "coding_guide": "命令行解析和路由，注册新命令在这里引入" },
-  { "layer": "Utils", "directory_path": "src/utils/", "coding_guide": "工具函数，如 file-utils.ts、logger.ts" }
+  {
+    "layer": "Commands",
+    "directory_path": "src/commands/",
+    "coding_guide": "新命令在此创建独立文件，如 src/commands/publish.ts"
+  },
+  {
+    "layer": "CLI Entry",
+    "directory_path": "src/cli.ts",
+    "coding_guide": "命令行解析和路由，注册新命令在这里引入"
+  },
+  {
+    "layer": "Utils",
+    "directory_path": "src/utils/",
+    "coding_guide": "工具函数，如 file-utils.ts、logger.ts"
+  }
 ]
 ```
 
 **模块化模式示例**：
+
 ```json
 [
-  { "layer": "Commands", "directory_path": "src/commands/<command>/", "coding_guide": "新命令创建目录，如 src/commands/publish/" },
-  { "layer": "Command Index", "directory_path": "src/commands/<command>/index.ts", "coding_guide": "命令入口，导出命令定义" },
-  { "layer": "Command Handler", "directory_path": "src/commands/<command>/handler.ts", "coding_guide": "命令执行逻辑" },
-  { "layer": "CLI Entry", "directory_path": "src/cli.ts", "coding_guide": "命令注册和路由" }
+  {
+    "layer": "Commands",
+    "directory_path": "src/commands/<command>/",
+    "coding_guide": "新命令创建目录，如 src/commands/publish/"
+  },
+  {
+    "layer": "Command Index",
+    "directory_path": "src/commands/<command>/index.ts",
+    "coding_guide": "命令入口，导出命令定义"
+  },
+  {
+    "layer": "Command Handler",
+    "directory_path": "src/commands/<command>/handler.ts",
+    "coding_guide": "命令执行逻辑"
+  },
+  {
+    "layer": "CLI Entry",
+    "directory_path": "src/cli.ts",
+    "coding_guide": "命令注册和路由"
+  }
 ]
 ```
 
@@ -173,11 +209,13 @@
 **必须采用表格形式**，每个条目包含三个字段。
 
 **coding_guide 填写示例**：
+
 - `"新命令在此创建独立文件"`
 - `"模板生成核心逻辑"`
 - `"内置模板文件"`
 
 **必须包含的目录**（按实际存在选择）：
+
 - src/commands/ 或 commands/（命令实现）
 - src/lib/ 或 src/core/（核心逻辑）
 - src/templates/ 或 templates/（模板文件）
@@ -202,11 +240,13 @@
    ```
 
 **不要写通用目录**（Agent 已知这些）：
+
 - `.git/`、`.svn/` — 版本控制目录（Agent 已知）
 - `.idea/`、`.vscode/` — IDE 配置（Agent 已知）
 - `node_modules/` — npm 依赖（Agent 已知）
 
 **示例**（TypeScript CLI）：
+
 ```json
 [
   { "path": "dist/", "reason": "构建产物" },
@@ -220,16 +260,27 @@
 描述通用的代码组织约定。
 
 **必填约定**：
+
 - 命令组织方式（每个命令独立文件 vs 集中定义）
 - 命令命名约定
 - 命令接口约定（如必须实现某个方法）
 
 **示例**：
+
 ```json
 [
-  { "convention": "命令组织", "description": "每个命令独立文件，位于 src/commands/" },
-  { "convention": "命名约定", "description": "命令文件以功能命名，如 generate.ts、build.ts" },
-  { "convention": "命令接口", "description": "每个命令导出 name、description、execute 方法" }
+  {
+    "convention": "命令组织",
+    "description": "每个命令独立文件，位于 src/commands/"
+  },
+  {
+    "convention": "命名约定",
+    "description": "命令文件以功能命名，如 generate.ts、build.ts"
+  },
+  {
+    "convention": "命令接口",
+    "description": "每个命令导出 name、description、execute 方法"
+  }
 ]
 ```
 
@@ -247,7 +298,11 @@ CLI 工具只有一个入口：
 
 ```json
 [
-  { "type": "CLI 入口", "location": "src/cli.ts", "description": "命令行解析和路由" }
+  {
+    "type": "CLI 入口",
+    "location": "src/cli.ts",
+    "description": "命令行解析和路由"
+  }
 ]
 ```
 
@@ -267,15 +322,43 @@ CLI 工具只有一个入口：
   "tech_stack": ["TypeScript", "Commander.js", "Inquirer.js"],
   "command_mode": "独立文件模式",
   "layer_directory_paths": [
-    { "layer": "Commands", "directory_path": "src/commands/", "coding_guide": "新命令在此创建独立文件，如 src/commands/publish.ts" },
-    { "layer": "CLI Entry", "directory_path": "src/cli.ts", "coding_guide": "命令行解析和路由，注册新命令在这里引入" },
-    { "layer": "Generators", "directory_path": "src/generators/", "coding_guide": "模板生成核心逻辑，如 Generator.ts" },
-    { "layer": "Templates", "directory_path": "src/templates/", "coding_guide": "内置模板文件，使用 EJS 格式" }
+    {
+      "layer": "Commands",
+      "directory_path": "src/commands/",
+      "coding_guide": "新命令在此创建独立文件，如 src/commands/publish.ts"
+    },
+    {
+      "layer": "CLI Entry",
+      "directory_path": "src/cli.ts",
+      "coding_guide": "命令行解析和路由，注册新命令在这里引入"
+    },
+    {
+      "layer": "Generators",
+      "directory_path": "src/generators/",
+      "coding_guide": "模板生成核心逻辑，如 Generator.ts"
+    },
+    {
+      "layer": "Templates",
+      "directory_path": "src/templates/",
+      "coding_guide": "内置模板文件，使用 EJS 格式"
+    }
   ],
   "directory_structure": [
-    { "path": "src/commands/", "purpose": "CLI 命令实现", "coding_guide": "分层目录已在上方列出" },
-    { "path": "src/generators/", "purpose": "模板生成核心逻辑", "coding_guide": "渲染引擎和模板组合" },
-    { "path": "src/templates/", "purpose": "内置模板文件", "coding_guide": "模板文件使用 EJS 格式" }
+    {
+      "path": "src/commands/",
+      "purpose": "CLI 命令实现",
+      "coding_guide": "分层目录已在上方列出"
+    },
+    {
+      "path": "src/generators/",
+      "purpose": "模板生成核心逻辑",
+      "coding_guide": "渲染引擎和模板组合"
+    },
+    {
+      "path": "src/templates/",
+      "purpose": "内置模板文件",
+      "coding_guide": "模板文件使用 EJS 格式"
+    }
   ],
   "ignore_directories": [
     { "path": "dist/", "reason": "构建产物" },
@@ -284,13 +367,26 @@ CLI 工具只有一个入口：
     { "path": ".codegraph/", "reason": "代码索引文件" }
   ],
   "coding_conventions": [
-    { "convention": "命令组织", "description": "每个命令独立文件，位于 src/commands/" },
-    { "convention": "命名约定", "description": "命令文件以功能命名，如 generate.ts、build.ts" },
-    { "convention": "命令接口", "description": "每个命令导出 name、description、execute 方法" }
+    {
+      "convention": "命令组织",
+      "description": "每个命令独立文件，位于 src/commands/"
+    },
+    {
+      "convention": "命名约定",
+      "description": "命令文件以功能命名，如 generate.ts、build.ts"
+    },
+    {
+      "convention": "命令接口",
+      "description": "每个命令导出 name、description、execute 方法"
+    }
   ],
   "export_structure": "dist/index.js 导出 Generator 类和 generate() 函数，支持程序化调用",
   "debug_entrypoints": [
-    { "type": "CLI 入口", "location": "src/cli.ts", "description": "命令行解析和路由" }
+    {
+      "type": "CLI 入口",
+      "location": "src/cli.ts",
+      "description": "命令行解析和路由"
+    }
   ],
   "evidence": ["package.json", "tsconfig.json", "src/commands/ 目录结构"]
 }
@@ -319,6 +415,7 @@ CLI 工具只有一个入口：
 - ignore_dirs：已识别的忽略目录
 
 **重点**：从 src_dir_tree 中：
+
 1. 推断命令组织模式（独立文件 vs 集中定义 vs 模块化）
 2. 提取分层目录的实际路径
 3. 提取具体的命令文件名称

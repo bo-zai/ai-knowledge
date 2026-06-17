@@ -12,8 +12,8 @@
  *   but most phases have linear dependencies)
  */
 
-import type { PipelinePhase, PipelineContext, PhaseResult } from './types.js';
-import { isDev } from '../utils/env.js';
+import type { PipelinePhase, PipelineContext, PhaseResult } from "./types.js";
+import { isDev } from "../utils/env.js";
 
 /**
  * Validate that the phases form a valid dependency graph (no cycles, all deps present).
@@ -32,7 +32,9 @@ function topologicalSort(phases: readonly PipelinePhase[]): PipelinePhase[] {
   for (const phase of phases) {
     for (const dep of phase.deps) {
       if (!phaseMap.has(dep)) {
-        throw new Error(`Phase '${phase.name}' depends on '${dep}', which is not registered`);
+        throw new Error(
+          `Phase '${phase.name}' depends on '${dep}', which is not registered`,
+        );
       }
     }
   }
@@ -54,7 +56,9 @@ function topologicalSort(phases: readonly PipelinePhase[]): PipelinePhase[] {
   }
 
   const sorted: PipelinePhase[] = [];
-  const queue = [...inDegree.entries()].filter(([, d]) => d === 0).map(([name]) => name);
+  const queue = [...inDegree.entries()]
+    .filter(([, d]) => d === 0)
+    .map(([name]) => name);
 
   while (queue.length > 0) {
     const name = queue.shift()!;
@@ -73,9 +77,9 @@ function topologicalSort(phases: readonly PipelinePhase[]): PipelinePhase[] {
     );
     const cyclePath = findCyclePath(remaining, phaseMap);
     const dependentsBlocked = remaining.size - new Set(cyclePath).size;
-    let message = `Cycle detected in pipeline phases: ${cyclePath.join(' -> ')}`;
+    let message = `Cycle detected in pipeline phases: ${cyclePath.join(" -> ")}`;
     if (dependentsBlocked > 0) {
-      message += ` (and ${dependentsBlocked} transitive dependent${dependentsBlocked === 1 ? '' : 's'} blocked)`;
+      message += ` (and ${dependentsBlocked} transitive dependent${dependentsBlocked === 1 ? "" : "s"} blocked)`;
     }
     throw new Error(message);
   }
@@ -160,9 +164,9 @@ export async function runPipeline(
     const message = err instanceof Error ? err.message : String(err);
     try {
       ctx.onProgress({
-        phase: 'error',
+        phase: "error",
         percent: 100,
-        message: 'Pipeline graph validation failed',
+        message: "Pipeline graph validation failed",
         detail: message,
       });
     } catch {
@@ -191,16 +195,19 @@ export async function runPipeline(
       output = await phase.execute(ctx, declaredDeps);
     } catch (err) {
       const originalMessage = err instanceof Error ? err.message : String(err);
-      const wrapped = new Error(`Phase '${phase.name}' failed: ${originalMessage}`, {
-        cause: err,
-      });
+      const wrapped = new Error(
+        `Phase '${phase.name}' failed: ${originalMessage}`,
+        {
+          cause: err,
+        },
+      );
 
       // Emit a terminal 'error' progress event so CLI/MCP consumers see the failure
       // before the rejection propagates. Best-effort: a throwing handler must not
       // mask the underlying phase error.
       try {
         ctx.onProgress({
-          phase: 'error',
+          phase: "error",
           percent: 100,
           message: `Phase '${phase.name}' failed`,
           detail: originalMessage,

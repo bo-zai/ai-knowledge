@@ -1,28 +1,31 @@
 import {
   withReadOnlyLbug,
   type ReadOnlyQueryExecutor,
-} from '../engine/lbug/read-only-session.js';
-import { getStoragePaths } from '../engine/storage/repo-manager.js';
+} from "../engine/lbug/read-only-session.js";
+import { getStoragePaths } from "../engine/storage/repo-manager.js";
 import type {
   EntrySignal,
   BehaviorSignal,
   TestSignal,
   DocSignal,
-} from './capability-candidate-schema.js';
-import { buildFunctionClusters, type FunctionCluster } from './function-clusterer.js';
+} from "./capability-candidate-schema.js";
+import {
+  buildFunctionClusters,
+  type FunctionCluster,
+} from "./function-clusterer.js";
 import {
   buildCapabilityDomainCandidates,
   type CapabilityDomainCandidate,
-} from './capability-domain-clusterer.js';
+} from "./capability-domain-clusterer.js";
 import {
   buildCapabilityDomainRefinePrompt,
   parseCapabilityDomainRefineResponse,
-} from './capability-domain-refiner.js';
+} from "./capability-domain-refiner.js";
 import {
   findBestMatchingDomain,
   loadDomainRegistry,
   type DomainRegistryEntry,
-} from '../packaging/domain-registry.js';
+} from "../packaging/domain-registry.js";
 
 export interface CapabilityInventoryItem {
   id: string;
@@ -37,12 +40,17 @@ export interface CapabilityInventoryItem {
   supportingFunctionIds: string[];
 }
 
-type PromptProvider = (systemPrompt: string, userPrompt: string) => Promise<{
+type PromptProvider = (
+  systemPrompt: string,
+  userPrompt: string,
+) => Promise<{
   rawText: string;
   model: string;
 }>;
 
-async function queryHttpEntryPoints(query: ReadOnlyQueryExecutor): Promise<EntrySignal[]> {
+async function queryHttpEntryPoints(
+  query: ReadOnlyQueryExecutor,
+): Promise<EntrySignal[]> {
   const cypher = `
     MATCH (c:Class)-[:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
     WHERE c.name =~ '.*Controller$'
@@ -52,18 +60,22 @@ async function queryHttpEntryPoints(query: ReadOnlyQueryExecutor): Promise<Entry
 
   const rows = await query(cypher);
   return rows.map((row) => ({
-    kind: 'http' as const,
-    location: String(row.filePath ?? ''),
-    name: `${String(row.className ?? '')}.${String(row.methodName ?? '')}`,
-    description: 'HTTP entry point',
-    matchedTerms: normalizeTerms(`${String(row.className ?? '')} ${String(row.methodName ?? '')}`),
+    kind: "http" as const,
+    location: String(row.filePath ?? ""),
+    name: `${String(row.className ?? "")}.${String(row.methodName ?? "")}`,
+    description: "HTTP entry point",
+    matchedTerms: normalizeTerms(
+      `${String(row.className ?? "")} ${String(row.methodName ?? "")}`,
+    ),
     targetRelevance: 0.8,
-    role: 'controller',
+    role: "controller",
     startLine: Number(row.startLine ?? undefined),
   }));
 }
 
-async function queryJobEntryPoints(query: ReadOnlyQueryExecutor): Promise<EntrySignal[]> {
+async function queryJobEntryPoints(
+  query: ReadOnlyQueryExecutor,
+): Promise<EntrySignal[]> {
   const cypher = `
     MATCH (c:Class)-[:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
     WHERE c.name =~ '.*(Job|Task|Scheduler)$'
@@ -73,18 +85,22 @@ async function queryJobEntryPoints(query: ReadOnlyQueryExecutor): Promise<EntryS
 
   const rows = await query(cypher);
   return rows.map((row) => ({
-    kind: 'job' as const,
-    location: String(row.filePath ?? ''),
-    name: `${String(row.className ?? '')}.${String(row.methodName ?? '')}`,
-    description: 'Scheduled job entry point',
-    matchedTerms: normalizeTerms(`${String(row.className ?? '')} ${String(row.methodName ?? '')}`),
+    kind: "job" as const,
+    location: String(row.filePath ?? ""),
+    name: `${String(row.className ?? "")}.${String(row.methodName ?? "")}`,
+    description: "Scheduled job entry point",
+    matchedTerms: normalizeTerms(
+      `${String(row.className ?? "")} ${String(row.methodName ?? "")}`,
+    ),
     targetRelevance: 0.65,
-    role: 'job',
+    role: "job",
     startLine: Number(row.startLine ?? undefined),
   }));
 }
 
-async function queryServiceBehaviors(query: ReadOnlyQueryExecutor): Promise<BehaviorSignal[]> {
+async function queryServiceBehaviors(
+  query: ReadOnlyQueryExecutor,
+): Promise<BehaviorSignal[]> {
   const cypher = `
     MATCH (c:Class)-[:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
     WHERE c.name =~ '.*Service$'
@@ -94,23 +110,25 @@ async function queryServiceBehaviors(query: ReadOnlyQueryExecutor): Promise<Beha
 
   const rows = await query(cypher);
   return rows.map((row) => {
-    const className = String(row.className ?? '');
-    const methodName = String(row.methodName ?? '');
+    const className = String(row.className ?? "");
+    const methodName = String(row.methodName ?? "");
     const words = normalizeTerms(methodName);
     return {
-      location: String(row.filePath ?? ''),
+      location: String(row.filePath ?? ""),
       verb: words[0] ?? methodName,
-      object: words.slice(1).join(' ') || className.replace(/Service$/, ''),
+      object: words.slice(1).join(" ") || className.replace(/Service$/, ""),
       context: `${className}.${methodName}`,
       targetRelevance: 0.7,
       matchedTerms: normalizeTerms(`${className} ${methodName}`),
-      role: 'service',
+      role: "service",
       startLine: Number(row.startLine ?? undefined),
     };
   });
 }
 
-async function queryTestSignals(query: ReadOnlyQueryExecutor): Promise<TestSignal[]> {
+async function queryTestSignals(
+  query: ReadOnlyQueryExecutor,
+): Promise<TestSignal[]> {
   const cypher = `
     MATCH (m:Method)
     WHERE m.filePath =~ '.*(test|spec).*'
@@ -120,16 +138,18 @@ async function queryTestSignals(query: ReadOnlyQueryExecutor): Promise<TestSigna
 
   const rows = await query(cypher);
   return rows.map((row) => ({
-    location: String(row.filePath ?? ''),
-    testName: String(row.methodName ?? ''),
+    location: String(row.filePath ?? ""),
+    testName: String(row.methodName ?? ""),
     targetRelevance: 0.55,
-    matchedTerms: normalizeTerms(String(row.methodName ?? '')),
-    role: 'test',
+    matchedTerms: normalizeTerms(String(row.methodName ?? "")),
+    role: "test",
     startLine: Number(row.startLine ?? undefined),
   }));
 }
 
-async function queryDocSignals(query: ReadOnlyQueryExecutor): Promise<DocSignal[]> {
+async function queryDocSignals(
+  query: ReadOnlyQueryExecutor,
+): Promise<DocSignal[]> {
   const cypher = `
     MATCH (f:File)
     WHERE f.filePath =~ '.*(README|readme|docs|design).*'
@@ -139,10 +159,10 @@ async function queryDocSignals(query: ReadOnlyQueryExecutor): Promise<DocSignal[
 
   const rows = await query(cypher);
   return rows.map((row) => {
-    const location = String(row.filePath ?? '');
+    const location = String(row.filePath ?? "");
     return {
       location,
-      kind: 'docs' as const,
+      kind: "docs" as const,
       terms: normalizeTerms(location),
       constraints: [],
       targetRelevance: 0.35,
@@ -153,35 +173,38 @@ async function queryDocSignals(query: ReadOnlyQueryExecutor): Promise<DocSignal[
 
 function normalizeTerms(input: string): string[] {
   return input
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .replace(/[-_/().]/g, ' ')
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[-_/().]/g, " ")
     .toLowerCase()
     .split(/\s+/)
-    .map(term => term.trim())
-    .filter(term => term.length > 1)
-    .filter(term => ![
-      'abstract',
-      'api',
-      'callback',
-      'cloud',
-      'config',
-      'controller',
-      'execute',
-      'ffmpeg',
-      'file',
-      'health',
-      'internal',
-      'job',
-      'li',
-      'scheduler',
-      'service',
-      'spec',
-      'task',
-      'test',
-      'upload',
-      'wx',
-    ].includes(term));
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1)
+    .filter(
+      (term) =>
+        ![
+          "abstract",
+          "api",
+          "callback",
+          "cloud",
+          "config",
+          "controller",
+          "execute",
+          "ffmpeg",
+          "file",
+          "health",
+          "internal",
+          "job",
+          "li",
+          "scheduler",
+          "service",
+          "spec",
+          "task",
+          "test",
+          "upload",
+          "wx",
+        ].includes(term),
+    );
 }
 
 function dedupe<T>(items: T[]): T[] {
@@ -189,10 +212,14 @@ function dedupe<T>(items: T[]): T[] {
 }
 
 function deriveRelatedEntities(functionClusters: FunctionCluster[]): string[] {
-  return dedupe(functionClusters.flatMap(cluster => cluster.domainTerms)).slice(0, 8);
+  return dedupe(
+    functionClusters.flatMap((cluster) => cluster.domainTerms),
+  ).slice(0, 8);
 }
 
-function normalizeInventoryItem(candidate: CapabilityDomainCandidate): CapabilityInventoryItem {
+function normalizeInventoryItem(
+  candidate: CapabilityDomainCandidate,
+): CapabilityInventoryItem {
   return {
     id: candidate.id,
     name: candidate.nameHint,
@@ -231,17 +258,24 @@ function applyRefinedDomains(
   }
 
   return refined
-    .map(domain => {
+    .map((domain) => {
       const functionClusters = domain.includedFunctionIds
-        .map(id => clusterById.get(id))
+        .map((id) => clusterById.get(id))
         .filter((cluster): cluster is FunctionCluster => Boolean(cluster));
 
       if (functionClusters.length === 0) return undefined;
 
-      const targetPaths = dedupe(functionClusters.flatMap(cluster => cluster.signals.map(signal => signal.location))).slice(0, 12);
+      const targetPaths = dedupe(
+        functionClusters.flatMap((cluster) =>
+          cluster.signals.map((signal) => signal.location),
+        ),
+      ).slice(0, 12);
       const targetTerms = dedupe([
         ...domain.targetTerms,
-        ...functionClusters.flatMap(cluster => [cluster.normalizedObject, ...cluster.domainTerms]),
+        ...functionClusters.flatMap((cluster) => [
+          cluster.normalizedObject,
+          ...cluster.domainTerms,
+        ]),
       ]).slice(0, 12);
 
       return {
@@ -250,11 +284,17 @@ function applyRefinedDomains(
         summary: domain.summary,
         targetTerms,
         targetPaths,
-        primaryObjects: dedupe(functionClusters.map(cluster => cluster.normalizedObject)).slice(0, 6),
+        primaryObjects: dedupe(
+          functionClusters.map((cluster) => cluster.normalizedObject),
+        ).slice(0, 6),
         relatedEntities: deriveRelatedEntities(functionClusters),
         functionClusters,
-        coreFunctionIds: domain.coreFunctionIds.filter(id => clusterById.has(id)),
-        supportingFunctionIds: domain.supportingFunctionIds.filter(id => clusterById.has(id)),
+        coreFunctionIds: domain.coreFunctionIds.filter((id) =>
+          clusterById.has(id),
+        ),
+        supportingFunctionIds: domain.supportingFunctionIds.filter((id) =>
+          clusterById.has(id),
+        ),
       } satisfies CapabilityInventoryItem;
     })
     .filter((item): item is CapabilityInventoryItem => Boolean(item));
@@ -266,20 +306,21 @@ export async function discoverProjectCapabilities(
 ): Promise<CapabilityInventoryItem[]> {
   const { lbugPath } = getStoragePaths(repoRoot);
 
-  return withReadOnlyLbug(lbugPath, async query => {
+  return withReadOnlyLbug(lbugPath, async (query) => {
     const countRows = await query(`MATCH (c:Class) RETURN count(c) AS cnt`);
     const classCount = Number(countRows[0]?.cnt ?? 0);
     if (classCount === 0) {
       return [];
     }
 
-    const [httpEntries, jobEntries, behaviorSignals, testSignals, docSignals] = await Promise.all([
-      queryHttpEntryPoints(query),
-      queryJobEntryPoints(query),
-      queryServiceBehaviors(query),
-      queryTestSignals(query),
-      queryDocSignals(query),
-    ]);
+    const [httpEntries, jobEntries, behaviorSignals, testSignals, docSignals] =
+      await Promise.all([
+        queryHttpEntryPoints(query),
+        queryJobEntryPoints(query),
+        queryServiceBehaviors(query),
+        queryTestSignals(query),
+        queryDocSignals(query),
+      ]);
 
     const functionClusters = buildFunctionClusters({
       entrySignals: [...httpEntries, ...jobEntries],
@@ -306,25 +347,30 @@ export async function discoverProjectCapabilities(
     }
 
     if (!promptProvider) {
-      return candidates.map(candidate =>
+      return candidates.map((candidate) =>
         applyMatchedDomain(
           normalizeInventoryItem(candidate),
-          findBestMatchingDomain({ updatedAt: '', domains: registryDomains }, candidate),
+          findBestMatchingDomain(
+            { updatedAt: "", domains: registryDomains },
+            candidate,
+          ),
         ),
       );
     }
 
     try {
-      const { systemPrompt, userPrompt } = buildCapabilityDomainRefinePrompt(candidates);
+      const { systemPrompt, userPrompt } =
+        buildCapabilityDomainRefinePrompt(candidates);
       const result = await promptProvider(systemPrompt, userPrompt);
       const refined = parseCapabilityDomainRefineResponse(result.rawText);
       const applied = applyRefinedDomains(candidates, refined);
-      const normalized = applied.length > 0 ? applied : candidates.map(normalizeInventoryItem);
-      return normalized.map(item =>
+      const normalized =
+        applied.length > 0 ? applied : candidates.map(normalizeInventoryItem);
+      return normalized.map((item) =>
         applyMatchedDomain(
           item,
           findBestMatchingDomain(
-            { updatedAt: '', domains: registryDomains },
+            { updatedAt: "", domains: registryDomains },
             {
               domainKey: item.id,
               domainName: item.name,
@@ -336,10 +382,13 @@ export async function discoverProjectCapabilities(
         ),
       );
     } catch {
-      return candidates.map(candidate =>
+      return candidates.map((candidate) =>
         applyMatchedDomain(
           normalizeInventoryItem(candidate),
-          findBestMatchingDomain({ updatedAt: '', domains: registryDomains }, candidate),
+          findBestMatchingDomain(
+            { updatedAt: "", domains: registryDomains },
+            candidate,
+          ),
         ),
       );
     }

@@ -1,11 +1,11 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const commonObjectSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(['TERM', 'CON', 'FLOW', 'MOD', 'OPEN', 'OWN', 'VER', 'DB']),
+  type: z.enum(["TERM", "CON", "FLOW", "MOD", "OPEN", "OWN", "VER", "DB"]),
   title: z.string().min(1),
-  status: z.enum(['fact', 'derived', 'open-question']),
-  maturity: z.literal('bootstrap'),
+  status: z.enum(["fact", "derived", "open-question"]),
+  maturity: z.literal("bootstrap"),
   scope: z.string().min(1),
   repo: z.string().min(1),
   slice_ids: z.array(z.string()),
@@ -16,4 +16,4 @@ export const commonObjectSchema = z.object({
   generated_at: z.string().min(1),
 });
 
-export type ObjectType = z.infer<typeof commonObjectSchema>['type'];
+export type ObjectType = z.infer<typeof commonObjectSchema>["type"];

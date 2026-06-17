@@ -32,8 +32,8 @@
  * reference-site scope chain (mirror `findExportedDefByName`).
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
 
 export function collectNamespaceTargets(
   parsed: ParsedFile,
@@ -45,7 +45,7 @@ export function collectNamespaceTargets(
 
   const namespaceLocals = new Set<string>();
   for (const imp of parsed.parsedImports) {
-    if (imp.kind === 'namespace') namespaceLocals.add(imp.localName);
+    if (imp.kind === "namespace") namespaceLocals.add(imp.localName);
   }
 
   for (const edge of moduleEdges) {

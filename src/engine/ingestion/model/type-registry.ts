@@ -6,7 +6,7 @@
  * Also includes a separate index for Rust Impl blocks.
  */
 
-import type { SymbolDefinition } from '../../shared/index.js';
+import type { SymbolDefinition } from "../../shared/index.js";
 
 // ---------------------------------------------------------------------------
 // Public read-only interface
@@ -27,7 +27,9 @@ export interface TypeRegistry {
    * e.g. `App.Models.User`, `com.example.User`, or `Admin.User`.
    * Returned array is a view into the live index — do not mutate.
    */
-  lookupClassByQualifiedName(qualifiedName: string): readonly SymbolDefinition[];
+  lookupClassByQualifiedName(
+    qualifiedName: string,
+  ): readonly SymbolDefinition[];
 
   /**
    * Look up Impl nodes by name. Used by Tier 3 resolution to include Rust
@@ -43,7 +45,11 @@ export interface TypeRegistry {
 
 export interface MutableTypeRegistry extends TypeRegistry {
   /** Register a class-like type by name and qualified name. */
-  registerClass(name: string, qualifiedName: string, def: SymbolDefinition): void;
+  registerClass(
+    name: string,
+    qualifiedName: string,
+    def: SymbolDefinition,
+  ): void;
   /** Register a Rust Impl block by name. */
   registerImpl(name: string, def: SymbolDefinition): void;
   /** Clear all entries. */
@@ -63,7 +69,9 @@ export const createTypeRegistry = (): MutableTypeRegistry => {
     return classByName.get(name) ?? [];
   };
 
-  const lookupClassByQualifiedName = (qualifiedName: string): SymbolDefinition[] => {
+  const lookupClassByQualifiedName = (
+    qualifiedName: string,
+  ): SymbolDefinition[] => {
     return classByQualifiedName.get(qualifiedName) ?? [];
   };
 
@@ -71,7 +79,11 @@ export const createTypeRegistry = (): MutableTypeRegistry => {
     return implByName.get(name) ?? [];
   };
 
-  const registerClass = (name: string, qualifiedName: string, def: SymbolDefinition): void => {
+  const registerClass = (
+    name: string,
+    qualifiedName: string,
+    def: SymbolDefinition,
+  ): void => {
     const existing = classByName.get(name);
     if (existing) {
       existing.push(def);

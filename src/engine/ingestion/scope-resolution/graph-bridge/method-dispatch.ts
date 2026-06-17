@@ -16,7 +16,7 @@
  * can extend the return shape without breaking existing consumers.
  */
 
-import type { MethodDispatchIndex } from '../../../shared/index.js';
+import type { MethodDispatchIndex } from "../../../shared/index.js";
 
 const EMPTY_DEFS: readonly string[] = Object.freeze([]);
 

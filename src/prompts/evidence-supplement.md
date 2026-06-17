@@ -5,6 +5,7 @@
 ## 输入说明
 
 你将收到：
+
 1. 知识类型（如 DATA_MODEL, CAPABILITY, RELATION, WORKFLOW）
 2. 补充焦点领域
 3. 静态抽取结果摘要
@@ -39,9 +40,7 @@
         "flowTraces": [
           {
             "ref": "evidence://flow/xxx",
-            "steps": [
-              { "action": "步骤动作", "location": "位置" }
-            ]
+            "steps": [{ "action": "步骤动作", "location": "位置" }]
           }
         ],
         "dataContracts": [
@@ -66,9 +65,7 @@
             "methods": ["方法列表"]
           }
         ],
-        "openQuestions": [
-          "需要进一步探索的问题"
-        ]
+        "openQuestions": ["需要进一步探索的问题"]
       }
     }
   ]
@@ -85,31 +82,37 @@
 ## 不同知识类型的补充策略
 
 ### DATA_MODEL
+
 - 补充实体之间的关系（关联、依赖、聚合）
 - 补充字段的验证规则和约束
 - 补充数据流转路径
 
 ### CAPABILITY
+
 - 补充操作的业务含义描述
 - 补充领域上下文信息
 - 补充跨服务协作模式
 
 ### RELATION
+
 - 补充服务间交互模式（同步/异步）
 - 补充数据流向和格式
 - 补充依赖原因和影响
 
 ### WORKFLOW
+
 - 补充步骤的条件判断
 - 补充异常处理分支
 - 补充触发事件和终止条件
 
 ### BOUNDARY
+
 - 补充边界划分依据
 - 补充跨边界交互点
 - 补充边界保护机制
 
 ### CONSTRAINT
+
 - 补充约束的业务背景
 - 补充约束实现机制
 - 补充约束违反处理方式

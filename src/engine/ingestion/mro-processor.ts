@@ -19,11 +19,11 @@
  * Cypher: MATCH (c:Class)-[r:CodeRelation {type: 'METHOD_OVERRIDES'}]->(m:Method)
  */
 
-import { KnowledgeGraph } from '../graph/types.js';
-import { generateId } from '../lib/utils.js';
-import { SupportedLanguages } from '../shared';
-import { getProvider } from './languages/index.js';
-import { c3Linearize, gatherAncestors } from './model/resolve.js';
+import { KnowledgeGraph } from "../graph/types.js";
+import { generateId } from "../lib/utils.js";
+import { SupportedLanguages } from "../shared";
+import { getProvider } from "./languages/index.js";
+import { c3Linearize, gatherAncestors } from "./model/resolve.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -62,13 +62,16 @@ function buildAdjacency(graph: KnowledgeGraph) {
   // methodMap: classId → methodIds[]
   const methodMap = new Map<string, string[]>();
   // Track which edge type each parent link came from
-  const parentEdgeType = new Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>();
+  const parentEdgeType = new Map<
+    string,
+    Map<string, "EXTENDS" | "IMPLEMENTS">
+  >();
 
   // Three typed iterations replace one full-relationship-map scan
   // with per-edge type checks. Each consumes only the edges of the
   // type it cares about — see plan
   // docs/plans/2026-04-20-002-perf-parse-heritage-mro-plan.md (Unit 2).
-  for (const rel of graph.iterRelationshipsByType('EXTENDS')) {
+  for (const rel of graph.iterRelationshipsByType("EXTENDS")) {
     let parents = parentMap.get(rel.sourceId);
     if (!parents) {
       parents = [];
@@ -81,9 +84,9 @@ function buildAdjacency(graph: KnowledgeGraph) {
       edgeTypes = new Map();
       parentEdgeType.set(rel.sourceId, edgeTypes);
     }
-    edgeTypes.set(rel.targetId, 'EXTENDS');
+    edgeTypes.set(rel.targetId, "EXTENDS");
   }
-  for (const rel of graph.iterRelationshipsByType('IMPLEMENTS')) {
+  for (const rel of graph.iterRelationshipsByType("IMPLEMENTS")) {
     let parents = parentMap.get(rel.sourceId);
     if (!parents) {
       parents = [];
@@ -96,9 +99,9 @@ function buildAdjacency(graph: KnowledgeGraph) {
       edgeTypes = new Map();
       parentEdgeType.set(rel.sourceId, edgeTypes);
     }
-    edgeTypes.set(rel.targetId, 'IMPLEMENTS');
+    edgeTypes.set(rel.targetId, "IMPLEMENTS");
   }
-  for (const rel of graph.iterRelationshipsByType('HAS_METHOD')) {
+  for (const rel of graph.iterRelationshipsByType("HAS_METHOD")) {
     let methods = methodMap.get(rel.sourceId);
     if (!methods) {
       methods = [];
@@ -119,7 +122,11 @@ function buildAdjacency(graph: KnowledgeGraph) {
 // ---------------------------------------------------------------------------
 
 type MethodDef = { classId: string; className: string; methodId: string };
-type Resolution = { resolvedTo: string | null; reason: string; confidence: number };
+type Resolution = {
+  resolvedTo: string | null;
+  reason: string;
+  confidence: number;
+};
 
 /** Resolve by MRO order — first ancestor in linearized order wins. */
 function resolveByMroOrder(
@@ -148,14 +155,14 @@ function resolveByMroOrder(
 function resolveCsharpJava(
   methodName: string,
   defs: MethodDef[],
-  parentEdgeTypes: Map<string, 'EXTENDS' | 'IMPLEMENTS'> | undefined,
+  parentEdgeTypes: Map<string, "EXTENDS" | "IMPLEMENTS"> | undefined,
 ): Resolution {
   const classDefs: MethodDef[] = [];
   const interfaceDefs: MethodDef[] = [];
 
   for (const def of defs) {
     const edgeType = parentEdgeTypes?.get(def.classId);
-    if (edgeType === 'IMPLEMENTS') {
+    if (edgeType === "IMPLEMENTS") {
       interfaceDefs.push(def);
     } else {
       classDefs.push(def);
@@ -173,7 +180,7 @@ function resolveCsharpJava(
   if (interfaceDefs.length > 1) {
     return {
       resolvedTo: null,
-      reason: `ambiguous: ${methodName} defined in multiple interfaces: ${interfaceDefs.map((d) => d.className).join(', ')}`,
+      reason: `ambiguous: ${methodName} defined in multiple interfaces: ${interfaceDefs.map((d) => d.className).join(", ")}`,
       confidence: 0.5,
     };
   }
@@ -186,7 +193,7 @@ function resolveCsharpJava(
     };
   }
 
-  return { resolvedTo: null, reason: 'no resolution found', confidence: 0.5 };
+  return { resolvedTo: null, reason: "no resolution found", confidence: 0.5 };
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +210,7 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
 
   // Pre-computed maps to avoid redundant BFS in emitMethodImplementsEdges
   const ancestorsMap = new Map<string, string[]>();
-  const edgeTypesMap = new Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>();
+  const edgeTypesMap = new Map<string, Map<string, "EXTENDS" | "IMPLEMENTS">>();
 
   // Process every class that has at least one parent
   for (const [classId, directParents] of parentMap) {
@@ -212,7 +219,9 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
     const classNode = graph.getNode(classId);
     if (!classNode) continue;
 
-    const language = classNode.properties.language as SupportedLanguages | undefined;
+    const language = classNode.properties.language as
+      | SupportedLanguages
+      | undefined;
     if (!language) continue;
     const className = classNode.properties.name;
 
@@ -220,10 +229,13 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
     const provider = getProvider(language);
     const ancestors = gatherAncestors(classId, parentMap);
     ancestorsMap.set(classId, ancestors);
-    edgeTypesMap.set(classId, buildTransitiveEdgeTypes(classId, parentMap, parentEdgeType));
+    edgeTypesMap.set(
+      classId,
+      buildTransitiveEdgeTypes(classId, parentMap, parentEdgeType),
+    );
 
     let mroOrder: string[];
-    if (provider.mroStrategy === 'c3') {
+    if (provider.mroStrategy === "c3") {
       const c3Result = c3Linearize(classId, parentMap, c3Cache);
       mroOrder = c3Result ?? ancestors;
     } else {
@@ -246,7 +258,7 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
         const methodNode = graph.getNode(methodId);
         if (!methodNode) continue;
         // Properties don't participate in method resolution order
-        if (methodNode.label === 'Property') continue;
+        if (methodNode.label === "Property") continue;
 
         const methodName = methodNode.properties.name;
         let defs = methodsByName.get(methodName);
@@ -269,8 +281,10 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
     const ambiguities: MethodAmbiguity[] = [];
 
     // Use pre-computed transitive edge types (only needed for implements-split languages)
-    const needsEdgeTypes = provider.mroStrategy === 'implements-split';
-    const classEdgeTypes = needsEdgeTypes ? edgeTypesMap.get(classId) : undefined;
+    const needsEdgeTypes = provider.mroStrategy === "implements-split";
+    const classEdgeTypes = needsEdgeTypes
+      ? edgeTypesMap.get(classId)
+      : undefined;
 
     for (const [methodName, defs] of methodsByName) {
       if (defs.length < 2) continue;
@@ -286,16 +300,21 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
       let resolution: Resolution;
 
       switch (provider.mroStrategy) {
-        case 'leftmost-base':
-          resolution = resolveByMroOrder(methodName, defs, mroOrder, 'leftmost base');
+        case "leftmost-base":
+          resolution = resolveByMroOrder(
+            methodName,
+            defs,
+            mroOrder,
+            "leftmost base",
+          );
           break;
-        case 'implements-split':
+        case "implements-split":
           resolution = resolveCsharpJava(methodName, defs, classEdgeTypes);
           break;
-        case 'c3':
-          resolution = resolveByMroOrder(methodName, defs, mroOrder, 'C3 MRO');
+        case "c3":
+          resolution = resolveByMroOrder(methodName, defs, mroOrder, "C3 MRO");
           break;
-        case 'qualified-syntax':
+        case "qualified-syntax":
           resolution = {
             resolvedTo: null,
             reason: `requires qualified syntax: <Type as Trait>::${methodName}()`,
@@ -303,7 +322,12 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
           };
           break;
         default:
-          resolution = resolveByMroOrder(methodName, defs, mroOrder, 'first definition');
+          resolution = resolveByMroOrder(
+            methodName,
+            defs,
+            mroOrder,
+            "first definition",
+          );
           break;
       }
 
@@ -322,10 +346,13 @@ export function computeMRO(graph: KnowledgeGraph): MROResult {
       // Emit METHOD_OVERRIDES edge if resolution found
       if (resolution.resolvedTo !== null) {
         graph.addRelationship({
-          id: generateId('METHOD_OVERRIDES', `${classId}->${resolution.resolvedTo}`),
+          id: generateId(
+            "METHOD_OVERRIDES",
+            `${classId}->${resolution.resolvedTo}`,
+          ),
           sourceId: classId,
           targetId: resolution.resolvedTo,
-          type: 'METHOD_OVERRIDES',
+          type: "METHOD_OVERRIDES",
           confidence: resolution.confidence,
           reason: resolution.reason,
         });
@@ -386,7 +413,10 @@ function parameterTypesMatch(
   if (a.length === 0 || b.length === 0) {
     // Fall back to arity check when type info is missing
     if (aParamCount !== undefined && bParamCount !== undefined) {
-      return { match: aParamCount === bParamCount, confident: aParamCount === bParamCount };
+      return {
+        match: aParamCount === bParamCount,
+        confident: aParamCount === bParamCount,
+      };
     }
     return { match: true, confident: false }; // lenient when either count is unknown
   }
@@ -410,9 +440,9 @@ function emitMethodImplementsEdges(
   graph: KnowledgeGraph,
   parentMap: Map<string, string[]>,
   methodMap: Map<string, string[]>,
-  parentEdgeType: Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>,
+  parentEdgeType: Map<string, Map<string, "EXTENDS" | "IMPLEMENTS">>,
   ancestorsMap: Map<string, string[]>,
-  edgeTypesMap: Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>,
+  edgeTypesMap: Map<string, Map<string, "EXTENDS" | "IMPLEMENTS">>,
 ): number {
   let edgeCount = 0;
 
@@ -421,7 +451,8 @@ function emitMethodImplementsEdges(
     if (!classNode) continue;
 
     // Interfaces and traits declare contracts — they don't implement them
-    if (classNode.label === 'Interface' || classNode.label === 'Trait') continue;
+    if (classNode.label === "Interface" || classNode.label === "Trait")
+      continue;
 
     // Get this class's own methods
     const ownMethodIds = methodMap.get(classId) ?? [];
@@ -429,16 +460,23 @@ function emitMethodImplementsEdges(
     // Build a lookup: methodName → Array<{methodId, parameterTypes, parameterCount}> for own methods
     const ownMethodsByName = new Map<
       string,
-      Array<{ methodId: string; parameterTypes: string[]; parameterCount?: number }>
+      Array<{
+        methodId: string;
+        parameterTypes: string[];
+        parameterCount?: number;
+      }>
     >();
     for (const methodId of ownMethodIds) {
       const methodNode = graph.getNode(methodId);
-      if (!methodNode || methodNode.label === 'Property') continue;
+      if (!methodNode || methodNode.label === "Property") continue;
       // Abstract methods don't satisfy interface contracts
       if (methodNode.properties.isAbstract === true) continue;
       const name = methodNode.properties.name as string;
-      const parameterTypes = (methodNode.properties.parameterTypes as string[] | undefined) ?? [];
-      const parameterCount = methodNode.properties.parameterCount as number | undefined;
+      const parameterTypes =
+        (methodNode.properties.parameterTypes as string[] | undefined) ?? [];
+      const parameterCount = methodNode.properties.parameterCount as
+        | number
+        | undefined;
       let bucket = ownMethodsByName.get(name);
       if (!bucket) {
         bucket = [];
@@ -448,9 +486,11 @@ function emitMethodImplementsEdges(
     }
 
     // Use pre-computed ancestors and edge types; fall back to computing if missing (safety)
-    const allAncestors = ancestorsMap.get(classId) ?? gatherAncestors(classId, parentMap);
+    const allAncestors =
+      ancestorsMap.get(classId) ?? gatherAncestors(classId, parentMap);
     const ancestorEdgeTypes =
-      edgeTypesMap.get(classId) ?? buildTransitiveEdgeTypes(classId, parentMap, parentEdgeType);
+      edgeTypesMap.get(classId) ??
+      buildTransitiveEdgeTypes(classId, parentMap, parentEdgeType);
 
     // Dedup set: avoid duplicate edges from diamond paths
     const emitted = new Set<string>();
@@ -460,23 +500,26 @@ function emitMethodImplementsEdges(
       const ancestorNode = graph.getNode(ancestorId);
       if (!ancestorNode) continue;
 
-      const isInterfaceLike = ancestorNode.label === 'Interface' || ancestorNode.label === 'Trait';
+      const isInterfaceLike =
+        ancestorNode.label === "Interface" || ancestorNode.label === "Trait";
       const classifiedEdgeType = ancestorEdgeTypes.get(ancestorId);
-      if (!isInterfaceLike && classifiedEdgeType !== 'IMPLEMENTS') continue;
+      if (!isInterfaceLike && classifiedEdgeType !== "IMPLEMENTS") continue;
 
       // Get ancestor's methods
       const ancestorMethodIds = methodMap.get(ancestorId) ?? [];
 
       for (const ancestorMethodId of ancestorMethodIds) {
         const ancestorMethodNode = graph.getNode(ancestorMethodId);
-        if (!ancestorMethodNode || ancestorMethodNode.label === 'Property') continue;
+        if (!ancestorMethodNode || ancestorMethodNode.label === "Property")
+          continue;
 
         const ancestorName = ancestorMethodNode.properties.name as string;
         const ancestorParamTypes =
-          (ancestorMethodNode.properties.parameterTypes as string[] | undefined) ?? [];
-        const ancestorParamCount = ancestorMethodNode.properties.parameterCount as
-          | number
-          | undefined;
+          (ancestorMethodNode.properties.parameterTypes as
+            | string[]
+            | undefined) ?? [];
+        const ancestorParamCount = ancestorMethodNode.properties
+          .parameterCount as number | undefined;
 
         // Find matching method in own class by name + parameterTypes/arity
         const candidates = ownMethodsByName.get(ancestorName);
@@ -499,12 +542,12 @@ function emitMethodImplementsEdges(
             if (!emitted.has(edgeKey)) {
               emitted.add(edgeKey);
               graph.addRelationship({
-                id: generateId('METHOD_IMPLEMENTS', edgeKey),
+                id: generateId("METHOD_IMPLEMENTS", edgeKey),
                 sourceId: inherited.methodId,
                 targetId: ancestorMethodId,
-                type: 'METHOD_IMPLEMENTS',
+                type: "METHOD_IMPLEMENTS",
                 confidence: inherited.confident ? 1.0 : 0.7,
-                reason: '',
+                reason: "",
               });
               edgeCount++;
             }
@@ -542,12 +585,12 @@ function emitMethodImplementsEdges(
         emitted.add(edgeKey);
 
         graph.addRelationship({
-          id: generateId('METHOD_IMPLEMENTS', edgeKey),
+          id: generateId("METHOD_IMPLEMENTS", edgeKey),
           sourceId: winner.methodId,
           targetId: ancestorMethodId,
-          type: 'METHOD_IMPLEMENTS',
+          type: "METHOD_IMPLEMENTS",
           confidence: winner.confident ? 1.0 : 0.7,
-          reason: '',
+          reason: "",
         });
         edgeCount++;
       }
@@ -572,7 +615,7 @@ function findInheritedMethod(
   graph: KnowledgeGraph,
   parentMap: Map<string, string[]>,
   methodMap: Map<string, string[]>,
-  parentEdgeType: Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>,
+  parentEdgeType: Map<string, Map<string, "EXTENDS" | "IMPLEMENTS">>,
   /** Method ID to exclude from results (prevents self-edges when the ancestor
    *  method being matched lives on an IMPLEMENTS parent). */
   excludeMethodId?: string,
@@ -585,10 +628,14 @@ function findInheritedMethod(
   const directEdges = parentEdgeType.get(classId);
   for (const pid of directParents) {
     const et = directEdges?.get(pid);
-    if (et === 'EXTENDS') {
+    if (et === "EXTENDS") {
       // Also check that the parent is not an Interface/Trait
       const parentNode = graph.getNode(pid);
-      if (parentNode && parentNode.label !== 'Interface' && parentNode.label !== 'Trait') {
+      if (
+        parentNode &&
+        parentNode.label !== "Interface" &&
+        parentNode.label !== "Trait"
+      ) {
         queue.push(pid);
       }
     }
@@ -614,13 +661,16 @@ function findInheritedMethod(
       const methods = methodMap.get(ancestorId) ?? [];
       for (const mid of methods) {
         const mNode = graph.getNode(mid);
-        if (!mNode || mNode.label === 'Property') continue;
+        if (!mNode || mNode.label === "Property") continue;
         // Abstract inherited methods don't count as concrete implementations
         if (mNode.properties.isAbstract === true) continue;
         if (mNode.properties.name !== methodName) continue;
 
-        const mParamTypes = (mNode.properties.parameterTypes as string[] | undefined) ?? [];
-        const mParamCount = mNode.properties.parameterCount as number | undefined;
+        const mParamTypes =
+          (mNode.properties.parameterTypes as string[] | undefined) ?? [];
+        const mParamCount = mNode.properties.parameterCount as
+          | number
+          | undefined;
         const ptResult = parameterTypesMatch(
           mParamTypes,
           targetParamTypes,
@@ -642,9 +692,13 @@ function findInheritedMethod(
       for (const gp of grandparents) {
         if (visited.has(gp)) continue;
         const gpEdge = ancestorEdges?.get(gp);
-        if (gpEdge === 'EXTENDS') {
+        if (gpEdge === "EXTENDS") {
           const gpNode = graph.getNode(gp);
-          if (gpNode && gpNode.label !== 'Interface' && gpNode.label !== 'Trait') {
+          if (
+            gpNode &&
+            gpNode.label !== "Interface" &&
+            gpNode.label !== "Trait"
+          ) {
             nextLevel.push(gp);
           }
         }
@@ -664,7 +718,7 @@ function findInheritedMethod(
   const implBfsQueue: string[] = [];
   for (const pid of directParents) {
     const et = directEdges?.get(pid);
-    if (et === 'IMPLEMENTS') {
+    if (et === "IMPLEMENTS") {
       implBfsQueue.push(pid);
     }
   }
@@ -684,18 +738,23 @@ function findInheritedMethod(
     // Only process Interface/Trait nodes — Dart `implements Class` does not
     // inherit method bodies, so Class/Struct/Enum parents must be skipped.
     const ifaceNode = graph.getNode(ifaceId);
-    if (!ifaceNode || (ifaceNode.label !== 'Interface' && ifaceNode.label !== 'Trait')) continue;
+    if (
+      !ifaceNode ||
+      (ifaceNode.label !== "Interface" && ifaceNode.label !== "Trait")
+    )
+      continue;
 
     // Check this interface/trait's methods for a non-abstract default
     const methods = methodMap.get(ifaceId) ?? [];
     for (const mid of methods) {
       if (mid === excludeMethodId) continue; // prevent self-edges
       const mNode = graph.getNode(mid);
-      if (!mNode || mNode.label === 'Property') continue;
+      if (!mNode || mNode.label === "Property") continue;
       if (mNode.properties.isAbstract === true) continue;
       if (mNode.properties.name !== methodName) continue;
 
-      const mParamTypes = (mNode.properties.parameterTypes as string[] | undefined) ?? [];
+      const mParamTypes =
+        (mNode.properties.parameterTypes as string[] | undefined) ?? [];
       const mParamCount = mNode.properties.parameterCount as number | undefined;
       const ptResult = parameterTypesMatch(
         mParamTypes,
@@ -735,18 +794,18 @@ function findInheritedMethod(
 function buildTransitiveEdgeTypes(
   classId: string,
   parentMap: Map<string, string[]>,
-  parentEdgeType: Map<string, Map<string, 'EXTENDS' | 'IMPLEMENTS'>>,
-): Map<string, 'EXTENDS' | 'IMPLEMENTS'> {
-  const result = new Map<string, 'EXTENDS' | 'IMPLEMENTS'>();
+  parentEdgeType: Map<string, Map<string, "EXTENDS" | "IMPLEMENTS">>,
+): Map<string, "EXTENDS" | "IMPLEMENTS"> {
+  const result = new Map<string, "EXTENDS" | "IMPLEMENTS">();
   const directEdges = parentEdgeType.get(classId);
   if (!directEdges) return result;
 
   // BFS: propagate edge type from direct parents
-  const queue: Array<{ id: string; edgeType: 'EXTENDS' | 'IMPLEMENTS' }> = [];
+  const queue: Array<{ id: string; edgeType: "EXTENDS" | "IMPLEMENTS" }> = [];
   const directParents = parentMap.get(classId) ?? [];
 
   for (const pid of directParents) {
-    const et = directEdges.get(pid) ?? 'EXTENDS';
+    const et = directEdges.get(pid) ?? "EXTENDS";
     if (!result.has(pid)) {
       result.set(pid, et);
       queue.push({ id: pid, edgeType: et });

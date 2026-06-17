@@ -6,11 +6,11 @@
  * Falls back to file-based parsing when graph is unavailable.
  */
 
-import fs, { access } from 'fs/promises';
-import path from 'path';
-import type { ResultMapDef, EntityEvidence } from './types.js';
-import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
-import { getStoragePaths } from '../engine/storage/repo-manager.js';
+import fs, { access } from "fs/promises";
+import path from "path";
+import type { ResultMapDef, EntityEvidence } from "./types.js";
+import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
+import { getStoragePaths } from "../engine/storage/repo-manager.js";
 
 /**
  * Resolve entity evidence from resultType or resultMap.
@@ -31,7 +31,11 @@ export async function resolveEntityEvidence(args: {
 
   // Try graph-based resolution first
   for (const searchPath of searchPaths) {
-    const entityEvidence = await resolveEntityFromGraph(searchPath, javaFqn, resultMap);
+    const entityEvidence = await resolveEntityFromGraph(
+      searchPath,
+      javaFqn,
+      resultMap,
+    );
     if (entityEvidence) return entityEvidence;
   }
 
@@ -54,18 +58,20 @@ async function resolveEntityFromGraph(
   javaFqn: string,
   resultMap?: ResultMapDef | null,
 ): Promise<EntityEvidence | null> {
-  const className = javaFqn.split('.').pop() || javaFqn;
+  const className = javaFqn.split(".").pop() || javaFqn;
 
   try {
     const { lbugPath } = getStoragePaths(repoPath);
     await access(lbugPath); // Only use graph if DB already exists
-    const graphResult = await withReadOnlyLbug(lbugPath, async query => {
+    const graphResult = await withReadOnlyLbug(lbugPath, async (query) => {
       const escapedClass = escapeCypherString(className);
       const classRows = await query(
         `MATCH (c:Class) WHERE c.name = '${escapedClass}' RETURN c.filePath AS fp, count(c) AS cnt`,
       );
       const cnt = Number((classRows[0] as Record<string, unknown>)?.cnt ?? 0);
-      const filePath = (classRows[0] as Record<string, unknown>)?.fp as string | undefined;
+      const filePath = (classRows[0] as Record<string, unknown>)?.fp as
+        | string
+        | undefined;
       if (cnt === 0 || !filePath) return null;
 
       const propRows = await query(
@@ -78,8 +84,10 @@ async function resolveEntityFromGraph(
     const { filePath, propRows } = graphResult;
 
     // Read file for class comment (not in graph)
-    const fullPath = path.isAbsolute(filePath) ? filePath : path.resolve(repoPath, filePath);
-    const content = await fs.readFile(fullPath, 'utf-8').catch(() => '');
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(repoPath, filePath);
+    const content = await fs.readFile(fullPath, "utf-8").catch(() => "");
     const classComment = content ? extractClassComment(content) : undefined;
 
     const fields = (propRows || [])
@@ -88,7 +96,9 @@ async function resolveEntityFromGraph(
         const propName = row.name as string;
         const propType = row.type as string;
         // Find column mapping from resultMap
-        const mapping = resultMap?.mappings.find((m) => m.property === propName);
+        const mapping = resultMap?.mappings.find(
+          (m) => m.property === propName,
+        );
         return {
           javaProperty: propName,
           javaFieldName: propName,
@@ -101,11 +111,11 @@ async function resolveEntityFromGraph(
     if (fields.length === 0 && !content) return null;
 
     const relativePath = path.isAbsolute(filePath)
-      ? path.relative(repoPath, filePath).replace(/\\/g, '/')
-      : filePath.replace(/\\/g, '/');
+      ? path.relative(repoPath, filePath).replace(/\\/g, "/")
+      : filePath.replace(/\\/g, "/");
 
     return {
-      sourceStatementId: '',
+      sourceStatementId: "",
       javaType: javaFqn,
       javaFile: relativePath,
       classComment,
@@ -118,13 +128,16 @@ async function resolveEntityFromGraph(
 
 // ---- File-based fallback helpers ----
 
-async function findJavaFile(repoPath: string, fqn: string): Promise<string | null> {
-  const parts = fqn.split('.');
+async function findJavaFile(
+  repoPath: string,
+  fqn: string,
+): Promise<string | null> {
+  const parts = fqn.split(".");
   const className = parts[parts.length - 1];
-  const packagePath = parts.slice(0, -1).join('/');
+  const packagePath = parts.slice(0, -1).join("/");
 
   const possiblePaths = [
-    path.join(repoPath, 'src/main/java', packagePath, `${className}.java`),
+    path.join(repoPath, "src/main/java", packagePath, `${className}.java`),
     path.join(repoPath, packagePath, `${className}.java`),
   ];
 
@@ -132,22 +145,27 @@ async function findJavaFile(repoPath: string, fqn: string): Promise<string | nul
     try {
       await fs.access(filePath);
       return filePath;
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   try {
-    const { glob } = await import('glob');
+    const { glob } = await import("glob");
     const matches = await glob(`**/${className}.java`, {
       cwd: repoPath,
       absolute: true,
-      ignore: ['node_modules/**', '.git/**', 'target/**', 'build/**'],
+      ignore: ["node_modules/**", ".git/**", "target/**", "build/**"],
     });
     for (const match of matches) {
       const relativePath = path.relative(repoPath, match);
-      if (relativePath.includes(packagePath.replace(/\//g, path.sep))) return match;
+      if (relativePath.includes(packagePath.replace(/\//g, path.sep)))
+        return match;
     }
     if (matches.length > 0) return matches[0];
-  } catch { /* glob not available */ }
+  } catch {
+    /* glob not available */
+  }
 
   return null;
 }
@@ -157,7 +175,7 @@ async function parseJavaEntityFile(
   javaFqn: string,
   resultMap?: ResultMapDef | null,
 ): Promise<EntityEvidence> {
-  const content = await fs.readFile(filePath, 'utf-8');
+  const content = await fs.readFile(filePath, "utf-8");
   const classComment = extractClassComment(content);
   const rawFields = extractJavaFields(content);
 
@@ -173,7 +191,7 @@ async function parseJavaEntityFile(
   });
 
   return {
-    sourceStatementId: '',
+    sourceStatementId: "",
     javaType: javaFqn,
     javaFile: filePath,
     classComment,
@@ -182,31 +200,38 @@ async function parseJavaEntityFile(
 }
 
 function toSnakeCase(value: string): string {
-  return value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase();
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
+    .toLowerCase();
 }
 
 function extractClassComment(content: string): string | undefined {
-  const classCommentRegex = /\/\*\*[\s\S]*?\*\/\s*(?:@[\w\s]+\s*)*public\s+class/;
+  const classCommentRegex =
+    /\/\*\*[\s\S]*?\*\/\s*(?:@[\w\s]+\s*)*public\s+class/;
   const match = content.match(classCommentRegex);
   if (match) {
     const comment = match[0]
-      .replace(/\/\*\*/, '')
-      .replace(/\*\//, '')
-      .replace(/\s*public\s+class.*$/, '')
-      .replace(/^\s*\*\s*/gm, '')
+      .replace(/\/\*\*/, "")
+      .replace(/\*\//, "")
+      .replace(/\s*public\s+class.*$/, "")
+      .replace(/^\s*\*\s*/gm, "")
       .trim();
     return comment || undefined;
   }
   return undefined;
 }
 
-function extractJavaFields(content: string): Array<{ name: string; type: string; comment?: string }> {
+function extractJavaFields(
+  content: string,
+): Array<{ name: string; type: string; comment?: string }> {
   const fields: Array<{ name: string; type: string; comment?: string }> = [];
   const classBody = findPrimaryTypeBody(content);
   if (!classBody) return fields;
 
   const lines = classBody.split(/\r?\n/);
-  const fieldRegex = /^(?:private|protected|public)\s+(?:(?:static|final|transient|volatile)\s+)*([\w.$<>\[\],?]+)\s+(\w+)\s*(?:=[^;]*)?;$/;
+  const fieldRegex =
+    /^(?:private|protected|public)\s+(?:(?:static|final|transient|volatile)\s+)*([\w.$<>\[\],?]+)\s+(\w+)\s*(?:=[^;]*)?;$/;
 
   let depth = 1;
   let inJavadoc = false;
@@ -219,15 +244,15 @@ function extractJavaFields(content: string): Array<{ name: string; type: string;
     if (inJavadoc) {
       const cleaned = cleanJavadocLine(line);
       if (cleaned) commentLines.push(cleaned);
-      if (line.includes('*/')) inJavadoc = false;
+      if (line.includes("*/")) inJavadoc = false;
       continue;
     }
 
-    if (depth === 1 && line.startsWith('/**')) {
+    if (depth === 1 && line.startsWith("/**")) {
       inJavadoc = true;
       const cleaned = cleanJavadocLine(line);
       if (cleaned) commentLines.push(cleaned);
-      if (line.includes('*/')) inJavadoc = false;
+      if (line.includes("*/")) inJavadoc = false;
       continue;
     }
 
@@ -236,10 +261,13 @@ function extractJavaFields(content: string): Array<{ name: string; type: string;
       continue;
     }
 
-    if (line.startsWith('@')) continue;
+    if (line.startsWith("@")) continue;
 
     const normalizedLine = stripInlineComment(line);
-    if (normalizedLine.includes('(') || /\b(class|interface|enum|record)\b/.test(normalizedLine)) {
+    if (
+      normalizedLine.includes("(") ||
+      /\b(class|interface|enum|record)\b/.test(normalizedLine)
+    ) {
       depth += countStructuralBraces(normalizedLine);
       commentLines.length = 0;
       continue;
@@ -250,13 +278,13 @@ function extractJavaFields(content: string): Array<{ name: string; type: string;
       fields.push({
         name: match[2],
         type: match[1].trim(),
-        comment: commentLines.length > 0 ? commentLines.join('\n') : undefined,
+        comment: commentLines.length > 0 ? commentLines.join("\n") : undefined,
       });
       commentLines.length = 0;
       continue;
     }
 
-    if (normalizedLine.endsWith(';')) commentLines.length = 0;
+    if (normalizedLine.endsWith(";")) commentLines.length = 0;
     depth += countStructuralBraces(normalizedLine);
   }
 
@@ -264,14 +292,17 @@ function extractJavaFields(content: string): Array<{ name: string; type: string;
 }
 
 function findPrimaryTypeBody(content: string): string | null {
-  const typeMatch = /\b(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|record)\s+\w+[^{]*\{/m.exec(content);
+  const typeMatch =
+    /\b(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|record)\s+\w+[^{]*\{/m.exec(
+      content,
+    );
   if (!typeMatch) return null;
   const bodyStart = (typeMatch.index ?? 0) + typeMatch[0].length;
   let depth = 1;
   for (let index = bodyStart; index < content.length; index += 1) {
     const char = content[index];
-    if (char === '{') depth += 1;
-    else if (char === '}') {
+    if (char === "{") depth += 1;
+    else if (char === "}") {
       depth -= 1;
       if (depth === 0) return content.slice(bodyStart, index);
     }
@@ -280,11 +311,15 @@ function findPrimaryTypeBody(content: string): string | null {
 }
 
 function cleanJavadocLine(line: string): string {
-  return line.replace('/**', '').replace('*/', '').replace(/^\s*\*\s?/, '').trim();
+  return line
+    .replace("/**", "")
+    .replace("*/", "")
+    .replace(/^\s*\*\s?/, "")
+    .trim();
 }
 
 function stripInlineComment(line: string): string {
-  return line.replace(/\/\/.*$/, '').trim();
+  return line.replace(/\/\/.*$/, "").trim();
 }
 
 function countStructuralBraces(line: string): number {
@@ -293,13 +328,25 @@ function countStructuralBraces(line: string): number {
   let inDoubleQuote = false;
   let escaped = false;
   for (const char of line) {
-    if (escaped) { escaped = false; continue; }
-    if (char === '\\') { escaped = true; continue; }
-    if (!inDoubleQuote && char === '\'') { inSingleQuote = !inSingleQuote; continue; }
-    if (!inSingleQuote && char === '"') { inDoubleQuote = !inDoubleQuote; continue; }
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (!inDoubleQuote && char === "'") {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+    if (!inSingleQuote && char === '"') {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
     if (inSingleQuote || inDoubleQuote) continue;
-    if (char === '{') balance += 1;
-    else if (char === '}') balance -= 1;
+    if (char === "{") balance += 1;
+    else if (char === "}") balance -= 1;
   }
   return balance;
 }
@@ -307,7 +354,10 @@ function countStructuralBraces(line: string): number {
 export function buildFieldEvidenceLookup(
   entityEvidence: EntityEvidence,
   resultMap?: ResultMapDef | null,
-): Map<string, { javaProperty: string; javaComment?: string; mappedColumn?: string }> {
+): Map<
+  string,
+  { javaProperty: string; javaComment?: string; mappedColumn?: string }
+> {
   const lookup = new Map();
   for (const field of entityEvidence.fields) {
     lookup.set(field.javaProperty, {

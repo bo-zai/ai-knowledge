@@ -25,34 +25,40 @@ import type {
   TableInfo,
   EntityInfo,
   ServiceCluster,
-} from './types.js';
-import { createLanguageAdapter, isLanguageSupported } from './language-adapters/index.js';
+} from "./types.js";
+import {
+  createLanguageAdapter,
+  isLanguageSupported,
+} from "./language-adapters/index.js";
 import {
   ControllerPathDiscovery,
   ScheduledPathDiscovery,
   MqConsumerPathDiscovery,
-} from './discovery-paths/index.js';
-import { TableAnchorAggregator, createTableAnchorAggregator } from './table-anchor-aggregator.js';
+} from "./discovery-paths/index.js";
+import {
+  TableAnchorAggregator,
+  createTableAnchorAggregator,
+} from "./table-anchor-aggregator.js";
 import {
   TableRelationSupplementImpl,
   createTableRelationSupplement,
   type TableRelationSupplementConfig,
-} from './table-relation-supplement.js';
+} from "./table-relation-supplement.js";
 import {
   ServiceCallClusterImpl,
   createServiceCallCluster,
   type ServiceCallClusterConfig,
-} from './service-call-cluster.js';
+} from "./service-call-cluster.js";
 import {
   GitCommitEnhancerImpl,
   createGitCommitEnhancer,
   type GitCommitEnhancerConfig,
-} from './git-commit-enhancer.js';
+} from "./git-commit-enhancer.js";
 import {
   BusinessDomainDefinerImpl,
   createBusinessDomainDefiner,
   type BusinessDomainDefinerConfig,
-} from './business-domain-definer.js';
+} from "./business-domain-definer.js";
 
 /**
  * 并行发现配置
@@ -65,7 +71,7 @@ export interface ParallelDiscoveryConfig {
   /** 语言标识（java, typescript 等） */
   language: string;
   /** 启用的发现途径（默认全部启用） */
-  pathways?: ('controller' | 'scheduled' | 'mq_consumer')[];
+  pathways?: ("controller" | "scheduled" | "mq_consumer")[];
   /** 最大并发数 */
   maxConcurrency?: number;
   /** 是否启用 Git Commit 增强（默认 true） */
@@ -129,7 +135,9 @@ export interface TableRelationSupplement {
  */
 export interface ServiceCallCluster {
   /** 聚类 Service 调用链 */
-  cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, ServiceCluster>>;
+  cluster(
+    tracePaths: DiscoveryPathResult[],
+  ): Promise<Map<string, ServiceCluster>>;
 }
 
 /**
@@ -139,7 +147,10 @@ export interface ServiceCallCluster {
  */
 export interface GitCommitEnhancer {
   /** 增强 Git Commit 信息 */
-  enhance(tableAnchors: TableAnchor[], repoPath: string): Promise<Map<string, GitCommitEvidence[]>>;
+  enhance(
+    tableAnchors: TableAnchor[],
+    repoPath: string,
+  ): Promise<Map<string, GitCommitEvidence[]>>;
 }
 
 /**
@@ -149,7 +160,10 @@ export interface GitCommitEnhancer {
  */
 export interface BusinessDomainDefiner {
   /** 定义业务域 */
-  define(tableAnchors: TableAnchor[], candidates: ConceptCandidate[]): Promise<BusinessDomain[]>;
+  define(
+    tableAnchors: TableAnchor[],
+    candidates: ConceptCandidate[],
+  ): Promise<BusinessDomain[]>;
 }
 
 /**
@@ -169,7 +183,9 @@ class StubTableRelationSupplement implements TableRelationSupplement {
  * Stub 实现：Service 调用链聚类（仅用于测试或禁用）
  */
 class StubServiceCallCluster implements ServiceCallCluster {
-  async cluster(tracePaths: DiscoveryPathResult[]): Promise<Map<string, ServiceCluster>> {
+  async cluster(
+    tracePaths: DiscoveryPathResult[],
+  ): Promise<Map<string, ServiceCluster>> {
     // Stub: 返回空聚类
     return new Map();
   }
@@ -179,7 +195,10 @@ class StubServiceCallCluster implements ServiceCallCluster {
  * Stub 实现：Git Commit 增强器
  */
 class StubGitCommitEnhancer implements GitCommitEnhancer {
-  async enhance(tableAnchors: TableAnchor[], repoPath: string): Promise<Map<string, GitCommitEvidence[]>> {
+  async enhance(
+    tableAnchors: TableAnchor[],
+    repoPath: string,
+  ): Promise<Map<string, GitCommitEvidence[]>> {
     // Stub: 返回空的 Git Commit 映射
     return new Map();
   }
@@ -189,7 +208,10 @@ class StubGitCommitEnhancer implements GitCommitEnhancer {
  * Stub 实现：业务域定义器
  */
 class StubBusinessDomainDefiner implements BusinessDomainDefiner {
-  async define(tableAnchors: TableAnchor[], candidates: ConceptCandidate[]): Promise<BusinessDomain[]> {
+  async define(
+    tableAnchors: TableAnchor[],
+    candidates: ConceptCandidate[],
+  ): Promise<BusinessDomain[]> {
     // Stub: 从表锚点生成简单的业务域
     const domains: BusinessDomain[] = [];
 
@@ -201,12 +223,14 @@ class StubBusinessDomainDefiner implements BusinessDomainDefiner {
         relatedTables: [],
         coveredModules: anchor.moduleNames.map((name, idx) => ({
           moduleName: name,
-          modulePath: anchor.traceSources[idx]?.modulePath || '',
-          role: idx === 0 ? 'primary' : 'supporting',
+          modulePath: anchor.traceSources[idx]?.modulePath || "",
+          role: idx === 0 ? "primary" : "supporting",
           entryPointCount: anchor.traceSources[idx]?.entryPoints.length || 0,
         })),
         isCrossModuleDomain: anchor.isCrossModule,
-        candidates: candidates.filter(c => c.tableAnchor.tableName === anchor.tableName),
+        candidates: candidates.filter(
+          (c) => c.tableAnchor.tableName === anchor.tableName,
+        ),
         gitCommits: [],
       });
     }
@@ -219,7 +243,10 @@ class StubBusinessDomainDefiner implements BusinessDomainDefiner {
    */
   private inferDomainName(tableName: string): string {
     // 简单的命名推断：去除后缀，转为中文描述
-    const baseName = tableName.replace(/_(?:order|info|detail|record|log|config|setting|data)$/i, '');
+    const baseName = tableName.replace(
+      /_(?:order|info|detail|record|log|config|setting|data)$/i,
+      "",
+    );
     return `${baseName}管理域`;
   }
 }
@@ -263,7 +290,7 @@ export class ParallelDiscoveryRunner {
       repoPath: config.repoPath,
       modulePaths: config.modulePaths,
       language: config.language,
-      pathways: config.pathways ?? ['controller', 'scheduled', 'mq_consumer'],
+      pathways: config.pathways ?? ["controller", "scheduled", "mq_consumer"],
       maxConcurrency: config.maxConcurrency ?? 5,
       enableGitEnhancement: config.enableGitEnhancement ?? true,
       enableDomainDefinition: config.enableDomainDefinition ?? true,
@@ -312,7 +339,10 @@ export class ParallelDiscoveryRunner {
     let tableAnchors = rawTableAnchors;
     if (this.config.enableTableRelation) {
       try {
-        tableAnchors = await this.tableRelationSupplement.supplement(rawTableAnchors, pathResults);
+        tableAnchors = await this.tableRelationSupplement.supplement(
+          rawTableAnchors,
+          pathResults,
+        );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         errors.push(`表关联补充失败: ${errorMsg}`);
@@ -325,7 +355,10 @@ export class ParallelDiscoveryRunner {
     // 7. 增强 Git Commit 信息（如果启用）
     if (this.config.enableGitEnhancement) {
       try {
-        const gitCommits = await this.gitCommitEnhancer.enhance(tableAnchors, this.config.repoPath);
+        const gitCommits = await this.gitCommitEnhancer.enhance(
+          tableAnchors,
+          this.config.repoPath,
+        );
         // 将 Git Commit 信息附加到候选
         for (const candidate of candidates) {
           const commits = gitCommits.get(candidate.tableAnchor.tableName) || [];
@@ -341,7 +374,10 @@ export class ParallelDiscoveryRunner {
     let domains: BusinessDomain[] = [];
     if (this.config.enableDomainDefinition) {
       try {
-        domains = await this.businessDomainDefiner.define(tableAnchors, candidates);
+        domains = await this.businessDomainDefiner.define(
+          tableAnchors,
+          candidates,
+        );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         errors.push(`业务域定义失败: ${errorMsg}`);
@@ -353,9 +389,12 @@ export class ParallelDiscoveryRunner {
     const stats = {
       totalModules: this.config.modulePaths.length,
       totalEntryPoints: allEntryPoints.length,
-      totalTracePaths: pathResults.reduce((sum, r) => sum + r.tracePaths.length, 0),
+      totalTracePaths: pathResults.reduce(
+        (sum, r) => sum + r.tracePaths.length,
+        0,
+      ),
       totalTableAnchors: tableAnchors.length,
-      crossModuleTables: tableAnchors.filter(a => a.isCrossModule).length,
+      crossModuleTables: tableAnchors.filter((a) => a.isCrossModule).length,
       runTimeMs,
     };
 
@@ -375,33 +414,39 @@ export class ParallelDiscoveryRunner {
    */
   private createDiscoveryTasks(): Array<{
     modulePath: string;
-    pathway: 'controller' | 'scheduled' | 'mq_consumer';
-    runner: ControllerPathDiscovery | ScheduledPathDiscovery | MqConsumerPathDiscovery;
+    pathway: "controller" | "scheduled" | "mq_consumer";
+    runner:
+      | ControllerPathDiscovery
+      | ScheduledPathDiscovery
+      | MqConsumerPathDiscovery;
   }> {
     const tasks: Array<{
       modulePath: string;
-      pathway: 'controller' | 'scheduled' | 'mq_consumer';
-      runner: ControllerPathDiscovery | ScheduledPathDiscovery | MqConsumerPathDiscovery;
+      pathway: "controller" | "scheduled" | "mq_consumer";
+      runner:
+        | ControllerPathDiscovery
+        | ScheduledPathDiscovery
+        | MqConsumerPathDiscovery;
     }> = [];
 
     for (const modulePath of this.config.modulePaths) {
       for (const pathway of this.config.pathways) {
         switch (pathway) {
-          case 'controller':
+          case "controller":
             tasks.push({
               modulePath,
               pathway,
               runner: new ControllerPathDiscovery(this.adapter, modulePath),
             });
             break;
-          case 'scheduled':
+          case "scheduled":
             tasks.push({
               modulePath,
               pathway,
               runner: new ScheduledPathDiscovery(this.adapter, modulePath),
             });
             break;
-          case 'mq_consumer':
+          case "mq_consumer":
             tasks.push({
               modulePath,
               pathway,
@@ -421,11 +466,24 @@ export class ParallelDiscoveryRunner {
   private async executeParallel(
     tasks: Array<{
       modulePath: string;
-      pathway: 'controller' | 'scheduled' | 'mq_consumer';
-      runner: ControllerPathDiscovery | ScheduledPathDiscovery | MqConsumerPathDiscovery;
+      pathway: "controller" | "scheduled" | "mq_consumer";
+      runner:
+        | ControllerPathDiscovery
+        | ScheduledPathDiscovery
+        | MqConsumerPathDiscovery;
     }>,
-  ): Promise<Array<{ pathResults: DiscoveryPathResult[]; entryPoints: EntryPointInfo[]; errors: string[] }>> {
-    const results: Array<{ pathResults: DiscoveryPathResult[]; entryPoints: EntryPointInfo[]; errors: string[] }> = [];
+  ): Promise<
+    Array<{
+      pathResults: DiscoveryPathResult[];
+      entryPoints: EntryPointInfo[];
+      errors: string[];
+    }>
+  > {
+    const results: Array<{
+      pathResults: DiscoveryPathResult[];
+      entryPoints: EntryPointInfo[];
+      errors: string[];
+    }> = [];
 
     // 分批执行，控制并发数
     const batches = this.batchTasks(tasks, this.config.maxConcurrency);
@@ -441,7 +499,8 @@ export class ParallelDiscoveryRunner {
               errors: result.errors,
             };
           } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
             return {
               pathResults: [],
               entryPoints: [],
@@ -498,8 +557,8 @@ export class ParallelDiscoveryRunner {
           multiEntryPoint: this.calculateMultiEntryPointBonus(anchor),
           tableRelation: anchor.tableRelationBonus ?? 0, // Task 7 补充
         },
-        modulePath: primarySource?.modulePath || '',
-        moduleName: primarySource?.moduleName || '',
+        modulePath: primarySource?.modulePath || "",
+        moduleName: primarySource?.moduleName || "",
         isCrossModule: anchor.isCrossModule,
         tableAnchor: anchor,
         tracePath: this.buildTracePath(anchor, pathResults),
@@ -518,9 +577,9 @@ export class ParallelDiscoveryRunner {
   private inferConceptNames(tableName: string): string[] {
     // snake_case -> 各种可能的命名
     const baseName = tableName
-      .split('_')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join('');
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join("");
 
     const variants: string[] = [];
 
@@ -528,15 +587,18 @@ export class ParallelDiscoveryRunner {
     variants.push(baseName);
 
     // 添加常见后缀变体
-    if (!baseName.endsWith('Info') && !baseName.endsWith('Data')) {
+    if (!baseName.endsWith("Info") && !baseName.endsWith("Data")) {
       variants.push(`${baseName}Info`);
     }
-    if (!baseName.endsWith('Record')) {
+    if (!baseName.endsWith("Record")) {
       variants.push(`${baseName}Record`);
     }
 
     // 去除常见后缀后的名称
-    const cleanName = baseName.replace(/(?:Order|Info|Detail|Record|Log|Config|Setting|Data)$/i, '');
+    const cleanName = baseName.replace(
+      /(?:Order|Info|Detail|Record|Log|Config|Setting|Data)$/i,
+      "",
+    );
     if (cleanName !== baseName && cleanName.length > 2) {
       variants.push(cleanName);
     }
@@ -547,7 +609,10 @@ export class ParallelDiscoveryRunner {
   /**
    * 计算置信度
    */
-  private calculateConfidence(anchor: TableAnchor, pathResults: DiscoveryPathResult[]): number {
+  private calculateConfidence(
+    anchor: TableAnchor,
+    pathResults: DiscoveryPathResult[],
+  ): number {
     // 基础置信度
     let confidence = 0.5;
 
@@ -640,11 +705,14 @@ export class ParallelDiscoveryRunner {
   /**
    * 构建追溯路径
    */
-  private buildTracePath(anchor: TableAnchor, pathResults: DiscoveryPathResult[]): ConceptTracePath {
+  private buildTracePath(
+    anchor: TableAnchor,
+    pathResults: DiscoveryPathResult[],
+  ): ConceptTracePath {
     // 从 pathResults 中找到与该表相关的追溯路径
-    const relevantPaths = pathResults.filter(result =>
-      result.tracePaths.some(path =>
-        path.tables.some(table => table.tableName === anchor.tableName),
+    const relevantPaths = pathResults.filter((result) =>
+      result.tracePaths.some((path) =>
+        path.tables.some((table) => table.tableName === anchor.tableName),
       ),
     );
 
@@ -728,7 +796,9 @@ export class ParallelDiscoveryRunner {
  * @param config - 配置选项
  * @returns ParallelDiscoveryRunner 实例
  */
-export function createParallelDiscoveryRunner(config: ParallelDiscoveryConfig): ParallelDiscoveryRunner {
+export function createParallelDiscoveryRunner(
+  config: ParallelDiscoveryConfig,
+): ParallelDiscoveryRunner {
   return new ParallelDiscoveryRunner(config);
 }
 

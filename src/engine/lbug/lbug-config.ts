@@ -1,5 +1,5 @@
-import lbug from '@ladybugdb/core';
-import type { Database, Connection } from '@ladybugdb/core';
+import lbug from "@ladybugdb/core";
+import type { Database, Connection } from "@ladybugdb/core";
 
 /**
  * Shared configuration for `@ladybugdb/core` `Database` construction.
@@ -83,7 +83,9 @@ export async function openLbugConnection(
   }
 }
 
-export async function closeLbugConnection(handle: LbugConnectionHandle): Promise<void> {
+export async function closeLbugConnection(
+  handle: LbugConnectionHandle,
+): Promise<void> {
   await handle.conn.close().catch(() => {});
   await handle.db.close().catch(() => {});
 }

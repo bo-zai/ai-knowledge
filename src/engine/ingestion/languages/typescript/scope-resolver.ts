@@ -12,19 +12,25 @@
  * ./query.ts (TYPESCRIPT_SCOPE_QUERY constant).
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import { SupportedLanguages } from '../../../shared/index.js';
-import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
-import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
-import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
-import { typescriptProvider } from '../typescript.js';
-import { loadTsconfigPaths, type TsconfigPaths } from '../../language-config.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import { SupportedLanguages } from "../../../shared/index.js";
+import {
+  buildMro,
+  defaultLinearize,
+} from "../../scope-resolution/passes/mro.js";
+import { populateClassOwnedMembers } from "../../scope-resolution/scope/walkers.js";
+import type { ScopeResolver } from "../../scope-resolution/contract/scope-resolver.js";
+import { typescriptProvider } from "../typescript.js";
+import {
+  loadTsconfigPaths,
+  type TsconfigPaths,
+} from "../../language-config.js";
 import {
   typescriptArityCompatibility,
   typescriptMergeBindings,
   resolveTsTarget,
   type TsResolveContext,
-} from './index.js';
+} from "./index.js";
 
 /** Shape the orchestrator threads in via `RunScopeResolutionInput.resolutionConfig`. */
 interface TypescriptResolutionConfig {
@@ -44,7 +50,7 @@ interface TypescriptResolutionConfig {
  * away the `resolveCache` on every import — O(N_files × N_imports)
  * total work for what should be O(N_files + N_imports).
  */
-function makeTsResolveImportTarget(): ScopeResolver['resolveImportTarget'] {
+function makeTsResolveImportTarget(): ScopeResolver["resolveImportTarget"] {
   interface PassCache {
     readonly key: ReadonlySet<string>;
     readonly allFilePaths: Set<string>;
@@ -82,7 +88,7 @@ function makeTsResolveImportTarget(): ScopeResolver['resolveImportTarget'] {
 const typescriptScopeResolver: ScopeResolver = {
   language: SupportedLanguages.TypeScript,
   languageProvider: typescriptProvider,
-  importEdgeReason: 'typescript-scope: import',
+  importEdgeReason: "typescript-scope: import",
 
   resolveImportTarget: makeTsResolveImportTarget(),
 
@@ -98,11 +104,14 @@ const typescriptScopeResolver: ScopeResolver = {
   // separated by declaration space (value / type / namespace). The
   // per-scope id is unused (shadowing is computed from origin + def.type),
   // so we don't need to synthesize a Scope here.
-  mergeBindings: (existing, incoming) => [...typescriptMergeBindings([...existing, ...incoming])],
+  mergeBindings: (existing, incoming) => [
+    ...typescriptMergeBindings([...existing, ...incoming]),
+  ],
 
   // Adapter: typescriptArityCompatibility uses (def, callsite); the
   // ScopeResolver contract is (callsite, def).
-  arityCompatibility: (callsite, def) => typescriptArityCompatibility(def, callsite),
+  arityCompatibility: (callsite, def) =>
+    typescriptArityCompatibility(def, callsite),
 
   buildMro: (graph, parsedFiles, nodeLookup) =>
     buildMro(graph, parsedFiles, nodeLookup, defaultLinearize),

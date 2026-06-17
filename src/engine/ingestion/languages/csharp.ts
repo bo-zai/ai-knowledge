@@ -6,26 +6,26 @@
  * Interface names follow the I-prefix convention (e.g., IDisposable).
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
-import { createClassExtractor } from '../class-extractors/generic.js';
-import { csharpClassConfig } from '../class-extractors/configs/csharp.js';
-import { defineLanguage } from '../language-provider.js';
-import { typeConfig as csharpConfig } from '../type-extractors/csharp.js';
-import { csharpExportChecker } from '../export-detection.js';
-import { createImportResolver } from '../import-resolvers/resolver-factory.js';
-import { csharpImportConfig } from '../import-resolvers/configs/csharp.js';
-import { extractCSharpNamedBindings } from '../named-bindings/csharp.js';
-import { CSHARP_QUERIES } from '../tree-sitter-queries.js';
-import type { AstFrameworkPatternConfig } from '../language-provider.js';
-import { createCallExtractor } from '../call-extractors/generic.js';
-import { csharpCallConfig } from '../call-extractors/configs/csharp.js';
-import { createFieldExtractor } from '../field-extractors/generic.js';
-import { csharpConfig as csharpFieldConfig } from '../field-extractors/configs/csharp.js';
-import { createMethodExtractor } from '../method-extractors/generic.js';
-import { csharpMethodConfig } from '../method-extractors/configs/csharp.js';
-import { createVariableExtractor } from '../variable-extractors/generic.js';
-import { csharpVariableConfig } from '../variable-extractors/configs/csharp.js';
-import { createHeritageExtractor } from '../heritage-extractors/generic.js';
+import { SupportedLanguages } from "../../shared/index.js";
+import { createClassExtractor } from "../class-extractors/generic.js";
+import { csharpClassConfig } from "../class-extractors/configs/csharp.js";
+import { defineLanguage } from "../language-provider.js";
+import { typeConfig as csharpConfig } from "../type-extractors/csharp.js";
+import { csharpExportChecker } from "../export-detection.js";
+import { createImportResolver } from "../import-resolvers/resolver-factory.js";
+import { csharpImportConfig } from "../import-resolvers/configs/csharp.js";
+import { extractCSharpNamedBindings } from "../named-bindings/csharp.js";
+import { CSHARP_QUERIES } from "../tree-sitter-queries.js";
+import type { AstFrameworkPatternConfig } from "../language-provider.js";
+import { createCallExtractor } from "../call-extractors/generic.js";
+import { csharpCallConfig } from "../call-extractors/configs/csharp.js";
+import { createFieldExtractor } from "../field-extractors/generic.js";
+import { csharpConfig as csharpFieldConfig } from "../field-extractors/configs/csharp.js";
+import { createMethodExtractor } from "../method-extractors/generic.js";
+import { csharpMethodConfig } from "../method-extractors/configs/csharp.js";
+import { createVariableExtractor } from "../variable-extractors/generic.js";
+import { csharpVariableConfig } from "../variable-extractors/configs/csharp.js";
+import { createHeritageExtractor } from "../heritage-extractors/generic.js";
 import {
   emitCsharpScopeCaptures,
   interpretCsharpImport,
@@ -36,106 +36,106 @@ import {
   csharpReceiverBinding,
   csharpArityCompatibility,
   resolveCsharpImportTarget,
-} from './csharp/index.js';
+} from "./csharp/index.js";
 
 const BUILT_INS: ReadonlySet<string> = new Set([
-  'Console',
-  'WriteLine',
-  'ReadLine',
-  'Write',
-  'Task',
-  'Run',
-  'Wait',
-  'WhenAll',
-  'WhenAny',
-  'FromResult',
-  'Delay',
-  'ContinueWith',
-  'ConfigureAwait',
-  'GetAwaiter',
-  'GetResult',
-  'ToString',
-  'GetType',
-  'Equals',
-  'GetHashCode',
-  'ReferenceEquals',
-  'Add',
-  'Remove',
-  'Contains',
-  'Clear',
-  'Count',
-  'Any',
-  'All',
-  'Where',
-  'Select',
-  'SelectMany',
-  'OrderBy',
-  'OrderByDescending',
-  'GroupBy',
-  'First',
-  'FirstOrDefault',
-  'Single',
-  'SingleOrDefault',
-  'Last',
-  'LastOrDefault',
-  'ToList',
-  'ToArray',
-  'ToDictionary',
-  'AsEnumerable',
-  'AsQueryable',
-  'Aggregate',
-  'Sum',
-  'Average',
-  'Min',
-  'Max',
-  'Distinct',
-  'Skip',
-  'Take',
-  'String',
-  'Format',
-  'IsNullOrEmpty',
-  'IsNullOrWhiteSpace',
-  'Concat',
-  'Join',
-  'Trim',
-  'TrimStart',
-  'TrimEnd',
-  'Split',
-  'Replace',
-  'StartsWith',
-  'EndsWith',
-  'Convert',
-  'ToInt32',
-  'ToDouble',
-  'ToBoolean',
-  'ToByte',
-  'Math',
-  'Abs',
-  'Ceiling',
-  'Floor',
-  'Round',
-  'Pow',
-  'Sqrt',
-  'Dispose',
-  'Close',
-  'TryParse',
-  'Parse',
-  'AddRange',
-  'RemoveAt',
-  'RemoveAll',
-  'FindAll',
-  'Exists',
-  'TrueForAll',
-  'ContainsKey',
-  'TryGetValue',
-  'AddOrUpdate',
-  'Throw',
-  'ThrowIfNull',
+  "Console",
+  "WriteLine",
+  "ReadLine",
+  "Write",
+  "Task",
+  "Run",
+  "Wait",
+  "WhenAll",
+  "WhenAny",
+  "FromResult",
+  "Delay",
+  "ContinueWith",
+  "ConfigureAwait",
+  "GetAwaiter",
+  "GetResult",
+  "ToString",
+  "GetType",
+  "Equals",
+  "GetHashCode",
+  "ReferenceEquals",
+  "Add",
+  "Remove",
+  "Contains",
+  "Clear",
+  "Count",
+  "Any",
+  "All",
+  "Where",
+  "Select",
+  "SelectMany",
+  "OrderBy",
+  "OrderByDescending",
+  "GroupBy",
+  "First",
+  "FirstOrDefault",
+  "Single",
+  "SingleOrDefault",
+  "Last",
+  "LastOrDefault",
+  "ToList",
+  "ToArray",
+  "ToDictionary",
+  "AsEnumerable",
+  "AsQueryable",
+  "Aggregate",
+  "Sum",
+  "Average",
+  "Min",
+  "Max",
+  "Distinct",
+  "Skip",
+  "Take",
+  "String",
+  "Format",
+  "IsNullOrEmpty",
+  "IsNullOrWhiteSpace",
+  "Concat",
+  "Join",
+  "Trim",
+  "TrimStart",
+  "TrimEnd",
+  "Split",
+  "Replace",
+  "StartsWith",
+  "EndsWith",
+  "Convert",
+  "ToInt32",
+  "ToDouble",
+  "ToBoolean",
+  "ToByte",
+  "Math",
+  "Abs",
+  "Ceiling",
+  "Floor",
+  "Round",
+  "Pow",
+  "Sqrt",
+  "Dispose",
+  "Close",
+  "TryParse",
+  "Parse",
+  "AddRange",
+  "RemoveAt",
+  "RemoveAll",
+  "FindAll",
+  "Exists",
+  "TrueForAll",
+  "ContainsKey",
+  "TryGetValue",
+  "AddOrUpdate",
+  "Throw",
+  "ThrowIfNull",
 ]);
 
 export const csharpProvider = defineLanguage({
   id: SupportedLanguages.CSharp,
-  extensions: ['.cs'],
+  extensions: [".cs"],
   entryPointPatterns: [
     /^(Get|Post|Put|Delete|Patch)/,
     /Action$/,
@@ -152,37 +152,37 @@ export const csharpProvider = defineLanguage({
   ],
   astFrameworkPatterns: [
     {
-      framework: 'aspnet',
+      framework: "aspnet",
       entryPointMultiplier: 3.2,
-      reason: 'aspnet-attribute',
+      reason: "aspnet-attribute",
       patterns: [
-        '[ApiController]',
-        '[HttpGet]',
-        '[HttpPost]',
-        '[HttpPut]',
-        '[HttpDelete]',
-        '[Route]',
-        '[Authorize]',
-        '[AllowAnonymous]',
+        "[ApiController]",
+        "[HttpGet]",
+        "[HttpPost]",
+        "[HttpPut]",
+        "[HttpDelete]",
+        "[Route]",
+        "[Authorize]",
+        "[AllowAnonymous]",
       ],
     },
     {
-      framework: 'signalr',
+      framework: "signalr",
       entryPointMultiplier: 2.8,
-      reason: 'signalr-attribute',
-      patterns: ['[HubMethodName]', ': Hub', ': Hub<'],
+      reason: "signalr-attribute",
+      patterns: ["[HubMethodName]", ": Hub", ": Hub<"],
     },
     {
-      framework: 'blazor',
+      framework: "blazor",
       entryPointMultiplier: 2.5,
-      reason: 'blazor-attribute',
-      patterns: ['@page', '[Parameter]', '@inject'],
+      reason: "blazor-attribute",
+      patterns: ["@page", "[Parameter]", "@inject"],
     },
     {
-      framework: 'efcore',
+      framework: "efcore",
       entryPointMultiplier: 2.0,
-      reason: 'efcore-pattern',
-      patterns: ['DbContext', 'DbSet<', 'OnModelCreating'],
+      reason: "efcore-pattern",
+      patterns: ["DbContext", "DbSet<", "OnModelCreating"],
     },
   ] satisfies AstFrameworkPatternConfig[],
   treeSitterQueries: CSHARP_QUERIES,
@@ -191,7 +191,7 @@ export const csharpProvider = defineLanguage({
   importResolver: createImportResolver(csharpImportConfig),
   namedBindingExtractor: extractCSharpNamedBindings,
   interfaceNamePattern: /^I[A-Z]/,
-  mroStrategy: 'implements-split',
+  mroStrategy: "implements-split",
   callExtractor: createCallExtractor(csharpCallConfig),
   fieldExtractor: createFieldExtractor(csharpFieldConfig),
   methodExtractor: createMethodExtractor(csharpMethodConfig),

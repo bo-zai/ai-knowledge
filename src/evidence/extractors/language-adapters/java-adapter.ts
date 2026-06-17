@@ -4,7 +4,7 @@
  * 实现 Java 特有的 import 解析、点号访问提取和枚举发现逻辑。
  */
 
-import type { LanguageAdapter, InternalEnum, NamingPatterns } from './index.js';
+import type { LanguageAdapter, InternalEnum, NamingPatterns } from "./index.js";
 
 /**
  * Java 命名模式配置
@@ -12,20 +12,47 @@ import type { LanguageAdapter, InternalEnum, NamingPatterns } from './index.js';
  * 定义 Java/Spring 项目中常见的类命名约定和目录结构
  */
 const JAVA_NAMING_PATTERNS: NamingPatterns = {
-  entryPointSuffixes: ['Controller', 'RestController', 'Api', 'Handler'],
-  dataModelSuffixes: ['Entity', 'DO', 'VO', 'DTO', 'Config', 'Property', 'Model'],
-  enumPatterns: ['Enum', 'Type', 'Kind'],
-  innerClassSeparator: '$',
-  transmissionSuffixes: ['VO', 'DTO', 'Request', 'Response', 'Param', 'Query', 'Form', 'Data'],
-  configSuffixes: ['Config', 'Configuration', 'Properties', 'Settings'],
+  entryPointSuffixes: ["Controller", "RestController", "Api", "Handler"],
+  dataModelSuffixes: [
+    "Entity",
+    "DO",
+    "VO",
+    "DTO",
+    "Config",
+    "Property",
+    "Model",
+  ],
+  enumPatterns: ["Enum", "Type", "Kind"],
+  innerClassSeparator: "$",
+  transmissionSuffixes: [
+    "VO",
+    "DTO",
+    "Request",
+    "Response",
+    "Param",
+    "Query",
+    "Form",
+    "Data",
+  ],
+  configSuffixes: ["Config", "Configuration", "Properties", "Settings"],
   // 架构证据收集配置
-  layerNames: ['controller', 'service', 'repository', 'dao', 'domain', 'application', 'infrastructure', 'web', 'api'],
-  componentDirs: [],  // Java 后端项目通常没有前端组件目录
-  commandDirs: [],    // Java 后端项目通常不是 CLI
-  apiDirs: ['api', 'facade', 'external'],
-  routingFiles: [],   // Java 后端项目通常没有前端路由文件
-  stateDirs: [],      // Java 后端项目通常没有前端状态管理
-  exportFiles: [],    // Java 后端项目通常没有模块导出文件
+  layerNames: [
+    "controller",
+    "service",
+    "repository",
+    "dao",
+    "domain",
+    "application",
+    "infrastructure",
+    "web",
+    "api",
+  ],
+  componentDirs: [], // Java 后端项目通常没有前端组件目录
+  commandDirs: [], // Java 后端项目通常不是 CLI
+  apiDirs: ["api", "facade", "external"],
+  routingFiles: [], // Java 后端项目通常没有前端路由文件
+  stateDirs: [], // Java 后端项目通常没有前端状态管理
+  exportFiles: [], // Java 后端项目通常没有模块导出文件
 };
 
 /**
@@ -37,7 +64,8 @@ const JAVA_NAMING_PATTERNS: NamingPatterns = {
  * - SomeUtil.CONSTANT - 常量访问
  * - SomeClass.staticField - 静态字段访问
  */
-const JAVA_DOT_ACCESS_REGEX = /\b([A-Z][a-zA-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)(?:\.[a-zA-Z]+)?\b/g;
+const JAVA_DOT_ACCESS_REGEX =
+  /\b([A-Z][a-zA-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)(?:\.[a-zA-Z]+)?\b/g;
 
 /**
  * Java import 语句提取规则
@@ -54,53 +82,54 @@ const JAVA_IMPORT_REGEX = /^import\s+([a-zA-Z0-9_.]+);\s*$/gm;
  * 注意：只匹配枚举头，枚举体通过 extractEnumBody 函数提取
  * 因为枚举体可能跨越多行并包含嵌套括号
  */
-const JAVA_ENUM_DEF_REGEX = /public\s+enum\s+(\w+)\s*(?:implements\s+[^\{]+)?\s*\{/g;
+const JAVA_ENUM_DEF_REGEX =
+  /public\s+enum\s+(\w+)\s*(?:implements\s+[^\{]+)?\s*\{/g;
 
 /**
  * 技术库包路径模式（不应作为业务概念）
  */
 const TECH_PACKAGE_PATTERNS = [
-  /^java\./,           // Java 标准库
-  /^javax\./,          // Java 扩展库
-  /^org\.apache\./,    // Apache 库
-  /^org\.springframework\./,  // Spring 框架
-  /^com\.fasterxml\./,  // Jackson/FastXML
-  /^org\.slf4j\./,     // 日志框架
-  /^lombok\./,         // Lombok
+  /^java\./, // Java 标准库
+  /^javax\./, // Java 扩展库
+  /^org\.apache\./, // Apache 库
+  /^org\.springframework\./, // Spring 框架
+  /^com\.fasterxml\./, // Jackson/FastXML
+  /^org\.slf4j\./, // 日志框架
+  /^lombok\./, // Lombok
   /^org\.projectlombok\./,
-  /^com\.google\./,    // Google 库（Guava 等）
-  /^org\.json\./,      // JSON 库
-  /^com\.alibaba\.fastjson\./,  // Fastjson
+  /^com\.google\./, // Google 库（Guava 等）
+  /^org\.json\./, // JSON 库
+  /^com\.alibaba\.fastjson\./, // Fastjson
 ];
 
 /**
  * 业务包路径模式（可能是业务概念）
  */
 const BUSINESS_PACKAGE_PATTERNS = [
-  /enums/i,           // 包含 enums 的包路径
-  /constant/i,        // 包含 constant 的包路径
-  /\.core\./,         // 核心业务包（如 com.company.core.enums）
-  /\.domain\./,       // 领域模型包
-  /\.model\./,        // 模型包
+  /enums/i, // 包含 enums 的包路径
+  /constant/i, // 包含 constant 的包路径
+  /\.core\./, // 核心业务包（如 com.company.core.enums）
+  /\.domain\./, // 领域模型包
+  /\.model\./, // 模型包
 ];
 
 /**
  * 简单枚举值模式（命名自解释，不值得生成知识）
  */
 const SELF_EXPLAINING_ENUM_VALUES = [
-  ['MALE', 'FEMALE'],
-  ['TRUE', 'FALSE'],
-  ['YES', 'NO'],
-  ['ON', 'OFF'],
-  ['ENABLE', 'DISABLE'],
-  ['ACTIVE', 'INACTIVE'],
+  ["MALE", "FEMALE"],
+  ["TRUE", "FALSE"],
+  ["YES", "NO"],
+  ["ON", "OFF"],
+  ["ENABLE", "DISABLE"],
+  ["ACTIVE", "INACTIVE"],
 ];
 
 /**
  * Java 语言适配器实现
  */
 export const javaAdapter: LanguageAdapter = {
-  language: 'java',
+  language: "java",
   namingPatterns: JAVA_NAMING_PATTERNS,
 
   /**
@@ -117,7 +146,7 @@ export const javaAdapter: LanguageAdapter = {
       // match[2] 是二级符号（如 PROCESSING）
 
       // 至少两级访问才可能是枚举/常量
-      if (match[0].includes('.')) {
+      if (match[0].includes(".")) {
         matches.push(match[0]);
       }
     }
@@ -148,11 +177,12 @@ export const javaAdapter: LanguageAdapter = {
    * 判断引用是否可能是业务枚举/常量
    */
   isBusinessRef(refExpression: string, externalImports: string[]): boolean {
-    const rootSymbol = refExpression.split('.')[0];
+    const rootSymbol = refExpression.split(".")[0];
 
     // 1. 检查是否有对应的 import 语句
-    const matchingImport = externalImports.find(imp =>
-      imp.endsWith('.' + rootSymbol) || imp.includes('.' + rootSymbol + '.')
+    const matchingImport = externalImports.find(
+      (imp) =>
+        imp.endsWith("." + rootSymbol) || imp.includes("." + rootSymbol + "."),
     );
 
     if (matchingImport) {
@@ -162,13 +192,13 @@ export const javaAdapter: LanguageAdapter = {
 
     // 2. 无 import，检查符号命名特征
     // Enum 后缀通常是业务枚举
-    if (rootSymbol.endsWith('Enum') || rootSymbol.endsWith('Type')) {
+    if (rootSymbol.endsWith("Enum") || rootSymbol.endsWith("Type")) {
       return true;
     }
 
     // Util + 大写常量可能是业务常量
-    if (rootSymbol.endsWith('Util') || rootSymbol.endsWith('Constants')) {
-      const secondPart = refExpression.split('.')[1];
+    if (rootSymbol.endsWith("Util") || rootSymbol.endsWith("Constants")) {
+      const secondPart = refExpression.split(".")[1];
       if (secondPart && /^[A-Z_]+$/.test(secondPart)) {
         return true;
       }
@@ -203,7 +233,7 @@ export const javaAdapter: LanguageAdapter = {
         enums.push({
           name: enumName,
           values,
-          contextSnippet: `public enum ${enumName} { ${values.slice(0, 5).join(', ')}...`,
+          contextSnippet: `public enum ${enumName} { ${values.slice(0, 5).join(", ")}...`,
         });
       }
     }
@@ -235,14 +265,14 @@ export const javaAdapter: LanguageAdapter = {
  * 判断包路径是否是技术库
  */
 function isTechPackage(packagePath: string): boolean {
-  return TECH_PACKAGE_PATTERNS.some(pattern => pattern.test(packagePath));
+  return TECH_PACKAGE_PATTERNS.some((pattern) => pattern.test(packagePath));
 }
 
 /**
  * 判断包路径是否可能是业务包
  */
 function isBusinessPackage(packagePath: string): boolean {
-  return BUSINESS_PACKAGE_PATTERNS.some(pattern => pattern.test(packagePath));
+  return BUSINESS_PACKAGE_PATTERNS.some((pattern) => pattern.test(packagePath));
 }
 
 /**
@@ -253,13 +283,13 @@ function isBusinessPackage(packagePath: string): boolean {
 function extractEnumBody(code: string, startIndex: number): string | null {
   let depth = 1;
   let i = startIndex;
-  let body = '';
+  let body = "";
 
   while (i < code.length && depth > 0) {
     const ch = code[i];
-    if (ch === '{') {
+    if (ch === "{") {
       depth++;
-    } else if (ch === '}') {
+    } else if (ch === "}") {
       depth--;
       if (depth === 0) {
         return body;
@@ -285,7 +315,8 @@ function extractJavaEnumValues(enumBody: string): string[] {
   const lines = enumBody.split(/[;\n,]/);
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+    if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*"))
+      continue;
 
     // 匹配枚举值
     if (VALUE_REGEX.test(trimmed)) {
@@ -303,8 +334,8 @@ function extractJavaEnumValues(enumBody: string): string[] {
  * 判断枚举值是否命名自解释
  */
 function isSelfExplainingEnum(values: string[]): boolean {
-  const upperValues = values.map(v => v.toUpperCase());
-  return SELF_EXPLAINING_ENUM_VALUES.some(pattern => {
-    return pattern.every(v => upperValues.includes(v));
+  const upperValues = values.map((v) => v.toUpperCase());
+  return SELF_EXPLAINING_ENUM_VALUES.some((pattern) => {
+    return pattern.every((v) => upperValues.includes(v));
   });
 }

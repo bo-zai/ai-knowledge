@@ -1,13 +1,16 @@
-import { describe, expect, it, beforeAll } from 'vitest';
-import { createLocalReadToolHandlers } from '../../src/agent-read-runtime/local-read-tools.js';
-import { createBudgetState, DEFAULT_KNOWLEDGE_READ_LIMITS } from '../../src/agent-read-runtime/context-budget.js';
-import { createTraceCollector } from '../../src/agent-read-runtime/trace.js';
-import path from 'node:path';
+import { describe, expect, it, beforeAll } from "vitest";
+import { createLocalReadToolHandlers } from "../../src/agent-read-runtime/local-read-tools.js";
+import {
+  createBudgetState,
+  DEFAULT_KNOWLEDGE_READ_LIMITS,
+} from "../../src/agent-read-runtime/context-budget.js";
+import { createTraceCollector } from "../../src/agent-read-runtime/trace.js";
+import path from "node:path";
 
 // 使用当前项目作为测试仓库
 const REPO_PATH = process.cwd();
 
-describe('local-read-tools', () => {
+describe("local-read-tools", () => {
   let handlers: ReturnType<typeof createLocalReadToolHandlers>;
 
   beforeAll(() => {
@@ -20,80 +23,80 @@ describe('local-read-tools', () => {
     });
   });
 
-  describe('readFileWindow', () => {
-    it('读取文件指定行范围', async () => {
+  describe("readFileWindow", () => {
+    it("读取文件指定行范围", async () => {
       // 读取 vitest.config.ts 的第 1-5 行
       const result = await handlers.readFileWindow({
-        path: 'vitest.config.ts',
+        path: "vitest.config.ts",
         startLine: 1,
         endLine: 5,
       });
 
-      expect(result).toContain('1 |');
-      expect(result).toContain('defineConfig');
-      expect(result).toContain('vitest');
+      expect(result).toContain("1 |");
+      expect(result).toContain("defineConfig");
+      expect(result).toContain("vitest");
     });
 
-    it('读取不存在的文件返回错误', async () => {
+    it("读取不存在的文件返回错误", async () => {
       const result = await handlers.readFileWindow({
-        path: 'nonexistent-file.ts',
+        path: "nonexistent-file.ts",
         startLine: 1,
         endLine: 5,
       });
 
-      expect(result).toContain('tool error');
+      expect(result).toContain("tool error");
     });
 
-    it('无效行号返回错误', async () => {
+    it("无效行号返回错误", async () => {
       const result = await handlers.readFileWindow({
-        path: 'vitest.config.ts',
+        path: "vitest.config.ts",
         startLine: 0,
         endLine: 5,
       });
 
-      expect(result).toContain('tool error');
-      expect(result).toContain('invalid line window');
+      expect(result).toContain("tool error");
+      expect(result).toContain("invalid line window");
     });
   });
 
-  describe('searchRepoText', () => {
-    it('搜索文本能找到匹配项', async () => {
+  describe("searchRepoText", () => {
+    it("搜索文本能找到匹配项", async () => {
       const result = await handlers.searchRepoText({
-        query: 'createLocalReadToolHandlers',
+        query: "createLocalReadToolHandlers",
         limit: 5,
       });
 
-      expect(result).toContain('local-read-tools.ts');
-      expect(result).toContain('createLocalReadToolHandlers');
+      expect(result).toContain("local-read-tools.ts");
+      expect(result).toContain("createLocalReadToolHandlers");
     });
 
-    it('搜索不存在文本返回无匹配', async () => {
+    it("搜索不存在文本返回无匹配", async () => {
       const result = await handlers.searchRepoText({
-        query: 'this-text-does-not-exist-xyz123',
+        query: "this-text-does-not-exist-xyz123",
         limit: 5,
       });
 
-      expect(result).toContain('no matches');
+      expect(result).toContain("no matches");
     });
   });
 
-  describe('readSymbolDefinition', () => {
-    it('查找符号定义', async () => {
+  describe("readSymbolDefinition", () => {
+    it("查找符号定义", async () => {
       const result = await handlers.readSymbolDefinition({
-        symbol: 'createBudgetState',
+        symbol: "createBudgetState",
         limit: 5,
       });
 
-      expect(result).toContain('context-budget.ts');
-      expect(result).toContain('function');
-      expect(result).toContain('createBudgetState');
+      expect(result).toContain("context-budget.ts");
+      expect(result).toContain("function");
+      expect(result).toContain("createBudgetState");
     });
   });
 
-  describe('readSymbolReferences', () => {
-    it('查找符号引用', async () => {
+  describe("readSymbolReferences", () => {
+    it("查找符号引用", async () => {
       const result = await handlers.readSymbolReferences({
-        symbol: 'DEFAULT_KNOWLEDGE_READ_LIMITS',
+        symbol: "DEFAULT_KNOWLEDGE_READ_LIMITS",
         limit: 10,
       });
 
@@ -102,10 +105,10 @@ describe('local-read-tools', () => {
     });
   });
 
-  describe('readRelatedTests', () => {
-    it('查找相关测试文件', async () => {
+  describe("readRelatedTests", () => {
+    it("查找相关测试文件", async () => {
       const result = await handlers.readRelatedTests({
-        path: 'src/agent-read-runtime/local-read-tools.ts',
+        path: "src/agent-read-runtime/local-read-tools.ts",
         limit: 5,
       });
 

@@ -37,9 +37,13 @@ import {
   getLanguageFromFilename,
   type SupportedLanguages,
   type WorkspaceIndex,
-} from '../shared';
-import type { ImportResolverFn, ImportResult, ResolveCtx } from './import-resolvers/types.js';
-import type { LanguageProvider } from './language-provider.js';
+} from "../shared";
+import type {
+  ImportResolverFn,
+  ImportResult,
+  ResolveCtx,
+} from "./import-resolvers/types.js";
+import type { LanguageProvider } from "./language-provider.js";
 
 /** A single language's resolver bundled with the context it needs. */
 export interface LanguageResolverEntry {
@@ -72,7 +76,10 @@ export function buildImportTargetWorkspace(
   const perLanguage = new Map<SupportedLanguages, LanguageResolverEntry>();
   for (const [lang, provider] of providers) {
     if (provider.importResolver === undefined) continue;
-    perLanguage.set(lang, { resolver: provider.importResolver, ctx: resolveCtx });
+    perLanguage.set(lang, {
+      resolver: provider.importResolver,
+      ctx: resolveCtx,
+    });
   }
   return { perLanguage };
 }
@@ -95,7 +102,8 @@ export function resolveImportTargetAcrossLanguages(
   workspaceIndex: WorkspaceIndex,
 ): string | null {
   const workspace = workspaceIndex as ImportTargetWorkspace | undefined;
-  if (workspace === undefined || workspace.perLanguage === undefined) return null;
+  if (workspace === undefined || workspace.perLanguage === undefined)
+    return null;
 
   const lang = getLanguageFromFilename(fromFile);
   if (lang === null) return null;

@@ -8,15 +8,29 @@
  * files — the Java equivalent of C#'s `populateNamespaceSiblings`.
  */
 
-import type { BindingRef, ParsedFile, ScopeId, TypeRef } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { isClassLike } from '../../scope-resolution/scope/walkers.js';
-import { getJavaParser } from './query.js';
-import { parseSourceSafe, ParseTimeoutError } from '../../../tree-sitter/safe-parse.js';
-import { logger } from '../../../../shared/logger.js';
+import type {
+  BindingRef,
+  ParsedFile,
+  ScopeId,
+  TypeRef,
+} from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { isClassLike } from "../../scope-resolution/scope/walkers.js";
+import { getJavaParser } from "./query.js";
+import {
+  parseSourceSafe,
+  ParseTimeoutError,
+} from "../../../tree-sitter/safe-parse.js";
+import { logger } from "../../../../shared/logger.js";
 
-function extractPackageName(content: string, filePath: string, cachedTree?: unknown): string {
-  let tree = cachedTree as ReturnType<ReturnType<typeof getJavaParser>['parse']> | undefined;
+function extractPackageName(
+  content: string,
+  filePath: string,
+  cachedTree?: unknown,
+): string {
+  let tree = cachedTree as
+    | ReturnType<ReturnType<typeof getJavaParser>["parse"]>
+    | undefined;
   if (tree === undefined) {
     try {
       tree = parseSourceSafe(getJavaParser(), content);
@@ -26,27 +40,30 @@ function extractPackageName(content: string, filePath: string, cachedTree?: unkn
         // same-package sibling injection for the whole run.
         logger.warn(
           { file: filePath },
-          'java package-siblings: parse timed out, treating as no package',
+          "java package-siblings: parse timed out, treating as no package",
         );
-        return '';
+        return "";
       }
       throw err;
     }
   }
   for (const child of tree.rootNode.namedChildren) {
-    if (child.type === 'package_declaration') {
+    if (child.type === "package_declaration") {
       const scoped = child.namedChildren.find(
-        (c) => c.type === 'scoped_identifier' || c.type === 'identifier',
+        (c) => c.type === "scoped_identifier" || c.type === "identifier",
       );
-      return scoped?.text ?? '';
+      return scoped?.text ?? "";
     }
   }
-  return '';
+  return "";
 }
 
 interface PackageBucket {
   readonly parsed: ParsedFile[];
-  readonly moduleScopes: { filePath: string; scope: ParsedFile['scopes'][number] }[];
+  readonly moduleScopes: {
+    filePath: string;
+    scope: ParsedFile["scopes"][number];
+  }[];
 }
 
 export function populateJavaPackageSiblings(
@@ -62,20 +79,27 @@ export function populateJavaPackageSiblings(
   for (const parsed of parsedFiles) {
     const content = ctx.fileContents.get(parsed.filePath);
     if (content === undefined) continue;
-    const pkg = extractPackageName(content, parsed.filePath, ctx.treeCache?.get(parsed.filePath));
+    const pkg = extractPackageName(
+      content,
+      parsed.filePath,
+      ctx.treeCache?.get(parsed.filePath),
+    );
     let bucket = buckets.get(pkg);
     if (bucket === undefined) {
       bucket = { parsed: [], moduleScopes: [] };
       buckets.set(pkg, bucket);
     }
     bucket.parsed.push(parsed);
-    const ms = parsed.scopes.find((s) => s.kind === 'Module');
+    const ms = parsed.scopes.find((s) => s.kind === "Module");
     if (ms !== undefined) {
       bucket.moduleScopes.push({ filePath: parsed.filePath, scope: ms });
     }
   }
 
-  const augmentations = indexes.bindingAugmentations as Map<ScopeId, Map<string, BindingRef[]>>;
+  const augmentations = indexes.bindingAugmentations as Map<
+    ScopeId,
+    Map<string, BindingRef[]>
+  >;
 
   const MAX_PACKAGE_FILES = 500;
 
@@ -88,12 +112,12 @@ export function populateJavaPackageSiblings(
       continue;
     }
 
-    const classDefs: { def: BindingRef['def']; filePath: string }[] = [];
+    const classDefs: { def: BindingRef["def"]; filePath: string }[] = [];
     for (const parsed of bucket.parsed) {
-      const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
+      const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
       const moduleScopeId = moduleScope?.id;
       for (const scope of parsed.scopes) {
-        if (scope.kind !== 'Class') continue;
+        if (scope.kind !== "Class") continue;
         if (scope.parent !== moduleScopeId) continue;
         for (const def of scope.ownedDefs) {
           if (isClassLike(def.type)) {
@@ -115,11 +139,16 @@ export function populateJavaPackageSiblings(
       const proximityCache = new Map<string, number>();
       for (const c of candidates) {
         if (!proximityCache.has(c.filePath)) {
-          proximityCache.set(c.filePath, sharedSegmentCount(c.filePath, filePath));
+          proximityCache.set(
+            c.filePath,
+            sharedSegmentCount(c.filePath, filePath),
+          );
         }
       }
       const sorted = candidates.sort(
-        (a, b) => (proximityCache.get(b.filePath) ?? 0) - (proximityCache.get(a.filePath) ?? 0),
+        (a, b) =>
+          (proximityCache.get(b.filePath) ?? 0) -
+          (proximityCache.get(a.filePath) ?? 0),
       );
 
       const injectedIds = new Set<string>();
@@ -128,13 +157,15 @@ export function populateJavaPackageSiblings(
         const qn = def.qualifiedName;
         if (qn === undefined) continue;
         injectedIds.add(def.nodeId);
-        const simpleName = qn.includes('.') ? qn.slice(qn.lastIndexOf('.') + 1) : qn;
+        const simpleName = qn.includes(".")
+          ? qn.slice(qn.lastIndexOf(".") + 1)
+          : qn;
         let list = scopeAug.get(simpleName);
         if (list === undefined) {
           list = [];
           scopeAug.set(simpleName, list);
         }
-        list.push({ def, origin: 'namespace' });
+        list.push({ def, origin: "namespace" });
       }
 
       const tb = scope.typeBindings as Map<string, TypeRef>;
@@ -149,9 +180,9 @@ export function populateJavaPackageSiblings(
       for (const sibParsed of bucket.parsed) {
         if (sibParsed.filePath === filePath) continue;
         for (const sibScope of sibParsed.scopes) {
-          if (sibScope.kind !== 'Class') continue;
+          if (sibScope.kind !== "Class") continue;
           for (const [name, ref] of sibScope.typeBindings) {
-            if (ref.source === 'self') continue;
+            if (ref.source === "self") continue;
             if (tb.has(name)) continue;
             tb.set(name, ref);
           }
@@ -162,8 +193,8 @@ export function populateJavaPackageSiblings(
 }
 
 function sharedSegmentCount(a: string, b: string): number {
-  const sa = a.replace(/\\/g, '/').split('/');
-  const sb = b.replace(/\\/g, '/').split('/');
+  const sa = a.replace(/\\/g, "/").split("/");
+  const sb = b.replace(/\\/g, "/").split("/");
   let i = 0;
   while (i < sa.length && i < sb.length && sa[i] === sb[i]) i++;
   return i;

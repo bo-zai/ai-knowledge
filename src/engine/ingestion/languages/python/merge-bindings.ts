@@ -13,7 +13,7 @@
  * purposes).
  */
 
-import type { BindingRef } from '../../../shared/index.js';
+import type { BindingRef } from "../../../shared/index.js";
 
 const TIER_LOCAL = 0;
 const TIER_IMPORT = 1;
@@ -22,20 +22,22 @@ const TIER_UNKNOWN = 3;
 
 function tierOf(b: BindingRef): number {
   switch (b.origin) {
-    case 'local':
+    case "local":
       return TIER_LOCAL;
-    case 'reexport':
-    case 'import':
-    case 'namespace':
+    case "reexport":
+    case "import":
+    case "namespace":
       return TIER_IMPORT;
-    case 'wildcard':
+    case "wildcard":
       return TIER_WILDCARD;
     default:
       return TIER_UNKNOWN;
   }
 }
 
-export function pythonMergeBindings(bindings: readonly BindingRef[]): readonly BindingRef[] {
+export function pythonMergeBindings(
+  bindings: readonly BindingRef[],
+): readonly BindingRef[] {
   if (bindings.length === 0) return bindings;
 
   let bestTier = Number.POSITIVE_INFINITY;

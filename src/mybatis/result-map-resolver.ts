@@ -4,12 +4,19 @@
  * Resolves resultMap definitions and provides column/property mappings.
  */
 
-import type { ResultMapDef, MapperDocument, ResolvedStatement } from './types.js';
+import type {
+  ResultMapDef,
+  MapperDocument,
+  ResolvedStatement,
+} from "./types.js";
 
 /**
  * Find a resultMap by ID in mapper document.
  */
-export function findResultMap(mapper: MapperDocument, resultMapId?: string): ResultMapDef | null {
+export function findResultMap(
+  mapper: MapperDocument,
+  resultMapId?: string,
+): ResultMapDef | null {
   if (!resultMapId) return null;
   return mapper.resultMaps.find((rm) => rm.id === resultMapId) || null;
 }
@@ -33,7 +40,7 @@ export function getResultMapProperties(resultMap: ResultMapDef): string[] {
  */
 export function findPropertyForColumn(
   resultMap: ResultMapDef,
-  column: string
+  column: string,
 ): string | null {
   const mapping = resultMap.mappings.find((m) => m.column === column);
   return mapping?.property || null;
@@ -44,7 +51,7 @@ export function findPropertyForColumn(
  */
 export function findColumnForProperty(
   resultMap: ResultMapDef,
-  property: string
+  property: string,
 ): string | null {
   const mapping = resultMap.mappings.find((m) => m.property === property);
   return mapping?.column || null;
@@ -56,7 +63,7 @@ export function findColumnForProperty(
  */
 export function getStatementResultMapping(
   statement: ResolvedStatement,
-  mapper: MapperDocument
+  mapper: MapperDocument,
 ): ResultMapDef | null {
   if (!statement.resultMap) return null;
   return findResultMap(mapper, statement.resultMap);
@@ -65,7 +72,9 @@ export function getStatementResultMapping(
 /**
  * Extract all resultMap info from mapper as a lookup table.
  */
-export function buildResultMapLookup(mapper: MapperDocument): Map<string, ResultMapDef> {
+export function buildResultMapLookup(
+  mapper: MapperDocument,
+): Map<string, ResultMapDef> {
   const lookup = new Map<string, ResultMapDef>();
   for (const rm of mapper.resultMaps) {
     lookup.set(rm.id, rm);

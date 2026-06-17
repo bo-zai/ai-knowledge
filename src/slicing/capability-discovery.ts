@@ -1,98 +1,106 @@
-import fs from 'fs/promises';
-import path from 'path';
-import type { CapabilityCandidate, EntrySignal, BehaviorSignal, DataSignal, TestSignal, DocSignal, ModuleCluster } from './capability-candidate-schema.js';
+import fs from "fs/promises";
+import path from "path";
+import type {
+  CapabilityCandidate,
+  EntrySignal,
+  BehaviorSignal,
+  DataSignal,
+  TestSignal,
+  DocSignal,
+  ModuleCluster,
+} from "./capability-candidate-schema.js";
 import {
   withReadOnlyLbug,
   type ReadOnlyQueryExecutor,
-} from '../engine/lbug/read-only-session.js';
-import { getStoragePaths } from '../engine/storage/repo-manager.js';
+} from "../engine/lbug/read-only-session.js";
+import { getStoragePaths } from "../engine/storage/repo-manager.js";
 
 const DOMAIN_PHRASES = [
-  'db object',
-  'knowledge object',
-  'description source',
-  'mybatis mapper',
-  'sql evidence',
-  'field description',
-  'bootstrap knowledge',
-  'evidence bundle',
-  'capability candidate',
-  'knowledge generation',
+  "db object",
+  "knowledge object",
+  "description source",
+  "mybatis mapper",
+  "sql evidence",
+  "field description",
+  "bootstrap knowledge",
+  "evidence bundle",
+  "capability candidate",
+  "knowledge generation",
 ];
 
 const DISCOVERY_FILE_EXTENSIONS = new Set([
-  '.ts',
-  '.js',
-  '.tsx',
-  '.jsx',
-  '.java',
-  '.xml',
-  '.yml',
-  '.yaml',
-  '.properties',
-  '.md',
-  '.txt',
+  ".ts",
+  ".js",
+  ".tsx",
+  ".jsx",
+  ".java",
+  ".xml",
+  ".yml",
+  ".yaml",
+  ".properties",
+  ".md",
+  ".txt",
 ]);
 
 const IGNORED_DISCOVERY_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'target',
-  'build',
-  'dist',
-  '.idea',
-  '.mvn',
-  'logs',
+  "node_modules",
+  ".git",
+  "target",
+  "build",
+  "dist",
+  ".idea",
+  ".mvn",
+  "logs",
 ]);
 
 const CROSS_CUTTING_TERMS = [
-  'aop',
-  'aspect',
-  'config',
-  'interceptor',
-  'filter',
-  'util',
-  'utils',
-  'common',
-  'job',
-  'listener',
-  'event',
-  'bootstrap',
-  'security',
-  'auth',
-  'logging',
-  'log',
-  'ratelimit',
-  'rate-limit',
+  "aop",
+  "aspect",
+  "config",
+  "interceptor",
+  "filter",
+  "util",
+  "utils",
+  "common",
+  "job",
+  "listener",
+  "event",
+  "bootstrap",
+  "security",
+  "auth",
+  "logging",
+  "log",
+  "ratelimit",
+  "rate-limit",
 ];
 
 const BUSINESS_ROLE_TERMS = [
-  'controller',
-  'service',
-  'mapper',
-  'repository',
-  'dao',
-  'xml',
-  'request',
-  'response',
-  'vo',
-  'dto',
-  'entity',
+  "controller",
+  "service",
+  "mapper",
+  "repository",
+  "dao",
+  "xml",
+  "request",
+  "response",
+  "vo",
+  "dto",
+  "entity",
 ];
 
 const TECHNICAL_CONTEXT_TERMS = new Set([
-  'mybatis',
-  'mapper',
-  'xml',
-  'sql',
-  'db',
-  'database',
-  'table',
-  'schema',
-  'knowledge',
-  'evidence',
-  'capability',
-  'bootstrap',
+  "mybatis",
+  "mapper",
+  "xml",
+  "sql",
+  "db",
+  "database",
+  "table",
+  "schema",
+  "knowledge",
+  "evidence",
+  "capability",
+  "bootstrap",
 ]);
 
 function classifyTargetTerms(targetTerms: string[]): {
@@ -101,8 +109,12 @@ function classifyTargetTerms(targetTerms: string[]): {
   normalizedTerms: string[];
 } {
   const normalizedTerms = normalizeTargetTerms(targetTerms);
-  const businessTerms = normalizedTerms.filter(term => !TECHNICAL_CONTEXT_TERMS.has(term));
-  const technicalTerms = normalizedTerms.filter(term => TECHNICAL_CONTEXT_TERMS.has(term));
+  const businessTerms = normalizedTerms.filter(
+    (term) => !TECHNICAL_CONTEXT_TERMS.has(term),
+  );
+  const technicalTerms = normalizedTerms.filter((term) =>
+    TECHNICAL_CONTEXT_TERMS.has(term),
+  );
   return { businessTerms, technicalTerms, normalizedTerms };
 }
 
@@ -117,7 +129,10 @@ type RankedSignal = {
   location?: string;
 };
 
-function collectBusinessTermScores(signals: RankedSignal[], businessTerms: string[]): Map<string, number> {
+function collectBusinessTermScores(
+  signals: RankedSignal[],
+  businessTerms: string[],
+): Map<string, number> {
   const scores = new Map<string, number>();
   const businessSet = new Set(businessTerms);
 
@@ -156,19 +171,20 @@ function deriveBusinessCapabilityName(input: {
   });
 
   const selectedTerms = rankedTerms
-    .filter(term => (scores.get(term) ?? 0) > 0)
+    .filter((term) => (scores.get(term) ?? 0) > 0)
     .slice(0, 3);
 
-  const termsForName = selectedTerms.length > 0 ? selectedTerms : input.businessTerms.slice(0, 3);
+  const termsForName =
+    selectedTerms.length > 0 ? selectedTerms : input.businessTerms.slice(0, 3);
   if (termsForName.length === 0) {
-    return 'Repository capability';
+    return "Repository capability";
   }
 
-  return `${termsForName.map(titleCaseTerm).join(' ')} capability`;
+  return `${termsForName.map(titleCaseTerm).join(" ")} capability`;
 }
 
 function normalizePathForMatch(input: string): string {
-  return input.replace(/\\/g, '/').toLowerCase();
+  return input.replace(/\\/g, "/").toLowerCase();
 }
 
 export type DiscoverCapabilitiesInput = {
@@ -182,26 +198,26 @@ export function normalizeCapabilityTerms(input: string): string[] {
   // 先处理 domain phrases
   const foundPhrases: string[] = [];
   for (const phrase of DOMAIN_PHRASES) {
-    const regex = new RegExp(phrase, 'gi');
+    const regex = new RegExp(phrase, "gi");
     if (regex.test(normalized)) {
       foundPhrases.push(phrase);
-      normalized = normalized.replace(regex, ' ');
+      normalized = normalized.replace(regex, " ");
     }
   }
 
   // 拆分 camelCase 和 PascalCase
-  normalized = normalized.replace(/([a-z])([A-Z])/g, '$1 $2');
-  normalized = normalized.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  normalized = normalized.replace(/([a-z])([A-Z])/g, "$1 $2");
+  normalized = normalized.replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
 
   // 拆分 kebab-case 和 snake_case
-  normalized = normalized.replace(/[-_]/g, ' ');
+  normalized = normalized.replace(/[-_]/g, " ");
 
   // 分词并转小写
   const words = normalized
     .toLowerCase()
     .split(/\s+/)
-    .map(w => w.trim())
-    .filter(w => w.length > 0);
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
 
   // 合并去重
   const allTerms = [...new Set([...foundPhrases, ...words])];
@@ -209,36 +225,57 @@ export function normalizeCapabilityTerms(input: string): string[] {
 }
 
 function normalizeTargetTerms(targetTerms: string[]): string[] {
-  return [...new Set(targetTerms.flatMap(normalizeCapabilityTerms).map(term => term.toLowerCase()))];
+  return [
+    ...new Set(
+      targetTerms
+        .flatMap(normalizeCapabilityTerms)
+        .map((term) => term.toLowerCase()),
+    ),
+  ];
 }
 
 function textForRelevance(parts: Array<string | undefined>): string {
-  return parts.filter(Boolean).join(' ').replace(/\\/g, '/').toLowerCase();
+  return parts.filter(Boolean).join(" ").replace(/\\/g, "/").toLowerCase();
 }
 
-function computeTargetRelevance(parts: Array<string | undefined>, targetTerms: string[]): {
+function computeTargetRelevance(
+  parts: Array<string | undefined>,
+  targetTerms: string[],
+): {
   score: number;
   matchedTerms: string[];
 } {
   const text = textForRelevance(parts);
   const normalizedTargets = normalizeTargetTerms(targetTerms);
-  const matchedTerms = normalizedTargets.filter(term => text.includes(term));
-  const base = normalizedTargets.length === 0 ? 0 : matchedTerms.length / normalizedTargets.length;
-  const roleBoost = BUSINESS_ROLE_TERMS.some(term => text.includes(term)) ? 0.25 : 0;
-  const crossCutPenalty = CROSS_CUTTING_TERMS.some(term => text.includes(term)) ? 0.45 : 0;
+  const matchedTerms = normalizedTargets.filter((term) => text.includes(term));
+  const base =
+    normalizedTargets.length === 0
+      ? 0
+      : matchedTerms.length / normalizedTargets.length;
+  const roleBoost = BUSINESS_ROLE_TERMS.some((term) => text.includes(term))
+    ? 0.25
+    : 0;
+  const crossCutPenalty = CROSS_CUTTING_TERMS.some((term) =>
+    text.includes(term),
+  )
+    ? 0.45
+    : 0;
   const score = Math.max(0, Math.min(1, base + roleBoost - crossCutPenalty));
   return { score, matchedTerms };
 }
 
-function byRelevanceDesc<T extends { targetRelevance?: number; location?: string }>(left: T, right: T): number {
+function byRelevanceDesc<
+  T extends { targetRelevance?: number; location?: string },
+>(left: T, right: T): number {
   const scoreDiff = (right.targetRelevance ?? 0) - (left.targetRelevance ?? 0);
   if (scoreDiff !== 0) return scoreDiff;
-  return (left.location ?? '').localeCompare(right.location ?? '');
+  return (left.location ?? "").localeCompare(right.location ?? "");
 }
 
 function extractJavaFieldNames(content: string): string[] {
   const fields: string[] = [];
-  const fieldRegex = /\b(private|protected|public)\s+[\w<>\[\], ?]+\s+(\w+)\s*;/g;
+  const fieldRegex =
+    /\b(private|protected|public)\s+[\w<>\[\], ?]+\s+(\w+)\s*;/g;
   let fieldMatch: RegExpExecArray | null;
   while ((fieldMatch = fieldRegex.exec(content)) !== null) {
     const fieldName = fieldMatch[2];
@@ -255,7 +292,7 @@ async function scanDirectory(dir: string): Promise<string[]> {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (!IGNORED_DISCOVERY_DIRS.has(entry.name)) {
-          files.push(...await scanDirectory(fullPath));
+          files.push(...(await scanDirectory(fullPath)));
         }
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
@@ -270,68 +307,86 @@ async function scanDirectory(dir: string): Promise<string[]> {
   return files;
 }
 
-function extractJavaEntrySignals(content: string, location: string, targetTerms: string[]): EntrySignal[] {
+function extractJavaEntrySignals(
+  content: string,
+  location: string,
+  targetTerms: string[],
+): EntrySignal[] {
   const signals: EntrySignal[] = [];
   const classNameMatch = content.match(/\bclass\s+(\w+)/);
   const interfaceNameMatch = content.match(/\binterface\s+(\w+)/);
-  const className = classNameMatch?.[1] ?? interfaceNameMatch?.[1] ?? path.basename(location, '.java');
+  const className =
+    classNameMatch?.[1] ??
+    interfaceNameMatch?.[1] ??
+    path.basename(location, ".java");
 
   const hasController = /@(RestController|Controller)\b/.test(content);
   const hasService = /@Service\b/.test(content);
   const hasComponent = /@Component\b/.test(content);
   const hasScheduled = /@Scheduled\b/.test(content);
 
-  const routeMatches = [...content.matchAll(/@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\(([^)]*)\))?/g)];
+  const routeMatches = [
+    ...content.matchAll(
+      /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\(([^)]*)\))?/g,
+    ),
+  ];
 
-  const routeSignature = routeMatches.map(match => match[0]).join(' ');
+  const routeSignature = routeMatches.map((match) => match[0]).join(" ");
 
-  const relevance = computeTargetRelevance([location, className, routeSignature], targetTerms);
+  const relevance = computeTargetRelevance(
+    [location, className, routeSignature],
+    targetTerms,
+  );
 
   // Find the line number of the class definition for startLine
-  const classLineMatch = content.match(/^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m);
-  const startLine = classLineMatch ? content.slice(0, classLineMatch.index ?? 0).split('\n').length + 1 : undefined;
+  const classLineMatch = content.match(
+    /^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m,
+  );
+  const startLine = classLineMatch
+    ? content.slice(0, classLineMatch.index ?? 0).split("\n").length + 1
+    : undefined;
 
   if (hasController || routeMatches.length > 0) {
     signals.push({
-      kind: 'http',
+      kind: "http",
       location,
       name: className,
       signature: routeSignature,
-      description: 'Spring controller or route entry',
+      description: "Spring controller or route entry",
       targetRelevance: relevance.score,
       matchedTerms: relevance.matchedTerms,
-      role: 'controller',
+      role: "controller",
       startLine,
     });
   } else if (hasScheduled) {
     signals.push({
-      kind: 'job',
+      kind: "job",
       location,
       name: className,
-      description: 'Scheduled job entry',
+      description: "Scheduled job entry",
       targetRelevance: relevance.score,
       matchedTerms: relevance.matchedTerms,
-      role: 'job',
+      role: "job",
     });
   } else if (hasService) {
     signals.push({
-      kind: 'service',
+      kind: "service",
       location,
       name: className,
-      description: 'Spring service entry',
+      description: "Spring service entry",
       targetRelevance: relevance.score,
       matchedTerms: relevance.matchedTerms,
-      role: 'service',
+      role: "service",
     });
   } else if (hasComponent) {
     signals.push({
-      kind: 'handler',
+      kind: "handler",
       location,
       name: className,
-      description: 'Spring component entry',
+      description: "Spring component entry",
       targetRelevance: relevance.score,
       matchedTerms: relevance.matchedTerms,
-      role: 'handler',
+      role: "handler",
     });
   }
 
@@ -351,7 +406,9 @@ async function collectCallerSignals(
 ): Promise<EntrySignal[]> {
   if (serviceSignals.length === 0) return [];
 
-  const serviceNames = [...new Set(serviceSignals.map(s => s.name).filter(Boolean))];
+  const serviceNames = [
+    ...new Set(serviceSignals.map((s) => s.name).filter(Boolean)),
+  ];
   if (serviceNames.length === 0) return [];
 
   const callerSignals: EntrySignal[] = [];
@@ -373,31 +430,41 @@ async function collectCallerSignals(
 
     try {
       const rows = await query(cypher);
-      for (const row of (rows || [])) {
+      for (const row of rows || []) {
         const className = row.className as string;
         const filePath = row.filePath as string;
         const methodName = row.methodName as string;
-        const startLine = Number((row as Record<string, unknown>).startLine ?? undefined);
+        const startLine = Number(
+          (row as Record<string, unknown>).startLine ?? undefined,
+        );
 
         if (!filePath || !className) continue;
 
-        const relative = path.relative(repoRoot, filePath).replace(/\\/g, '/');
-        if (!relative.endsWith('.java')) continue;
+        const relative = path.relative(repoRoot, filePath).replace(/\\/g, "/");
+        if (!relative.endsWith(".java")) continue;
 
         const key = `${relative}:${className}`;
         if (seen.has(key)) continue;
         seen.add(key);
 
         const normalizedPath = relative.toLowerCase();
-        const hasController = normalizedPath.includes('/controller');
-        const hasService = normalizedPath.includes('/service');
+        const hasController = normalizedPath.includes("/controller");
+        const hasService = normalizedPath.includes("/service");
 
-        let kind: EntrySignal['kind'] = 'handler';
+        let kind: EntrySignal["kind"] = "handler";
         let role: string | undefined;
-        if (hasController) { kind = 'http'; role = 'controller'; }
-        else if (hasService) { kind = 'service'; role = 'service'; }
+        if (hasController) {
+          kind = "http";
+          role = "controller";
+        } else if (hasService) {
+          kind = "service";
+          role = "service";
+        }
 
-        const relevance = computeTargetRelevance([relative, className, serviceName, methodName], targetTerms);
+        const relevance = computeTargetRelevance(
+          [relative, className, serviceName, methodName],
+          targetTerms,
+        );
         const boostedRelevance = Math.min(1, relevance.score + 0.3);
 
         callerSignals.push({
@@ -420,16 +487,22 @@ async function collectCallerSignals(
   return callerSignals;
 }
 
-async function collectEntrySignals(targetPaths: string[], repoRoot: string, targetTerms: string[]): Promise<EntrySignal[]> {
+async function collectEntrySignals(
+  targetPaths: string[],
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<EntrySignal[]> {
   const signals: EntrySignal[] = [];
   for (const targetPath of targetPaths) {
     const fullPath = path.resolve(repoRoot, targetPath);
     const files = await scanDirectory(fullPath);
     for (const file of files) {
       const relative = path.relative(repoRoot, file);
-      const content = await fs.readFile(file, 'utf-8').catch(() => '');
-      if (file.endsWith('.java')) {
-        signals.push(...extractJavaEntrySignals(content, relative, targetTerms));
+      const content = await fs.readFile(file, "utf-8").catch(() => "");
+      if (file.endsWith(".java")) {
+        signals.push(
+          ...extractJavaEntrySignals(content, relative, targetTerms),
+        );
       }
     }
   }
@@ -446,8 +519,8 @@ function computeConfidence(
 ): number {
   return (
     entrySignal * 0.25 +
-    behaviorSignal * 0.20 +
-    dataSignal * 0.20 +
+    behaviorSignal * 0.2 +
+    dataSignal * 0.2 +
     testSignal * 0.15 +
     docSignal * 0.05 +
     graphCohesion * 0.15
@@ -455,19 +528,37 @@ function computeConfidence(
 }
 
 function deriveModuleRoot(relativeFile: string): string {
-  const normalized = relativeFile.replace(/\\/g, '/');
-  const parts = normalized.split('/');
-  const roleIndex = parts.findIndex(part =>
-    ['controller', 'service', 'mapper', 'repository', 'dao', 'resources', 'test', 'entity', 'dto', 'vo', 'request', 'response'].includes(part.toLowerCase())
+  const normalized = relativeFile.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  const roleIndex = parts.findIndex((part) =>
+    [
+      "controller",
+      "service",
+      "mapper",
+      "repository",
+      "dao",
+      "resources",
+      "test",
+      "entity",
+      "dto",
+      "vo",
+      "request",
+      "response",
+    ].includes(part.toLowerCase()),
   );
   if (roleIndex >= 0) {
-    return parts.slice(0, roleIndex + 1).join('/');
+    return parts.slice(0, roleIndex + 1).join("/");
   }
-  return parts.slice(0, Math.min(parts.length - 1, 4)).join('/');
+  return parts.slice(0, Math.min(parts.length - 1, 4)).join("/");
 }
 
-async function analyzeModuleClusters(targetPaths: string[], repoRoot: string, targetTerms: string[]): Promise<ModuleCluster[]> {
-  const clusterMap: Map<string, { files: string[]; moduleNames: string[] }> = new Map();
+async function analyzeModuleClusters(
+  targetPaths: string[],
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<ModuleCluster[]> {
+  const clusterMap: Map<string, { files: string[]; moduleNames: string[] }> =
+    new Map();
 
   for (const targetPath of targetPaths) {
     const fullPath = path.resolve(repoRoot, targetPath);
@@ -486,8 +577,11 @@ async function analyzeModuleClusters(targetPaths: string[], repoRoot: string, ta
 
   const clusters: ModuleCluster[] = [];
   for (const [rootPath, data] of clusterMap.entries()) {
-    const role = rootPath.split('/').pop()?.toLowerCase() ?? undefined;
-    const relevance = computeTargetRelevance([rootPath, ...data.moduleNames], targetTerms);
+    const role = rootPath.split("/").pop()?.toLowerCase() ?? undefined;
+    const relevance = computeTargetRelevance(
+      [rootPath, ...data.moduleNames],
+      targetTerms,
+    );
     clusters.push({
       rootPath,
       moduleNames: [...new Set(data.moduleNames)],
@@ -503,35 +597,48 @@ async function analyzeModuleClusters(targetPaths: string[], repoRoot: string, ta
   return clusters.slice(0, 8);
 }
 
-async function collectBehaviorSignals(targetPaths: string[], repoRoot: string, targetTerms: string[]): Promise<BehaviorSignal[]> {
+async function collectBehaviorSignals(
+  targetPaths: string[],
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<BehaviorSignal[]> {
   const signals: BehaviorSignal[] = [];
   for (const targetPath of targetPaths) {
     const fullPath = path.resolve(repoRoot, targetPath);
     const files = await scanDirectory(fullPath);
     for (const file of files) {
-      const content = await fs.readFile(file, 'utf-8').catch(() => '');
+      const content = await fs.readFile(file, "utf-8").catch(() => "");
       const relative = path.relative(repoRoot, file);
 
-      if (file.endsWith('.java')) {
+      if (file.endsWith(".java")) {
         // Determine role from file path (normalize for Windows backslash)
         const normalizedRelative = normalizePathForMatch(relative);
-        const role = normalizedRelative.includes('/controller/') ? 'controller' :
-                     normalizedRelative.includes('/service/') ? 'service' :
-                     normalizedRelative.includes('/mapper/') ? 'mapper' : undefined;
+        const role = normalizedRelative.includes("/controller/")
+          ? "controller"
+          : normalizedRelative.includes("/service/")
+            ? "service"
+            : normalizedRelative.includes("/mapper/")
+              ? "mapper"
+              : undefined;
 
         // Java method regex
-        const javaMethodRegex = /\b(public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:synchronized\s+)?[\w<>\[\], ?]+\s+(\w+)\s*\([^)]*\)\s*\{/g;
+        const javaMethodRegex =
+          /\b(public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:synchronized\s+)?[\w<>\[\], ?]+\s+(\w+)\s*\([^)]*\)\s*\{/g;
         let methodMatch: RegExpExecArray | null;
         while ((methodMatch = javaMethodRegex.exec(content)) !== null) {
           const name = methodMatch[2];
           if (name) {
             const terms = normalizeCapabilityTerms(name);
-            const relevance = computeTargetRelevance([relative, name], targetTerms);
-            const startLine = content.slice(0, methodMatch.index ?? 0).split('\n').length + 1;
+            const relevance = computeTargetRelevance(
+              [relative, name],
+              targetTerms,
+            );
+            const startLine =
+              content.slice(0, methodMatch.index ?? 0).split("\n").length + 1;
             signals.push({
               location: relative,
               verb: terms[0] || name,
-              object: terms.slice(1).join(' ') || name,
+              object: terms.slice(1).join(" ") || name,
               targetRelevance: relevance.score,
               matchedTerms: relevance.matchedTerms,
               role,
@@ -541,17 +648,22 @@ async function collectBehaviorSignals(targetPaths: string[], repoRoot: string, t
         }
       } else {
         // TypeScript/JavaScript function regex
-        const lines = content.split('\n');
+        const lines = content.split("\n");
         for (const line of lines) {
-          const funcMatch = line.match(/(?:export\s+)?(?:async\s+)?function\s+(\w+)/);
+          const funcMatch = line.match(
+            /(?:export\s+)?(?:async\s+)?function\s+(\w+)/,
+          );
           if (funcMatch) {
             const name = funcMatch[1];
             const terms = normalizeCapabilityTerms(name);
-            const relevance = computeTargetRelevance([relative, name], targetTerms);
+            const relevance = computeTargetRelevance(
+              [relative, name],
+              targetTerms,
+            );
             signals.push({
               location: relative,
               verb: terms[0] || name,
-              object: terms.slice(1).join(' ') || name,
+              object: terms.slice(1).join(" ") || name,
               targetRelevance: relevance.score,
               matchedTerms: relevance.matchedTerms,
             });
@@ -563,34 +675,48 @@ async function collectBehaviorSignals(targetPaths: string[], repoRoot: string, t
   return signals;
 }
 
-async function collectDataSignals(targetPaths: string[], repoRoot: string, targetTerms: string[]): Promise<DataSignal[]> {
+async function collectDataSignals(
+  targetPaths: string[],
+  repoRoot: string,
+  targetTerms: string[],
+): Promise<DataSignal[]> {
   const signals: DataSignal[] = [];
   for (const targetPath of targetPaths) {
     const fullPath = path.resolve(repoRoot, targetPath);
     const files = await scanDirectory(fullPath);
     for (const file of files) {
-      const content = await fs.readFile(file, 'utf-8').catch(() => '');
+      const content = await fs.readFile(file, "utf-8").catch(() => "");
       const relative = path.relative(repoRoot, file);
 
-      if (file.endsWith('.java')) {
+      if (file.endsWith(".java")) {
         // Determine role from file path (normalize for Windows backslash)
         const normalizedRelative = normalizePathForMatch(relative);
-        const role = normalizedRelative.includes('/controller/') ? 'controller' :
-                     normalizedRelative.includes('/service/') ? 'service' :
-                     normalizedRelative.includes('/mapper/') ? 'mapper' :
-                     normalizedRelative.includes('/entity/') ? 'entity' :
-                     normalizedRelative.includes('/dto/') ||
-                     normalizedRelative.includes('/vo/') ||
-                     normalizedRelative.includes('/request/') ||
-                     normalizedRelative.includes('/response/') ? 'dto' : undefined;
+        const role = normalizedRelative.includes("/controller/")
+          ? "controller"
+          : normalizedRelative.includes("/service/")
+            ? "service"
+            : normalizedRelative.includes("/mapper/")
+              ? "mapper"
+              : normalizedRelative.includes("/entity/")
+                ? "entity"
+                : normalizedRelative.includes("/dto/") ||
+                    normalizedRelative.includes("/vo/") ||
+                    normalizedRelative.includes("/request/") ||
+                    normalizedRelative.includes("/response/")
+                  ? "dto"
+                  : undefined;
 
         // Java class/interface/enum
         const typeMatch = content.match(/\b(class|interface|enum)\s+(\w+)/);
         if (typeMatch) {
-          const relevance = computeTargetRelevance([relative, typeMatch[2]], targetTerms);
-          const startLine = content.slice(0, typeMatch.index ?? 0).split('\n').length + 1;
+          const relevance = computeTargetRelevance(
+            [relative, typeMatch[2]],
+            targetTerms,
+          );
+          const startLine =
+            content.slice(0, typeMatch.index ?? 0).split("\n").length + 1;
           signals.push({
-            kind: 'type',
+            kind: "type",
             location: relative,
             name: typeMatch[2],
             fields: extractJavaFieldNames(content),
@@ -602,14 +728,18 @@ async function collectDataSignals(targetPaths: string[], repoRoot: string, targe
         }
 
         // Java field names
-        const fieldRegex = /\b(private|protected|public)\s+[\w<>\[\], ?]+\s+(\w+)\s*;/g;
+        const fieldRegex =
+          /\b(private|protected|public)\s+[\w<>\[\], ?]+\s+(\w+)\s*;/g;
         let fieldMatch: RegExpExecArray | null;
         while ((fieldMatch = fieldRegex.exec(content)) !== null) {
           const fieldName = fieldMatch[2];
           if (fieldName) {
-            const relevance = computeTargetRelevance([relative, fieldName], targetTerms);
+            const relevance = computeTargetRelevance(
+              [relative, fieldName],
+              targetTerms,
+            );
             signals.push({
-              kind: 'field',
+              kind: "field",
               location: relative,
               name: fieldName,
               targetRelevance: relevance.score,
@@ -618,39 +748,50 @@ async function collectDataSignals(targetPaths: string[], repoRoot: string, targe
             });
           }
         }
-      } else if (file.endsWith('.xml') && content.includes('<mapper')) {
+      } else if (file.endsWith(".xml") && content.includes("<mapper")) {
         // MyBatis mapper XML
-        const namespaceMatch = content.match(/<mapper\s+[^>]*namespace=["']([^"']+)["']/);
+        const namespaceMatch = content.match(
+          /<mapper\s+[^>]*namespace=["']([^"']+)["']/,
+        );
         const namespace = namespaceMatch?.[1];
 
-        const statementRegex = /<(select|insert|update|delete)\s+[^>]*id=["']([^"']+)["'][^>]*>/g;
+        const statementRegex =
+          /<(select|insert|update|delete)\s+[^>]*id=["']([^"']+)["'][^>]*>/g;
         let statementMatch: RegExpExecArray | null;
         while ((statementMatch = statementRegex.exec(content)) !== null) {
           const statementId = statementMatch[2];
           if (statementId) {
-            const statementName = `${namespace ?? 'mapper'}.${statementId}`;
+            const statementName = `${namespace ?? "mapper"}.${statementId}`;
             const tableNames = extractSimpleSqlTableNames(content);
-            const relevance = computeTargetRelevance([relative, statementName, ...tableNames], targetTerms);
+            const relevance = computeTargetRelevance(
+              [relative, statementName, ...tableNames],
+              targetTerms,
+            );
             signals.push({
-              kind: 'sql',
+              kind: "sql",
               location: relative,
               name: statementName,
               fields: tableNames,
               targetRelevance: relevance.score,
               matchedTerms: relevance.matchedTerms,
-              role: 'mapper',
+              role: "mapper",
             });
           }
         }
       } else {
         // TypeScript/JavaScript type regex
-        const lines = content.split('\n');
+        const lines = content.split("\n");
         for (const line of lines) {
-          const typeMatch = line.match(/(?:export\s+)?(?:interface|type)\s+(\w+)/);
+          const typeMatch = line.match(
+            /(?:export\s+)?(?:interface|type)\s+(\w+)/,
+          );
           if (typeMatch) {
-            const relevance = computeTargetRelevance([relative, typeMatch[1]], targetTerms);
+            const relevance = computeTargetRelevance(
+              [relative, typeMatch[1]],
+              targetTerms,
+            );
             signals.push({
-              kind: 'type',
+              kind: "type",
               location: relative,
               name: typeMatch[1],
               targetRelevance: relevance.score,
@@ -680,17 +821,21 @@ function extractSimpleSqlTableNames(content: string): string[] {
   return [...new Set(tables)];
 }
 
-async function collectTestSignals(repoRoot: string, targetPaths: string[], targetTerms: string[]): Promise<TestSignal[]> {
+async function collectTestSignals(
+  repoRoot: string,
+  targetPaths: string[],
+  targetTerms: string[],
+): Promise<TestSignal[]> {
   const signals: TestSignal[] = [];
 
   // Check for Java test directories
   for (const targetPath of targetPaths) {
-    if (targetPath.includes('test')) {
+    if (targetPath.includes("test")) {
       const fullPath = path.resolve(repoRoot, targetPath);
       const files = await scanDirectory(fullPath);
       for (const file of files) {
-        if (file.endsWith('.java')) {
-          const content = await fs.readFile(file, 'utf-8').catch(() => '');
+        if (file.endsWith(".java")) {
+          const content = await fs.readFile(file, "utf-8").catch(() => "");
           const relative = path.relative(repoRoot, file);
 
           // Find @Test methods
@@ -699,13 +844,16 @@ async function collectTestSignals(repoRoot: string, targetPaths: string[], targe
           while ((methodMatch = testMethodRegex.exec(content)) !== null) {
             const methodName = methodMatch[1];
             if (methodName) {
-              const relevance = computeTargetRelevance([relative, methodName], targetTerms);
+              const relevance = computeTargetRelevance(
+                [relative, methodName],
+                targetTerms,
+              );
               signals.push({
                 location: relative,
                 testName: methodName,
                 targetRelevance: relevance.score,
                 matchedTerms: relevance.matchedTerms,
-                role: 'test',
+                role: "test",
               });
             }
           }
@@ -713,13 +861,16 @@ async function collectTestSignals(repoRoot: string, targetPaths: string[], targe
           // Also detect test class naming pattern
           const classMatch = content.match(/\bclass\s+(\w*Test\w*)\b/);
           if (classMatch?.[1]) {
-            const relevance = computeTargetRelevance([relative, classMatch[1]], targetTerms);
+            const relevance = computeTargetRelevance(
+              [relative, classMatch[1]],
+              targetTerms,
+            );
             signals.push({
               location: relative,
               testName: classMatch[1],
               targetRelevance: relevance.score,
               matchedTerms: relevance.matchedTerms,
-              role: 'test',
+              role: "test",
             });
           }
         }
@@ -728,23 +879,28 @@ async function collectTestSignals(repoRoot: string, targetPaths: string[], targe
   }
 
   // Check for TypeScript/JavaScript test directories
-  const testDirs = ['tests', 'test'];
+  const testDirs = ["tests", "test"];
   for (const testDir of testDirs) {
     const files = await scanDirectory(path.join(repoRoot, testDir));
     for (const file of files) {
-      const content = await fs.readFile(file, 'utf-8').catch(() => '');
+      const content = await fs.readFile(file, "utf-8").catch(() => "");
       const relative = path.relative(repoRoot, file);
-      const lines = content.split('\n');
+      const lines = content.split("\n");
       for (const line of lines) {
-        const testMatch = line.match(/(?:it|test|describe)\s*\(\s*['"`]([^'"`]+)/);
+        const testMatch = line.match(
+          /(?:it|test|describe)\s*\(\s*['"`]([^'"`]+)/,
+        );
         if (testMatch) {
-          const relevance = computeTargetRelevance([relative, testMatch[1]], targetTerms);
+          const relevance = computeTargetRelevance(
+            [relative, testMatch[1]],
+            targetTerms,
+          );
           signals.push({
             location: relative,
             testName: testMatch[1],
             targetRelevance: relevance.score,
             matchedTerms: relevance.matchedTerms,
-            role: 'test',
+            role: "test",
           });
         }
       }
@@ -753,10 +909,14 @@ async function collectTestSignals(repoRoot: string, targetPaths: string[], targe
   return signals;
 }
 
-export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Promise<CapabilityCandidate[]> {
+export async function discoverCapabilities(
+  input: DiscoverCapabilitiesInput,
+): Promise<CapabilityCandidate[]> {
   const { repoRoot, targetTerms = [], targetPaths = [] } = input;
 
-  console.log(`[DEBUG] discoverCapabilities: starting, terms=${targetTerms.length}, paths=${targetPaths.length}`);
+  console.log(
+    `[DEBUG] discoverCapabilities: starting, terms=${targetTerms.length}, paths=${targetPaths.length}`,
+  );
 
   if (targetTerms.length === 0 && targetPaths.length === 0) {
     return [];
@@ -767,17 +927,23 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
   const { lbugPath } = getStoragePaths(repoRoot);
   console.log(`[DEBUG] discoverCapabilities: lbugPath=${lbugPath}`);
   try {
-    return await withReadOnlyLbug(lbugPath, async query => {
-      const classCountRows = await query(`MATCH (c:Class) RETURN count(c) AS cnt`);
+    return await withReadOnlyLbug(lbugPath, async (query) => {
+      const classCountRows = await query(
+        `MATCH (c:Class) RETURN count(c) AS cnt`,
+      );
       const classCount = Number(classCountRows[0]?.cnt ?? 0);
       console.log(`[DEBUG] discoverCapabilities: classCount=${classCount}`);
       if (classCount === 0) {
         return discoverCapabilitiesFromFilesystem(input);
       }
 
-      console.log(`[DEBUG] discoverCapabilities: calling discoverCapabilitiesFromGraph`);
+      console.log(
+        `[DEBUG] discoverCapabilities: calling discoverCapabilitiesFromGraph`,
+      );
       const result = await discoverCapabilitiesFromGraph(query, input);
-      console.log(`[DEBUG] discoverCapabilities: discoverCapabilitiesFromGraph returned ${result.length} candidates`);
+      console.log(
+        `[DEBUG] discoverCapabilities: discoverCapabilitiesFromGraph returned ${result.length} candidates`,
+      );
       return result;
     });
   } catch (err) {
@@ -791,7 +957,9 @@ export async function discoverCapabilities(input: DiscoverCapabilitiesInput): Pr
 // Filesystem-based capability discovery (fallback when graph is unavailable)
 // ============================================================================
 
-async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInput): Promise<CapabilityCandidate[]> {
+async function discoverCapabilitiesFromFilesystem(
+  input: DiscoverCapabilitiesInput,
+): Promise<CapabilityCandidate[]> {
   const { repoRoot, targetTerms = [], targetPaths = [] } = input;
 
   if (targetTerms.length === 0 && targetPaths.length === 0) {
@@ -800,11 +968,31 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
 
   const candidates: CapabilityCandidate[] = [];
 
-  const primaryEntryPoints = await collectEntrySignals(targetPaths, repoRoot, targetTerms);
-  const behaviorAnchors = await collectBehaviorSignals(targetPaths, repoRoot, targetTerms);
-  const dataAnchors = await collectDataSignals(targetPaths, repoRoot, targetTerms);
-  const testAnchors = await collectTestSignals(repoRoot, targetPaths, targetTerms);
-  const moduleClusters = await analyzeModuleClusters(targetPaths, repoRoot, targetTerms);
+  const primaryEntryPoints = await collectEntrySignals(
+    targetPaths,
+    repoRoot,
+    targetTerms,
+  );
+  const behaviorAnchors = await collectBehaviorSignals(
+    targetPaths,
+    repoRoot,
+    targetTerms,
+  );
+  const dataAnchors = await collectDataSignals(
+    targetPaths,
+    repoRoot,
+    targetTerms,
+  );
+  const testAnchors = await collectTestSignals(
+    repoRoot,
+    targetPaths,
+    targetTerms,
+  );
+  const moduleClusters = await analyzeModuleClusters(
+    targetPaths,
+    repoRoot,
+    targetTerms,
+  );
 
   primaryEntryPoints.sort(byRelevanceDesc);
   behaviorAnchors.sort(byRelevanceDesc);
@@ -812,14 +1000,25 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
   testAnchors.sort(byRelevanceDesc);
   moduleClusters.sort(byRelevanceDesc);
 
-  const entrySignal = primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
-  const behaviorSignal = behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
-  const dataSignal = dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
-  const testSignal = testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
+  const entrySignal =
+    primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
+  const behaviorSignal =
+    behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
+  const dataSignal =
+    dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
+  const testSignal =
+    testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
   const docSignal = 0.4;
   const graphCohesion = moduleClusters.length > 1 ? 0.75 : 0.5;
 
-  const confidence = computeConfidence(entrySignal, behaviorSignal, dataSignal, testSignal, docSignal, graphCohesion);
+  const confidence = computeConfidence(
+    entrySignal,
+    behaviorSignal,
+    dataSignal,
+    testSignal,
+    docSignal,
+    graphCohesion,
+  );
 
   const { businessTerms, technicalTerms } = classifyTargetTerms(targetTerms);
   const nameCandidates: string[] = [];
@@ -835,7 +1034,7 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
     entrySignals: primaryEntryPoints,
     behaviorSignals: behaviorAnchors,
     dataSignals: dataAnchors,
-    moduleSignals: moduleClusters.map(cluster => ({
+    moduleSignals: moduleClusters.map((cluster) => ({
       targetRelevance: cluster.targetRelevance,
       matchedTerms: cluster.matchedTerms,
       name: cluster.rootPath,
@@ -845,12 +1044,15 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
 
   nameCandidates.push(businessCapabilityName);
 
-  if (technicalTerms.includes('mybatis') && !relatedTerms.includes('mybatis mapper')) {
-    relatedTerms.push('mybatis mapper');
+  if (
+    technicalTerms.includes("mybatis") &&
+    !relatedTerms.includes("mybatis mapper")
+  ) {
+    relatedTerms.push("mybatis mapper");
   }
 
   const candidate: CapabilityCandidate = {
-    candidateId: `CAND-${targetTerms.map(t => t.toUpperCase()).join('-')}`,
+    candidateId: `CAND-${targetTerms.map((t) => t.toUpperCase()).join("-")}`,
     nameCandidates,
     confidence,
     confidenceBreakdown: {
@@ -868,8 +1070,8 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
     docAnchors: [],
     moduleClusters,
     relatedTerms: [...new Set(relatedTerms)],
-    risks: ['no_external_boundary_found'],
-    missingSignals: ['No explicit external DB ownership contract found'],
+    risks: ["no_external_boundary_found"],
+    missingSignals: ["No explicit external DB ownership contract found"],
   };
 
   if (candidate.confidence >= 0.55) {
@@ -884,16 +1086,16 @@ async function discoverCapabilitiesFromFilesystem(input: DiscoverCapabilitiesInp
 // ============================================================================
 
 function escapeCypherString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
 function buildPathFilterCypher(varName: string, targetPaths: string[]): string {
-  if (targetPaths.length === 0) return 'true';
-  const clauses = targetPaths.map(p => {
-    const normalized = escapeCypherString(p.replace(/\\/g, '/'));
+  if (targetPaths.length === 0) return "true";
+  const clauses = targetPaths.map((p) => {
+    const normalized = escapeCypherString(p.replace(/\\/g, "/"));
     return `${varName}.filePath STARTS WITH '${normalized}'`;
   });
-  return `(${clauses.join(' OR ')})`;
+  return `(${clauses.join(" OR ")})`;
 }
 
 async function queryGraphEntrySignals(
@@ -907,14 +1109,19 @@ async function queryGraphEntrySignals(
   const results: EntrySignal[] = [];
 
   for (const row of rows) {
-    const name = String(row.name ?? '');
-    const filePath = String(row.filePath ?? '');
+    const name = String(row.name ?? "");
+    const filePath = String(row.filePath ?? "");
     const relevance = computeTargetRelevance([filePath, name], targetTerms);
     const lower = name.toLowerCase();
-    let kind: EntrySignal['kind'] = 'handler';
+    let kind: EntrySignal["kind"] = "handler";
     let role: string | undefined;
-    if (lower.includes('controller')) { kind = 'http'; role = 'controller'; }
-    else if (lower.includes('service')) { kind = 'service'; role = 'service'; }
+    if (lower.includes("controller")) {
+      kind = "http";
+      role = "controller";
+    } else if (lower.includes("service")) {
+      kind = "service";
+      role = "service";
+    }
 
     const signal: EntrySignal = {
       kind,
@@ -927,17 +1134,26 @@ async function queryGraphEntrySignals(
     };
 
     // For HTTP controllers, extract route annotations for signature and startLine
-    if (kind === 'http') {
+    if (kind === "http") {
       try {
-        const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(repoRoot, filePath);
-        const content = await fs.readFile(resolvedPath, 'utf-8');
-        const routeMatches = [...content.matchAll(/@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\(([^)]*)\))?/g)];
+        const resolvedPath = path.isAbsolute(filePath)
+          ? filePath
+          : path.resolve(repoRoot, filePath);
+        const content = await fs.readFile(resolvedPath, "utf-8");
+        const routeMatches = [
+          ...content.matchAll(
+            /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping|RequestMapping)\s*(?:\(([^)]*)\))?/g,
+          ),
+        ];
         if (routeMatches.length > 0) {
-          signal.signature = routeMatches.map(m => m[0]).join(' ');
+          signal.signature = routeMatches.map((m) => m[0]).join(" ");
           // Extract startLine from class definition
-          const classMatch = content.match(/^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m);
+          const classMatch = content.match(
+            /^.*\b(?:public\s+)?(?:abstract\s+)?(?:class|interface)\s+/m,
+          );
           if (classMatch) {
-            signal.startLine = content.slice(0, classMatch.index).split('\n').length + 1;
+            signal.startLine =
+              content.slice(0, classMatch.index).split("\n").length + 1;
           }
         }
       } catch {
@@ -959,24 +1175,30 @@ async function queryGraphBehaviorSignals(
 ): Promise<BehaviorSignal[]> {
   const cypher = `MATCH (m:Method) WHERE ${pathFilter} RETURN m.name as name, m.filePath as filePath LIMIT 500`;
   const rows = await query(cypher);
-  return rows.map((row: Record<string, unknown>) => {
-    const name = String(row.name ?? '');
-    const filePath = String(row.filePath ?? '');
-    const relevance = computeTargetRelevance([filePath, name], targetTerms);
-    const terms = normalizeCapabilityTerms(name);
-    const normalizedPath = normalizePathForMatch(filePath);
-    const role = normalizedPath.includes('/controller/') ? 'controller' :
-                 normalizedPath.includes('/service/') ? 'service' :
-                 normalizedPath.includes('/mapper/') ? 'mapper' : undefined;
-    return {
-      location: filePath,
-      verb: terms[0] || name,
-      object: terms.slice(1).join(' ') || name,
-      targetRelevance: relevance.score,
-      matchedTerms: relevance.matchedTerms,
-      role,
-    };
-  }).sort(byRelevanceDesc);
+  return rows
+    .map((row: Record<string, unknown>) => {
+      const name = String(row.name ?? "");
+      const filePath = String(row.filePath ?? "");
+      const relevance = computeTargetRelevance([filePath, name], targetTerms);
+      const terms = normalizeCapabilityTerms(name);
+      const normalizedPath = normalizePathForMatch(filePath);
+      const role = normalizedPath.includes("/controller/")
+        ? "controller"
+        : normalizedPath.includes("/service/")
+          ? "service"
+          : normalizedPath.includes("/mapper/")
+            ? "mapper"
+            : undefined;
+      return {
+        location: filePath,
+        verb: terms[0] || name,
+        object: terms.slice(1).join(" ") || name,
+        targetRelevance: relevance.score,
+        matchedTerms: relevance.matchedTerms,
+        role,
+      };
+    })
+    .sort(byRelevanceDesc);
 }
 
 async function queryGraphDataSignals(
@@ -991,20 +1213,48 @@ async function queryGraphDataSignals(
   const classRows = await query(classCypher);
   const interfaceRows = await query(interfaceCypher);
   const allRows = [
-    ...classRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
-    ...interfaceRows.map((r: Record<string, unknown>) => ({ name: String(r.name ?? ''), filePath: String(r.filePath ?? ''), kind: 'type' as const })),
+    ...classRows.map((r: Record<string, unknown>) => ({
+      name: String(r.name ?? ""),
+      filePath: String(r.filePath ?? ""),
+      kind: "type" as const,
+    })),
+    ...interfaceRows.map((r: Record<string, unknown>) => ({
+      name: String(r.name ?? ""),
+      filePath: String(r.filePath ?? ""),
+      kind: "type" as const,
+    })),
   ];
-  return allRows.map(row => {
-    const relevance = computeTargetRelevance([row.filePath, row.name], targetTerms);
-    const normalizedPath = normalizePathForMatch(row.filePath);
-    const role = normalizedPath.includes('/controller/') ? 'controller' :
-                 normalizedPath.includes('/service/') ? 'service' :
-                 normalizedPath.includes('/mapper/') ? 'mapper' :
-                 normalizedPath.includes('/entity/') ? 'entity' :
-                 normalizedPath.includes('/dto/') || normalizedPath.includes('/vo/') ||
-                 normalizedPath.includes('/request/') || normalizedPath.includes('/response/') ? 'dto' : undefined;
-    return { kind: row.kind, location: row.filePath, name: row.name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role };
-  }).sort(byRelevanceDesc);
+  return allRows
+    .map((row) => {
+      const relevance = computeTargetRelevance(
+        [row.filePath, row.name],
+        targetTerms,
+      );
+      const normalizedPath = normalizePathForMatch(row.filePath);
+      const role = normalizedPath.includes("/controller/")
+        ? "controller"
+        : normalizedPath.includes("/service/")
+          ? "service"
+          : normalizedPath.includes("/mapper/")
+            ? "mapper"
+            : normalizedPath.includes("/entity/")
+              ? "entity"
+              : normalizedPath.includes("/dto/") ||
+                  normalizedPath.includes("/vo/") ||
+                  normalizedPath.includes("/request/") ||
+                  normalizedPath.includes("/response/")
+                ? "dto"
+                : undefined;
+      return {
+        kind: row.kind,
+        location: row.filePath,
+        name: row.name,
+        targetRelevance: relevance.score,
+        matchedTerms: relevance.matchedTerms,
+        role,
+      };
+    })
+    .sort(byRelevanceDesc);
 }
 
 async function queryGraphTestSignals(
@@ -1018,34 +1268,48 @@ async function queryGraphTestSignals(
   const seen = new Set<string>();
   const signals: TestSignal[] = [];
   for (const row of rows) {
-    const name = String((row as Record<string, unknown>).name ?? '');
-    const filePath = String((row as Record<string, unknown>).filePath ?? '');
-    const startLine = Number((row as Record<string, unknown>).startLine ?? undefined);
+    const name = String((row as Record<string, unknown>).name ?? "");
+    const filePath = String((row as Record<string, unknown>).filePath ?? "");
+    const startLine = Number(
+      (row as Record<string, unknown>).startLine ?? undefined,
+    );
     const key = `${filePath}:${name}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const relevance = computeTargetRelevance([filePath, name], targetTerms);
-    signals.push({ location: filePath, testName: name, targetRelevance: relevance.score, matchedTerms: relevance.matchedTerms, role: 'test', startLine: isNaN(startLine) ? undefined : startLine });
+    signals.push({
+      location: filePath,
+      testName: name,
+      targetRelevance: relevance.score,
+      matchedTerms: relevance.matchedTerms,
+      role: "test",
+      startLine: isNaN(startLine) ? undefined : startLine,
+    });
   }
   signals.sort(byRelevanceDesc);
   return signals;
 }
 
-async function queryGraphModuleClusters(query: ReadOnlyQueryExecutor, targetTerms: string[]): Promise<ModuleCluster[]> {
+async function queryGraphModuleClusters(
+  query: ReadOnlyQueryExecutor,
+  targetTerms: string[],
+): Promise<ModuleCluster[]> {
   const cypher = `MATCH (c:Community) RETURN c.heuristicLabel as label, c.symbolCount as symbolCount, c.cohesion as cohesion LIMIT 8`;
   const rows = await query(cypher);
-  return rows.map((row: Record<string, unknown>) => {
-    const label = String(row.label ?? '');
-    const cohesion = Number(row.cohesion ?? row.symbolCount ?? 0);
-    const relevance = computeTargetRelevance([label], targetTerms);
-    return {
-      rootPath: label,
-      moduleNames: [label],
-      cohesionScore: Math.min(1, Math.max(0.5, cohesion / 100)),
-      targetRelevance: relevance.score,
-      matchedTerms: relevance.matchedTerms,
-    };
-  }).sort(byRelevanceDesc);
+  return rows
+    .map((row: Record<string, unknown>) => {
+      const label = String(row.label ?? "");
+      const cohesion = Number(row.cohesion ?? row.symbolCount ?? 0);
+      const relevance = computeTargetRelevance([label], targetTerms);
+      return {
+        rootPath: label,
+        moduleNames: [label],
+        cohesionScore: Math.min(1, Math.max(0.5, cohesion / 100)),
+        targetRelevance: relevance.score,
+        matchedTerms: relevance.matchedTerms,
+      };
+    })
+    .sort(byRelevanceDesc);
 }
 
 export async function discoverCapabilitiesFromGraph(
@@ -1058,27 +1322,58 @@ export async function discoverCapabilitiesFromGraph(
     return [];
   }
 
-  const pathFilter = buildPathFilterCypher('c', targetPaths);
-  const methodPathFilter = buildPathFilterCypher('m', targetPaths);
-  const interfacePathFilter = buildPathFilterCypher('i', targetPaths);
+  const pathFilter = buildPathFilterCypher("c", targetPaths);
+  const methodPathFilter = buildPathFilterCypher("m", targetPaths);
+  const interfacePathFilter = buildPathFilterCypher("i", targetPaths);
 
   const candidates: CapabilityCandidate[] = [];
 
-  const primaryEntryPoints = await queryGraphEntrySignals(query, pathFilter, repoRoot, targetTerms);
-  const behaviorAnchors = await queryGraphBehaviorSignals(query, methodPathFilter, repoRoot, targetTerms);
-  const dataAnchors = await queryGraphDataSignals(query, pathFilter, repoRoot, targetTerms);
-  const testAnchors = await queryGraphTestSignals(query, methodPathFilter, repoRoot, targetTerms);
+  const primaryEntryPoints = await queryGraphEntrySignals(
+    query,
+    pathFilter,
+    repoRoot,
+    targetTerms,
+  );
+  const behaviorAnchors = await queryGraphBehaviorSignals(
+    query,
+    methodPathFilter,
+    repoRoot,
+    targetTerms,
+  );
+  const dataAnchors = await queryGraphDataSignals(
+    query,
+    pathFilter,
+    repoRoot,
+    targetTerms,
+  );
+  const testAnchors = await queryGraphTestSignals(
+    query,
+    methodPathFilter,
+    repoRoot,
+    targetTerms,
+  );
   const moduleClusters = await queryGraphModuleClusters(query, targetTerms);
 
   // Compute confidence (reuse existing logic)
-  const entrySignal = primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
-  const behaviorSignal = behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
-  const dataSignal = dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
-  const testSignal = testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
+  const entrySignal =
+    primaryEntryPoints.length > 0 ? 0.9 : targetPaths.length > 0 ? 0.55 : 0.2;
+  const behaviorSignal =
+    behaviorAnchors.length > 5 ? 0.85 : behaviorAnchors.length > 0 ? 0.6 : 0.3;
+  const dataSignal =
+    dataAnchors.length > 3 ? 0.9 : dataAnchors.length > 0 ? 0.6 : 0.3;
+  const testSignal =
+    testAnchors.length > 5 ? 0.75 : testAnchors.length > 0 ? 0.5 : 0.2;
   const docSignal = 0.4;
   const graphCohesion = moduleClusters.length > 1 ? 0.75 : 0.5;
 
-  const confidence = computeConfidence(entrySignal, behaviorSignal, dataSignal, testSignal, docSignal, graphCohesion);
+  const confidence = computeConfidence(
+    entrySignal,
+    behaviorSignal,
+    dataSignal,
+    testSignal,
+    docSignal,
+    graphCohesion,
+  );
 
   const { businessTerms, technicalTerms } = classifyTargetTerms(targetTerms);
   const relatedTerms: string[] = [...targetTerms];
@@ -1091,7 +1386,7 @@ export async function discoverCapabilitiesFromGraph(
     entrySignals: primaryEntryPoints,
     behaviorSignals: behaviorAnchors,
     dataSignals: dataAnchors,
-    moduleSignals: moduleClusters.map(cluster => ({
+    moduleSignals: moduleClusters.map((cluster) => ({
       targetRelevance: cluster.targetRelevance,
       matchedTerms: cluster.matchedTerms,
       name: cluster.rootPath,
@@ -1101,12 +1396,15 @@ export async function discoverCapabilitiesFromGraph(
 
   const nameCandidates = [businessCapabilityName];
 
-  if (technicalTerms.includes('mybatis') && !relatedTerms.includes('mybatis mapper')) {
-    relatedTerms.push('mybatis mapper');
+  if (
+    technicalTerms.includes("mybatis") &&
+    !relatedTerms.includes("mybatis mapper")
+  ) {
+    relatedTerms.push("mybatis mapper");
   }
 
   const candidate: CapabilityCandidate = {
-    candidateId: `CAND-${targetTerms.map(t => t.toUpperCase()).join('-')}`,
+    candidateId: `CAND-${targetTerms.map((t) => t.toUpperCase()).join("-")}`,
     nameCandidates,
     confidence,
     confidenceBreakdown: {
@@ -1124,8 +1422,8 @@ export async function discoverCapabilitiesFromGraph(
     docAnchors: [],
     moduleClusters,
     relatedTerms: [...new Set(relatedTerms)],
-    risks: ['no_external_boundary_found'],
-    missingSignals: ['No explicit external DB ownership contract found'],
+    risks: ["no_external_boundary_found"],
+    missingSignals: ["No explicit external DB ownership contract found"],
   };
 
   if (candidate.confidence >= 0.55) {

@@ -9,13 +9,13 @@
  * pipeline's AST extractors and passed via node.methodNames/node.fieldNames.
  */
 
-import type { EmbeddableNode, EmbeddingConfig } from './types.js';
+import type { EmbeddableNode, EmbeddingConfig } from "./types.js";
 import {
   CHUNKING_RULES,
   DEFAULT_EMBEDDING_CONFIG,
   STRUCTURAL_TEXT_MODE_DECLARATION,
   isShortLabel,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Truncate description to max length at sentence/word boundary
@@ -27,16 +27,16 @@ const truncateDescription = (text: string, maxLength: number): string => {
 
   // Try sentence boundary (. ! ?)
   const sentenceEnd = Math.max(
-    truncated.lastIndexOf('. '),
-    truncated.lastIndexOf('! '),
-    truncated.lastIndexOf('? '),
+    truncated.lastIndexOf(". "),
+    truncated.lastIndexOf("! "),
+    truncated.lastIndexOf("? "),
   );
   if (sentenceEnd > maxLength * 0.5) {
     return truncated.slice(0, sentenceEnd + 1);
   }
 
   // Try word boundary
-  const lastSpace = truncated.lastIndexOf(' ');
+  const lastSpace = truncated.lastIndexOf(" ");
   if (lastSpace > maxLength * 0.5) {
     return truncated.slice(0, lastSpace);
   }
@@ -49,18 +49,21 @@ const truncateDescription = (text: string, maxLength: number): string => {
  */
 const cleanContent = (content: string): string => {
   return content
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .split('\n')
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
     .map((line) => line.trimEnd())
-    .join('\n')
+    .join("\n")
     .trim();
 };
 
 /**
  * Build metadata header for a node
  */
-const buildMetadataHeader = (node: EmbeddableNode, config: Partial<EmbeddingConfig>): string => {
+const buildMetadataHeader = (
+  node: EmbeddableNode,
+  config: Partial<EmbeddingConfig>,
+): string => {
   const parts: string[] = [];
 
   // Label + name
@@ -86,14 +89,16 @@ const buildMetadataHeader = (node: EmbeddableNode, config: Partial<EmbeddingConf
 
   // Description (truncated)
   if (node.description) {
-    const maxLen = config.maxDescriptionLength ?? DEFAULT_EMBEDDING_CONFIG.maxDescriptionLength;
+    const maxLen =
+      config.maxDescriptionLength ??
+      DEFAULT_EMBEDDING_CONFIG.maxDescriptionLength;
     const truncated = truncateDescription(node.description, maxLen);
     if (truncated) {
       parts.push(truncated);
     }
   }
 
-  return parts.join('\n');
+  return parts.join("\n");
 };
 
 const generateCodeBodyText = (
@@ -107,8 +112,8 @@ const generateCodeBodyText = (
   if (prevTail) {
     parts.push(`[preceding context]: ...${cleanContent(prevTail)}`);
   }
-  parts.push('', cleanContent(codeBody));
-  return parts.join('\n');
+  parts.push("", cleanContent(codeBody));
+  return parts.join("\n");
 };
 
 const getCompactContainerContext = (
@@ -116,7 +121,7 @@ const getCompactContainerContext = (
   declarationOnly: string,
 ): string | undefined => {
   const source = declarationOnly || cleanedContent;
-  const nlIdx = source.indexOf('\n');
+  const nlIdx = source.indexOf("\n");
   const firstLine = (nlIdx === -1 ? source : source.substring(0, nlIdx)).trim();
   return firstLine ? `Container: ${firstLine}` : undefined;
 };
@@ -133,7 +138,10 @@ const generateStructuralTypeText = (
   const isFirstChunk = chunkIndex === undefined || chunkIndex === 0;
   const cleanedContent = cleanContent(node.content);
   const declarationOnly = extractDeclarationOnly(cleanedContent);
-  const compactContainerContext = getCompactContainerContext(cleanedContent, declarationOnly);
+  const compactContainerContext = getCompactContainerContext(
+    cleanedContent,
+    declarationOnly,
+  );
 
   if (compactContainerContext) {
     parts.push(compactContainerContext);
@@ -144,22 +152,22 @@ const generateStructuralTypeText = (
   }
 
   if (isFirstChunk && node.methodNames?.length) {
-    parts.push(`Methods: ${node.methodNames.join(', ')}`);
+    parts.push(`Methods: ${node.methodNames.join(", ")}`);
   }
   if (isFirstChunk && node.fieldNames?.length) {
-    parts.push(`Properties: ${node.fieldNames.join(', ')}`);
+    parts.push(`Properties: ${node.fieldNames.join(", ")}`);
   }
 
   if (isFirstChunk && declarationOnly) {
-    parts.push('', declarationOnly);
+    parts.push("", declarationOnly);
   }
 
   const cleanedChunk = cleanContent(codeBody);
   if (cleanedChunk && cleanedChunk !== cleanedContent) {
-    parts.push('', cleanedChunk);
+    parts.push("", cleanedChunk);
   }
 
-  return parts.join('\n');
+  return parts.join("\n");
 };
 
 const DECL_START_RE =
@@ -172,7 +180,7 @@ const DECL_START_RE =
  * - Non-brace languages (Python/Ruby): returns empty string (patterns handle extraction).
  */
 export const extractDeclarationOnly = (content: string): string => {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const declLines: string[] = [];
   let depth = 0;
   let started = false;
@@ -186,14 +194,14 @@ export const extractDeclarationOnly = (content: string): string => {
       if (DECL_START_RE.test(trimmed)) {
         // Non-brace language check: current line or next 3 lines must have `{`
         const nextLines = lines.slice(idx + 1, idx + 4);
-        if (!trimmed.includes('{') && !nextLines.some((l) => l.includes('{'))) {
-          return '';
+        if (!trimmed.includes("{") && !nextLines.some((l) => l.includes("{"))) {
+          return "";
         }
         started = true;
         declLines.push(trimmed);
         for (const ch of trimmed) {
-          if (ch === '{') depth++;
-          else if (ch === '}') depth--;
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
         }
         if (depth > 0) classDepth = depth;
       }
@@ -219,10 +227,10 @@ export const extractDeclarationOnly = (content: string): string => {
     }
 
     // Detect method signature: line has both `(` and `{` and goes deeper than class body
-    const hasParens = trimmed.includes('(');
+    const hasParens = trimmed.includes("(");
     const hasOpenBrace = opens > 0;
     if (hasParens && hasOpenBrace && prevDepth + opens > classDepth) {
-      if (opens === closes && trimmed.endsWith(';')) {
+      if (opens === closes && trimmed.endsWith(";")) {
         // Property with function/object initializer like `config = { timeout: 5000 };` — keep
         declLines.push(trimmed);
       }
@@ -238,7 +246,7 @@ export const extractDeclarationOnly = (content: string): string => {
     if (depth <= 0 && declLines.length > 1) break;
   }
 
-  return declLines.join('\n').trim();
+  return declLines.join("\n").trim();
 };
 
 /**
@@ -258,9 +266,16 @@ export const generateEmbeddingText = (
     return `${header}\n\n${cleaned}`;
   }
 
-  const chunkingRule = CHUNKING_RULES[node.label as keyof typeof CHUNKING_RULES];
+  const chunkingRule =
+    CHUNKING_RULES[node.label as keyof typeof CHUNKING_RULES];
   if (chunkingRule?.structuralTextMode === STRUCTURAL_TEXT_MODE_DECLARATION) {
-    return generateStructuralTypeText(node, codeBody, config, chunkIndex, prevTail);
+    return generateStructuralTypeText(
+      node,
+      codeBody,
+      config,
+      chunkIndex,
+      prevTail,
+    );
   }
 
   return generateCodeBodyText(node, codeBody, config, prevTail);

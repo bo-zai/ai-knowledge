@@ -17,8 +17,11 @@
  * contributions for debugging.
  */
 
-import type { BindingRef, ResolutionEvidence } from '../types.js';
-import { EvidenceWeights, typeBindingWeightAtDepth } from '../evidence-weights.js';
+import type { BindingRef, ResolutionEvidence } from "../types.js";
+import {
+  EvidenceWeights,
+  typeBindingWeightAtDepth,
+} from "../evidence-weights.js";
 
 /**
  * Raw signals observed for a single candidate during the 7-step walk.
@@ -28,7 +31,7 @@ import { EvidenceWeights, typeBindingWeightAtDepth } from '../evidence-weights.j
 export interface RawSignals {
   // ── Where-found ────────────────────────────────────────────────────────
   /** Visibility origin of the binding that produced this candidate. */
-  readonly origin?: BindingRef['origin'] | 'global-qualified' | 'global-name';
+  readonly origin?: BindingRef["origin"] | "global-qualified" | "global-name";
   /** Depth at which the binding was found (hops up from start scope). */
   readonly scopeChainDepth?: number;
   /** `ImportEdge` that brought the name in; present when origin is a non-local. */
@@ -45,7 +48,7 @@ export interface RawSignals {
   readonly kindMatch: true;
 
   // ── Arity ──────────────────────────────────────────────────────────────
-  readonly arityVerdict?: 'compatible' | 'unknown' | 'incompatible';
+  readonly arityVerdict?: "compatible" | "unknown" | "incompatible";
 
   // ── Dynamic-unresolved passthrough ─────────────────────────────────────
   /** Candidate flows through a `kind: 'dynamic-unresolved'` ImportEdge. */
@@ -60,7 +63,9 @@ export interface RawSignals {
  * the per-signal contributions easy to reason about in tests and in the
  * shadow-mode parity dashboard.
  */
-export function composeEvidence(signals: RawSignals): readonly ResolutionEvidence[] {
+export function composeEvidence(
+  signals: RawSignals,
+): readonly ResolutionEvidence[] {
   const out: ResolutionEvidence[] = [];
 
   // ── Where-found visibility ─────────────────────────────────────────────
@@ -74,7 +79,9 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
       kind: evidenceKind,
       weight: capped,
       ...(signals.viaUnlinkedImport
-        ? { note: `via unresolved import (${EvidenceWeights.unlinkedImportMultiplier}× cap)` }
+        ? {
+            note: `via unresolved import (${EvidenceWeights.unlinkedImportMultiplier}× cap)`,
+          }
         : {}),
     });
   }
@@ -84,7 +91,7 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
   // emits a single `scope-chain` evidence with the accumulated penalty.
   if (signals.scopeChainDepth !== undefined && signals.scopeChainDepth > 0) {
     out.push({
-      kind: 'scope-chain',
+      kind: "scope-chain",
       weight: EvidenceWeights.scopeChainPerDepth * signals.scopeChainDepth,
       note: `depth=${signals.scopeChainDepth}`,
     });
@@ -93,7 +100,7 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
   // ── Type-binding / MRO path ────────────────────────────────────────────
   if (signals.typeBindingMroDepth !== undefined) {
     out.push({
-      kind: 'type-binding',
+      kind: "type-binding",
       weight: typeBindingWeightAtDepth(signals.typeBindingMroDepth),
       note: `mroDepth=${signals.typeBindingMroDepth}`,
     });
@@ -102,27 +109,27 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
   // ── Owner match (explanatory for debug) ────────────────────────────────
   if (signals.ownerMatch === true) {
     out.push({
-      kind: 'owner-match',
+      kind: "owner-match",
       weight: EvidenceWeights.ownerMatch,
     });
   }
 
   // ── Kind match (always present; weight 0; retained for debuggability) ──
   out.push({
-    kind: 'kind-match',
+    kind: "kind-match",
     weight: EvidenceWeights.kindMatch,
   });
 
   // ── Arity ──────────────────────────────────────────────────────────────
   if (signals.arityVerdict !== undefined) {
     const weight =
-      signals.arityVerdict === 'compatible'
+      signals.arityVerdict === "compatible"
         ? EvidenceWeights.arityMatchCompatible
-        : signals.arityVerdict === 'incompatible'
+        : signals.arityVerdict === "incompatible"
           ? EvidenceWeights.arityMatchIncompatible
           : EvidenceWeights.arityMatchUnknown;
     out.push({
-      kind: 'arity-match',
+      kind: "arity-match",
       weight,
       note: signals.arityVerdict,
     });
@@ -131,7 +138,7 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
   // ── Dynamic-unresolved (degraded signal) ───────────────────────────────
   if (signals.dynamicUnresolved === true) {
     out.push({
-      kind: 'dynamic-import-unresolved',
+      kind: "dynamic-import-unresolved",
       weight: EvidenceWeights.dynamicImportUnresolved,
     });
   }
@@ -143,7 +150,9 @@ export function composeEvidence(signals: RawSignals): readonly ResolutionEvidenc
  * Sum evidence weights and clamp to `[0, 1]`. Separate from `composeEvidence`
  * so tests and the parity dashboard can inspect the raw evidence list.
  */
-export function confidenceFromEvidence(evidence: readonly ResolutionEvidence[]): number {
+export function confidenceFromEvidence(
+  evidence: readonly ResolutionEvidence[],
+): number {
   let sum = 0;
   for (const e of evidence) sum += e.weight;
   if (sum < 0) return 0;
@@ -153,21 +162,21 @@ export function confidenceFromEvidence(evidence: readonly ResolutionEvidence[]):
 
 // ─── Internal ───────────────────────────────────────────────────────────────
 
-function getOriginWeight(origin: NonNullable<RawSignals['origin']>): number {
+function getOriginWeight(origin: NonNullable<RawSignals["origin"]>): number {
   switch (origin) {
-    case 'local':
+    case "local":
       return EvidenceWeights.local;
-    case 'import':
+    case "import":
       return EvidenceWeights.import;
-    case 'reexport':
+    case "reexport":
       return EvidenceWeights.reexport;
-    case 'namespace':
+    case "namespace":
       return EvidenceWeights.namespace;
-    case 'wildcard':
+    case "wildcard":
       return EvidenceWeights.wildcard;
-    case 'global-qualified':
+    case "global-qualified":
       return EvidenceWeights.globalQualified;
-    case 'global-name':
+    case "global-name":
       // Reserved for Ring 3 byName global index. `lookupCore` today only
       // emits `'global-qualified'` (via `lookupQualified`, dotted-name
       // fallback); no code path constructs `origin: 'global-name'` yet.
@@ -178,19 +187,19 @@ function getOriginWeight(origin: NonNullable<RawSignals['origin']>): number {
 }
 
 function whereFoundEvidenceKind(
-  origin: NonNullable<RawSignals['origin']>,
-): ResolutionEvidence['kind'] {
+  origin: NonNullable<RawSignals["origin"]>,
+): ResolutionEvidence["kind"] {
   switch (origin) {
-    case 'local':
-      return 'local';
-    case 'import':
-    case 'reexport':
-    case 'namespace':
-    case 'wildcard':
-      return 'import';
-    case 'global-qualified':
-      return 'global-qualified';
-    case 'global-name':
-      return 'global-name';
+    case "local":
+      return "local";
+    case "import":
+    case "reexport":
+    case "namespace":
+    case "wildcard":
+      return "import";
+    case "global-qualified":
+      return "global-qualified";
+    case "global-name":
+      return "global-name";
   }
 }

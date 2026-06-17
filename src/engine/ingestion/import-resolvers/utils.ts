@@ -3,71 +3,86 @@
  * Extracted from import-processor.ts to reduce file size.
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
+import { SupportedLanguages } from "../../shared/index.js";
 
 /** All file extensions to try during resolution (legacy, for cross-language fallback) */
 export const EXTENSIONS = [
-  '',
+  "",
   // TypeScript/JavaScript
-  '.tsx',
-  '.ts',
-  '.jsx',
-  '.js',
-  '.vue',
-  '/index.tsx',
-  '/index.ts',
-  '/index.jsx',
-  '/index.js',
+  ".tsx",
+  ".ts",
+  ".jsx",
+  ".js",
+  ".vue",
+  "/index.tsx",
+  "/index.ts",
+  "/index.jsx",
+  "/index.js",
   // Python
-  '.py',
-  '/__init__.py',
+  ".py",
+  "/__init__.py",
   // Java
-  '.java',
+  ".java",
   // Kotlin
-  '.kt',
-  '.kts',
+  ".kt",
+  ".kts",
   // C/C++
-  '.c',
-  '.h',
-  '.cpp',
-  '.hpp',
-  '.cc',
-  '.cxx',
-  '.hxx',
-  '.hh',
+  ".c",
+  ".h",
+  ".cpp",
+  ".hpp",
+  ".cc",
+  ".cxx",
+  ".hxx",
+  ".hh",
   // C#
-  '.cs',
+  ".cs",
   // Go
-  '.go',
+  ".go",
   // Rust
-  '.rs',
-  '/mod.rs',
+  ".rs",
+  "/mod.rs",
   // PHP
-  '.php',
-  '.phtml',
+  ".php",
+  ".phtml",
   // Swift
-  '.swift',
+  ".swift",
   // Ruby
-  '.rb',
+  ".rb",
 ];
 
 /** Language-specific extensions for import resolution.
  *  Prevents cross-language resolution (e.g., Java → TypeScript). */
-export const LANGUAGE_EXTENSIONS: ReadonlyMap<SupportedLanguages, readonly string[]> = new Map([
-  [SupportedLanguages.TypeScript, ['.tsx', '.ts', '/index.tsx', '/index.ts', '.d.ts']],
-  [SupportedLanguages.JavaScript, ['.jsx', '.js', '/index.jsx', '/index.js', '.mjs', '.cjs']],
-  [SupportedLanguages.Java, ['.java']],
-  [SupportedLanguages.Kotlin, ['.kt', '.kts']],
-  [SupportedLanguages.Python, ['.py', '/__init__.py']],
-  [SupportedLanguages.CSharp, ['.cs']],
-  [SupportedLanguages.Go, ['.go']],
-  [SupportedLanguages.Rust, ['.rs', '/mod.rs']],
-  [SupportedLanguages.C, ['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.hh']],
-  [SupportedLanguages.CPlusPlus, ['.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.hh', '.c', '.h']],
-  [SupportedLanguages.PHP, ['.php', '.phtml']],
-  [SupportedLanguages.Swift, ['.swift']],
-  [SupportedLanguages.Ruby, ['.rb']],
-  [SupportedLanguages.Vue, ['.vue', '.ts', '.js']],
+export const LANGUAGE_EXTENSIONS: ReadonlyMap<
+  SupportedLanguages,
+  readonly string[]
+> = new Map([
+  [
+    SupportedLanguages.TypeScript,
+    [".tsx", ".ts", "/index.tsx", "/index.ts", ".d.ts"],
+  ],
+  [
+    SupportedLanguages.JavaScript,
+    [".jsx", ".js", "/index.jsx", "/index.js", ".mjs", ".cjs"],
+  ],
+  [SupportedLanguages.Java, [".java"]],
+  [SupportedLanguages.Kotlin, [".kt", ".kts"]],
+  [SupportedLanguages.Python, [".py", "/__init__.py"]],
+  [SupportedLanguages.CSharp, [".cs"]],
+  [SupportedLanguages.Go, [".go"]],
+  [SupportedLanguages.Rust, [".rs", "/mod.rs"]],
+  [
+    SupportedLanguages.C,
+    [".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".hxx", ".hh"],
+  ],
+  [
+    SupportedLanguages.CPlusPlus,
+    [".cpp", ".hpp", ".cc", ".cxx", ".hxx", ".hh", ".c", ".h"],
+  ],
+  [SupportedLanguages.PHP, [".php", ".phtml"]],
+  [SupportedLanguages.Swift, [".swift"]],
+  [SupportedLanguages.Ruby, [".rb"]],
+  [SupportedLanguages.Vue, [".vue", ".ts", ".js"]],
 ]);
 
 /**
@@ -115,7 +130,10 @@ export const EMPTY_INDEX: SuffixIndex = Object.freeze({
   getFilesInDir: () => FROZEN_EMPTY_ARRAY,
 });
 
-export function buildSuffixIndex(normalizedFileList: string[], allFileList: string[]): SuffixIndex {
+export function buildSuffixIndex(
+  normalizedFileList: string[],
+  allFileList: string[],
+): SuffixIndex {
   // Map: normalized suffix -> original file path
   const exactMap = new Map<string, string>();
   // Map: lowercase suffix -> original file path
@@ -126,11 +144,11 @@ export function buildSuffixIndex(normalizedFileList: string[], allFileList: stri
   for (let i = 0; i < normalizedFileList.length; i++) {
     const normalized = normalizedFileList[i];
     const original = allFileList[i];
-    const parts = normalized.split('/');
+    const parts = normalized.split("/");
 
     // Index all suffixes: "a/b/c.java" -> ["c.java", "b/c.java", "a/b/c.java"]
     for (let j = parts.length - 1; j >= 0; j--) {
-      const suffix = parts.slice(j).join('/');
+      const suffix = parts.slice(j).join("/");
       // Only store first match (longest path wins for ambiguous suffixes)
       if (!exactMap.has(suffix)) {
         exactMap.set(suffix, original);
@@ -142,15 +160,15 @@ export function buildSuffixIndex(normalizedFileList: string[], allFileList: stri
     }
 
     // Index directory membership
-    const lastSlash = normalized.lastIndexOf('/');
+    const lastSlash = normalized.lastIndexOf("/");
     if (lastSlash >= 0) {
       // Build all directory suffixes
       const dirParts = parts.slice(0, -1);
       const fileName = parts[parts.length - 1];
-      const ext = fileName.substring(fileName.lastIndexOf('.'));
+      const ext = fileName.substring(fileName.lastIndexOf("."));
 
       for (let j = dirParts.length - 1; j >= 0; j--) {
-        const dirSuffix = dirParts.slice(j).join('/');
+        const dirSuffix = dirParts.slice(j).join("/");
         const key = `${dirSuffix}:${ext}`;
         let list = dirMap.get(key);
         if (!list) {
@@ -185,10 +203,11 @@ export function suffixResolve(
   const exts = extensions ?? EXTENSIONS;
   if (index) {
     for (let i = 0; i < pathParts.length; i++) {
-      const suffix = pathParts.slice(i).join('/');
+      const suffix = pathParts.slice(i).join("/");
       for (const ext of exts) {
         const suffixWithExt = suffix + ext;
-        const result = index.get(suffixWithExt) || index.getInsensitive(suffixWithExt);
+        const result =
+          index.get(suffixWithExt) || index.getInsensitive(suffixWithExt);
         if (result) return result;
       }
     }
@@ -197,10 +216,10 @@ export function suffixResolve(
 
   // Fallback: linear scan (for backward compatibility)
   for (let i = 0; i < pathParts.length; i++) {
-    const suffix = pathParts.slice(i).join('/');
+    const suffix = pathParts.slice(i).join("/");
     for (const ext of exts) {
       const suffixWithExt = suffix + ext;
-      const suffixPattern = '/' + suffixWithExt;
+      const suffixPattern = "/" + suffixWithExt;
       const matchIdx = normalizedFileList.findIndex(
         (filePath) =>
           filePath.endsWith(suffixPattern) ||

@@ -4,19 +4,19 @@
  * 在概念生成后立即验证质量，并进行修正或拒绝。
  */
 
-import { logger } from '../shared/logger.js';
-import { PromptLoader } from '../shared/prompt-loader.js';
-import { callLlmForJson } from './llm-json-client.js';
-import type { LlmClaimsProvider } from './knowledge-generator.js';
-import { LLM_DEFAULTS } from '../config/defaults.js';
-import { toKebabCase } from '../knowledge/type-directory-map.js';
+import { logger } from "../shared/logger.js";
+import { PromptLoader } from "../shared/prompt-loader.js";
+import { callLlmForJson } from "./llm-json-client.js";
+import type { LlmClaimsProvider } from "./knowledge-generator.js";
+import { LLM_DEFAULTS } from "../config/defaults.js";
+import { toKebabCase } from "../knowledge/type-directory-map.js";
 
 /**
  * 验证修正结果
  */
 export interface VerifyResult {
   /** 操作类型 */
-  action: 'accept' | 'fix' | 'reject';
+  action: "accept" | "fix" | "reject";
   /** 原因说明 */
   reason: string;
   /** 拒绝规则编号（仅reject时有） */
@@ -52,10 +52,11 @@ export async function verifyConcept(
   input: VerifyInput,
   claimsProvider: LlmClaimsProvider,
 ): Promise<VerifyResult> {
-  const { conceptContent, className, filePath, suspiciousMark, enumValues } = input;
+  const { conceptContent, className, filePath, suspiciousMark, enumValues } =
+    input;
 
   // 加载验证提示词模板
-  const template = PromptLoader.load('concept-verify');
+  const template = PromptLoader.load("concept-verify");
 
   // 构建用户提示词
   const conceptJson = JSON.stringify(conceptContent, null, 2);
@@ -64,10 +65,11 @@ export async function verifyConcept(
     className,
     filePath,
     suspiciousMark: suspiciousMark || undefined,
-    enumValues: enumValues ? enumValues.join(', ') : undefined,
+    enumValues: enumValues ? enumValues.join(", ") : undefined,
   });
 
-  const systemPrompt = '你是概念知识质量检验员。严格按照规则判断知识质量，输出 accept/fix/reject 决策。';
+  const systemPrompt =
+    "你是概念知识质量检验员。严格按照规则判断知识质量，输出 accept/fix/reject 决策。";
 
   logger.debug(`CONCEPT verify: 验证 "${className}"`);
 
@@ -76,8 +78,8 @@ export async function verifyConcept(
     systemPrompt,
     userPrompt,
     claimsProvider,
-    knowledgeType: 'CONCEPT',
-    maxRetries: 2,  // 验证只重试2次
+    knowledgeType: "CONCEPT",
+    maxRetries: 2, // 验证只重试2次
     timeout: LLM_DEFAULTS.shortTimeoutSeconds * 1000, // 短超时场景（秒转毫秒）
     fallbackContext: {
       className,
@@ -90,20 +92,22 @@ export async function verifyConcept(
     // 验证LLM失败，默认reject（不写入低质量知识）
     logger.warn(`CONCEPT verify failed for "${className}"，默认reject`);
     return {
-      action: 'reject',
-      reason: '验证LLM调用失败',
+      action: "reject",
+      reason: "验证LLM调用失败",
     };
   }
 
   const result = llmResult.data;
 
   // 记录验证结果
-  if (result.action === 'accept') {
+  if (result.action === "accept") {
     logger.info(`CONCEPT verify: "${className}" accepted - ${result.reason}`);
-  } else if (result.action === 'fix') {
+  } else if (result.action === "fix") {
     logger.info(`CONCEPT verify: "${className}" needs fix - ${result.reason}`);
-  } else if (result.action === 'reject') {
-    logger.warn(`CONCEPT verify: "${className}" rejected (rule ${result.ruleId}) - ${result.reason}`);
+  } else if (result.action === "reject") {
+    logger.warn(
+      `CONCEPT verify: "${className}" rejected (rule ${result.ruleId}) - ${result.reason}`,
+    );
   }
 
   return result;

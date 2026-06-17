@@ -1,7 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
@@ -10,7 +10,7 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-let currentLevel: LogLevel = 'info';
+let currentLevel: LogLevel = "info";
 let logFilePath: string | null = null;
 let logStream: fs.WriteStream | null = null;
 
@@ -22,7 +22,7 @@ function formatBeijingTime(): string {
   // 东八区偏移 8 小时
   const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
   // 格式：2026-06-04 15:46:58
-  return beijingTime.toISOString().replace('T', ' ').slice(0, 19);
+  return beijingTime.toISOString().replace("T", " ").slice(0, 19);
 }
 
 export function setLogLevel(level: LogLevel): void {
@@ -41,7 +41,7 @@ export function setLogFile(filePath: string): void {
     fs.mkdirSync(dir, { recursive: true });
   }
   // 使用 sync: true 确保实时写入（参考 GitNexus logger）
-  logStream = fs.createWriteStream(filePath, { flags: 'a', encoding: 'utf8' });
+  logStream = fs.createWriteStream(filePath, { flags: "a", encoding: "utf8" });
 }
 
 export function closeLogFile(): void {
@@ -77,9 +77,10 @@ export function log(level: LogLevel, message: string, data?: unknown): void {
   if (LOG_LEVELS[level] >= LOG_LEVELS[currentLevel]) {
     const timestamp = formatBeijingTime();
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-    const fullMessage = data !== undefined
-      ? `${prefix} ${message} ${JSON.stringify(data)}`
-      : `${prefix} ${message}`;
+    const fullMessage =
+      data !== undefined
+        ? `${prefix} ${message} ${JSON.stringify(data)}`
+        : `${prefix} ${message}`;
 
     // 写入 stderr（参考 GitNexus：stderr 用于日志，stdout 用于数据）
     if (data !== undefined) {
@@ -90,9 +91,9 @@ export function log(level: LogLevel, message: string, data?: unknown): void {
 
     // 写入日志文件并立即刷新
     if (logStream) {
-      logStream.write(fullMessage + '\n');
+      logStream.write(fullMessage + "\n");
       // 关键日志（error/warn）立即刷新
-      if (level === 'error' || level === 'warn') {
+      if (level === "error" || level === "warn") {
         flushLogFile();
       }
     }
@@ -100,8 +101,8 @@ export function log(level: LogLevel, message: string, data?: unknown): void {
 }
 
 export const logger = {
-  debug: (message: string, data?: unknown) => log('debug', message, data),
-  info: (message: string, data?: unknown) => log('info', message, data),
-  warn: (message: string, data?: unknown) => log('warn', message, data),
-  error: (message: string, data?: unknown) => log('error', message, data),
+  debug: (message: string, data?: unknown) => log("debug", message, data),
+  info: (message: string, data?: unknown) => log("info", message, data),
+  warn: (message: string, data?: unknown) => log("warn", message, data),
+  error: (message: string, data?: unknown) => log("error", message, data),
 };

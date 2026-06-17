@@ -6,10 +6,10 @@
  * on resolution-context.ts (circular dependency risk).
  */
 
-import type { SymbolDefinition } from '../../shared/index.js';
-import type { SemanticModel } from './semantic-model.js';
-import type { HeritageMap } from './heritage-map.js';
-import type { MroStrategy } from '../../shared/index.js';
+import type { SymbolDefinition } from "../../shared/index.js";
+import type { SemanticModel } from "./semantic-model.js";
+import type { HeritageMap } from "./heritage-map.js";
+import type { MroStrategy } from "../../shared/index.js";
 
 // ---------------------------------------------------------------------------
 // MRO primitives.
@@ -26,7 +26,10 @@ import type { MroStrategy } from '../../shared/index.js';
  * Uses a head-pointer BFS (`queue[head++]`) instead of `Array.shift()` to
  * avoid O(n) per-dequeue re-indexing — matching `buildParentMapFromHeritage`.
  */
-function gatherAncestors(classId: string, parentMap: Map<string, string[]>): string[] {
+function gatherAncestors(
+  classId: string,
+  parentMap: Map<string, string[]>,
+): string[] {
   const visited = new Set<string>();
   const order: string[] = [];
   const queue: string[] = [...(parentMap.get(classId) ?? [])];
@@ -77,7 +80,9 @@ export function c3Linearize(
 
   const ENTER = 0;
   const MERGE = 1;
-  const stack: Array<{ id: string; phase: number }> = [{ id: classId, phase: ENTER }];
+  const stack: Array<{ id: string; phase: number }> = [
+    { id: classId, phase: ENTER },
+  ];
 
   while (stack.length > 0) {
     const frame = stack[stack.length - 1];
@@ -233,7 +238,10 @@ export { gatherAncestors };
  * `null` is a sentinel for "C3 failed for this owner" (cyclic or inconsistent
  * hierarchy) so we don't re-run the expensive linearization repeatedly.
  */
-const c3LinearizationCache = new WeakMap<HeritageMap, Map<string, readonly string[] | null>>();
+const c3LinearizationCache = new WeakMap<
+  HeritageMap,
+  Map<string, readonly string[] | null>
+>();
 
 const getCachedC3Linearization = (
   ownerNodeId: string,
@@ -339,11 +347,15 @@ export const lookupMethodByOwnerWithMRO = (
   // Singleton dispatch: caller supplies ancestryOverride (extend providers only);
   //   simple left-to-right scan. Miss NEVER falls through to file-scoped fallback.
   // See gitnexus-shared/mro-strategy.ts § 'ruby-mixin' for full strategy docs.
-  if (strategy === 'ruby-mixin') {
+  if (strategy === "ruby-mixin") {
     if (ancestryOverride) {
       // Singleton dispatch: scan pre-computed ancestry only. Miss null-routes.
       for (const ancestorId of ancestryOverride) {
-        const method = model.methods.lookupMethodByOwner(ancestorId, methodName, argCount);
+        const method = model.methods.lookupMethodByOwner(
+          ancestorId,
+          methodName,
+          argCount,
+        );
         if (method) return method;
       }
       return undefined;
@@ -356,25 +368,37 @@ export const lookupMethodByOwnerWithMRO = (
     const prependParents: string[] = [];
     const otherParents: string[] = [];
     for (const e of instanceEntries) {
-      if (e.kind === 'prepend') prependParents.push(e.parentId);
+      if (e.kind === "prepend") prependParents.push(e.parentId);
       else otherParents.push(e.parentId);
     }
 
     // Step 1: Walk prepend parents in REVERSE declaration order (last-prepended wins).
     for (let i = prependParents.length - 1; i >= 0; i--) {
-      const method = model.methods.lookupMethodByOwner(prependParents[i], methodName, argCount);
+      const method = model.methods.lookupMethodByOwner(
+        prependParents[i],
+        methodName,
+        argCount,
+      );
       if (method) return method;
     }
 
     // Step 2: Direct owner lookup (the class's own method).
     // This is the only difference from other strategies — prepend beats direct.
-    const direct = model.methods.lookupMethodByOwner(ownerNodeId, methodName, argCount);
+    const direct = model.methods.lookupMethodByOwner(
+      ownerNodeId,
+      methodName,
+      argCount,
+    );
     if (direct) return direct;
 
     // Step 3: Walk extends + include parents in REVERSE declaration order.
     // (Ruby `include A; include B` puts B ahead of A in MRO.)
     for (let i = otherParents.length - 1; i >= 0; i--) {
-      const method = model.methods.lookupMethodByOwner(otherParents[i], methodName, argCount);
+      const method = model.methods.lookupMethodByOwner(
+        otherParents[i],
+        methodName,
+        argCount,
+      );
       if (method) return method;
     }
 
@@ -398,7 +422,11 @@ export const lookupMethodByOwnerWithMRO = (
       if (ancestorId === ownerNodeId) continue;
       if (walkedDirect.has(ancestorId)) continue;
       if (singletonOnly.has(ancestorId)) continue;
-      const method = model.methods.lookupMethodByOwner(ancestorId, methodName, argCount);
+      const method = model.methods.lookupMethodByOwner(
+        ancestorId,
+        methodName,
+        argCount,
+      );
       if (method) return method;
     }
     return undefined;
@@ -409,18 +437,22 @@ export const lookupMethodByOwnerWithMRO = (
   // Direct lookup first (child override — no walk needed).
   // argCount is threaded through so arity-differing overloads on the direct
   // owner can be disambiguated before the MRO walk starts.
-  const direct = model.methods.lookupMethodByOwner(ownerNodeId, methodName, argCount);
+  const direct = model.methods.lookupMethodByOwner(
+    ownerNodeId,
+    methodName,
+    argCount,
+  );
   if (direct) return direct;
 
   // Rust: requires qualified syntax (<Type as Trait>::method), no auto-resolution
-  if (strategy === 'qualified-syntax') return undefined;
+  if (strategy === "qualified-syntax") return undefined;
 
   // Determine ancestor walk order based on MRO strategy.
   // readonly to accept the cached (frozen) c3 linearization without copying.
   let ancestors: readonly string[];
   if (ancestryOverride) {
     ancestors = ancestryOverride;
-  } else if (strategy === 'c3') {
+  } else if (strategy === "c3") {
     // C3 linearization (memoized per HeritageMap
     // so repeated calls for the same owner within an ingestion run reuse the
     // linearization instead of rebuilding the parent map and re-running C3).
@@ -439,7 +471,11 @@ export const lookupMethodByOwnerWithMRO = (
   // Walk ancestors in MRO order — first match wins.
   // argCount narrows overloaded ancestors the same way as the direct lookup.
   for (const ancestorId of ancestors) {
-    const method = model.methods.lookupMethodByOwner(ancestorId, methodName, argCount);
+    const method = model.methods.lookupMethodByOwner(
+      ancestorId,
+      methodName,
+      argCount,
+    );
     if (method) return method;
   }
 

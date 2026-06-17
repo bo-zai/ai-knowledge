@@ -75,7 +75,8 @@ export function deriveEmbeddingMode(
   const preserveExistingEmbeddings =
     !explicit && !drop && !forceRegenerateEmbeddings && hasExisting;
   const shouldGenerateEmbeddings = explicit || forceRegenerateEmbeddings;
-  const shouldLoadCache = !drop && (shouldGenerateEmbeddings || preserveExistingEmbeddings);
+  const shouldLoadCache =
+    !drop && (shouldGenerateEmbeddings || preserveExistingEmbeddings);
 
   return {
     shouldGenerateEmbeddings,

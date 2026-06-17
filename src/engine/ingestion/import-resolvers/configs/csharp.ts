@@ -3,13 +3,23 @@
  * Namespace-based strategy via .csproj configs, then standard fallback.
  */
 
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
-import { createStandardStrategy } from '../standard.js';
-import { resolveCSharpImportInternal, resolveCSharpNamespaceDir } from '../csharp.js';
+import { SupportedLanguages } from "../../../shared/index.js";
+import type {
+  ImportResolutionConfig,
+  ImportResolverStrategy,
+} from "../types.js";
+import { createStandardStrategy } from "../standard.js";
+import {
+  resolveCSharpImportInternal,
+  resolveCSharpNamespaceDir,
+} from "../csharp.js";
 
 /** C# namespace-based resolution strategy via .csproj configs. */
-export const csharpNamespaceStrategy: ImportResolverStrategy = (rawImportPath, _filePath, ctx) => {
+export const csharpNamespaceStrategy: ImportResolverStrategy = (
+  rawImportPath,
+  _filePath,
+  ctx,
+) => {
   const csharpConfigs = ctx.configs.csharpConfigs;
   if (csharpConfigs.length > 0) {
     const resolvedFiles = resolveCSharpImportInternal(
@@ -22,15 +32,19 @@ export const csharpNamespaceStrategy: ImportResolverStrategy = (rawImportPath, _
     if (resolvedFiles.length > 1) {
       const dirSuffix = resolveCSharpNamespaceDir(rawImportPath, csharpConfigs);
       if (dirSuffix) {
-        return { kind: 'package', files: resolvedFiles, dirSuffix };
+        return { kind: "package", files: resolvedFiles, dirSuffix };
       }
     }
-    if (resolvedFiles.length > 0) return { kind: 'files', files: resolvedFiles };
+    if (resolvedFiles.length > 0)
+      return { kind: "files", files: resolvedFiles };
   }
   return null;
 };
 
 export const csharpImportConfig: ImportResolutionConfig = {
   language: SupportedLanguages.CSharp,
-  strategies: [csharpNamespaceStrategy, createStandardStrategy(SupportedLanguages.CSharp)],
+  strategies: [
+    csharpNamespaceStrategy,
+    createStandardStrategy(SupportedLanguages.CSharp),
+  ],
 };

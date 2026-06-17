@@ -1,8 +1,8 @@
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { extractPackagePath } from './shared.js';
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { extractPackagePath } from "./shared.js";
 
 /**
  * CAPABILITY: Query Controller methods grouped by Controller class.
@@ -13,8 +13,8 @@ export async function queryCapabilityEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const targetFilter = target ? `AND m.name CONTAINS '${target.value}'` : '';
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const targetFilter = target ? `AND m.name CONTAINS '${target.value}'` : "";
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   const controllerCypher = `
     MATCH (c:Class) WHERE c.name =~ '(?i).*Controller$'
@@ -29,14 +29,17 @@ export async function queryCapabilityEvidenceByPackage(
   const controllerResults = await executeQuery(controllerCypher);
 
   // Group by Controller class
-  const controllerGroups = new Map<string, Array<{
-    className: string;
-    methodName: string;
-    filePath: string;
-    returnType?: string;
-    parameterCount?: number;
-    startLine: number;
-  }>>();
+  const controllerGroups = new Map<
+    string,
+    Array<{
+      className: string;
+      methodName: string;
+      filePath: string;
+      returnType?: string;
+      parameterCount?: number;
+      startLine: number;
+    }>
+  >();
 
   for (const row of controllerResults) {
     const className = row.className as string;
@@ -50,7 +53,10 @@ export async function queryCapabilityEvidenceByPackage(
 
   for (const [className, methods] of controllerGroups.entries()) {
     // Skip technical controllers
-    if (className.toLowerCase().includes('health') || className.toLowerCase().includes('upload')) {
+    if (
+      className.toLowerCase().includes("health") ||
+      className.toLowerCase().includes("upload")
+    ) {
       continue;
     }
 
@@ -58,14 +64,18 @@ export async function queryCapabilityEvidenceByPackage(
     const groupId = `CAPABILITY-${className}`;
     const bundleId = `BUNDLE-CAPABILITY-${className}`.toUpperCase();
 
-    const entryPoints: EvidenceBundle['entryPoints'] = methods.map((m, idx) => ({
-      ref: `evidence://entry/EP-${String(idx + 1).padStart(3, '0')}`,
-      kind: 'http',
-      location: m.filePath,
-      name: `${m.className}.${m.methodName}`,
-      signature: m.returnType ? `${m.returnType}(${m.parameterCount || 0} params)` : '',
-      startLine: m.startLine,
-    }));
+    const entryPoints: EvidenceBundle["entryPoints"] = methods.map(
+      (m, idx) => ({
+        ref: `evidence://entry/EP-${String(idx + 1).padStart(3, "0")}`,
+        kind: "http",
+        location: m.filePath,
+        name: `${m.className}.${m.methodName}`,
+        signature: m.returnType
+          ? `${m.returnType}(${m.parameterCount || 0} params)`
+          : "",
+        startLine: m.startLine,
+      }),
+    );
 
     groups.push({
       groupId,
@@ -77,7 +87,7 @@ export async function queryCapabilityEvidenceByPackage(
         confidence: 0.8,
         risks: [],
         capabilityHints: {
-          nameCandidates: [className.replace(/Controller$/i, '')],
+          nameCandidates: [className.replace(/Controller$/i, "")],
           relatedTerms: [],
         },
         entryPoints,

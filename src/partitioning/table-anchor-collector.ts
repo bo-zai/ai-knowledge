@@ -8,17 +8,25 @@
  * - 关联表检测
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import type { ReadOnlyQueryExecutor } from '../engine/lbug/read-only-session.js';
-import type { TableInfo, EntityInfo, MapperInfo, JunctionBetween } from './types.js';
-import { parseMapperFile, extractTablesFromSql } from '../mybatis/mapper-parser.js';
+import fs from "fs/promises";
+import path from "path";
+import type { ReadOnlyQueryExecutor } from "../engine/lbug/read-only-session.js";
+import type {
+  TableInfo,
+  EntityInfo,
+  MapperInfo,
+  JunctionBetween,
+} from "./types.js";
+import {
+  parseMapperFile,
+  extractTablesFromSql,
+} from "../mybatis/mapper-parser.js";
 
 /**
  * Cypher 字符串转义
  */
 function escapeCypherString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
 /**
@@ -49,9 +57,9 @@ export class TableAnchorCollector {
 
         for (const stmt of mapperDoc.statements) {
           const sqlParts = stmt.rawSqlParts
-            .filter((p: { kind: string }) => p.kind === 'text')
+            .filter((p: { kind: string }) => p.kind === "text")
             .map((p: { value: string }) => p.value)
-            .join(' ');
+            .join(" ");
 
           const extractedTables = extractTablesFromSql(sqlParts);
 
@@ -61,8 +69,8 @@ export class TableAnchorCollector {
 
             tables.push({
               tableName,
-              role: 'primary',
-              tableType: 'table',
+              role: "primary",
+              tableType: "table",
             });
           }
         }
@@ -79,7 +87,10 @@ export class TableAnchorCollector {
    *
    * 从 SQL JOIN 语句或 Entity 注解提取
    */
-  async analyzeForeignKeys(tables: TableInfo[], entities: EntityInfo[]): Promise<TableInfo[]> {
+  async analyzeForeignKeys(
+    tables: TableInfo[],
+    entities: EntityInfo[],
+  ): Promise<TableInfo[]> {
     const result: TableInfo[] = [...tables];
     const tableMap = new Map<string, TableInfo>();
     for (const table of tables) {
@@ -89,24 +100,32 @@ export class TableAnchorCollector {
     // 从 Entity 注解提取外键关系
     for (const entity of entities) {
       try {
-        const content = await fs.readFile(entity.filePath, 'utf-8');
+        const content = await fs.readFile(entity.filePath, "utf-8");
 
         // 检查 @JoinColumn 注解
-        const joinColumnMatches = content.matchAll(/@JoinColumn\s*\(\s*name\s*=\s*"([^"]+)"/g);
+        const joinColumnMatches = content.matchAll(
+          /@JoinColumn\s*\(\s*name\s*=\s*"([^"]+)"/g,
+        );
         for (const match of joinColumnMatches) {
           const columnName = match[1];
           // 从列名推断外键关系（如 order_id → oms_order.id）
-          if (columnName.endsWith('_id')) {
+          if (columnName.endsWith("_id")) {
             const referencedTable = this.inferTableNameFromColumn(columnName);
 
             // 找到当前 Entity 对应的表
-            const currentTable = entity.tablesMapped?.[0] ?? this.inferTableNameFromClassName(entity.className);
-            if (currentTable && referencedTable && currentTable !== referencedTable) {
+            const currentTable =
+              entity.tablesMapped?.[0] ??
+              this.inferTableNameFromClassName(entity.className);
+            if (
+              currentTable &&
+              referencedTable &&
+              currentTable !== referencedTable
+            ) {
               // 标记为关联表
               const currentTableInfo = tableMap.get(currentTable);
               if (currentTableInfo) {
-                currentTableInfo.role = 'related';
-                currentTableInfo.relationType = 'foreign_key';
+                currentTableInfo.role = "related";
+                currentTableInfo.relationType = "foreign_key";
                 currentTableInfo.foreignKey = `${columnName} → ${referencedTable}.id`;
               }
             }
@@ -150,8 +169,8 @@ export class TableAnchorCollector {
       // 主表
       result.push({
         tableName: baseName,
-        role: 'primary',
-        tableType: 'table',
+        role: "primary",
+        tableType: "table",
       });
 
       // 分表
@@ -159,9 +178,9 @@ export class TableAnchorCollector {
         const yearMatch = shard.tableName.match(/_(\d{4})$/);
         result.push({
           tableName: shard.tableName,
-          role: 'shard',
+          role: "shard",
           shardGroup: baseName,
-          tableType: 'table',
+          tableType: "table",
         });
       }
     }
@@ -183,11 +202,11 @@ export class TableAnchorCollector {
         const rightPart = junctionMatch[2];
 
         // 检查是否存在左右表
-        const hasLeft = tables.some(t => t.tableName.startsWith(leftPart));
-        const hasRight = tables.some(t => t.tableName.startsWith(rightPart));
+        const hasLeft = tables.some((t) => t.tableName.startsWith(leftPart));
+        const hasRight = tables.some((t) => t.tableName.startsWith(rightPart));
 
         if (hasLeft && hasRight) {
-          table.role = 'junction_table';
+          table.role = "junction_table";
           table.junctionBetween = {
             leftTable: leftPart,
             rightTable: rightPart,
@@ -206,8 +225,8 @@ export class TableAnchorCollector {
    */
   private inferTableNameFromColumn(columnName: string): string | undefined {
     // 如 order_id → oms_order
-    if (columnName.endsWith('_id')) {
-      const baseName = columnName.replace('_id', '');
+    if (columnName.endsWith("_id")) {
+      const baseName = columnName.replace("_id", "");
       // 尝试匹配常见表名模式
       return baseName; // 简化处理，后续可以通过查询验证
     }
@@ -220,9 +239,9 @@ export class TableAnchorCollector {
   private inferTableNameFromClassName(className: string): string {
     // PascalCase → snake_case
     const snakeName = className
-      .replace(/([a-z])([A-Z])/g, '$1_$2')
+      .replace(/([a-z])([A-Z])/g, "$1_$2")
       .toLowerCase()
-      .replace(/_(entity|do|po|vo|dto)$/i, '');
+      .replace(/_(entity|do|po|vo|dto)$/i, "");
 
     return snakeName;
   }
@@ -252,8 +271,8 @@ export class TableAnchorCollector {
           return {
             className: entityName,
             filePath,
-            module: path.dirname(filePath).split('/').pop() || 'unknown',
-            entityRole: 'canonical',
+            module: path.dirname(filePath).split("/").pop() || "unknown",
+            entityRole: "canonical",
             tablesMapped: [tableName],
           };
         }
@@ -268,9 +287,9 @@ export class TableAnchorCollector {
    */
   private inferEntityNames(tableName: string): string[] {
     const pascalName = tableName
-      .split('_')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join('');
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join("");
 
     return [
       pascalName,
@@ -284,6 +303,9 @@ export class TableAnchorCollector {
 /**
  * 创建 TableAnchorCollector 实例
  */
-export function createTableAnchorCollector(query: ReadOnlyQueryExecutor, repoPath: string): TableAnchorCollector {
+export function createTableAnchorCollector(
+  query: ReadOnlyQueryExecutor,
+  repoPath: string,
+): TableAnchorCollector {
   return new TableAnchorCollector(query, repoPath);
 }

@@ -1,14 +1,14 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/rust.ts
 // Verified against tree-sitter-rust 0.23.1
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Rust helpers
@@ -19,7 +19,7 @@ import type { SyntaxNode } from '../../utils/ast-helpers.js';
  * Both use a `name` field containing an identifier.
  */
 function extractRustMethodName(node: SyntaxNode): string | undefined {
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   return nameNode?.text;
 }
 
@@ -28,7 +28,7 @@ function extractRustMethodName(node: SyntaxNode): string | undefined {
  * tree-sitter-rust puts the return type (after `->`) as the `return_type` field.
  */
 function extractRustReturnType(node: SyntaxNode): string | undefined {
-  const typeNode = node.childForFieldName('return_type');
+  const typeNode = node.childForFieldName("return_type");
   if (!typeNode) return undefined;
   return typeNode.text?.trim();
 }
@@ -40,7 +40,7 @@ function extractRustReturnType(node: SyntaxNode): string | undefined {
  *   parameter { pattern: identifier, type: primitive_type }
  */
 function extractRustParameters(node: SyntaxNode): ParameterInfo[] {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return [];
   const params: ParameterInfo[] = [];
 
@@ -49,14 +49,16 @@ function extractRustParameters(node: SyntaxNode): ParameterInfo[] {
     if (!param) continue;
 
     // Skip self_parameter — it is the receiver, not a regular parameter
-    if (param.type === 'self_parameter') continue;
+    if (param.type === "self_parameter") continue;
 
-    if (param.type === 'parameter') {
-      const patternNode = param.childForFieldName('pattern');
-      const typeNode = param.childForFieldName('type');
+    if (param.type === "parameter") {
+      const patternNode = param.childForFieldName("pattern");
+      const typeNode = param.childForFieldName("type");
       params.push({
-        name: patternNode?.text ?? '?',
-        type: typeNode ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null) : null,
+        name: patternNode?.text ?? "?",
+        type: typeNode
+          ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
+          : null,
         rawType: typeNode?.text?.trim() ?? null,
         isOptional: false,
         isVariadic: false,
@@ -74,9 +76,9 @@ function extractRustParameters(node: SyntaxNode): ParameterInfo[] {
 function extractRustVisibility(node: SyntaxNode): MethodVisibility {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child?.type === 'visibility_modifier') return 'public';
+    if (child?.type === "visibility_modifier") return "public";
   }
-  return 'private';
+  return "private";
 }
 
 /**
@@ -90,10 +92,10 @@ function extractRustVisibility(node: SyntaxNode): MethodVisibility {
  *   - `self: Box<Self>` → "Box<Self>" (explicit self type)
  */
 function extractRustReceiverType(node: SyntaxNode): string | undefined {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return undefined;
   const first = paramList.namedChild(0);
-  if (!first || first.type !== 'self_parameter') return undefined;
+  if (!first || first.type !== "self_parameter") return undefined;
   return first.text;
 }
 
@@ -104,7 +106,8 @@ function extractRustReceiverType(node: SyntaxNode): string | undefined {
 function isRustAsync(node: SyntaxNode): boolean {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child?.type === 'function_modifiers' && child.text.includes('async')) return true;
+    if (child?.type === "function_modifiers" && child.text.includes("async"))
+      return true;
   }
   return false;
 }
@@ -119,7 +122,7 @@ function extractRustAnnotations(node: SyntaxNode): string[] {
   const annotations: string[] = [];
   let sibling = node.previousNamedSibling;
   while (sibling) {
-    if (sibling.type === 'attribute_item') {
+    if (sibling.type === "attribute_item") {
       annotations.unshift(sibling.text);
     } else {
       // Stop at the first non-attribute sibling — attributes are contiguous
@@ -151,28 +154,31 @@ function extractRustAnnotations(node: SyntaxNode): string[] {
 //   - Unsafe methods are not distinguished (no isUnsafe field in schema).
 export const rustMethodConfig: MethodExtractionConfig = {
   language: SupportedLanguages.Rust,
-  typeDeclarationNodes: ['impl_item', 'trait_item'],
-  methodNodeTypes: ['function_item', 'function_signature_item'],
-  bodyNodeTypes: ['declaration_list'],
+  typeDeclarationNodes: ["impl_item", "trait_item"],
+  methodNodeTypes: ["function_item", "function_signature_item"],
+  bodyNodeTypes: ["declaration_list"],
 
   // For `impl Trait for Struct`, resolve owner to the concrete Struct (after `for`).
   // For plain `impl Struct`, resolve to Struct (first type_identifier).
   // For `trait Foo`, let the default name-field resolution handle it.
   extractOwnerName(node) {
-    if (node.type !== 'impl_item') return undefined;
+    if (node.type !== "impl_item") return undefined;
     const children = node.children ?? [];
-    const forIdx = children.findIndex((c: SyntaxNode) => c.text === 'for');
+    const forIdx = children.findIndex((c: SyntaxNode) => c.text === "for");
     if (forIdx !== -1) {
       // impl Trait for Struct — pick the type after `for`
       const typeNode = children
         .slice(forIdx + 1)
         .find(
-          (c: SyntaxNode) => c.type === 'type_identifier' || c.type === 'scoped_type_identifier',
+          (c: SyntaxNode) =>
+            c.type === "type_identifier" || c.type === "scoped_type_identifier",
         );
       if (typeNode) return typeNode.text;
     }
     // Plain `impl Struct` — pick the first type_identifier
-    const first = children.find((c: SyntaxNode) => c.type === 'type_identifier');
+    const first = children.find(
+      (c: SyntaxNode) => c.type === "type_identifier",
+    );
     return first?.text;
   },
 
@@ -184,16 +190,19 @@ export const rustMethodConfig: MethodExtractionConfig = {
   isStatic(node) {
     // A Rust method is an "associated function" (static) if it lacks a
     // self_parameter as first parameter.
-    const paramList = node.childForFieldName('parameters');
+    const paramList = node.childForFieldName("parameters");
     if (!paramList) return true;
     const first = paramList.namedChild(0);
-    return !first || first.type !== 'self_parameter';
+    return !first || first.type !== "self_parameter";
   },
 
   isAbstract(node, ownerNode) {
     // Only trait methods without a body (function_signature_item) are abstract.
     // function_signature_item never has a body field.
-    if (ownerNode.type === 'trait_item' && node.type === 'function_signature_item') {
+    if (
+      ownerNode.type === "trait_item" &&
+      node.type === "function_signature_item"
+    ) {
       return true;
     }
     return false;

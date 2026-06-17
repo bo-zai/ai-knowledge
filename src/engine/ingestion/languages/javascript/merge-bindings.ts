@@ -13,9 +13,11 @@
  * the tier (local 0 / import-namespace-reexport 1 / wildcard 2) ordering.
  */
 
-import type { BindingRef } from '../../../shared/index.js';
-import { typescriptMergeBindings } from '../typescript/merge-bindings.js';
+import type { BindingRef } from "../../../shared/index.js";
+import { typescriptMergeBindings } from "../typescript/merge-bindings.js";
 
-export function jsMergeBindings(bindings: readonly BindingRef[]): readonly BindingRef[] {
+export function jsMergeBindings(
+  bindings: readonly BindingRef[],
+): readonly BindingRef[] {
   return typescriptMergeBindings(bindings);
 }

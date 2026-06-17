@@ -8,8 +8,8 @@
  * production search systems.
  */
 
-import { searchFTSFromLbug, type BM25SearchResult } from './bm25-index.js';
-import type { SemanticSearchResult } from '../embeddings/types.js';
+import { searchFTSFromLbug, type BM25SearchResult } from "./bm25-index.js";
+import type { SemanticSearchResult } from "../embeddings/types.js";
 
 /**
  * RRF constant - standard value used in the literature
@@ -21,7 +21,7 @@ export interface HybridSearchResult {
   filePath: string;
   score: number; // RRF score
   rank: number; // Final rank
-  sources: ('bm25' | 'semantic')[]; // Which methods found this
+  sources: ("bm25" | "semantic")[]; // Which methods found this
 
   // Metadata from semantic search (if available)
   nodeId?: string;
@@ -59,7 +59,7 @@ export const mergeWithRRF = (
       filePath: r.filePath,
       score: rrfScore,
       rank: 0, // Will be set after sorting
-      sources: ['bm25'],
+      sources: ["bm25"],
       bm25Score: r.score,
     });
   }
@@ -73,7 +73,7 @@ export const mergeWithRRF = (
     if (existing) {
       // Found by both methods - add scores
       existing.score += rrfScore;
-      existing.sources.push('semantic');
+      existing.sources.push("semantic");
       existing.semanticScore = 1 - r.distance;
 
       // Add semantic metadata
@@ -88,7 +88,7 @@ export const mergeWithRRF = (
         filePath: r.filePath,
         score: rrfScore,
         rank: 0,
-        sources: ['semantic'],
+        sources: ["semantic"],
         semanticScore: 1 - r.distance,
         nodeId: r.nodeId,
         name: r.name,
@@ -126,14 +126,14 @@ export const isHybridSearchReady = (): boolean => {
  */
 export const formatHybridResults = (results: HybridSearchResult[]): string => {
   if (results.length === 0) {
-    return 'No results found.';
+    return "No results found.";
   }
 
   const formatted = results.map((r, i) => {
-    const sources = r.sources.join(' + ');
-    const location = r.startLine ? ` (lines ${r.startLine}-${r.endLine})` : '';
-    const label = r.label ? `${r.label}: ` : 'File: ';
-    const name = r.name || r.filePath.split('/').pop() || r.filePath;
+    const sources = r.sources.join(" + ");
+    const location = r.startLine ? ` (lines ${r.startLine}-${r.endLine})` : "";
+    const label = r.label ? `${r.label}: ` : "File: ";
+    const name = r.name || r.filePath.split("/").pop() || r.filePath;
 
     return `[${i + 1}] ${label}${name}
     File: ${r.filePath}${location}
@@ -141,7 +141,7 @@ export const formatHybridResults = (results: HybridSearchResult[]): string => {
     Relevance: ${r.score.toFixed(4)}`;
   });
 
-  return `Found ${results.length} results:\n\n${formatted.join('\n\n')}`;
+  return `Found ${results.length} results:\n\n${formatted.join("\n\n")}`;
 };
 
 /**

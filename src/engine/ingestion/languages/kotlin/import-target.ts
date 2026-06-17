@@ -1,4 +1,4 @@
-import type { ParsedImport, WorkspaceIndex } from '../../../shared/index.js';
+import type { ParsedImport, WorkspaceIndex } from "../../../shared/index.js";
 
 export interface KotlinResolveContext {
   readonly fromFile: string;
@@ -12,18 +12,19 @@ export function resolveKotlinImportTarget(
   const ctx = workspaceIndex as KotlinResolveContext | undefined;
   if (
     ctx === undefined ||
-    typeof (ctx as { fromFile?: unknown }).fromFile !== 'string' ||
+    typeof (ctx as { fromFile?: unknown }).fromFile !== "string" ||
     !((ctx as { allFilePaths?: unknown }).allFilePaths instanceof Set)
   ) {
     return null;
   }
-  if (parsedImport.kind === 'dynamic-unresolved') return null;
-  if (parsedImport.targetRaw === null || parsedImport.targetRaw === '') return null;
+  if (parsedImport.kind === "dynamic-unresolved") return null;
+  if (parsedImport.targetRaw === null || parsedImport.targetRaw === "")
+    return null;
 
-  const target = parsedImport.targetRaw.endsWith('.*')
+  const target = parsedImport.targetRaw.endsWith(".*")
     ? parsedImport.targetRaw.slice(0, -2)
     : parsedImport.targetRaw;
-  const pathLike = target.replace(/\./g, '/');
+  const pathLike = target.replace(/\./g, "/");
 
   // Resolution tiers, most-specific first:
   //  1. The full `pathLike` matches a `.kt`/`.kts` file directly
@@ -38,7 +39,7 @@ export function resolveKotlinImportTarget(
   //     export the imported name (#1759).
   //  4. Progressive prefix strip for deeper namespace aliases that
   //     don't map 1:1 to directories.
-  const stripped = pathLike.split('/').slice(0, -1).join('/');
+  const stripped = pathLike.split("/").slice(0, -1).join("/");
   return (
     findKotlinFile(ctx.allFilePaths, pathLike) ??
     findKotlinExactOrSuffix(ctx.allFilePaths, stripped) ??
@@ -47,7 +48,10 @@ export function resolveKotlinImportTarget(
   );
 }
 
-function findKotlinFile(allFilePaths: ReadonlySet<string>, pathLike: string): string | null {
+function findKotlinFile(
+  allFilePaths: ReadonlySet<string>,
+  pathLike: string,
+): string | null {
   return (
     findKotlinExactOrSuffix(allFilePaths, pathLike) ??
     findKotlinDirectoryChild(allFilePaths, pathLike)
@@ -64,17 +68,18 @@ function findKotlinExactOrSuffix(
   allFilePaths: ReadonlySet<string>,
   pathLike: string,
 ): string | null {
-  if (pathLike === '') return null;
-  const extensions = ['.kt', '.kts'];
+  if (pathLike === "") return null;
+  const extensions = [".kt", ".kts"];
   const suffix = `/${pathLike}`;
   let suffixFile: string | null = null;
 
   for (const raw of allFilePaths) {
-    const file = raw.replace(/\\/g, '/');
+    const file = raw.replace(/\\/g, "/");
     if (!extensions.some((ext) => file.endsWith(ext))) continue;
     for (const ext of extensions) {
       if (file === `${pathLike}${ext}`) return raw;
-      if (suffixFile === null && file.endsWith(`${suffix}${ext}`)) suffixFile = raw;
+      if (suffixFile === null && file.endsWith(`${suffix}${ext}`))
+        suffixFile = raw;
     }
   }
 
@@ -90,20 +95,20 @@ function findKotlinDirectoryChild(
   allFilePaths: ReadonlySet<string>,
   pathLike: string,
 ): string | null {
-  if (pathLike === '') return null;
-  const extensions = ['.kt', '.kts'];
+  if (pathLike === "") return null;
+  const extensions = [".kt", ".kts"];
   const dirPrefix = `${pathLike}/`;
   const suffixDirPrefix = `/${dirPrefix}`;
 
   for (const raw of allFilePaths) {
-    const file = raw.replace(/\\/g, '/');
+    const file = raw.replace(/\\/g, "/");
     if (!extensions.some((ext) => file.endsWith(ext))) continue;
     const atRoot = file.startsWith(dirPrefix);
     const atNested = file.includes(suffixDirPrefix);
     if (!atRoot && !atNested) continue;
     const idx = atRoot ? 0 : file.indexOf(suffixDirPrefix) + 1;
     const after = file.slice(idx + dirPrefix.length);
-    if (after.length > 0 && !after.includes('/')) return raw;
+    if (after.length > 0 && !after.includes("/")) return raw;
   }
 
   return null;
@@ -122,14 +127,14 @@ function findKotlinPackageFiles(
   allFilePaths: ReadonlySet<string>,
   dirPath: string,
 ): readonly string[] | null {
-  if (dirPath === '') return null;
-  const extensions = ['.kt', '.kts'];
+  if (dirPath === "") return null;
+  const extensions = [".kt", ".kts"];
   const dirPrefix = `${dirPath}/`;
   const suffixDirPrefix = `/${dirPrefix}`;
   const out: string[] = [];
 
   for (const raw of allFilePaths) {
-    const file = raw.replace(/\\/g, '/');
+    const file = raw.replace(/\\/g, "/");
     if (!extensions.some((ext) => file.endsWith(ext))) continue;
     const atRoot = file.startsWith(dirPrefix);
     const atNested = file.includes(suffixDirPrefix);
@@ -138,7 +143,7 @@ function findKotlinPackageFiles(
     const after = file.slice(idx + dirPrefix.length);
     // Direct children only — `models/sub/Util.kt` is a different package
     // (`models.sub`) and must not be merged with `models`.
-    if (after.length === 0 || after.includes('/')) continue;
+    if (after.length === 0 || after.includes("/")) continue;
     out.push(raw);
   }
 
@@ -149,9 +154,9 @@ function findByProgressivePrefixStrip(
   allFilePaths: ReadonlySet<string>,
   pathLike: string,
 ): string | null {
-  const segments = pathLike.split('/').filter(Boolean);
+  const segments = pathLike.split("/").filter(Boolean);
   for (let skip = 1; skip < segments.length; skip++) {
-    const found = findKotlinFile(allFilePaths, segments.slice(skip).join('/'));
+    const found = findKotlinFile(allFilePaths, segments.slice(skip).join("/"));
     if (found !== null) return found;
   }
   return null;

@@ -6,7 +6,7 @@
  * This file contains the shared internal helper used by the strategy and tests.
  */
 
-import { tryResolveWithExtensions } from './utils.js';
+import { tryResolveWithExtensions } from "./utils.js";
 
 /**
  * Resolve a Python import to a file path (low-level helper).
@@ -28,31 +28,35 @@ export function resolvePythonImportInternal(
   allFiles: Set<string>,
 ): string | null {
   // Relative import — PEP 328 (https://peps.python.org/pep-0328/)
-  if (importPath.startsWith('.')) {
+  if (importPath.startsWith(".")) {
     const dotMatch = importPath.match(/^(\.+)(.*)/);
     if (!dotMatch) return null;
 
     const dotCount = dotMatch[1].length;
     const modulePart = dotMatch[2];
-    const dirParts = currentFile.split('/').slice(0, -1);
+    const dirParts = currentFile.split("/").slice(0, -1);
 
     // PEP 328: more dots than directory levels → beyond top-level package → invalid
     if (dotCount - 1 > dirParts.length) return null;
     for (let i = 1; i < dotCount; i++) dirParts.pop();
 
     if (modulePart) {
-      dirParts.push(...modulePart.replace(/\./g, '/').split('/'));
+      dirParts.push(...modulePart.replace(/\./g, "/").split("/"));
     }
 
-    return tryResolveWithExtensions(dirParts.join('/'), allFiles);
+    return tryResolveWithExtensions(dirParts.join("/"), allFiles);
   }
 
   // Proximity bare import — single-segment only; package before module (PEP 451 §4)
-  const pathLike = importPath.replace(/\./g, '/');
-  if (pathLike.includes('/')) return null;
+  const pathLike = importPath.replace(/\./g, "/");
+  if (pathLike.includes("/")) return null;
 
   // Normalize for Windows backslashes
-  const importerDir = currentFile.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+  const importerDir = currentFile
+    .replace(/\\/g, "/")
+    .split("/")
+    .slice(0, -1)
+    .join("/");
 
   // Proximity check — only applies when the importer lives in a subdirectory.
   // Root-level importers (importerDir === '') skip straight to the ancestor
@@ -60,7 +64,8 @@ export function resolvePythonImportInternal(
   if (importerDir) {
     if (allFiles.has(`${importerDir}/${pathLike}/__init__.py`))
       return `${importerDir}/${pathLike}/__init__.py`;
-    if (allFiles.has(`${importerDir}/${pathLike}.py`)) return `${importerDir}/${pathLike}.py`;
+    if (allFiles.has(`${importerDir}/${pathLike}.py`))
+      return `${importerDir}/${pathLike}.py`;
   }
 
   // Ancestor directory walk — Python resolves bare imports against sys.path entries,
@@ -68,12 +73,14 @@ export function resolvePythonImportInternal(
   // importer's directory to find the module in an ancestor, preferring the closest match.
   // This prevents cross-language misresolution (e.g., Python `from middleware import X`
   // resolving to a TypeScript middleware.ts via suffix matching). Issue #417.
-  const dirParts = importerDir.split('/');
+  const dirParts = importerDir.split("/");
   for (let i = dirParts.length - 1; i >= 0; i--) {
-    const ancestorDir = dirParts.slice(0, i).join('/');
-    const prefix = ancestorDir ? `${ancestorDir}/` : '';
-    if (allFiles.has(`${prefix}${pathLike}/__init__.py`)) return `${prefix}${pathLike}/__init__.py`;
-    if (allFiles.has(`${prefix}${pathLike}.py`)) return `${prefix}${pathLike}.py`;
+    const ancestorDir = dirParts.slice(0, i).join("/");
+    const prefix = ancestorDir ? `${ancestorDir}/` : "";
+    if (allFiles.has(`${prefix}${pathLike}/__init__.py`))
+      return `${prefix}${pathLike}/__init__.py`;
+    if (allFiles.has(`${prefix}${pathLike}.py`))
+      return `${prefix}${pathLike}.py`;
   }
 
   return null;

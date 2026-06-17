@@ -5,23 +5,28 @@
  * 所有项目共享同一个 skills 目录
  */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import type { Agent, SkillInitConfig, SkillInitResult, SkillFile } from './types.js';
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import type {
+  Agent,
+  SkillInitConfig,
+  SkillInitResult,
+  SkillFile,
+} from "./types.js";
 
 export const CMBCOWORK_AGENT: Agent = {
-  name: 'CmbCoworkAgent',
-  id: 'cmbcowork',
+  name: "CmbCoworkAgent",
+  id: "cmbcowork",
 
   getSkillDir(repoPath: string): string {
     // CmbCoworkAgent 的 skills 存储在用户家目录，与 repoPath 无关
-    return path.join(os.homedir(), '.cmbcoworkagent', 'skills');
+    return path.join(os.homedir(), ".cmbcoworkagent", "skills");
   },
 
   async isInitialized(repoPath: string): Promise<boolean> {
     const skillDir = this.getSkillDir(repoPath);
-    const useKnowledgePath = path.join(skillDir, 'use-knowledge.md');
+    const useKnowledgePath = path.join(skillDir, "use-knowledge.md");
 
     try {
       await fs.access(useKnowledgePath);
@@ -38,15 +43,15 @@ export const CMBCOWORK_AGENT: Agent = {
     try {
       await fs.mkdir(skillDir, { recursive: true });
 
-      const { USE_KNOWLEDGE_SKILL } = await import('../skill-templates.js');
+      const { USE_KNOWLEDGE_SKILL } = await import("../skill-templates.js");
       await fs.writeFile(
-        path.join(skillDir, 'use-knowledge.md'),
+        path.join(skillDir, "use-knowledge.md"),
         USE_KNOWLEDGE_SKILL,
-        'utf-8',
+        "utf-8",
       );
       files.push({
-        name: 'use-knowledge',
-        filename: '~/.cmbcoworkagent/skills/use-knowledge.md',
+        name: "use-knowledge",
+        filename: "~/.cmbcoworkagent/skills/use-knowledge.md",
         content: USE_KNOWLEDGE_SKILL,
       });
 

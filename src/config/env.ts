@@ -1,9 +1,12 @@
-import { AppError } from '../shared/errors.js';
+import { AppError } from "../shared/errors.js";
 
 export function getEnvVar(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new AppError(`Missing environment variable: ${name}`, 'MISSING_ENV_VAR');
+    throw new AppError(
+      `Missing environment variable: ${name}`,
+      "MISSING_ENV_VAR",
+    );
   }
   return value;
 }

@@ -1,14 +1,14 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/go.ts
 // Verified against tree-sitter-go 0.23.4
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../method-types.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Go helpers
@@ -20,7 +20,7 @@ import type { SyntaxNode } from '../../utils/ast-helpers.js';
  * - function_declaration: name is an `identifier`
  */
 function extractGoName(node: SyntaxNode): string | undefined {
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   return nameNode?.text;
 }
 
@@ -31,19 +31,19 @@ function extractGoName(node: SyntaxNode): string | undefined {
  * Multi-return appears as a `parameter_list` — extract the first type.
  */
 function extractGoReturnType(node: SyntaxNode): string | undefined {
-  const result = node.childForFieldName('result');
+  const result = node.childForFieldName("result");
   if (!result) return undefined;
 
   // Single return type (type_identifier, pointer_type, etc.)
-  if (result.type !== 'parameter_list') {
+  if (result.type !== "parameter_list") {
     return result.text?.trim();
   }
 
   // Multi-return: (Type, error) — extract first parameter's type
   for (let i = 0; i < result.namedChildCount; i++) {
     const param = result.namedChild(i);
-    if (param?.type === 'parameter_declaration') {
-      const typeNode = param.childForFieldName('type');
+    if (param?.type === "parameter_declaration") {
+      const typeNode = param.childForFieldName("type");
       if (typeNode) return typeNode.text?.trim();
     }
   }
@@ -60,7 +60,7 @@ function extractGoReturnType(node: SyntaxNode): string | undefined {
  * Handles variadic_parameter_declaration (`...string`).
  */
 function extractGoParameters(node: SyntaxNode): ParameterInfo[] {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return [];
   const params: ParameterInfo[] = [];
 
@@ -68,8 +68,8 @@ function extractGoParameters(node: SyntaxNode): ParameterInfo[] {
     const param = paramList.namedChild(i);
     if (!param) continue;
 
-    if (param.type === 'parameter_declaration') {
-      const typeNode = param.childForFieldName('type');
+    if (param.type === "parameter_declaration") {
+      const typeNode = param.childForFieldName("type");
       const typeName = typeNode
         ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
         : null;
@@ -78,7 +78,7 @@ function extractGoParameters(node: SyntaxNode): ParameterInfo[] {
       const names: string[] = [];
       for (let j = 0; j < param.namedChildCount; j++) {
         const child = param.namedChild(j);
-        if (child?.type === 'identifier') {
+        if (child?.type === "identifier") {
           names.push(child.text);
         }
       }
@@ -95,12 +95,18 @@ function extractGoParameters(node: SyntaxNode): ParameterInfo[] {
         });
       } else {
         for (const name of names) {
-          params.push({ name, type: typeName, rawType, isOptional: false, isVariadic: false });
+          params.push({
+            name,
+            type: typeName,
+            rawType,
+            isOptional: false,
+            isVariadic: false,
+          });
         }
       }
-    } else if (param.type === 'variadic_parameter_declaration') {
-      const nameNode = param.childForFieldName('name');
-      const typeNode = param.childForFieldName('type');
+    } else if (param.type === "variadic_parameter_declaration") {
+      const nameNode = param.childForFieldName("name");
+      const typeNode = param.childForFieldName("type");
       const typeName = typeNode
         ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
         : null;
@@ -121,9 +127,11 @@ function extractGoParameters(node: SyntaxNode): ParameterInfo[] {
  */
 function extractGoVisibility(node: SyntaxNode): MethodVisibility {
   const name = extractGoName(node);
-  if (!name || name.length === 0) return 'private';
+  if (!name || name.length === 0) return "private";
   const first = name[0];
-  return first === first.toUpperCase() && first !== first.toLowerCase() ? 'public' : 'private';
+  return first === first.toUpperCase() && first !== first.toLowerCase()
+    ? "public"
+    : "private";
 }
 
 /**
@@ -134,16 +142,17 @@ function extractGoVisibility(node: SyntaxNode): MethodVisibility {
  *   (r Repo)  → type_identifier "Repo"
  */
 function extractGoReceiverType(node: SyntaxNode): string | undefined {
-  const receiver = node.childForFieldName('receiver');
+  const receiver = node.childForFieldName("receiver");
   if (!receiver) return undefined;
 
   for (let i = 0; i < receiver.namedChildCount; i++) {
     const param = receiver.namedChild(i);
-    if (param?.type === 'parameter_declaration') {
-      const typeNode = param.childForFieldName('type');
+    if (param?.type === "parameter_declaration") {
+      const typeNode = param.childForFieldName("type");
       if (!typeNode) continue;
       // Unwrap pointer_type: *User → User
-      const inner = typeNode.type === 'pointer_type' ? typeNode.firstNamedChild : typeNode;
+      const inner =
+        typeNode.type === "pointer_type" ? typeNode.firstNamedChild : typeNode;
       return inner?.text;
     }
   }
@@ -168,8 +177,16 @@ export const goMethodConfig: MethodExtractionConfig = {
   // Each method_declaration/function_declaration is treated as its own "container"
   // for extractFromNode() — not used with extract() in the traditional sense.
   // method_elem covers interface method signatures (abstract methods).
-  typeDeclarationNodes: ['method_declaration', 'function_declaration', 'method_elem'],
-  methodNodeTypes: ['method_declaration', 'function_declaration', 'method_elem'],
+  typeDeclarationNodes: [
+    "method_declaration",
+    "function_declaration",
+    "method_elem",
+  ],
+  methodNodeTypes: [
+    "method_declaration",
+    "function_declaration",
+    "method_elem",
+  ],
   bodyNodeTypes: [],
 
   extractName: extractGoName,
@@ -181,12 +198,12 @@ export const goMethodConfig: MethodExtractionConfig = {
 
   isStatic(node) {
     // Go functions (no receiver) are effectively static
-    return node.type === 'function_declaration';
+    return node.type === "function_declaration";
   },
 
   isAbstract(node, _ownerNode) {
     // Go interface method signatures (method_elem) are abstract — no body
-    return node.type === 'method_elem';
+    return node.type === "method_elem";
   },
 
   isFinal(_node) {

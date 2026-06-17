@@ -1,6 +1,6 @@
-import { removeDir, fileExists } from '../shared/fs.js';
-import { DEFAULT_KNOWLEDGE_DIR } from '../config/defaults.js';
-import { resolveTargetRepo } from '../shared/resolve-target-repo.js';
+import { removeDir, fileExists } from "../shared/fs.js";
+import { DEFAULT_KNOWLEDGE_DIR } from "../config/defaults.js";
+import { resolveTargetRepo } from "../shared/resolve-target-repo.js";
 
 interface CleanOptions {
   repo?: string;

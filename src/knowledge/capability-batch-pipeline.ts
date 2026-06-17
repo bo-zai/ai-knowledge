@@ -1,16 +1,19 @@
-import { buildCapabilityInventory } from '../slicing/capability-inventory.js';
+import { buildCapabilityInventory } from "../slicing/capability-inventory.js";
 import {
   runCapabilityKnowledgePipeline,
   type CapabilityClaimsProviderResult,
-} from './capability-knowledge-pipeline.js';
-import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
-import type { KnowledgePackageFile, KnowledgePackageObjectRef } from '../packaging/knowledge-package-contribution.js';
-import { TYPE_TO_DIR } from './type-directory-map.js';
+} from "./capability-knowledge-pipeline.js";
+import type { EvidenceBundle } from "../evidence/evidence-bundle-schema.js";
+import type {
+  KnowledgePackageFile,
+  KnowledgePackageObjectRef,
+} from "../packaging/knowledge-package-contribution.js";
+import { TYPE_TO_DIR } from "./type-directory-map.js";
 
 export interface CapabilityBatchItemReport {
   id: string;
   name: string;
-  status: 'succeeded' | 'failed';
+  status: "succeeded" | "failed";
   capabilityId?: string;
   primaryDoc?: string;
   compatibilityView?: string;
@@ -22,7 +25,7 @@ export interface CapabilityBatchPipelineResult {
   files: KnowledgePackageFile[];
   objects: KnowledgePackageObjectRef[];
   report: {
-    mode: 'capability-batch';
+    mode: "capability-batch";
     succeeded: number;
     failed: number;
     capabilities: CapabilityBatchItemReport[];
@@ -35,21 +38,26 @@ export interface CapabilityInventoryPromptResult {
   model: string;
 }
 
-function rewriteCapabilityFilePath(path: string, inventoryId: string): string | undefined {
-  if (path === 'catalog.yaml') return undefined;
-  if (path === 'reports/generation.json') return undefined;
-  if (path === 'reports/capability-generation.json') {
+function rewriteCapabilityFilePath(
+  path: string,
+  inventoryId: string,
+): string | undefined {
+  if (path === "catalog.yaml") return undefined;
+  if (path === "reports/generation.json") return undefined;
+  if (path === "reports/capability-generation.json") {
     return `reports/capabilities/${inventoryId}.json`;
   }
-  if (path.startsWith('debug/')) {
-    return `debug/capabilities/${inventoryId}/${path.replace(/^debug\//, '')}`;
+  if (path.startsWith("debug/")) {
+    return `debug/capabilities/${inventoryId}/${path.replace(/^debug\//, "")}`;
   }
   return path;
 }
 
 export async function runCapabilityBatchPipeline(input: {
   repoRoot: string;
-  claimsProvider: (bundle: EvidenceBundle) => Promise<CapabilityClaimsProviderResult>;
+  claimsProvider: (
+    bundle: EvidenceBundle,
+  ) => Promise<CapabilityClaimsProviderResult>;
   inventoryPromptProvider?: (
     systemPrompt: string,
     userPrompt: string,
@@ -61,16 +69,20 @@ export async function runCapabilityBatchPipeline(input: {
   }) => Promise<void>;
   model?: string;
 }): Promise<CapabilityBatchPipelineResult> {
-  console.log('[DEBUG] runCapabilityBatchPipeline: starting');
+  console.log("[DEBUG] runCapabilityBatchPipeline: starting");
   // 先做静态聚类，再按需交给 LLM 做业务域归并与核心/辅助动作判定。
   const inventory = await buildCapabilityInventory(
     input.repoRoot,
     input.inventoryPromptProvider,
   );
-  console.log(`[DEBUG] runCapabilityBatchPipeline: inventory built, ${inventory.length} items`);
+  console.log(
+    `[DEBUG] runCapabilityBatchPipeline: inventory built, ${inventory.length} items`,
+  );
 
   if (inventory.length === 0) {
-    throw new Error('No business capabilities discovered in project. Use --target or --terms to specify capability focus.');
+    throw new Error(
+      "No business capabilities discovered in project. Use --target or --terms to specify capability focus.",
+    );
   }
   const files: KnowledgePackageFile[] = [];
   const objects: KnowledgePackageObjectRef[] = [];
@@ -80,7 +92,9 @@ export async function runCapabilityBatchPipeline(input: {
   for (const item of inventory) {
     console.log(`[DEBUG] runCapabilityBatchPipeline: processing ${item.name}`);
     try {
-      console.log(`[DEBUG] runCapabilityBatchPipeline: calling runCapabilityKnowledgePipeline for ${item.name}`);
+      console.log(
+        `[DEBUG] runCapabilityBatchPipeline: calling runCapabilityKnowledgePipeline for ${item.name}`,
+      );
       const result = await runCapabilityKnowledgePipeline({
         repoRoot: input.repoRoot,
         targetTerms: item.targetTerms,
@@ -91,7 +105,9 @@ export async function runCapabilityBatchPipeline(input: {
         claimsProvider: input.claimsProvider,
         llmMode: { requested: true, required: true, model: input.model },
       });
-      console.log(`[DEBUG] runCapabilityBatchPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`);
+      console.log(
+        `[DEBUG] runCapabilityBatchPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`,
+      );
 
       if (input.onItemSucceeded) {
         await input.onItemSucceeded({
@@ -101,8 +117,15 @@ export async function runCapabilityBatchPipeline(input: {
         });
       }
 
-      const primaryDoc = result.files.find(file => file.path.startsWith('capabilities/') && file.path.endsWith('.md'))?.path;
-      const compatibilityView = result.files.find(file => file.path.startsWith('views/capabilities/') && file.path.endsWith('.md'))?.path;
+      const primaryDoc = result.files.find(
+        (file) =>
+          file.path.startsWith("capabilities/") && file.path.endsWith(".md"),
+      )?.path;
+      const compatibilityView = result.files.find(
+        (file) =>
+          file.path.startsWith("views/capabilities/") &&
+          file.path.endsWith(".md"),
+      )?.path;
 
       for (const file of result.files) {
         const rewritten = rewriteCapabilityFilePath(file.path, item.id);
@@ -110,16 +133,18 @@ export async function runCapabilityBatchPipeline(input: {
         files.push({ path: rewritten, content: file.content });
       }
 
-      objects.push(...result.objects.map(obj => ({
-        id: obj.id,
-        type: obj.type,
-        path: `objects/${TYPE_TO_DIR[obj.type] || 'unknown'}/${obj.id}.yaml`,
-      })));
+      objects.push(
+        ...result.objects.map((obj) => ({
+          id: obj.id,
+          type: obj.type,
+          path: `objects/${TYPE_TO_DIR[obj.type] || "unknown"}/${obj.id}.yaml`,
+        })),
+      );
 
       capabilities.push({
         id: item.id,
         name: item.name,
-        status: 'succeeded',
+        status: "succeeded",
         capabilityId: result.metadata.capabilityId,
         primaryDoc,
         compatibilityView,
@@ -131,29 +156,31 @@ export async function runCapabilityBatchPipeline(input: {
       capabilities.push({
         id: item.id,
         name: item.name,
-        status: 'failed',
+        status: "failed",
         error: message,
       });
     }
   }
 
-  const succeeded = capabilities.filter(c => c.status === 'succeeded').length;
-  const failed = capabilities.filter(c => c.status === 'failed').length;
+  const succeeded = capabilities.filter((c) => c.status === "succeeded").length;
+  const failed = capabilities.filter((c) => c.status === "failed").length;
 
   if (succeeded === 0) {
-    throw new Error(`Capability batch generation failed for all ${inventory.length} capabilities`);
+    throw new Error(
+      `Capability batch generation failed for all ${inventory.length} capabilities`,
+    );
   }
 
   const report = {
-    mode: 'capability-batch' as const,
+    mode: "capability-batch" as const,
     succeeded,
     failed,
     capabilities,
   };
 
   files.push({
-    path: 'reports/capability-inventory.json',
-    content: JSON.stringify({ inventory, report }, null, 2) + '\n',
+    path: "reports/capability-inventory.json",
+    content: JSON.stringify({ inventory, report }, null, 2) + "\n",
   });
 
   return { files, objects, report, warnings };

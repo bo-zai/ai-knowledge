@@ -1,15 +1,23 @@
-import type { SyntaxNode } from '../utils/ast-helpers.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
 
 /** Extracts type bindings from a declaration node into the env map */
-export type TypeBindingExtractor = (node: SyntaxNode, env: Map<string, string>) => void;
+export type TypeBindingExtractor = (
+  node: SyntaxNode,
+  env: Map<string, string>,
+) => void;
 
 /** Extracts type bindings from a parameter node into the env map */
-export type ParameterExtractor = (node: SyntaxNode, env: Map<string, string>) => void;
+export type ParameterExtractor = (
+  node: SyntaxNode,
+  env: Map<string, string>,
+) => void;
 
 /** Optionally locates the type-annotation AST node for a declaration node.
  * Used by buildTypeEnv to populate declarationTypeNodes and constructorTypeMap.
  * If absent, buildTypeEnv falls back to generic heuristics (childForFieldName('type'), etc). */
-export type DeclarationTypeNodeLocator = (node: SyntaxNode) => SyntaxNode | null;
+export type DeclarationTypeNodeLocator = (
+  node: SyntaxNode,
+) => SyntaxNode | null;
 
 /** Minimal interface for checking whether a name is a known class/struct.
  *  Narrower than ReadonlySet — only `.has()` is used by extractors. */
@@ -28,7 +36,9 @@ export type InitializerExtractor = (
  *  (e.g. $this->getUser() in PHP provides the enclosing class name). */
 export type ConstructorBindingScanner = (
   node: SyntaxNode,
-) => { varName: string; calleeName: string; receiverClassName?: string } | undefined;
+) =>
+  | { varName: string; calleeName: string; receiverClassName?: string }
+  | undefined;
 
 /** Infer the type name of a literal AST node for overload disambiguation.
  *  Returns the canonical type name (e.g. 'int', 'String', 'boolean') or undefined
@@ -79,7 +89,10 @@ export interface ForLoopExtractorContext {
 }
 
 /** Extracts loop variable type binding from a for-each statement. */
-export type ForLoopExtractor = (node: SyntaxNode, ctx: ForLoopExtractorContext) => void;
+export type ForLoopExtractor = (
+  node: SyntaxNode,
+  ctx: ForLoopExtractorContext,
+) => void;
 
 /** Discriminated union for pending Tier-2 propagation items.
  *  - `copy`             — `const b = a` (identifier alias, propagate a's type to b)
@@ -87,10 +100,16 @@ export type ForLoopExtractor = (node: SyntaxNode, ctx: ForLoopExtractorContext) 
  *  - `fieldAccess`      — `const b = a.field` (bind b to field's declaredType on a's type)
  *  - `methodCallResult` — `const b = a.method()` (bind b to method's returnType on a's type) */
 export type PendingAssignment =
-  | { kind: 'copy'; lhs: string; rhs: string }
-  | { kind: 'callResult'; lhs: string; callee: string; calleeFqn?: string; line?: number }
-  | { kind: 'fieldAccess'; lhs: string; receiver: string; field: string }
-  | { kind: 'methodCallResult'; lhs: string; receiver: string; method: string };
+  | { kind: "copy"; lhs: string; rhs: string }
+  | {
+      kind: "callResult";
+      lhs: string;
+      callee: string;
+      calleeFqn?: string;
+      line?: number;
+    }
+  | { kind: "fieldAccess"; lhs: string; receiver: string; field: string }
+  | { kind: "methodCallResult"; lhs: string; receiver: string; method: string };
 
 /** Extracts a pending assignment for Tier 2 propagation.
  *  Returns a PendingAssignment when the RHS is a bare identifier (`copy`), a

@@ -24,25 +24,25 @@ import type {
   SymbolDefinition,
   Callsite,
   WorkspaceIndex,
-} from '../shared';
-import type { LanguageTypeConfig } from './type-extractors/types.js';
-import type { CallRouter } from './call-routing.js';
+} from "../shared";
+import type { LanguageTypeConfig } from "./type-extractors/types.js";
+import type { CallRouter } from "./call-routing.js";
 import type {
   CallExtractor,
   DispatchDecision,
   ImplicitReceiverOverride,
   ReceiverEnriched,
-} from './call-types.js';
-import type { ClassExtractor } from './class-types.js';
-import type { ExportChecker } from './export-detection.js';
-import type { FieldExtractor } from './field-extractor.js';
-import type { HeritageExtractor } from './heritage-types.js';
-import type { MethodExtractor } from './method-types.js';
-import type { VariableExtractor } from './variable-types.js';
-import type { ImportResolverFn } from './import-resolvers/types.js';
-import type { NamedBindingExtractorFn } from './named-bindings/types.js';
-import type { SyntaxNode } from './utils/ast-helpers.js';
-import type { NodeLabel } from '../shared';
+} from "./call-types.js";
+import type { ClassExtractor } from "./class-types.js";
+import type { ExportChecker } from "./export-detection.js";
+import type { FieldExtractor } from "./field-extractor.js";
+import type { HeritageExtractor } from "./heritage-types.js";
+import type { MethodExtractor } from "./method-types.js";
+import type { VariableExtractor } from "./variable-types.js";
+import type { ImportResolverFn } from "./import-resolvers/types.js";
+import type { NamedBindingExtractorFn } from "./named-bindings/types.js";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
+import type { NodeLabel } from "../shared";
 
 // ── Shared type aliases ────────────────────────────────────────────────────
 /** Tree-sitter query captures: capture name → AST node (or undefined if not captured). */
@@ -72,11 +72,11 @@ export type CaptureMap = Record<string, SyntaxNode | undefined>;
  * handling is unchanged. A future PR will implement the DAG walk for `export *`.
  */
 export type ImportSemantics =
-  | 'named'
-  | 'wildcard-transitive'
-  | 'wildcard-leaf'
-  | 'namespace'
-  | 'explicit-reexport';
+  | "named"
+  | "wildcard-transitive"
+  | "wildcard-leaf"
+  | "namespace"
+  | "explicit-reexport";
 
 /** Configuration for AST-based framework detection patterns. */
 export interface AstFrameworkPatternConfig {
@@ -111,7 +111,7 @@ interface LanguageProviderConfig {
   /** Parse strategy: 'tree-sitter' (default) uses AST parsing via tree-sitter.
    *  'standalone' means the language has its own regex-based processor and
    *  should be skipped by the tree-sitter pipeline (e.g., COBOL, Markdown). */
-  readonly parseStrategy?: 'tree-sitter' | 'standalone';
+  readonly parseStrategy?: "tree-sitter" | "standalone";
   /** Tree-sitter query strings for definitions, imports, calls, heritage.
    *  Required for tree-sitter languages; empty string for standalone processors. */
   readonly treeSitterQueries: string;
@@ -142,7 +142,10 @@ interface LanguageProviderConfig {
   /** Language-specific transformation of raw import path text before resolution.
    *  Called after sanitization. E.g., Kotlin appends wildcard suffixes.
    *  Default: undefined (no preprocessing). */
-  readonly importPathPreprocessor?: (cleaned: string, importNode: SyntaxNode) => string;
+  readonly importPathPreprocessor?: (
+    cleaned: string,
+    importNode: SyntaxNode,
+  ) => string;
   /** Wire implicit inter-file imports for languages where all files in a module
    *  see each other (e.g., Swift targets, C header inclusion units).
    *  Called with only THIS language's files (pre-grouped by the processor).
@@ -182,12 +185,15 @@ interface LanguageProviderConfig {
    *  Return null to skip (C/C++ duplicate), a different label to reclassify
    *  (e.g., 'Method' for Kotlin), or defaultLabel to keep as-is.
    *  Default: undefined (standard label assignment). */
-  readonly labelOverride?: (functionNode: SyntaxNode, defaultLabel: NodeLabel) => NodeLabel | null;
+  readonly labelOverride?: (
+    functionNode: SyntaxNode,
+    defaultLabel: NodeLabel,
+  ) => NodeLabel | null;
 
   // ── Heritage & MRO ────────────────────────────────────────────────
   /** Default edge type when parent symbol is ambiguous (interface vs class).
    *  Default: 'EXTENDS'. */
-  readonly heritageDefaultEdge?: 'EXTENDS' | 'IMPLEMENTS';
+  readonly heritageDefaultEdge?: "EXTENDS" | "IMPLEMENTS";
   /** Regex to detect interface names by convention (e.g., /^I[A-Z]/ for C#/Java).
    *  When matched, IMPLEMENTS edge is used instead of heritageDefaultEdge. */
   readonly interfaceNamePattern?: RegExp;
@@ -261,7 +267,7 @@ interface LanguageProviderConfig {
    */
   readonly inferImplicitReceiver?: (params: {
     readonly calledName: string;
-    readonly callForm: 'free' | 'member' | 'constructor' | undefined;
+    readonly callForm: "free" | "member" | "constructor" | undefined;
     readonly receiverName: string | undefined;
     readonly receiverTypeName: string | undefined;
     readonly callNode: SyntaxNode;
@@ -294,10 +300,10 @@ interface LanguageProviderConfig {
    */
   readonly selectDispatch?: (params: {
     readonly calledName: string;
-    readonly callForm: 'free' | 'member' | 'constructor' | undefined;
+    readonly callForm: "free" | "member" | "constructor" | undefined;
     readonly receiverName: string | undefined;
     readonly receiverTypeName: string | undefined;
-    readonly receiverSource: ReceiverEnriched['receiverSource'];
+    readonly receiverSource: ReceiverEnriched["receiverSource"];
     readonly hint: string | undefined;
   }) => DispatchDecision | null;
 
@@ -393,7 +399,9 @@ interface LanguageProviderConfig {
    *
    * Default: undefined (falls back to `{ boundName: captures.name, rawTypeName: captures.type, source: 'annotation' }`).
    */
-  readonly interpretTypeBinding?: (captures: CaptureMatch) => ParsedTypeBinding | null;
+  readonly interpretTypeBinding?: (
+    captures: CaptureMatch,
+  ) => ParsedTypeBinding | null;
 
   /**
    * Override the `ScopeKind` assigned to a scope capture. Use when the
@@ -495,7 +503,10 @@ interface LanguageProviderConfig {
    * Default: undefined (central finalize uses local-first-then-imports,
    * deduping by `DefId`).
    */
-  readonly mergeBindings?: (scope: Scope, bindings: readonly BindingRef[]) => readonly BindingRef[];
+  readonly mergeBindings?: (
+    scope: Scope,
+    bindings: readonly BindingRef[],
+  ) => readonly BindingRef[];
 
   // ── Reference-extraction phase ─────────────────────────────────────
 
@@ -512,7 +523,7 @@ interface LanguageProviderConfig {
   readonly classifyCallForm?: (
     captures: CaptureMatch,
     enclosingScope: Scope,
-  ) => 'free' | 'member' | 'constructor' | 'index';
+  ) => "free" | "member" | "constructor" | "index";
 
   // ── Resolution phase (RFC §4v2) ────────────────────────────────────
 
@@ -541,34 +552,40 @@ interface LanguageProviderConfig {
   readonly arityCompatibility?: (
     def: SymbolDefinition,
     callsite: Callsite,
-  ) => 'compatible' | 'unknown' | 'incompatible';
+  ) => "compatible" | "unknown" | "incompatible";
 }
 
 /** Runtime type — same as LanguageProviderConfig but with defaults guaranteed present. */
 export interface LanguageProvider extends Omit<
   LanguageProviderConfig,
-  'importSemantics' | 'heritageDefaultEdge' | 'mroStrategy'
+  "importSemantics" | "heritageDefaultEdge" | "mroStrategy"
 > {
   readonly importSemantics: ImportSemantics;
-  readonly heritageDefaultEdge: 'EXTENDS' | 'IMPLEMENTS';
+  readonly heritageDefaultEdge: "EXTENDS" | "IMPLEMENTS";
   readonly mroStrategy: MroStrategy;
   /** Check if a name is a built-in/stdlib function that should be filtered from the call graph. */
   readonly isBuiltInName: (name: string) => boolean;
 }
 
-const DEFAULTS: Pick<LanguageProvider, 'importSemantics' | 'heritageDefaultEdge' | 'mroStrategy'> =
-  {
-    importSemantics: 'named',
-    heritageDefaultEdge: 'EXTENDS',
-    mroStrategy: 'first-wins',
-  };
+const DEFAULTS: Pick<
+  LanguageProvider,
+  "importSemantics" | "heritageDefaultEdge" | "mroStrategy"
+> = {
+  importSemantics: "named",
+  heritageDefaultEdge: "EXTENDS",
+  mroStrategy: "first-wins",
+};
 
 /** Define a language provider — required fields must be supplied, optional fields get sensible defaults. */
-export function defineLanguage(config: LanguageProviderConfig): LanguageProvider {
+export function defineLanguage(
+  config: LanguageProviderConfig,
+): LanguageProvider {
   const builtIns = config.builtInNames;
   return {
     ...DEFAULTS,
     ...config,
-    isBuiltInName: builtIns ? (name: string) => builtIns.has(name) : () => false,
+    isBuiltInName: builtIns
+      ? (name: string) => builtIns.has(name)
+      : () => false,
   };
 }

@@ -6,44 +6,49 @@
  * call-resolution path.
  */
 
-import type { ParsedFile, TypeRef } from '../../../shared/index.js';
-import { SupportedLanguages } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
-import { resolveDefGraphId } from '../../scope-resolution/graph-bridge/ids.js';
-import type { GraphNodeLookup } from '../../scope-resolution/graph-bridge/node-lookup.js';
+import type { ParsedFile, TypeRef } from "../../../shared/index.js";
+import { SupportedLanguages } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import {
+  buildMro,
+  defaultLinearize,
+} from "../../scope-resolution/passes/mro.js";
+import { resolveDefGraphId } from "../../scope-resolution/graph-bridge/ids.js";
+import type { GraphNodeLookup } from "../../scope-resolution/graph-bridge/node-lookup.js";
 import {
   isClassLike,
   lookupBindingsAt,
   namesAtScope,
   populateClassOwnedMembers,
-} from '../../scope-resolution/scope/walkers.js';
-import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { followChainPostFinalize } from '../../scope-resolution/passes/imported-return-types.js';
-import { javaProvider } from '../java.js';
+} from "../../scope-resolution/scope/walkers.js";
+import type { ScopeResolver } from "../../scope-resolution/contract/scope-resolver.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { followChainPostFinalize } from "../../scope-resolution/passes/imported-return-types.js";
+import { javaProvider } from "../java.js";
 import {
   javaArityCompatibility,
   javaMergeBindings,
   resolveJavaImportTarget,
   type JavaResolveContext,
-} from './index.js';
-import { populateJavaPackageSiblings } from './package-siblings.js';
+} from "./index.js";
+import { populateJavaPackageSiblings } from "./package-siblings.js";
 
 const javaScopeResolver: ScopeResolver = {
   language: SupportedLanguages.Java,
   languageProvider: javaProvider,
-  importEdgeReason: 'java-scope: import',
+  importEdgeReason: "java-scope: import",
 
   resolveImportTarget: (targetRaw, fromFile, allFilePaths) => {
     const ws: JavaResolveContext = { fromFile, allFilePaths };
     return resolveJavaImportTarget(
-      { kind: 'named', localName: '_', importedName: '_', targetRaw },
+      { kind: "named", localName: "_", importedName: "_", targetRaw },
       ws,
     );
   },
 
-  mergeBindings: (existing, incoming) => [...javaMergeBindings([...existing, ...incoming])],
+  mergeBindings: (existing, incoming) => [
+    ...javaMergeBindings([...existing, ...incoming]),
+  ],
 
   arityCompatibility: (callsite, def) => javaArityCompatibility(def, callsite),
 
@@ -51,7 +56,7 @@ const javaScopeResolver: ScopeResolver = {
 
   populateOwners: (parsed: ParsedFile) => populateClassOwnedMembers(parsed),
 
-  isSuperReceiver: (text) => text.trim() === 'super',
+  isSuperReceiver: (text) => text.trim() === "super",
 
   fieldFallbackOnMethodLookup: false,
   propagatesReturnTypesAcrossImports: true,
@@ -68,12 +73,12 @@ function populateJavaCrossFileReturnTypes(
   parsedFiles: readonly ParsedFile[],
   indexes: ScopeResolutionIndexes,
 ): void {
-  const moduleScopeByFile = new Map<string, ParsedFile['scopes'][number]>();
-  const classScopesByFile = new Map<string, ParsedFile['scopes'][number][]>();
+  const moduleScopeByFile = new Map<string, ParsedFile["scopes"][number]>();
+  const classScopesByFile = new Map<string, ParsedFile["scopes"][number][]>();
   for (const parsed of parsedFiles) {
-    const ms = parsed.scopes.find((s) => s.kind === 'Module');
+    const ms = parsed.scopes.find((s) => s.kind === "Module");
     if (ms !== undefined) moduleScopeByFile.set(parsed.filePath, ms);
-    const cs = parsed.scopes.filter((s) => s.kind === 'Class');
+    const cs = parsed.scopes.filter((s) => s.kind === "Class");
     if (cs.length > 0) classScopesByFile.set(parsed.filePath, cs);
   }
 
@@ -85,7 +90,7 @@ function populateJavaCrossFileReturnTypes(
     for (const name of namesAtScope(importerModule.id, indexes)) {
       const refs = lookupBindingsAt(importerModule.id, name, indexes);
       for (const ref of refs) {
-        if (ref.origin !== 'import' && ref.origin !== 'reexport') continue;
+        if (ref.origin !== "import" && ref.origin !== "reexport") continue;
         if (!isClassLike(ref.def.type)) continue;
 
         const sourceModule = moduleScopeByFile.get(ref.def.filePath);
@@ -93,7 +98,7 @@ function populateJavaCrossFileReturnTypes(
 
         const tb = importerModule.typeBindings as Map<string, TypeRef>;
         for (const [srcName, srcRef] of sourceModule.typeBindings) {
-          if (srcRef.source !== 'return-annotation') continue;
+          if (srcRef.source !== "return-annotation") continue;
           if (ambiguousMirrors.has(srcName)) continue;
           const existing = tb.get(srcName);
           if (existing !== undefined && existing.rawName !== srcRef.rawName) {
@@ -104,9 +109,14 @@ function populateJavaCrossFileReturnTypes(
           if (existing === undefined) tb.set(srcName, srcRef);
         }
 
-        for (const classScope of classScopesByFile.get(ref.def.filePath) ?? []) {
+        for (const classScope of classScopesByFile.get(ref.def.filePath) ??
+          []) {
           for (const [srcName, srcRef] of classScope.typeBindings) {
-            if (srcRef.source === 'self' || srcRef.source === 'parameter-annotation') continue;
+            if (
+              srcRef.source === "self" ||
+              srcRef.source === "parameter-annotation"
+            )
+              continue;
             if (ambiguousMirrors.has(srcName)) continue;
             const existing = tb.get(srcName);
             if (existing !== undefined && existing.rawName !== srcRef.rawName) {
@@ -123,7 +133,10 @@ function populateJavaCrossFileReturnTypes(
     for (const [name, ref] of importerModule.typeBindings) {
       const resolved = followChainPostFinalize(ref, importerModule.id, indexes);
       if (resolved !== ref) {
-        (importerModule.typeBindings as Map<string, TypeRef>).set(name, resolved);
+        (importerModule.typeBindings as Map<string, TypeRef>).set(
+          name,
+          resolved,
+        );
       }
     }
   }
@@ -159,7 +172,7 @@ function buildJavaMro(
   }
 
   const directImpls = new Map<string, string[]>();
-  for (const rel of graph.iterRelationshipsByType('IMPLEMENTS')) {
+  for (const rel of graph.iterRelationshipsByType("IMPLEMENTS")) {
     const source = defIdByGraphId.get(rel.sourceId);
     const target = defIdByGraphId.get(rel.targetId);
     if (source === undefined || target === undefined) continue;
@@ -181,7 +194,10 @@ function buildJavaMro(
     }
     if (seeds.length === 0) continue;
     const interfaces = closeInterfaces(seeds, directImpls);
-    mro.set(classDefId, [...extendsMro, ...interfaces.filter((i) => !extendsMro.includes(i))]);
+    mro.set(classDefId, [
+      ...extendsMro,
+      ...interfaces.filter((i) => !extendsMro.includes(i)),
+    ]);
   }
 
   for (const [classDefId, ifaces] of directImpls) {

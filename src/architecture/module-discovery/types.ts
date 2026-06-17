@@ -4,7 +4,12 @@
  * 解耦设计的核心类型，供探测器、分析器、协调器使用
  */
 
-import type { ModuleInfo, ModuleRole, ModuleType, CouplingMode } from '../../schemas/module.js';
+import type {
+  ModuleInfo,
+  ModuleRole,
+  ModuleType,
+  CouplingMode,
+} from "../../schemas/module.js";
 
 /**
  * 探测结果
@@ -19,7 +24,7 @@ export interface DetectionResult {
   modules: ModuleInfo[];
 
   /** 探测层级：root-build-system | sub-project | nested */
-  layer: 'root-build-system' | 'sub-project' | 'nested';
+  layer: "root-build-system" | "sub-project" | "nested";
 
   /** 探测是否成功 */
   success: boolean;
@@ -44,7 +49,10 @@ export interface ModuleDetector {
   canDetect(repoPath: string): Promise<boolean>;
 
   /** 执行探测，返回发现的模块 */
-  detect(repoPath: string, options?: DetectionOptions): Promise<DetectionResult>;
+  detect(
+    repoPath: string,
+    options?: DetectionOptions,
+  ): Promise<DetectionResult>;
 }
 
 /**
@@ -94,23 +102,23 @@ export interface ModuleDiscoveryResult {
  * 仓库类型
  */
 export type RepoType =
-  | 'single-project'           // 单项目仓库
-  | 'build-system-multi-module' // 构建系统多模块（Maven/Gradle/npm workspaces）
-  | 'business-domain-multi-project' // 业务域多项目（子目录各自有构建配置）
-  | 'hybrid'                   // 混合型（构建系统声明部分，子目录还有独立项目）
-  | 'nested';                  // 嵌套多模块
+  | "single-project" // 单项目仓库
+  | "build-system-multi-module" // 构建系统多模块（Maven/Gradle/npm workspaces）
+  | "business-domain-multi-project" // 业务域多项目（子目录各自有构建配置）
+  | "hybrid" // 混合型（构建系统声明部分，子目录还有独立项目）
+  | "nested"; // 嵌套多模块
 
 /**
  * 构建系统类型
  */
 export type BuildSystemType =
-  | 'maven'
-  | 'gradle'
-  | 'npm'
-  | 'go'
-  | 'rust'
-  | 'python'
-  | 'unknown';
+  | "maven"
+  | "gradle"
+  | "npm"
+  | "go"
+  | "rust"
+  | "python"
+  | "unknown";
 
 /**
  * 构建配置文件信息

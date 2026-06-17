@@ -14,10 +14,10 @@
  * `linkStatus: 'unresolved'`.
  */
 
-import type { ParsedImport, WorkspaceIndex } from '../../../shared/index.js';
-import { SupportedLanguages } from '../../../shared/index.js';
-import { resolveImportPath } from '../../import-resolvers/standard.js';
-import type { TsconfigPaths } from '../../language-config.js';
+import type { ParsedImport, WorkspaceIndex } from "../../../shared/index.js";
+import { SupportedLanguages } from "../../../shared/index.js";
+import { resolveImportPath } from "../../import-resolvers/standard.js";
+import type { TsconfigPaths } from "../../language-config.js";
 
 export interface TsResolveContext {
   readonly fromFile: string;
@@ -35,7 +35,9 @@ export interface TsResolveContext {
   readonly tsconfigPaths?: TsconfigPaths | null;
   /** JavaScript vs TypeScript switch — affects the extensions the
    *  resolver tries. Defaults to TypeScript. */
-  readonly language?: SupportedLanguages.TypeScript | SupportedLanguages.JavaScript;
+  readonly language?:
+    | SupportedLanguages.TypeScript
+    | SupportedLanguages.JavaScript;
 }
 
 export function resolveTsImportTarget(
@@ -49,8 +51,13 @@ export function resolveTsImportTarget(
   // expression isn't a string literal we can't resolve a file.
   // A string-literal dynamic import (`import('./m')`) resolves like a
   // static import — fall through to the shared path resolver.
-  if (parsedImport.kind === 'dynamic-unresolved' && parsedImport.targetRaw === null) return null;
-  if (parsedImport.targetRaw === null || parsedImport.targetRaw === '') return null;
+  if (
+    parsedImport.kind === "dynamic-unresolved" &&
+    parsedImport.targetRaw === null
+  )
+    return null;
+  if (parsedImport.targetRaw === null || parsedImport.targetRaw === "")
+    return null;
 
   return resolveTsTarget(parsedImport.targetRaw, ctx);
 }
@@ -67,12 +74,16 @@ export function resolveTsImportTarget(
  *   - `targetRaw` is empty
  *   - the resolver finds no matching file
  */
-export function resolveTsTarget(targetRaw: string, ctx: TsResolveContext): string | null {
-  if (targetRaw === '') return null;
+export function resolveTsTarget(
+  targetRaw: string,
+  ctx: TsResolveContext,
+): string | null {
+  if (targetRaw === "") return null;
 
   const language = ctx.language ?? SupportedLanguages.TypeScript;
   const allFileList = ctx.allFileList ?? Array.from(ctx.allFilePaths);
-  const normalizedFileList = ctx.normalizedFileList ?? allFileList.map((f) => f.toLowerCase());
+  const normalizedFileList =
+    ctx.normalizedFileList ?? allFileList.map((f) => f.toLowerCase());
   const resolveCache = ctx.resolveCache ?? new Map<string, string | null>();
 
   return resolveImportPath(
@@ -87,11 +98,13 @@ export function resolveTsTarget(targetRaw: string, ctx: TsResolveContext): strin
   );
 }
 
-function narrowTsContext(workspaceIndex: WorkspaceIndex): TsResolveContext | null {
+function narrowTsContext(
+  workspaceIndex: WorkspaceIndex,
+): TsResolveContext | null {
   const ctx = workspaceIndex as TsResolveContext | undefined;
   if (
     ctx === undefined ||
-    typeof (ctx as { fromFile?: unknown }).fromFile !== 'string' ||
+    typeof (ctx as { fromFile?: unknown }).fromFile !== "string" ||
     !((ctx as { allFilePaths?: unknown }).allFilePaths instanceof Set)
   ) {
     return null;

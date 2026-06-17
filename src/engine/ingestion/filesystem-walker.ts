@@ -1,9 +1,12 @@
-import { isVerboseIngestionEnabled } from './utils/verbose.js';
-import { DEFAULT_MAX_FILE_SIZE_BYTES, getMaxFileSizeBytes } from './utils/max-file-size.js';
-import fs from 'fs/promises';
-import path from 'path';
-import { glob } from 'glob';
-import { createIgnoreFilter } from '../../config/ignore-service.js';
+import { isVerboseIngestionEnabled } from "./utils/verbose.js";
+import {
+  DEFAULT_MAX_FILE_SIZE_BYTES,
+  getMaxFileSizeBytes,
+} from "./utils/max-file-size.js";
+import fs from "fs/promises";
+import path from "path";
+import { glob } from "glob";
+import { createIgnoreFilter } from "../../config/ignore-service.js";
 
 export interface FileEntry {
   path: string;
@@ -34,7 +37,7 @@ export const walkRepositoryPaths = async (
   const ignoreFilter = await createIgnoreFilter(repoPath);
   const maxFileSizeBytes = getMaxFileSizeBytes();
 
-  const filtered = await glob('**/*', {
+  const filtered = await glob("**/*", {
     cwd: repoPath,
     nodir: true,
     dot: false,
@@ -53,28 +56,34 @@ export const walkRepositoryPaths = async (
         const stat = await fs.stat(fullPath);
         if (stat.size > maxFileSizeBytes) {
           skippedLarge++;
-          skippedLargePaths.push(relativePath.replace(/\\/g, '/'));
+          skippedLargePaths.push(relativePath.replace(/\\/g, "/"));
           return null;
         }
-        return { path: relativePath.replace(/\\/g, '/'), size: stat.size };
+        return { path: relativePath.replace(/\\/g, "/"), size: stat.size };
       }),
     );
 
     for (const result of results) {
       processed++;
-      if (result.status === 'fulfilled' && result.value !== null) {
+      if (result.status === "fulfilled" && result.value !== null) {
         entries.push(result.value);
         onProgress?.(processed, filtered.length, result.value.path);
       } else {
-        onProgress?.(processed, filtered.length, batch[results.indexOf(result)]);
+        onProgress?.(
+          processed,
+          filtered.length,
+          batch[results.indexOf(result)],
+        );
       }
     }
   }
 
   if (skippedLarge > 0) {
     const isDefault = maxFileSizeBytes === DEFAULT_MAX_FILE_SIZE_BYTES;
-    const suffix = isDefault ? ', likely generated/vendored' : '';
-    console.warn(`  Skipped ${skippedLarge} large files (>${maxFileSizeBytes / 1024}KB${suffix})`);
+    const suffix = isDefault ? ", likely generated/vendored" : "";
+    console.warn(
+      `  Skipped ${skippedLarge} large files (>${maxFileSizeBytes / 1024}KB${suffix})`,
+    );
     if (isVerboseIngestionEnabled()) {
       for (const p of skippedLargePaths) {
         console.warn(`  - ${p}`);
@@ -100,13 +109,13 @@ export const readFileContents = async (
     const results = await Promise.allSettled(
       batch.map(async (relativePath) => {
         const fullPath = path.join(repoPath, relativePath);
-        const content = await fs.readFile(fullPath, 'utf-8');
+        const content = await fs.readFile(fullPath, "utf-8");
         return { path: relativePath, content };
       }),
     );
 
     for (const result of results) {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         contents.set(result.value.path, result.value.content);
       }
     }

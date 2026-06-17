@@ -15,7 +15,7 @@
  * 与旧技术类型（TERM/CON/FLOW/MOD/OPEN/OWN/VER/DB/CAP）的映射关系。
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 // ============================================================================
 // 业务知识类型（设计文档定义）
@@ -27,15 +27,15 @@ import { z } from 'zod';
  * 来自设计文档 02-knowledge-type-spec.md
  */
 export const KnowledgeTypeSchema = z.enum([
-  'ARCHITECTURE',
-  'CAPABILITY',
-  'CONCEPT',
-  'BOUNDARY',
-  'EXTERNAL',
-  'CONSTRAINT',
-  'RELATION',
-  'DATA_MODEL',
-  'WORKFLOW',
+  "ARCHITECTURE",
+  "CAPABILITY",
+  "CONCEPT",
+  "BOUNDARY",
+  "EXTERNAL",
+  "CONSTRAINT",
+  "RELATION",
+  "DATA_MODEL",
+  "WORKFLOW",
 ]);
 
 export type KnowledgeType = z.infer<typeof KnowledgeTypeSchema>;
@@ -44,30 +44,30 @@ export type KnowledgeType = z.infer<typeof KnowledgeTypeSchema>;
  * 所有业务知识类型列表
  */
 export const ALL_KNOWLEDGE_TYPES: KnowledgeType[] = [
-  'ARCHITECTURE',
-  'CAPABILITY',
-  'CONCEPT',
-  'BOUNDARY',
-  'EXTERNAL',
-  'CONSTRAINT',
-  'RELATION',
-  'DATA_MODEL',
-  'WORKFLOW',
+  "ARCHITECTURE",
+  "CAPABILITY",
+  "CONCEPT",
+  "BOUNDARY",
+  "EXTERNAL",
+  "CONSTRAINT",
+  "RELATION",
+  "DATA_MODEL",
+  "WORKFLOW",
 ];
 
 /**
  * 业务知识类型的中文名称
  */
 export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
-  ARCHITECTURE: '架构概览',
-  CAPABILITY: '能力目录',
-  CONCEPT: '概念知识',
-  BOUNDARY: '边界知识',
-  EXTERNAL: '外部系统交互',
-  CONSTRAINT: '约束知识',
-  RELATION: '能力关系',
-  DATA_MODEL: '数据模型',
-  WORKFLOW: '跨域业务流程',
+  ARCHITECTURE: "架构概览",
+  CAPABILITY: "能力目录",
+  CONCEPT: "概念知识",
+  BOUNDARY: "边界知识",
+  EXTERNAL: "外部系统交互",
+  CONSTRAINT: "约束知识",
+  RELATION: "能力关系",
+  DATA_MODEL: "数据模型",
+  WORKFLOW: "跨域业务流程",
 };
 
 /**
@@ -75,15 +75,15 @@ export const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
  * ARCHITECTURE 放在知识库根目录，其他类型放在子目录
  */
 export const KNOWLEDGE_TYPE_DIRS: Record<KnowledgeType, string> = {
-  ARCHITECTURE: '', // 根目录
-  CAPABILITY: 'capabilities',
-  CONCEPT: 'concepts',
-  BOUNDARY: 'boundaries',
-  EXTERNAL: 'external-systems',
-  CONSTRAINT: 'constraints',
-  RELATION: 'relations',
-  DATA_MODEL: 'data-model',
-  WORKFLOW: 'workflows',
+  ARCHITECTURE: "", // 根目录
+  CAPABILITY: "capabilities",
+  CONCEPT: "concepts",
+  BOUNDARY: "boundaries",
+  EXTERNAL: "external-systems",
+  CONSTRAINT: "constraints",
+  RELATION: "relations",
+  DATA_MODEL: "data-model",
+  WORKFLOW: "workflows",
 };
 
 // ============================================================================
@@ -96,15 +96,15 @@ export const KNOWLEDGE_TYPE_DIRS: Record<KnowledgeType, string> = {
  * 来自现有 Schema 定义
  */
 export const LegacyTypeSchema = z.enum([
-  'TERM',
-  'CON',
-  'FLOW',
-  'MOD',
-  'OPEN',
-  'OWN',
-  'VER',
-  'DB',
-  'CAP',
+  "TERM",
+  "CON",
+  "FLOW",
+  "MOD",
+  "OPEN",
+  "OWN",
+  "VER",
+  "DB",
+  "CAP",
 ]);
 
 export type LegacyType = z.infer<typeof LegacyTypeSchema>;
@@ -113,30 +113,30 @@ export type LegacyType = z.infer<typeof LegacyTypeSchema>;
  * 所有技术类型列表
  */
 export const ALL_LEGACY_TYPES: LegacyType[] = [
-  'TERM',
-  'CON',
-  'FLOW',
-  'MOD',
-  'OPEN',
-  'OWN',
-  'VER',
-  'DB',
-  'CAP',
+  "TERM",
+  "CON",
+  "FLOW",
+  "MOD",
+  "OPEN",
+  "OWN",
+  "VER",
+  "DB",
+  "CAP",
 ];
 
 /**
  * 技术类型的中文名称
  */
 export const LEGACY_TYPE_LABELS: Record<LegacyType, string> = {
-  TERM: '术语',
-  CON: '契约',
-  FLOW: '流程',
-  MOD: '模块',
-  OPEN: '开放问题',
-  OWN: '所有权',
-  VER: '验证锚点',
-  DB: '数据库',
-  CAP: '能力声明',
+  TERM: "术语",
+  CON: "契约",
+  FLOW: "流程",
+  MOD: "模块",
+  OPEN: "开放问题",
+  OWN: "所有权",
+  VER: "验证锚点",
+  DB: "数据库",
+  CAP: "能力声明",
 };
 
 // ============================================================================
@@ -149,16 +149,19 @@ export const LEGACY_TYPE_LABELS: Record<LegacyType, string> = {
  * 用于将旧类型转换为新类型。
  * undefined 表示该技术类型无对应的业务类型（纯技术类型）。
  */
-export const LEGACY_TO_KNOWLEDGE_MAP: Record<LegacyType, KnowledgeType | undefined> = {
-  TERM: 'CONCEPT',           // 术语 → 概念知识
-  CON: undefined,            // 契约：纯技术类型，无业务对应
-  FLOW: 'WORKFLOW',          // 流程 → 跨域业务流程
-  MOD: undefined,            // 模块：纯技术类型，无业务对应
-  OPEN: 'BOUNDARY',          // 开放问题 → 边界知识
-  OWN: undefined,            // 所有权：纯技术类型，无业务对应
-  VER: undefined,            // 验证锚点：纯技术类型，无业务对应
-  DB: 'DATA_MODEL',          // 数据库 → 数据模型
-  CAP: 'CAPABILITY',         // 能力声明 → 能力目录
+export const LEGACY_TO_KNOWLEDGE_MAP: Record<
+  LegacyType,
+  KnowledgeType | undefined
+> = {
+  TERM: "CONCEPT", // 术语 → 概念知识
+  CON: undefined, // 契约：纯技术类型，无业务对应
+  FLOW: "WORKFLOW", // 流程 → 跨域业务流程
+  MOD: undefined, // 模块：纯技术类型，无业务对应
+  OPEN: "BOUNDARY", // 开放问题 → 边界知识
+  OWN: undefined, // 所有权：纯技术类型，无业务对应
+  VER: undefined, // 验证锚点：纯技术类型，无业务对应
+  DB: "DATA_MODEL", // 数据库 → 数据模型
+  CAP: "CAPABILITY", // 能力声明 → 能力目录
 };
 
 /**
@@ -167,15 +170,15 @@ export const LEGACY_TO_KNOWLEDGE_MAP: Record<LegacyType, KnowledgeType | undefin
  * 一个业务类型可能对应多个技术类型。
  */
 export const KNOWLEDGE_TO_LEGACY_MAP: Record<KnowledgeType, LegacyType[]> = {
-  ARCHITECTURE: [],           // 新类型，无技术对应
-  CAPABILITY: ['CAP'],
-  CONCEPT: ['TERM'],
-  BOUNDARY: ['OPEN'],
-  EXTERNAL: [],              // 新类型，无技术对应
-  CONSTRAINT: [],            // 新类型，无技术对应
-  RELATION: [],              // 新类型，无技术对应
-  DATA_MODEL: ['DB'],
-  WORKFLOW: ['FLOW'],
+  ARCHITECTURE: [], // 新类型，无技术对应
+  CAPABILITY: ["CAP"],
+  CONCEPT: ["TERM"],
+  BOUNDARY: ["OPEN"],
+  EXTERNAL: [], // 新类型，无技术对应
+  CONSTRAINT: [], // 新类型，无技术对应
+  RELATION: [], // 新类型，无技术对应
+  DATA_MODEL: ["DB"],
+  WORKFLOW: ["FLOW"],
 };
 
 /**
@@ -188,7 +191,9 @@ export function hasBusinessMapping(legacyType: LegacyType): boolean {
 /**
  * 获取技术类型对应的业务类型
  */
-export function getKnowledgeTypeForLegacy(legacyType: LegacyType): KnowledgeType | undefined {
+export function getKnowledgeTypeForLegacy(
+  legacyType: LegacyType,
+): KnowledgeType | undefined {
   return LEGACY_TO_KNOWLEDGE_MAP[legacyType];
 }
 
@@ -230,17 +235,17 @@ export function getTypeDir(type: KnowledgeType | LegacyType): string {
   }
   // 纯技术类型保持原有目录名
   const legacyDirs: Record<LegacyType, string> = {
-    TERM: 'terms',
-    CON: 'contracts',
-    FLOW: 'flows',
-    MOD: 'modules',
-    OPEN: 'open',
-    OWN: 'ownership',
-    VER: 'validation',
-    DB: 'db',
-    CAP: 'capabilities',
+    TERM: "terms",
+    CON: "contracts",
+    FLOW: "flows",
+    MOD: "modules",
+    OPEN: "open",
+    OWN: "ownership",
+    VER: "validation",
+    DB: "db",
+    CAP: "capabilities",
   };
-  return legacyDirs[type] ?? 'unknown';
+  return legacyDirs[type] ?? "unknown";
 }
 
 // ============================================================================
@@ -256,11 +261,11 @@ export function getTypeDir(type: KnowledgeType | LegacyType): string {
  * - 阶段 2: 其他类型并行
  */
 export const GenerationPhaseSchema = z.enum([
-  'architecture',
-  'concept',
-  'data_model',
-  'capability',
-  'parallel',
+  "architecture",
+  "concept",
+  "data_model",
+  "capability",
+  "parallel",
 ]);
 
 export type GenerationPhase = z.infer<typeof GenerationPhaseSchema>;
@@ -269,11 +274,11 @@ export type GenerationPhase = z.infer<typeof GenerationPhaseSchema>;
  * 各生成阶段对应的类型
  */
 export const PHASE_TO_TYPES: Record<GenerationPhase, KnowledgeType[]> = {
-  architecture: ['ARCHITECTURE'],
-  concept: ['CONCEPT'],
-  data_model: ['DATA_MODEL'],
-  capability: ['CAPABILITY'],
-  parallel: ['BOUNDARY', 'EXTERNAL', 'CONSTRAINT', 'RELATION', 'WORKFLOW'],
+  architecture: ["ARCHITECTURE"],
+  concept: ["CONCEPT"],
+  data_model: ["DATA_MODEL"],
+  capability: ["CAPABILITY"],
+  parallel: ["BOUNDARY", "EXTERNAL", "CONSTRAINT", "RELATION", "WORKFLOW"],
 };
 
 /**
@@ -285,7 +290,7 @@ export function getPhaseForType(type: KnowledgeType): GenerationPhase {
       return phase as GenerationPhase;
     }
   }
-  return 'parallel'; // 默认为并行阶段
+  return "parallel"; // 默认为并行阶段
 }
 
 // ============================================================================
@@ -326,7 +331,7 @@ export const commonKnowledgeSchema = z.object({
   source_files: z.array(z.string()).optional(),
 
   /** 置信度 */
-  confidence: z.enum(['high', 'medium', 'low']).optional(),
+  confidence: z.enum(["high", "medium", "low"]).optional(),
 });
 
 export type CommonKnowledgeFields = z.infer<typeof commonKnowledgeSchema>;

@@ -5,9 +5,9 @@
  * 组装模型、工具、中间件，创建完整的 Agent 运行时
  */
 
-import { ChatOpenAI } from '@langchain/openai';
-import { DynamicStructuredTool } from '@langchain/core/tools';
-import { ToolMessage } from '@langchain/core/messages';
+import { ChatOpenAI } from "@langchain/openai";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { ToolMessage } from "@langchain/core/messages";
 import {
   createFilesystemMiddleware,
   StateBackend,
@@ -15,25 +15,32 @@ import {
   createSummarizationMiddleware,
   createSubAgentMiddleware,
   GENERAL_PURPOSE_SUBAGENT,
-} from 'deepagents';
+} from "deepagents";
 import {
   createAgent,
   createMiddleware,
   todoListMiddleware,
   anthropicPromptCachingMiddleware,
-} from 'langchain';
+} from "langchain";
 
-import { FileBackend } from './file-backend.js';
-import { createFileToolsMiddleware, getFileToolsSystemPrompt } from './file-tools.js';
+import { FileBackend } from "./file-backend.js";
+import {
+  createFileToolsMiddleware,
+  getFileToolsSystemPrompt,
+} from "./file-tools.js";
 import {
   computeSummarizationThresholds,
   AIWIKI_SUMMARY_PROMPT,
   type SummarizationThresholds,
-} from './middleware.js';
-import { createRetryingFetch, type RetryHooks, DEFAULT_RETRY_MAX_ATTEMPTS } from '../shared/retrying-fetch.js';
-import { logger } from '../shared/logger.js';
-import { LLM_DEFAULTS } from '../config/defaults.js';
-import type { ValidatedModelConfig } from '../config/multi-model-config.js';
+} from "./middleware.js";
+import {
+  createRetryingFetch,
+  type RetryHooks,
+  DEFAULT_RETRY_MAX_ATTEMPTS,
+} from "../shared/retrying-fetch.js";
+import { logger } from "../shared/logger.js";
+import { LLM_DEFAULTS } from "../config/defaults.js";
+import type { ValidatedModelConfig } from "../config/multi-model-config.js";
 
 // ── 类型定义 ───────────────────────────────────────────────────────────────
 
@@ -119,7 +126,7 @@ export type AgentRuntime = ReturnType<typeof createAgent>;
 /**
  * 默认历史记录路径前缀
  */
-const DEFAULT_HISTORY_PATH_PREFIX = '.aiwiki/conversation_history';
+const DEFAULT_HISTORY_PATH_PREFIX = ".aiwiki/conversation_history";
 
 /**
  * 默认上下文窗口大小
@@ -130,7 +137,7 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
  * 基础系统提示词
  */
 const BASE_PROMPT =
-  'In order to complete the objective that the user asks of you, you have access to a number of standard tools.';
+  "In order to complete the objective that the user asks of you, you have access to a number of standard tools.";
 
 /**
  * 子代理任务提示词
@@ -178,19 +185,21 @@ When NOT to use the task tool:
 export function createModelInstance(
   config: ModelInstanceConfig,
   retryHooks?: RetryHooks,
-  maxRetryAttempts?: number
+  maxRetryAttempts?: number,
 ): ChatOpenAI {
   const apiKey = config.apiKey;
   if (!apiKey) {
-    throw new Error('API key not configured');
+    throw new Error("API key not configured");
   }
 
   const resolvedModel = config.model;
   if (!resolvedModel.trim()) {
-    throw new Error('Model name is empty. Please configure a valid model name.');
+    throw new Error(
+      "Model name is empty. Please configure a valid model name.",
+    );
   }
 
-  logger.info('[Runtime] Creating model instance', {
+  logger.info("[Runtime] Creating model instance", {
     model: resolvedModel,
     baseUrl: config.baseUrl,
     maxTokens: config.maxTokens,
@@ -253,7 +262,7 @@ export function createStateBackend(config: StateBackendConfig): FileBackend {
     virtualMode: false,
   });
 
-  logger.info('[Runtime] StateBackend created', {
+  logger.info("[Runtime] StateBackend created", {
     rootDir: config.rootDir,
     maxOutputBytes: config.maxOutputBytes,
   });
@@ -268,28 +277,29 @@ export function createStateBackend(config: StateBackendConfig): FileBackend {
  * 参考 CmbCoworkAgent 的 formatLocalISO
  */
 function formatLocalISO(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   }).formatToParts(date);
 
-  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
-  const local = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+  const get = (type: string): string =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  const local = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
 
   // 计算 UTC 偏移
-  const utc = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-  const loc = new Date(date.toLocaleString('en-US', { timeZone }));
+  const utc = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
+  const loc = new Date(date.toLocaleString("en-US", { timeZone }));
   const offsetMin = Math.round((loc.getTime() - utc.getTime()) / 60_000);
-  const sign = offsetMin >= 0 ? '+' : '-';
+  const sign = offsetMin >= 0 ? "+" : "-";
   const absMin = Math.abs(offsetMin);
-  const oh = String(Math.floor(absMin / 60)).padStart(2, '0');
-  const om = String(absMin % 60).padStart(2, '0');
+  const oh = String(Math.floor(absMin / 60)).padStart(2, "0");
+  const om = String(absMin % 60).padStart(2, "0");
 
   return `${local}${sign}${oh}:${om}`;
 }
@@ -303,8 +313,12 @@ function getSystemEnvironment(): {
   timezone: string;
   currentTime: string;
 } {
-  const isWindows = process.platform === 'win32';
-  const platform = isWindows ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
+  const isWindows = process.platform === "win32";
+  const platform = isWindows
+    ? "Windows"
+    : process.platform === "darwin"
+      ? "macOS"
+      : "Linux";
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
@@ -322,7 +336,10 @@ function getSystemEnvironment(): {
  * @param extraPrompt - 额外提示词（可选）
  * @returns 完整的系统提示词
  */
-export function buildSystemPrompt(workspacePath: string, extraPrompt?: string): string {
+export function buildSystemPrompt(
+  workspacePath: string,
+  extraPrompt?: string,
+): string {
   const env = getSystemEnvironment();
 
   const systemPrompt = `
@@ -342,7 +359,7 @@ export function buildSystemPrompt(workspacePath: string, extraPrompt?: string): 
 
 ${BASE_PROMPT}
 
-${extraPrompt ? `\n${extraPrompt}` : ''}
+${extraPrompt ? `\n${extraPrompt}` : ""}
 `;
 
   return systemPrompt.trim();
@@ -360,7 +377,7 @@ ${extraPrompt ? `\n${extraPrompt}` : ''}
  * @returns Agent 运行时实例
  */
 export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
-  logger.info('[Runtime] Creating agent runtime', {
+  logger.info("[Runtime] Creating agent runtime", {
     model: config.model.model,
     workspacePath: config.workspacePath,
     threadId: config.threadId,
@@ -370,7 +387,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   const model = createModelInstance(
     config.model,
     config.retryHooks,
-    config.maxRetryAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS
+    config.maxRetryAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS,
   );
 
   // ── 2. 创建 StateBackend ─────────────────────────────────────────────────
@@ -385,9 +402,10 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
 
   // ── 3. 计算摘要阈值 ─────────────────────────────────────────────────────
   const maxTokens = config.model.maxTokens ?? DEFAULT_CONTEXT_WINDOW;
-  const thresholds: SummarizationThresholds = computeSummarizationThresholds(maxTokens);
+  const thresholds: SummarizationThresholds =
+    computeSummarizationThresholds(maxTokens);
 
-  logger.debug('[Runtime] Summarization thresholds', {
+  logger.debug("[Runtime] Summarization thresholds", {
     maxTokens,
     triggerTokens: thresholds.triggerTokens,
     keepTokens: thresholds.keepTokens,
@@ -398,13 +416,13 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   // ── 4. 构建系统提示词 ───────────────────────────────────────────────────
   const systemPrompt = buildSystemPrompt(
     config.workspacePath,
-    config.extraSystemPrompt
+    config.extraSystemPrompt,
   );
 
   // ── 5. 构建文件工具系统提示词 ───────────────────────────────────────────
   const filesystemSystemPrompt = getFileToolsSystemPrompt(
     config.workspacePath,
-    config.enableWrite ?? true
+    config.enableWrite ?? true,
   );
 
   // ── 6. 构建中间件列表 ───────────────────────────────────────────────────
@@ -430,7 +448,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   // 工具错误处理中间件（参考 CmbCoworkAgent）
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolErrorMiddleware = createMiddleware<any>({
-    name: 'toolErrorCatch',
+    name: "toolErrorCatch",
     wrapToolCall: async (request, handler) => {
       try {
         return await handler(request);
@@ -447,18 +465,18 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
 
         logger.warn(
           `[Runtime] Recoverable ${recovered.kind} error from tool "${toolName}" handed back to model:`,
-          recovered.message
+          recovered.message,
         );
 
         // 返回 ToolMessage 让模型看到错误并调整
         return new ToolMessage({
           content:
-            recovered.kind === 'schema'
+            recovered.kind === "schema"
               ? `Invalid tool arguments: ${recovered.message}\nPlease fix the arguments and try again.`
               : `Tool execution failed: ${recovered.message}\nPlease adjust your approach and try again.`,
           tool_call_id: toolCallId,
           name: toolName,
-          status: 'error',
+          status: "error",
         });
       }
     },
@@ -470,7 +488,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
     // 处理子代理：为带有 skills 的子代理自动注入 SkillsMiddleware
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const processedSubagents = config.subagents.map((subagent: any) => {
-      if (!('skills' in subagent) || !subagent.skills?.length) return subagent;
+      if (!("skills" in subagent) || !subagent.skills?.length) return subagent;
 
       // 子代理的 SkillsMiddleware 需要从 deepagents 导入
       // const subagentSkillsMiddleware = createSkillsMiddleware({
@@ -513,7 +531,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
         subagents: [generalPurposeSubagent, ...processedSubagents],
         generalPurposeAgent: false,
         systemPrompt: SEQUENTIAL_TASK_PROMPT,
-      } as Parameters<typeof createSubAgentMiddleware>[0])
+      } as Parameters<typeof createSubAgentMiddleware>[0]),
     );
   }
 
@@ -525,8 +543,8 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
       backend: filesystemBackend,
       summaryPrompt: config.customSummaryPrompt ?? AIWIKI_SUMMARY_PROMPT,
       trimTokensToSummarize: thresholds.trimForSummary,
-      trigger: { type: 'tokens', value: thresholds.triggerTokens },
-      keep: { type: 'tokens', value: thresholds.keepTokens },
+      trigger: { type: "tokens", value: thresholds.triggerTokens },
+      keep: { type: "tokens", value: thresholds.keepTokens },
     };
 
     middlewareList.push(createSummarizationMiddleware(summarizationOptions));
@@ -535,7 +553,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   // Prompt Caching 中间件
   if (config.enablePromptCaching ?? true) {
     middlewareList.push(
-      anthropicPromptCachingMiddleware({ unsupportedModelBehavior: 'ignore' })
+      anthropicPromptCachingMiddleware({ unsupportedModelBehavior: "ignore" }),
     );
   }
 
@@ -567,10 +585,10 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
     // 不使用 checkpointer（根据需求）
     // checkpointer,
     backend,
-    name: config.threadId ? `agent-${config.threadId}` : 'aiwiki-agent',
+    name: config.threadId ? `agent-${config.threadId}` : "aiwiki-agent",
   } as unknown as Parameters<typeof createAgent>[0]);
 
-  logger.info('[Runtime] Agent created successfully', {
+  logger.info("[Runtime] Agent created successfully", {
     workspacePath: config.workspacePath,
     middlewareCount: middlewareList.length,
     toolCount: config.tools?.length ?? 0,
@@ -587,8 +605,8 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
  */
 function unwrapToolFailure(
   error: unknown,
-  toolName: string | undefined
-): { kind: 'schema' | 'runtime'; message: string } | null {
+  toolName: string | undefined,
+): { kind: "schema" | "runtime"; message: string } | null {
   // 不恢复的错误类型
   if (isGraphBubbleUp(error)) return null;
   if (isAbortError(error)) return null;
@@ -606,7 +624,7 @@ function unwrapToolFailure(
 
   // 其他错误视为可恢复
   const message = describeToolError(error);
-  return { kind: 'runtime', message };
+  return { kind: "runtime", message };
 }
 
 /**
@@ -615,7 +633,7 @@ function unwrapToolFailure(
 function isGraphBubbleUp(error: unknown): boolean {
   // 需要从 @langchain/langgraph 导入 isGraphBubbleUp
   // return isGraphBubbleUp(error);
-  return error instanceof Error && error.name === 'GraphBubbleUp';
+  return error instanceof Error && error.name === "GraphBubbleUp";
 }
 
 /**
@@ -623,7 +641,10 @@ function isGraphBubbleUp(error: unknown): boolean {
  */
 function isAbortError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return error.name === 'AbortError' || (error as { code?: unknown }).code === 'ABORT_ERR';
+  return (
+    error.name === "AbortError" ||
+    (error as { code?: unknown }).code === "ABORT_ERR"
+  );
 }
 
 /**
@@ -637,8 +658,8 @@ function isProgrammerError(error: unknown): boolean {
  * 描述工具错误
  */
 function describeToolError(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name || 'Error';
-  if (typeof error === 'string' && error) return error;
+  if (error instanceof Error) return error.message || error.name || "Error";
+  if (typeof error === "string" && error) return error;
   try {
     return JSON.stringify(error) ?? String(error);
   } catch {
@@ -656,7 +677,9 @@ function describeToolError(error: unknown): string {
  * @param options - Agent 运行时选项
  * @returns Agent 运行时实例
  */
-export function createAgentRuntimeSimple(options: AgentRuntimeOptions): AgentRuntime {
+export function createAgentRuntimeSimple(
+  options: AgentRuntimeOptions,
+): AgentRuntime {
   const modelConfig: ModelInstanceConfig = {
     id: options.modelConfig.id,
     model: options.modelConfig.model,

@@ -5,6 +5,7 @@
 你需要为一个前端应用项目生成架构概览知识。架构概览帮助 AI Agent 快速建立对项目的全局认知，并指导编码时的代码定位。
 
 架构概览回答的问题：
+
 - 这个项目是什么类型？使用什么技术栈？
 - 组件组织模式是什么？（feature-based 还是 type-based）
 - 新组件/hooks/slice 放在哪？
@@ -73,6 +74,7 @@
 格式：`技术栈 + 应用类型 + 主要功能`
 
 示例：
+
 - 正确："React SPA 管理后台，提供用户管理、订单管理等功能"
 - 错误："React SPA 管理后台，采用 feature-based 组件组织和 Redux 状态管理"（过于技术化）
 
@@ -91,6 +93,7 @@
 从 src_dir_tree 证据中推断组件组织模式，有以下三种：
 
 **feature-based（按功能分包）**：
+
 - 特征：src/ 下有 features/ 目录，每个 feature 包含独立的组件、hooks、slice
 - 示例结构：
   ```
@@ -106,6 +109,7 @@
   ```
 
 **type-based（按类型分包）**：
+
 - 特征：src/ 下按类型组织，components/、hooks/、pages/ 等目录独立
 - 示例结构：
   ```
@@ -117,6 +121,7 @@
   ```
 
 **混合模式（mixed）**：
+
 - 特征：部分功能独立分包，部分公共代码按类型组织
 - 示例结构：
   ```
@@ -127,6 +132,7 @@
   ```
 
 **判断方法**：
+
 1. 查看 src_dir_tree 中是否存在 features/ 目录
 2. 如果存在 features/ 且每个 feature 有独立子目录 → feature-based
 3. 如果存在 components/hooks/pages 等顶层目录 → type-based
@@ -140,30 +146,68 @@
 
 采用表格形式，每个条目包含三个字段：
 
-| 字段 | 要求 |
-|------|------|
-| layer | 分层名称：Components、Hooks、Pages、Store/Slice 等 |
-| directory_path | 完整目录路径，从证据中提取 |
-| coding_guide | 编码时指导——新代码放哪 |
+| 字段           | 要求                                               |
+| -------------- | -------------------------------------------------- |
+| layer          | 分层名称：Components、Hooks、Pages、Store/Slice 等 |
+| directory_path | 完整目录路径，从证据中提取                         |
+| coding_guide   | 编码时指导——新代码放哪                             |
 
 **feature-based 示例**：
+
 ```json
 [
-  { "layer": "Feature", "directory_path": "src/features/<feature>/", "coding_guide": "新功能创建目录，如 src/features/order/" },
-  { "layer": "Feature Components", "directory_path": "src/features/<feature>/components/", "coding_guide": "功能内组件，如 features/order/components/OrderList.tsx" },
-  { "layer": "Feature Hooks", "directory_path": "src/features/<feature>/hooks/", "coding_guide": "功能内 hooks，如 features/order/hooks/useOrderList.ts" },
-  { "layer": "Feature Slice", "directory_path": "src/features/<feature>/slice.ts", "coding_guide": "功能 Redux 状态定义" },
-  { "layer": "通用组件", "directory_path": "src/components/", "coding_guide": "跨 feature 共享组件" }
+  {
+    "layer": "Feature",
+    "directory_path": "src/features/<feature>/",
+    "coding_guide": "新功能创建目录，如 src/features/order/"
+  },
+  {
+    "layer": "Feature Components",
+    "directory_path": "src/features/<feature>/components/",
+    "coding_guide": "功能内组件，如 features/order/components/OrderList.tsx"
+  },
+  {
+    "layer": "Feature Hooks",
+    "directory_path": "src/features/<feature>/hooks/",
+    "coding_guide": "功能内 hooks，如 features/order/hooks/useOrderList.ts"
+  },
+  {
+    "layer": "Feature Slice",
+    "directory_path": "src/features/<feature>/slice.ts",
+    "coding_guide": "功能 Redux 状态定义"
+  },
+  {
+    "layer": "通用组件",
+    "directory_path": "src/components/",
+    "coding_guide": "跨 feature 共享组件"
+  }
 ]
 ```
 
 **type-based 示例**：
+
 ```json
 [
-  { "layer": "Components", "directory_path": "src/components/", "coding_guide": "新组件在此创建，如 components/OrderList.tsx" },
-  { "layer": "Pages", "directory_path": "src/pages/", "coding_guide": "页面组件，如 pages/OrderPage.tsx" },
-  { "layer": "Hooks", "directory_path": "src/hooks/", "coding_guide": "新 hooks 在此创建，如 hooks/useOrder.ts" },
-  { "layer": "Store", "directory_path": "src/store/", "coding_guide": "Redux 全局状态和 slices" }
+  {
+    "layer": "Components",
+    "directory_path": "src/components/",
+    "coding_guide": "新组件在此创建，如 components/OrderList.tsx"
+  },
+  {
+    "layer": "Pages",
+    "directory_path": "src/pages/",
+    "coding_guide": "页面组件，如 pages/OrderPage.tsx"
+  },
+  {
+    "layer": "Hooks",
+    "directory_path": "src/hooks/",
+    "coding_guide": "新 hooks 在此创建，如 hooks/useOrder.ts"
+  },
+  {
+    "layer": "Store",
+    "directory_path": "src/store/",
+    "coding_guide": "Redux 全局状态和 slices"
+  }
 ]
 ```
 
@@ -174,11 +218,13 @@
 **必须采用表格形式**，每个条目包含三个字段。
 
 **coding_guide 塋写示例**：
+
 - `"分层目录已在上方列出"`（如果分层已在 layer_directory_paths 中详细说明）
 - `"通用 hooks，跨功能共享"`
 - `"应用样式和主题"`
 
 **必须包含的目录**（按实际存在选择）：
+
 - src/features/ 或 src/modules/（业务功能目录）
 - src/components/（通用组件）
 - src/hooks/ 或 src/utils/（工具/hooks）
@@ -204,11 +250,13 @@
    ```
 
 **不要写通用目录**（Agent 已知这些）：
+
 - `.git/`、`.svn/` — 版本控制目录（Agent 已知）
 - `.idea/`、`.vscode/` — IDE 配置（Agent 已知）
 - `node_modules/` — npm 依赖（Agent 已知）
 
 **示例**（Vue/React 项目）：
+
 ```json
 [
   { "path": "dist/", "reason": "构建产物" },
@@ -218,6 +266,7 @@
 ```
 
 **示例**（Next.js 项目）：
+
 ```json
 [
   { "path": ".next/", "reason": "Next.js 构建产物" },
@@ -232,20 +281,32 @@
 描述通用的代码组织约定，从目录结构和文件命名推断。
 
 **必填约定**：
+
 - 组件命名约定（PascalCase 或其他）
 - hooks 命名约定（useXxx 格式）
 - 状态管理位置
 
 **示例**：
+
 ```json
 [
-  { "convention": "组件命名", "description": "组件文件使用 PascalCase，如 OrderList.tsx" },
-  { "convention": "Hooks 命名", "description": "Hooks 文件以 use 开头，如 useOrderList.ts" },
-  { "convention": "状态管理", "description": "feature 状态在各 feature 的 slice.ts，全局状态在 src/store/" }
+  {
+    "convention": "组件命名",
+    "description": "组件文件使用 PascalCase，如 OrderList.tsx"
+  },
+  {
+    "convention": "Hooks 命名",
+    "description": "Hooks 文件以 use 开头，如 useOrderList.ts"
+  },
+  {
+    "convention": "状态管理",
+    "description": "feature 状态在各 feature 的 slice.ts，全局状态在 src/store/"
+  }
 ]
 ```
 
 **禁止**：
+
 - 不描述业务特定约定（如"订单列表必须分页"），业务约定属于约束知识。
 
 ### business_domains_navigation（业务领域导航）
@@ -271,16 +332,25 @@
 
 列出主要入口：
 
-| 类型 | 必填 |
-|------|------|
+| 类型     | 必填                                |
+| -------- | ----------------------------------- |
 | 应用入口 | 是（src/main.tsx 或 src/index.tsx） |
-| 路由入口 | 是（src/App.tsx 或路由配置文件） |
+| 路由入口 | 是（src/App.tsx 或路由配置文件）    |
 
 **示例**：
+
 ```json
 [
-  { "type": "应用入口", "location": "src/main.tsx", "description": "Vite 启动入口" },
-  { "type": "路由入口", "location": "src/App.tsx", "description": "React Router 配置" }
+  {
+    "type": "应用入口",
+    "location": "src/main.tsx",
+    "description": "Vite 启动入口"
+  },
+  {
+    "type": "路由入口",
+    "location": "src/App.tsx",
+    "description": "React Router 配置"
+  }
 ]
 ```
 
@@ -305,16 +375,48 @@
   "tech_stack": ["React 18", "Redux Toolkit", "Vite", "Ant Design"],
   "component_mode": "feature-based",
   "layer_directory_paths": [
-    { "layer": "Feature", "directory_path": "src/features/<feature>/", "coding_guide": "新功能创建目录，如 src/features/order/" },
-    { "layer": "Feature Components", "directory_path": "src/features/<feature>/components/", "coding_guide": "功能内组件，如 features/order/components/OrderList.tsx" },
-    { "layer": "Feature Hooks", "directory_path": "src/features/<feature>/hooks/", "coding_guide": "功能内 hooks，如 features/order/hooks/useOrderList.ts" },
-    { "layer": "Feature Slice", "directory_path": "src/features/<feature>/slice.ts", "coding_guide": "功能 Redux 状态定义" },
-    { "layer": "通用组件", "directory_path": "src/components/", "coding_guide": "跨 feature 共享组件" }
+    {
+      "layer": "Feature",
+      "directory_path": "src/features/<feature>/",
+      "coding_guide": "新功能创建目录，如 src/features/order/"
+    },
+    {
+      "layer": "Feature Components",
+      "directory_path": "src/features/<feature>/components/",
+      "coding_guide": "功能内组件，如 features/order/components/OrderList.tsx"
+    },
+    {
+      "layer": "Feature Hooks",
+      "directory_path": "src/features/<feature>/hooks/",
+      "coding_guide": "功能内 hooks，如 features/order/hooks/useOrderList.ts"
+    },
+    {
+      "layer": "Feature Slice",
+      "directory_path": "src/features/<feature>/slice.ts",
+      "coding_guide": "功能 Redux 状态定义"
+    },
+    {
+      "layer": "通用组件",
+      "directory_path": "src/components/",
+      "coding_guide": "跨 feature 共享组件"
+    }
   ],
   "directory_structure": [
-    { "path": "src/features/", "purpose": "业务功能模块", "coding_guide": "分层目录已在上方列出" },
-    { "path": "src/components/", "purpose": "通用 UI 组件", "coding_guide": "跨 feature 共享的组件" },
-    { "path": "src/hooks/", "purpose": "通用 hooks", "coding_guide": "跨 feature 共享的逻辑封装" }
+    {
+      "path": "src/features/",
+      "purpose": "业务功能模块",
+      "coding_guide": "分层目录已在上方列出"
+    },
+    {
+      "path": "src/components/",
+      "purpose": "通用 UI 组件",
+      "coding_guide": "跨 feature 共享的组件"
+    },
+    {
+      "path": "src/hooks/",
+      "purpose": "通用 hooks",
+      "coding_guide": "跨 feature 共享的逻辑封装"
+    }
   ],
   "ignore_directories": [
     { "path": "node_modules/", "reason": "npm 依赖" },
@@ -323,14 +425,31 @@
     { "path": ".codegraph/", "reason": "代码索引文件" }
   ],
   "coding_conventions": [
-    { "convention": "组件命名", "description": "组件文件使用 PascalCase，如 OrderList.tsx" },
-    { "convention": "Hooks 命名", "description": "Hooks 文件以 use 开头，如 useOrderList.ts" },
-    { "convention": "状态管理", "description": "feature 状态在各 feature 的 slice.ts，全局状态在 src/store/" }
+    {
+      "convention": "组件命名",
+      "description": "组件文件使用 PascalCase，如 OrderList.tsx"
+    },
+    {
+      "convention": "Hooks 命名",
+      "description": "Hooks 文件以 use 开头，如 useOrderList.ts"
+    },
+    {
+      "convention": "状态管理",
+      "description": "feature 状态在各 feature 的 slice.ts，全局状态在 src/store/"
+    }
   ],
   "business_domains_navigation": "参见能力目录 capabilities/_index.md 获取用户管理、订单管理等业务领域的详细信息。",
   "debug_entrypoints": [
-    { "type": "应用入口", "location": "src/main.tsx", "description": "Vite 启动入口" },
-    { "type": "路由入口", "location": "src/App.tsx", "description": "React Router 配置" }
+    {
+      "type": "应用入口",
+      "location": "src/main.tsx",
+      "description": "Vite 启动入口"
+    },
+    {
+      "type": "路由入口",
+      "location": "src/App.tsx",
+      "description": "React Router 配置"
+    }
   ],
   "evidence": ["package.json", "vite.config.ts", "src/ 目录结构"]
 }
@@ -346,15 +465,39 @@
   "tech_stack": ["Vue 3", "Pinia", "Vite", "Element Plus"],
   "component_mode": "type-based",
   "layer_directory_paths": [
-    { "layer": "Components", "directory_path": "src/components/", "coding_guide": "新组件在此创建，如 components/UserProfile.vue" },
-    { "layer": "Pages", "directory_path": "src/pages/", "coding_guide": "页面组件，如 pages/LoginPage.vue" },
-    { "layer": "Hooks", "directory_path": "src/composables/", "coding_guide": "新 composables 在此创建，如 composables/useAuth.ts" },
-    { "layer": "Store", "directory_path": "src/stores/", "coding_guide": "Pinia 状态定义，如 stores/user.ts" }
+    {
+      "layer": "Components",
+      "directory_path": "src/components/",
+      "coding_guide": "新组件在此创建，如 components/UserProfile.vue"
+    },
+    {
+      "layer": "Pages",
+      "directory_path": "src/pages/",
+      "coding_guide": "页面组件，如 pages/LoginPage.vue"
+    },
+    {
+      "layer": "Hooks",
+      "directory_path": "src/composables/",
+      "coding_guide": "新 composables 在此创建，如 composables/useAuth.ts"
+    },
+    {
+      "layer": "Store",
+      "directory_path": "src/stores/",
+      "coding_guide": "Pinia 状态定义，如 stores/user.ts"
+    }
   ],
   "directory_structure": [
-    { "path": "src/components/", "purpose": "UI 组件", "coding_guide": "分层目录已在上方列出" },
+    {
+      "path": "src/components/",
+      "purpose": "UI 组件",
+      "coding_guide": "分层目录已在上方列出"
+    },
     { "path": "src/pages/", "purpose": "页面组件", "coding_guide": "路由页面" },
-    { "path": "src/composables/", "purpose": "组合式函数", "coding_guide": "可复用逻辑" }
+    {
+      "path": "src/composables/",
+      "purpose": "组合式函数",
+      "coding_guide": "可复用逻辑"
+    }
   ],
   "ignore_directories": [
     { "path": "node_modules/", "reason": "npm 依赖" },
@@ -363,14 +506,31 @@
     { "path": ".codegraph/", "reason": "代码索引文件" }
   ],
   "coding_conventions": [
-    { "convention": "组件命名", "description": "组件文件使用 PascalCase 或 camelCase，如 UserProfile.vue" },
-    { "convention": "Composables 命名", "description": "Composables 文件以 use 开头，如 useAuth.ts" },
-    { "convention": "状态管理", "description": "使用 Pinia，状态定义在 src/stores/" }
+    {
+      "convention": "组件命名",
+      "description": "组件文件使用 PascalCase 或 camelCase，如 UserProfile.vue"
+    },
+    {
+      "convention": "Composables 命名",
+      "description": "Composables 文件以 use 开头，如 useAuth.ts"
+    },
+    {
+      "convention": "状态管理",
+      "description": "使用 Pinia，状态定义在 src/stores/"
+    }
   ],
   "business_domains_navigation": "参见能力目录 capabilities/_index.md 获取用户注册、登录、个人中心等业务领域的详细信息。",
   "debug_entrypoints": [
-    { "type": "应用入口", "location": "src/main.ts", "description": "Vite 启动入口" },
-    { "type": "路由入口", "location": "src/router/index.ts", "description": "Vue Router 配置" }
+    {
+      "type": "应用入口",
+      "location": "src/main.ts",
+      "description": "Vite 启动入口"
+    },
+    {
+      "type": "路由入口",
+      "location": "src/router/index.ts",
+      "description": "Vue Router 配置"
+    }
   ],
   "evidence": ["package.json", "vite.config.ts", "src/ 目录结构"]
 }
@@ -398,6 +558,7 @@
 - ignore_dirs：已识别的忽略目录
 
 **重点**：从 src_dir_tree 中：
+
 1. 推断组件组织模式（feature-based vs type-based）
 2. 提取分层目录的实际路径
 3. 提取具体的 feature 目录名称

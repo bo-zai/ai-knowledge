@@ -1,7 +1,7 @@
-import type { ParsedFile, TypeRef } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { WorkspaceResolutionIndex } from '../../scope-resolution/workspace-index.js';
-import { followChainPostFinalize } from '../../scope-resolution/passes/imported-return-types.js';
+import type { ParsedFile, TypeRef } from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import type { WorkspaceResolutionIndex } from "../../scope-resolution/workspace-index.js";
+import { followChainPostFinalize } from "../../scope-resolution/passes/imported-return-types.js";
 
 /**
  * Mirror exported typeBindings from namespace-import target modules
@@ -30,7 +30,7 @@ export function mirrorGoNamespaceTypeBindings(
 
     const nsTargets = new Map<string, string[]>();
     for (const edge of moduleEdges) {
-      if (edge.kind !== 'namespace' || edge.targetFile === null) continue;
+      if (edge.kind !== "namespace" || edge.targetFile === null) continue;
       let targets = nsTargets.get(edge.localName);
       if (targets === undefined) {
         targets = [];
@@ -47,11 +47,18 @@ export function mirrorGoNamespaceTypeBindings(
         for (const [name, ref] of sourceModule.typeBindings) {
           if (name.length === 0) continue;
           const first = name[0]!;
-          if (first < 'A' || first > 'Z') continue;
+          if (first < "A" || first > "Z") continue;
           if (importerModule.typeBindings.has(name)) continue;
 
-          const terminal = followChainPostFinalize(ref, sourceModule.id, indexes);
-          (importerModule.typeBindings as Map<string, TypeRef>).set(name, terminal);
+          const terminal = followChainPostFinalize(
+            ref,
+            sourceModule.id,
+            indexes,
+          );
+          (importerModule.typeBindings as Map<string, TypeRef>).set(
+            name,
+            terminal,
+          );
         }
       }
     }

@@ -7,9 +7,9 @@
  * consumed by createCallExtractor() and the per-language configs.
  */
 
-import type { SupportedLanguages } from '../shared';
-import type { SyntaxNode } from './utils/ast-helpers.js';
-import type { MixedChainStep } from './utils/call-analysis.js';
+import type { SupportedLanguages } from "../shared";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
+import type { MixedChainStep } from "./utils/call-analysis.js";
 
 // ---------------------------------------------------------------------------
 // Extracted result
@@ -22,7 +22,7 @@ import type { MixedChainStep } from './utils/call-analysis.js';
  */
 export interface ExtractedCallSite {
   calledName: string;
-  callForm?: 'free' | 'member' | 'constructor';
+  callForm?: "free" | "member" | "constructor";
   receiverName?: string;
   argCount?: number;
   /** Unified mixed chain for complex receivers (field + call chains). */
@@ -48,7 +48,10 @@ export interface CallExtractor {
    *                     (e.g. Java method_reference via `::`).
    * @returns Extracted call site, or null when no call can be derived.
    */
-  extract(callNode: SyntaxNode, callNameNode: SyntaxNode | undefined): ExtractedCallSite | null;
+  extract(
+    callNode: SyntaxNode,
+    callNameNode: SyntaxNode | undefined,
+  ): ExtractedCallSite | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,16 +111,16 @@ export interface CallExtractionConfig {
  */
 export interface ReceiverEnriched {
   readonly calledName: string;
-  readonly callForm: 'free' | 'member' | 'constructor' | undefined;
+  readonly callForm: "free" | "member" | "constructor" | undefined;
   readonly receiverName: string | undefined;
   readonly receiverTypeName: string | undefined;
   readonly receiverSource:
-    | 'none'
-    | 'typed-binding'
-    | 'constructor-map'
-    | 'class-as-receiver'
-    | 'mixed-chain'
-    | 'implicit-self';
+    | "none"
+    | "typed-binding"
+    | "constructor-map"
+    | "class-as-receiver"
+    | "mixed-chain"
+    | "implicit-self";
   /** Free-form hint from the provider hook; opaque to shared stages. */
   readonly hint?: string;
 }
@@ -136,10 +139,13 @@ export interface ReceiverEnriched {
  * - `hint` is opaque to shared stages; consumed by the same language's `selectDispatch`.
  */
 export interface ImplicitReceiverOverride {
-  readonly callForm: 'free' | 'member' | 'constructor';
+  readonly callForm: "free" | "member" | "constructor";
   readonly receiverName: string;
   readonly receiverTypeName: string;
-  readonly receiverSource: Extract<ReceiverEnriched['receiverSource'], 'implicit-self'>;
+  readonly receiverSource: Extract<
+    ReceiverEnriched["receiverSource"],
+    "implicit-self"
+  >;
   /** Free-form language tag (e.g. Ruby sets 'singleton' for `def self.foo`
    *  method bodies). Consumed by the same language's `selectDispatch` hook. */
   readonly hint?: string;
@@ -170,8 +176,8 @@ export interface ImplicitReceiverOverride {
  * @see call-processor.ts § defaultDispatchDecision, resolveCallTarget
  */
 export interface DispatchDecision {
-  readonly primary: 'owner-scoped' | 'free' | 'constructor';
-  readonly fallback?: 'free-arity-narrowed';
-  readonly ancestryView?: 'instance' | 'singleton';
+  readonly primary: "owner-scoped" | "free" | "constructor";
+  readonly fallback?: "free-arity-narrowed";
+  readonly ancestryView?: "instance" | "singleton";
   readonly hint?: string;
 }

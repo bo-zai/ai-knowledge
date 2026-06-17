@@ -3,6 +3,7 @@
 ## 1. 核心问题
 
 当前概念知识生成流程中，大部分候选类"无代码片段"，原因是：
+
 - `src/shared/fs.ts` 的正则提取不支持 `implements`/`extends` 等复杂类声明
 - 图数据库 `Property.content` 只存储字段声明 + 上下文几行，不是完整类代码
 
@@ -50,20 +51,20 @@ export interface ExtractedClassCode {
   startLine: number;
   /** 结束行号 */
   endLine: number;
-  
+
   /** 类声明片段（类头部，含 extends/implements） */
   classDeclaration: string;
   /** 类声明行号范围 */
   declarationLines: { start: number; end: number };
-  
+
   /** 字段列表（含类型、修饰符） */
   fields: ExtractedField[];
   /** 方法签名列表（不含方法体） */
   methods: ExtractedMethod[];
-  
+
   /** 原始代码片段（完整类代码，用于 LLM 分析） */
   fullSnippet: string;
-  
+
   /** 精简代码片段（类声明 + 字段 + 方法签名，不含方法体） */
   compactSnippet: string;
 }
@@ -71,17 +72,17 @@ export interface ExtractedClassCode {
 export interface ExtractedField {
   name: string;
   type?: string;
-  modifiers?: string[];  // public, private, static, final, etc.
+  modifiers?: string[]; // public, private, static, final, etc.
   line: number;
-  content: string;       // 字段声明原文
+  content: string; // 字段声明原文
 }
 
 export interface ExtractedMethod {
   name: string;
   returnType?: string;
-  parameters?: number;   // 参数数量
+  parameters?: number; // 参数数量
   modifiers?: string[];
-  signature: string;     // 方法签名原文（不含方法体）
+  signature: string; // 方法签名原文（不含方法体）
   line: number;
 }
 
@@ -104,13 +105,16 @@ export interface ExtractOptions {
  */
 export interface LanguageExtractorStrategy {
   language: SupportedLanguages;
-  
+
   /** 从图节点提取类结构 */
   extractFromGraphNode(node: GraphClassNode): ExtractedClassCode | null;
-  
+
   /** 从 AST 节点提取类结构 */
-  extractFromAstNode(node: SyntaxNode, sourceCode: string): ExtractedClassCode | null;
-  
+  extractFromAstNode(
+    node: SyntaxNode,
+    sourceCode: string,
+  ): ExtractedClassCode | null;
+
   /** 判断是否需要 Fallback（图数据不完整） */
   needsFallback?(node: GraphClassNode): boolean;
 }
@@ -121,7 +125,7 @@ export interface LanguageExtractorStrategy {
 ```typescript
 /**
  * 提取类代码片段
- * 
+ *
  * 双路径策略：
  * 1. 优先从图数据库查询 Class + Property + Method 节点
  * 2. 若图数据不完整，Fallback 到文件解析
@@ -143,7 +147,9 @@ export async function extractClassCodes(
 /**
  * 获取语言提取策略
  */
-export function getExtractorStrategy(language: SupportedLanguages): LanguageExtractorStrategy;
+export function getExtractorStrategy(
+  language: SupportedLanguages,
+): LanguageExtractorStrategy;
 ```
 
 ## 6. 图数据库查询器 (graph-querier.ts)
@@ -200,7 +206,7 @@ RETURN m.name, m.returnType, m.parameterCount, m.startLine, m.endLine, m.content
 ```typescript
 /**
  * 解析文件并提取类结构
- * 
+ *
  * 使用 Tree-sitter 解析文件，提取类声明、字段、方法。
  */
 export async function parseFileAndExtractClass(
@@ -211,6 +217,7 @@ export async function parseFileAndExtractClass(
 ```
 
 **实现要点**：
+
 - 使用现有的 Tree-sitter 解析器（复用 `src/engine/ingestion/` 的逻辑）
 - 提取类声明节点，遍历其子节点提取字段和方法
 - 构建完整片段和精简片段
@@ -266,23 +273,23 @@ Class 节点存在？ → [提取类结构]
 
 ## 10. 与现有代码的集成
 
-| 现有模块 | 集成方式 |
-|---------|---------|
-| `src/evidence/type-evidence-builder.ts` | 调用 `extractClassCode` 替代现有正则提取 |
-| `src/engine/lbug/lbug-adapter.ts` | 复用图查询逻辑 |
-| `src/engine/ingestion/class-extractors/` | 复用 Tree-sitter 解析配置 |
-| `src/engine/ingestion/field-extractors/` | 复用字段提取逻辑 |
+| 现有模块                                 | 集成方式                                 |
+| ---------------------------------------- | ---------------------------------------- |
+| `src/evidence/type-evidence-builder.ts`  | 调用 `extractClassCode` 替代现有正则提取 |
+| `src/engine/lbug/lbug-adapter.ts`        | 复用图查询逻辑                           |
+| `src/engine/ingestion/class-extractors/` | 复用 Tree-sitter 解析配置                |
+| `src/engine/ingestion/field-extractors/` | 复用字段提取逻辑                         |
 
 ## 11. 实施步骤
 
-| 步骤 | 工作量 | 输出 |
-|------|--------|------|
-| 1. 创建目录和类型定义 | 0.5h | `types.ts` |
-| 2. 实现图查询器 | 1h | `graph-querier.ts` |
-| 3. 实现 Java 提取策略 | 1h | `languages/java.ts` |
-| 4. 实现文件解析器 | 1h | `file-parser.ts` |
-| 5. 实现主入口 API | 0.5h | `index.ts` |
-| 6. 集成到知识生成流程 | 1h | `type-evidence-builder.ts` |
-| 7. 添加 TypeScript 策略 | 0.5h | `languages/typescript.ts` |
+| 步骤                    | 工作量 | 输出                       |
+| ----------------------- | ------ | -------------------------- |
+| 1. 创建目录和类型定义   | 0.5h   | `types.ts`                 |
+| 2. 实现图查询器         | 1h     | `graph-querier.ts`         |
+| 3. 实现 Java 提取策略   | 1h     | `languages/java.ts`        |
+| 4. 实现文件解析器       | 1h     | `file-parser.ts`           |
+| 5. 实现主入口 API       | 0.5h   | `index.ts`                 |
+| 6. 集成到知识生成流程   | 1h     | `type-evidence-builder.ts` |
+| 7. 添加 TypeScript 策略 | 0.5h   | `languages/typescript.ts`  |
 
 **总计：约 5.5h**

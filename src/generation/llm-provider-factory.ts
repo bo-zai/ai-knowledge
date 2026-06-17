@@ -2,11 +2,15 @@
  * LLM Claims Provider 工厂函数
  */
 
-import OpenAI from 'openai';
-import type { LlmClaimsProvider } from './knowledge-generator.js';
-import type { LlmCallInput, LlmCallResult } from './llm-types.js';
-import { generateWithClient, generateWithMessages, createOpenAiClient } from './llm-client.js';
-import type { ModelConfig } from '../config/model-config.js';
+import OpenAI from "openai";
+import type { LlmClaimsProvider } from "./knowledge-generator.js";
+import type { LlmCallInput, LlmCallResult } from "./llm-types.js";
+import {
+  generateWithClient,
+  generateWithMessages,
+  createOpenAiClient,
+} from "./llm-client.js";
+import type { ModelConfig } from "../config/model-config.js";
 
 /**
  * 创建 Claims Provider
@@ -25,12 +29,17 @@ export function createOpenAiClaimsProvider(
 ): LlmClaimsProvider {
   const handler = async (
     systemOrInput: string | LlmCallInput,
-    userPrompt?: string
+    userPrompt?: string,
   ): Promise<LlmCallResult> => {
     // 检测调用模式
-    if (typeof systemOrInput === 'string' && userPrompt !== undefined) {
+    if (typeof systemOrInput === "string" && userPrompt !== undefined) {
       // Legacy: (systemPrompt, userPrompt)
-      const result = await generateWithClient(client, model, systemOrInput, userPrompt);
+      const result = await generateWithClient(
+        client,
+        model,
+        systemOrInput,
+        userPrompt,
+      );
       return {
         rawText: result.text,
         model,
@@ -38,12 +47,16 @@ export function createOpenAiClaimsProvider(
       };
     }
 
-    if (typeof systemOrInput === 'object') {
+    if (typeof systemOrInput === "object") {
       const input = systemOrInput as LlmCallInput;
 
       if (input.messages && input.messages.length > 0) {
         // Messages 数组模式
-        const result = await generateWithMessages(client, model, input.messages);
+        const result = await generateWithMessages(
+          client,
+          model,
+          input.messages,
+        );
         return {
           rawText: result.text,
           model,
@@ -53,7 +66,12 @@ export function createOpenAiClaimsProvider(
 
       if (input.systemPrompt !== undefined && input.userPrompt !== undefined) {
         // V2 Legacy 模式
-        const result = await generateWithClient(client, model, input.systemPrompt, input.userPrompt);
+        const result = await generateWithClient(
+          client,
+          model,
+          input.systemPrompt,
+          input.userPrompt,
+        );
         return {
           rawText: result.text,
           model,
@@ -61,10 +79,14 @@ export function createOpenAiClaimsProvider(
         };
       }
 
-      throw new Error('Invalid LlmCallInput: must provide messages or systemPrompt+userPrompt');
+      throw new Error(
+        "Invalid LlmCallInput: must provide messages or systemPrompt+userPrompt",
+      );
     }
 
-    throw new Error('Invalid arguments: provide (systemPrompt, userPrompt) or LlmCallInput');
+    throw new Error(
+      "Invalid arguments: provide (systemPrompt, userPrompt) or LlmCallInput",
+    );
   };
 
   return handler as LlmClaimsProvider;

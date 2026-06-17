@@ -16,7 +16,14 @@ export interface Catalog {
 
 export function buildCatalog(input: {
   retrievalOrder: string[];
-  objects: Array<{ id: string; type: string; path: string; slice_ids: string[]; status?: string; maturity?: string }>;
+  objects: Array<{
+    id: string;
+    type: string;
+    path: string;
+    slice_ids: string[];
+    status?: string;
+    maturity?: string;
+  }>;
 }): Catalog {
   const objectCounts: Record<string, number> = {};
 
@@ -31,8 +38,8 @@ export function buildCatalog(input: {
           type: object.type,
           path: object.path,
           slice_ids: object.slice_ids,
-          status: object.status ?? 'fact',
-          maturity: object.maturity ?? 'bootstrap',
+          status: object.status ?? "fact",
+          maturity: object.maturity ?? "bootstrap",
         },
       ];
     }),

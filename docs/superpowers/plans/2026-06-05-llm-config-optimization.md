@@ -13,6 +13,7 @@
 ## Task 1: 添加 LLM 默认值常量
 
 **Files:**
+
 - Modify: `src/config/defaults.ts`
 - Test: 无（常量无需测试）
 
@@ -25,9 +26,9 @@ Run: 读取 `src/config/defaults.ts` 查看现有结构
 ```typescript
 /** LLM 配置默认值 */
 export const LLM_DEFAULTS = {
-  model: 'gpt-4o',
-  baseUrl: 'https://api.openai.com/v1',
-  apiKeyEnv: 'OPENAI_API_KEY',
+  model: "gpt-4o",
+  baseUrl: "https://api.openai.com/v1",
+  apiKeyEnv: "OPENAI_API_KEY",
 
   concurrency: 3,
   timeoutSeconds: 120,
@@ -54,6 +55,7 @@ git commit -m "feat(config): add LLM_DEFAULTS constant for centralized defaults"
 ## Task 2: 扩展类型定义
 
 **Files:**
+
 - Modify: `src/config/model-config.ts`
 - Test: 无（类型定义变更，后续测试验证）
 
@@ -62,7 +64,7 @@ git commit -m "feat(config): add LLM_DEFAULTS constant for centralized defaults"
 在 `model-config.ts` 顶部添加：
 
 ```typescript
-import { LLM_DEFAULTS } from './defaults.js';
+import { LLM_DEFAULTS } from "./defaults.js";
 ```
 
 - [ ] **Step 2: 扩展 LlmConfigFile 接口**
@@ -125,6 +127,7 @@ git commit -m "feat(config): extend LlmConfigFile and ModelConfig with concurren
 ## Task 3: 重写 resolveModelConfig 函数
 
 **Files:**
+
 - Modify: `src/config/model-config.ts`
 - Test: 创建 `tests/config/model-config.test.ts`
 
@@ -133,12 +136,12 @@ git commit -m "feat(config): extend LlmConfigFile and ModelConfig with concurren
 创建 `tests/config/model-config.test.ts`：
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { resolveModelConfig } from '../../src/config/model-config.js';
-import { LLM_DEFAULTS } from '../../src/config/defaults.js';
+import { describe, it, expect } from "vitest";
+import { resolveModelConfig } from "../../src/config/model-config.js";
+import { LLM_DEFAULTS } from "../../src/config/defaults.js";
 
-describe('resolveModelConfig', () => {
-  it('should use defaults when no file config provided', () => {
+describe("resolveModelConfig", () => {
+  it("should use defaults when no file config provided", () => {
     const result = resolveModelConfig({});
     expect(result.model).toBe(LLM_DEFAULTS.model);
     expect(result.baseUrl).toBe(LLM_DEFAULTS.baseUrl);
@@ -148,29 +151,29 @@ describe('resolveModelConfig', () => {
     expect(result.maxRetries).toBe(LLM_DEFAULTS.maxRetries);
   });
 
-  it('should override values from file config', () => {
+  it("should override values from file config", () => {
     const result = resolveModelConfig({
       fileConfig: {
-        model: 'custom-model',
+        model: "custom-model",
         concurrency: 5,
         timeout: 60,
         maxRetries: 2,
       },
     });
-    expect(result.model).toBe('custom-model');
+    expect(result.model).toBe("custom-model");
     expect(result.concurrency).toBe(5);
     expect(result.timeoutMs).toBe(60000);
     expect(result.maxRetries).toBe(2);
   });
 
-  it('should fallback to defaults for invalid concurrency', () => {
+  it("should fallback to defaults for invalid concurrency", () => {
     const result = resolveModelConfig({
       fileConfig: { concurrency: 0 },
     });
     expect(result.concurrency).toBe(LLM_DEFAULTS.concurrency);
   });
 
-  it('should fallback to defaults for invalid timeout', () => {
+  it("should fallback to defaults for invalid timeout", () => {
     const result = resolveModelConfig({
       fileConfig: { timeout: -1 },
     });
@@ -189,7 +192,7 @@ Expected: FAIL - resolveModelConfig 参数不匹配
 修改 `resolveModelConfig` 函数：
 
 ```typescript
-import { logger } from '../shared/logger.js';
+import { logger } from "../shared/logger.js";
 
 export function resolveModelConfig(input: {
   fileConfig?: LlmConfigFile;
@@ -198,27 +201,36 @@ export function resolveModelConfig(input: {
 
   // 验证并发数
   let concurrency = fileConfig?.concurrency ?? LLM_DEFAULTS.concurrency;
-  if (typeof fileConfig?.concurrency !== 'number' || fileConfig.concurrency < 1) {
+  if (
+    typeof fileConfig?.concurrency !== "number" ||
+    fileConfig.concurrency < 1
+  ) {
     if (fileConfig?.concurrency !== undefined) {
-      logger.warn(`Invalid concurrency value (${fileConfig.concurrency}), using default ${LLM_DEFAULTS.concurrency}`);
+      logger.warn(
+        `Invalid concurrency value (${fileConfig.concurrency}), using default ${LLM_DEFAULTS.concurrency}`,
+      );
     }
     concurrency = LLM_DEFAULTS.concurrency;
   }
 
   // 验证超时
   let timeoutSeconds = fileConfig?.timeout ?? LLM_DEFAULTS.timeoutSeconds;
-  if (typeof fileConfig?.timeout !== 'number' || fileConfig.timeout < 1) {
+  if (typeof fileConfig?.timeout !== "number" || fileConfig.timeout < 1) {
     if (fileConfig?.timeout !== undefined) {
-      logger.warn(`Invalid timeout value (${fileConfig.timeout}), using default ${LLM_DEFAULTS.timeoutSeconds}`);
+      logger.warn(
+        `Invalid timeout value (${fileConfig.timeout}), using default ${LLM_DEFAULTS.timeoutSeconds}`,
+      );
     }
     timeoutSeconds = LLM_DEFAULTS.timeoutSeconds;
   }
 
   // 验证重试次数
   let maxRetries = fileConfig?.maxRetries ?? LLM_DEFAULTS.maxRetries;
-  if (typeof fileConfig?.maxRetries !== 'number' || fileConfig.maxRetries < 1) {
+  if (typeof fileConfig?.maxRetries !== "number" || fileConfig.maxRetries < 1) {
     if (fileConfig?.maxRetries !== undefined) {
-      logger.warn(`Invalid maxRetries value (${fileConfig.maxRetries}), using default ${LLM_DEFAULTS.maxRetries}`);
+      logger.warn(
+        `Invalid maxRetries value (${fileConfig.maxRetries}), using default ${LLM_DEFAULTS.maxRetries}`,
+      );
     }
     maxRetries = LLM_DEFAULTS.maxRetries;
   }
@@ -228,7 +240,7 @@ export function resolveModelConfig(input: {
 
   return {
     baseUrl: fileConfig?.baseUrl ?? LLM_DEFAULTS.baseUrl,
-    apiKey: fileConfig?.apiKey ?? '',
+    apiKey: fileConfig?.apiKey ?? "",
     apiKeyEnv: fileConfig?.apiKeyEnv ?? LLM_DEFAULTS.apiKeyEnv,
     model: fileConfig?.model ?? LLM_DEFAULTS.model,
     concurrency,
@@ -264,6 +276,7 @@ git commit -m "feat(config): rewrite resolveModelConfig with validation, remove 
 ## Task 4: 删除 CLI 参数
 
 **Files:**
+
 - Modify: `src/cli/index.ts`
 
 - [ ] **Step 1: 删除三个 CLI 参数定义**
@@ -293,6 +306,7 @@ git commit -m "feat(cli): remove --model, --base-url, --api-key-env parameters"
 ## Task 5: 简化 generate.ts 配置加载
 
 **Files:**
+
 - Modify: `src/cli/generate.ts`
 
 - [ ] **Step 1: 删除 GenerateOptions 中的旧字段**
@@ -327,7 +341,8 @@ const fileConfig = options.llmConfig
 
 const modelConfig = resolveModelConfig({ fileConfig });
 
-const apiKey = modelConfig.apiKey || getEnvVarOptional(modelConfig.apiKeyEnv) || '';
+const apiKey =
+  modelConfig.apiKey || getEnvVarOptional(modelConfig.apiKeyEnv) || "";
 const finalConfig: ModelConfig = {
   ...modelConfig,
   apiKey,
@@ -335,7 +350,9 @@ const finalConfig: ModelConfig = {
 
 const mockMode = isMockModel(finalConfig.model);
 
-logger.info(`Using LLM config: model=${finalConfig.model}, concurrency=${finalConfig.concurrency}, timeout=${finalConfig.timeoutMs}ms`);
+logger.info(
+  `Using LLM config: model=${finalConfig.model}, concurrency=${finalConfig.concurrency}, timeout=${finalConfig.timeoutMs}ms`,
+);
 ```
 
 - [ ] **Step 3: 更新后续使用 modelConfig 的代码**
@@ -343,6 +360,7 @@ logger.info(`Using LLM config: model=${finalConfig.model}, concurrency=${finalCo
 搜索 `modelConfig` 变量的使用位置，确保使用 `finalConfig`。
 
 主要位置：
+
 - 约 606 行：`archClientConfig: ModelConfig` → 使用 `finalConfig`
 - 约 657-661 行：`clientConfig` → 使用 `finalConfig`
 - 约 768-773 行：`orchestrationInput.llm` → 简化
@@ -383,6 +401,7 @@ git commit -m "feat(cli): simplify config loading, use centralized defaults"
 ## Task 6: 更新并发控制使用配置值
 
 **Files:**
+
 - Modify: `src/cli/generate.ts`
 
 - [ ] **Step 1: 替换 Layer 3 并发硬编码**
@@ -430,6 +449,7 @@ git commit -m "feat(cli): use config concurrency instead of hardcoded values"
 ## Task 7: 更新 llm-json-client 使用配置参数
 
 **Files:**
+
 - Modify: `src/generation/llm-json-client.ts`
 
 - [ ] **Step 1: 添加 import**
@@ -437,7 +457,7 @@ git commit -m "feat(cli): use config concurrency instead of hardcoded values"
 在文件顶部添加：
 
 ```typescript
-import { LLM_DEFAULTS } from '../config/defaults.js';
+import { LLM_DEFAULTS } from "../config/defaults.js";
 ```
 
 - [ ] **Step 2: 更新 DEFAULT_TIMEOUT_MS 和 DEFAULT_MAX_RETRIES**
@@ -473,6 +493,7 @@ git commit -m "feat(llm): use LLM_DEFAULTS for timeout and maxRetries defaults"
 ## Task 8: 验证整体功能
 
 **Files:**
+
 - 无文件改动
 
 - [ ] **Step 1: 运行完整测试**
@@ -505,6 +526,7 @@ Expected: 日志显示正确配置值
 ## Task 9: 最终提交整理
 
 **Files:**
+
 - 无文件改动
 
 - [ ] **Step 1: 查看所有改动**
@@ -515,6 +537,7 @@ Expected: 7 个提交
 - [ ] **Step 2: 确认无遗漏**
 
 检查所有文件改动：
+
 - `src/config/defaults.ts` - LLM_DEFAULTS 添加
 - `src/config/model-config.ts` - 类型扩展、函数重写
 - `src/cli/index.ts` - CLI 参数删除
@@ -541,6 +564,7 @@ LLM 调用 callLlmForJson(maxRetries, timeout)
 ```
 
 **关键改动点：**
+
 1. 默认值集中在 `LLM_DEFAULTS`
 2. CLI 参数减少，简化用户使用
 3. 配置文件支持并发、超时、重试

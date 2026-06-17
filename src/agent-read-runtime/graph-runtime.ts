@@ -1,19 +1,19 @@
-import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
-import { ChatOpenAI } from '@langchain/openai';
-import { END, START, StateGraph, Annotation } from '@langchain/langgraph';
+import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
+import { END, START, StateGraph, Annotation } from "@langchain/langgraph";
 import {
   createBudgetState,
   recordToolCall,
   resolveKnowledgeReadLimits,
-} from './context-budget.js';
-import { createLocalReadTools } from './local-read-tools.js';
-import { createTraceCollector } from './trace.js';
+} from "./context-budget.js";
+import { createLocalReadTools } from "./local-read-tools.js";
+import { createTraceCollector } from "./trace.js";
 import {
   KnowledgeReadAgentOutputSchema,
   type KnowledgeReadAgentOutput,
   type KnowledgeReadResult,
   type KnowledgeReadRuntimeInput,
-} from './types.js';
+} from "./types.js";
 
 const SYSTEM_PROMPT = `You are a repository evidence reader for a knowledge generation pipeline.
 Use only the provided local read tools to inspect repository evidence.
@@ -27,7 +27,7 @@ export class KnowledgeReadValidationError extends Error {
 
   constructor(message: string) {
     super(message);
-    this.name = 'KnowledgeReadValidationError';
+    this.name = "KnowledgeReadValidationError";
   }
 }
 
@@ -58,44 +58,51 @@ const GraphStateAnnotation = Annotation.Root({
   }),
 });
 
-export function routeAfterBudgetCheck(state: { budgetExceeded: boolean; finalText?: string }): 'model_decide' | 'force_insufficient_output' | 'output_validate' {
+export function routeAfterBudgetCheck(state: {
+  budgetExceeded: boolean;
+  finalText?: string;
+}): "model_decide" | "force_insufficient_output" | "output_validate" {
   if (state.finalText) {
-    return 'output_validate';
+    return "output_validate";
   }
   if (state.budgetExceeded) {
-    return 'force_insufficient_output';
+    return "force_insufficient_output";
   }
-  return 'model_decide';
+  return "model_decide";
 }
 
 export function routeAfterValidation(state: {
   parsedOutput?: KnowledgeReadAgentOutput;
   validationError?: string;
   repairAttempts: number;
-}): typeof END | 'repair_output' | 'failed' {
+}): typeof END | "repair_output" | "failed" {
   if (state.parsedOutput) {
     return END;
   }
   if (state.validationError && state.repairAttempts < 1) {
-    return 'repair_output';
+    return "repair_output";
   }
-  return 'failed';
+  return "failed";
 }
 
 export function buildForcedInsufficientOutput(): string {
   return JSON.stringify({
-    answer: 'Evidence budget was exhausted before enough evidence could be confirmed.',
+    answer:
+      "Evidence budget was exhausted before enough evidence could be confirmed.",
     evidence_refs: [],
     insufficient_evidence: true,
   });
 }
 
-export function validateFinalOutput(state: { finalText?: string; repairAttempts: number }): {
+export function validateFinalOutput(state: {
+  finalText?: string;
+  repairAttempts: number;
+}): {
   parsedOutput?: KnowledgeReadAgentOutput;
   validationError?: string;
 } {
   try {
-    const parsed = parseKnowledgeReadAgentOutput(state.finalText ?? '');
+    const parsed = parseKnowledgeReadAgentOutput(state.finalText ?? "");
     return {
       parsedOutput: {
         answer: parsed.answer,
@@ -116,7 +123,9 @@ export function validateFinalOutput(state: { finalText?: string; repairAttempts:
   }
 }
 
-export function parseKnowledgeReadAgentOutput(text: string): Omit<KnowledgeReadResult, 'toolCallsUsed' | 'trace'> {
+export function parseKnowledgeReadAgentOutput(
+  text: string,
+): Omit<KnowledgeReadResult, "toolCallsUsed" | "trace"> {
   // 参考 CmbCoworkAgent 的多层 JSON 提取策略
   const candidates = extractJsonCandidates(text);
 
@@ -141,7 +150,9 @@ export function parseKnowledgeReadAgentOutput(text: string): Omit<KnowledgeReadR
     }
   }
 
-  throw new Error('Agent output is not valid JSON after all extraction attempts');
+  throw new Error(
+    "Agent output is not valid JSON after all extraction attempts",
+  );
 }
 
 /**
@@ -180,8 +191,8 @@ function extractJsonCandidates(text: string): string[] {
  */
 function stripThinkTags(text: string): string {
   return text
-    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
-    .replace(/^[\s\S]*?<\/think>\s*/i, '')
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
+    .replace(/^[\s\S]*?<\/think>\s*/i, "")
     .trim();
 }
 
@@ -206,7 +217,7 @@ function extractBalancedJsonObjects(text: string): string[] {
         escaping = false;
         continue;
       }
-      if (char === '\\') {
+      if (char === "\\") {
         escaping = true;
         continue;
       }
@@ -221,13 +232,13 @@ function extractBalancedJsonObjects(text: string): string[] {
       continue;
     }
 
-    if (char === '{') {
+    if (char === "{") {
       if (depth === 0) start = index;
       depth += 1;
       continue;
     }
 
-    if (char === '}') {
+    if (char === "}") {
       if (depth === 0) continue;
       depth -= 1;
       if (depth === 0 && start >= 0) {
@@ -247,31 +258,37 @@ function repairJson(text: string): string {
   let repaired = text;
 
   // 移除尾部逗号
-  repaired = repaired.replace(/,\s*}/g, '}');
-  repaired = repaired.replace(/,\s*]/g, ']');
+  repaired = repaired.replace(/,\s*}/g, "}");
+  repaired = repaired.replace(/,\s*]/g, "]");
 
   // 移除控制字符（保留换行和制表符）
-  repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+  repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
 
   // 修复未加引号的键名（简单情况）
   // 例如：{name: "value"} → {"name": "value"}
-  repaired = repaired.replace(/(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+  repaired = repaired.replace(
+    /(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g,
+    '$1"$2":',
+  );
 
   return repaired;
 }
 
-function buildRepairPrompt(finalText: string | undefined, validationError: string | undefined): string {
+function buildRepairPrompt(
+  finalText: string | undefined,
+  validationError: string | undefined,
+): string {
   return [
-    'Repair the previous output so it is valid JSON for this schema:',
+    "Repair the previous output so it is valid JSON for this schema:",
     '{"answer":"string","evidence_refs":[{"file":"string","start_line":1,"end_line":1,"note":"string"}],"insufficient_evidence":false}',
-    '',
-    `Validation error: ${validationError ?? 'unknown'}`,
-    '',
-    'Previous output:',
-    finalText ?? '',
-    '',
-    'Return only JSON.',
-  ].join('\n');
+    "",
+    `Validation error: ${validationError ?? "unknown"}`,
+    "",
+    "Previous output:",
+    finalText ?? "",
+    "",
+    "Return only JSON.",
+  ].join("\n");
 }
 
 async function invokeGraphWithRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -295,21 +312,21 @@ async function invokeGraphWithRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function messageContentToText(content: unknown): string {
-  if (typeof content === 'string') {
+  if (typeof content === "string") {
     return content;
   }
   if (Array.isArray(content)) {
     return content
       .map((item) => {
-        if (typeof item === 'string') return item;
-        if (item && typeof item === 'object' && 'text' in item) {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "text" in item) {
           return String((item as { text: unknown }).text);
         }
-        return '';
+        return "";
       })
-      .join('');
+      .join("");
   }
-  return '';
+  return "";
 }
 
 interface KnowledgeReadRuntimeDeps {
@@ -333,12 +350,15 @@ export async function runKnowledgeReadRuntime(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolMap = new Map<string, any>(tools.map((item) => [item.name, item]));
 
-  const recordUnknownToolCall = (toolName: string, args: Record<string, unknown>): string => {
+  const recordUnknownToolCall = (
+    toolName: string,
+    args: Record<string, unknown>,
+  ): string => {
     const started = new Date();
     const callBudget = recordToolCall(budget);
     const content = callBudget.allowed
       ? `unknown tool: ${toolName}`
-      : callBudget.message ?? 'tool call budget exceeded';
+      : (callBudget.message ?? "tool call budget exceeded");
     const finished = new Date();
 
     trace.recordToolCall({
@@ -350,7 +370,7 @@ export async function runKnowledgeReadRuntime(
       returnedChars: content.length,
       acceptedBudgetChars: 0,
       truncated: false,
-      error: 'unknown tool',
+      error: "unknown tool",
     });
 
     return content;
@@ -370,12 +390,14 @@ export async function runKnowledgeReadRuntime(
 
   const userPrompt = [
     SYSTEM_PROMPT,
-    input.initialContext ? `Initial context:\n${input.initialContext}` : '',
+    input.initialContext ? `Initial context:\n${input.initialContext}` : "",
     `Instruction:\n${input.instruction}`,
-  ].filter(Boolean).join('\n\n');
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const graph = new StateGraph(GraphStateAnnotation)
-    .addNode('model_decide', async (state) => {
+    .addNode("model_decide", async (state) => {
       const response = await model.invoke(state.messages);
       const toolCalls = response.tool_calls ?? [];
       if (toolCalls.length === 0) {
@@ -386,7 +408,7 @@ export async function runKnowledgeReadRuntime(
       }
       return { messages: [response] };
     })
-    .addNode('tool_execute', async (state) => {
+    .addNode("tool_execute", async (state) => {
       const last = state.messages[state.messages.length - 1];
       if (!(last instanceof AIMessage)) {
         return {};
@@ -401,31 +423,39 @@ export async function runKnowledgeReadRuntime(
         } else {
           content = recordUnknownToolCall(call.name, call.args ?? {});
         }
-        toolMessages.push(new ToolMessage({
-          content,
-          tool_call_id: call.id ?? call.name,
-        }));
+        toolMessages.push(
+          new ToolMessage({
+            content,
+            tool_call_id: call.id ?? call.name,
+          }),
+        );
       }
       return {
         messages: toolMessages,
-        budgetExceeded: budget.toolCallsUsed >= budget.limits.maxToolCalls
-          || budget.totalToolResultChars >= budget.limits.maxTotalToolResultChars,
+        budgetExceeded:
+          budget.toolCallsUsed >= budget.limits.maxToolCalls ||
+          budget.totalToolResultChars >= budget.limits.maxTotalToolResultChars,
       };
     })
-    .addNode('budget_check', async (state) => state)
-    .addNode('force_insufficient_output', async () => ({
+    .addNode("budget_check", async (state) => state)
+    .addNode("force_insufficient_output", async () => ({
       finalText: buildForcedInsufficientOutput(),
     }))
-    .addNode('output_validate', async (state) => {
+    .addNode("output_validate", async (state) => {
       // 调试：打印 LLM 返回的原始内容
       if (state.finalText) {
-        console.debug('[graph-runtime] LLM output (first 500 chars):', state.finalText.slice(0, 500));
+        console.debug(
+          "[graph-runtime] LLM output (first 500 chars):",
+          state.finalText.slice(0, 500),
+        );
       }
       return validateFinalOutput(state);
     })
-    .addNode('repair_output', async (state) => {
+    .addNode("repair_output", async (state) => {
       const response = await model.invoke([
-        new HumanMessage(buildRepairPrompt(state.finalText, state.validationError)),
+        new HumanMessage(
+          buildRepairPrompt(state.finalText, state.validationError),
+        ),
       ]);
       return {
         finalText: messageContentToText(response.content),
@@ -433,46 +463,54 @@ export async function runKnowledgeReadRuntime(
         repairAttempts: state.repairAttempts + 1,
       };
     })
-    .addNode('failed', async (state) => {
+    .addNode("failed", async (state) => {
       throw new KnowledgeReadValidationError(
-        state.validationError ?? 'Knowledge read output validation failed',
+        state.validationError ?? "Knowledge read output validation failed",
       );
     })
-    .addEdge(START, 'model_decide')
-    .addConditionalEdges('model_decide', (state) => {
-      const last = state.messages[state.messages.length - 1];
-      if (last instanceof AIMessage && (last.tool_calls?.length ?? 0) > 0) {
-        return 'tool_execute';
-      }
-      return 'output_validate';
-    }, {
-      tool_execute: 'tool_execute',
-      output_validate: 'output_validate',
+    .addEdge(START, "model_decide")
+    .addConditionalEdges(
+      "model_decide",
+      (state) => {
+        const last = state.messages[state.messages.length - 1];
+        if (last instanceof AIMessage && (last.tool_calls?.length ?? 0) > 0) {
+          return "tool_execute";
+        }
+        return "output_validate";
+      },
+      {
+        tool_execute: "tool_execute",
+        output_validate: "output_validate",
+      },
+    )
+    .addEdge("tool_execute", "budget_check")
+    .addConditionalEdges("budget_check", routeAfterBudgetCheck, {
+      model_decide: "model_decide",
+      force_insufficient_output: "force_insufficient_output",
+      output_validate: "output_validate",
     })
-    .addEdge('tool_execute', 'budget_check')
-    .addConditionalEdges('budget_check', routeAfterBudgetCheck, {
-      model_decide: 'model_decide',
-      force_insufficient_output: 'force_insufficient_output',
-      output_validate: 'output_validate',
-    })
-    .addEdge('force_insufficient_output', 'output_validate')
-    .addConditionalEdges('output_validate', routeAfterValidation, {
+    .addEdge("force_insufficient_output", "output_validate")
+    .addConditionalEdges("output_validate", routeAfterValidation, {
       [END]: END,
-      repair_output: 'repair_output',
-      failed: 'failed',
+      repair_output: "repair_output",
+      failed: "failed",
     })
-    .addEdge('repair_output', 'output_validate')
-    .addEdge('failed', END)
+    .addEdge("repair_output", "output_validate")
+    .addEdge("failed", END)
     .compile();
 
-  const response = await invokeGraphWithRetry(() => graph.invoke({
-    messages: [new HumanMessage(userPrompt)],
-    budgetExceeded: false,
-    repairAttempts: 0,
-  }));
+  const response = await invokeGraphWithRetry(() =>
+    graph.invoke({
+      messages: [new HumanMessage(userPrompt)],
+      budgetExceeded: false,
+      repairAttempts: 0,
+    }),
+  );
 
   if (!response.parsedOutput) {
-    throw new Error(response.validationError ?? 'Knowledge read output validation failed');
+    throw new Error(
+      response.validationError ?? "Knowledge read output validation failed",
+    );
   }
 
   const parsed = {

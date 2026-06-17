@@ -14,23 +14,28 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from '../../../shared/index.js';
-import type { SyntaxNode } from 'tree-sitter';
-import { findAncestorBeforeBoundary, FUNCTION_NODE_TYPES } from '../../utils/ast-helpers.js';
+} from "../../../shared/index.js";
+import type { SyntaxNode } from "tree-sitter";
+import {
+  findAncestorBeforeBoundary,
+  FUNCTION_NODE_TYPES,
+} from "../../utils/ast-helpers.js";
 
-const PYTHON_METHOD_CONTAINER_TYPES: ReadonlySet<string> = new Set(['class_definition']);
+const PYTHON_METHOD_CONTAINER_TYPES: ReadonlySet<string> = new Set([
+  "class_definition",
+]);
 
 export function pythonFunctionDefinitionLabel(
   functionNode: SyntaxNode,
   defaultLabel: NodeLabel,
 ): NodeLabel {
-  if (defaultLabel !== 'Function') return defaultLabel;
+  if (defaultLabel !== "Function") return defaultLabel;
   const ancestor = findAncestorBeforeBoundary(
     functionNode,
     PYTHON_METHOD_CONTAINER_TYPES,
     FUNCTION_NODE_TYPES,
   );
-  return ancestor === null ? 'Function' : 'Method';
+  return ancestor === null ? "Function" : "Method";
 }
 
 // ─── bindingScopeFor ──────────────────────────────────────────────────────
@@ -59,7 +64,8 @@ export function pythonImportOwningScope(
   innermost: Scope,
   _tree: ScopeTree,
 ): ScopeId | null {
-  if (innermost.kind === 'Function' || innermost.kind === 'Class') return innermost.id;
+  if (innermost.kind === "Function" || innermost.kind === "Class")
+    return innermost.id;
   return null;
 }
 
@@ -69,6 +75,10 @@ export function pythonImportOwningScope(
  *  Returns `null` for free functions (no `self`/`cls`) and for
  *  non-Function scopes. */
 export function pythonReceiverBinding(functionScope: Scope): TypeRef | null {
-  if (functionScope.kind !== 'Function') return null;
-  return functionScope.typeBindings.get('self') ?? functionScope.typeBindings.get('cls') ?? null;
+  if (functionScope.kind !== "Function") return null;
+  return (
+    functionScope.typeBindings.get("self") ??
+    functionScope.typeBindings.get("cls") ??
+    null
+  );
 }

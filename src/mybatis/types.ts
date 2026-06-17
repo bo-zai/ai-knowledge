@@ -9,7 +9,7 @@
  * SQL part representation - preserves structure for include resolution.
  */
 export interface SqlPart {
-  kind: 'text' | 'include';
+  kind: "text" | "include";
   value: string;
 }
 
@@ -19,7 +19,7 @@ export interface SqlPart {
  */
 export interface StatementDraft {
   id: string;
-  type: 'select' | 'insert' | 'update' | 'delete';
+  type: "select" | "insert" | "update" | "delete";
   rawSqlParts: SqlPart[];
   includeRefs: string[];
   parameterType?: string;
@@ -60,7 +60,7 @@ export interface MapperDocument {
  */
 export interface ResolvedStatement {
   id: string;
-  type: 'select' | 'insert' | 'update' | 'delete';
+  type: "select" | "insert" | "update" | "delete";
   namespace: string;
   mapperFile: string;
   sql: string;
@@ -77,7 +77,7 @@ export interface StatementTableRef {
   namespace: string;
   mapperFile: string;
   statementId: string;
-  statementType: 'select' | 'insert' | 'update' | 'delete';
+  statementType: "select" | "insert" | "update" | "delete";
   sql: string;
   tables: string[];
 }
@@ -88,7 +88,7 @@ export interface StatementTableRef {
 export interface StatementFieldRef {
   table: string;
   fieldName: string;
-  clauseType: 'select' | 'insert' | 'update' | 'where' | 'join';
+  clauseType: "select" | "insert" | "update" | "where" | "join";
   sourceStatementId: string;
   sqlAlias?: string;
   fragmentSource?: string;
@@ -144,7 +144,7 @@ export interface DbTableEvidenceBundle {
   sqlStatements: Array<{
     id: string;
     sql: string;
-    statementType: 'select' | 'insert' | 'update' | 'delete';
+    statementType: "select" | "insert" | "update" | "delete";
     tables: string[];
     fragmentRefs: string[];
   }>;
@@ -152,7 +152,7 @@ export interface DbTableEvidenceBundle {
     dbField: string;
     sqlAlias?: string;
     sourceStatementId: string;
-    sourceKind: 'mapper' | 'entity' | 'caller' | 'inferred';
+    sourceKind: "mapper" | "entity" | "caller" | "inferred";
     fragmentSource?: string;
     mappedJavaProperty?: string;
     javaFieldComment?: string;
@@ -172,7 +172,11 @@ export interface DbTableEvidenceBundle {
  * Gap information for missing evidence.
  */
 export interface GapInfo {
-  type: 'missing_entity' | 'missing_caller' | 'missing_fragment' | 'unresolved_column';
+  type:
+    | "missing_entity"
+    | "missing_caller"
+    | "missing_fragment"
+    | "unresolved_column";
   description: string;
   context?: string;
 }

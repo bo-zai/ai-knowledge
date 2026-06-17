@@ -19,12 +19,12 @@
  * `parentsByDefId`) so C3 implementations have what they need.
  */
 
-import type { ParsedFile } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { GraphNodeLookup } from '../graph-bridge/node-lookup.js';
-import type { LinearizeStrategy } from '../contract/scope-resolver.js';
-import { resolveDefGraphId } from '../graph-bridge/ids.js';
-import { isClassLike } from '../scope/walkers.js';
+import type { ParsedFile } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type { GraphNodeLookup } from "../graph-bridge/node-lookup.js";
+import type { LinearizeStrategy } from "../contract/scope-resolver.js";
+import { resolveDefGraphId } from "../graph-bridge/ids.js";
+import { isClassLike } from "../scope/walkers.js";
 
 /**
  * Build an MRO map keyed by scope-resolution Class `DefId`.
@@ -46,7 +46,7 @@ export function buildMro(
   // check and the millions of CALLS/ACCESSES/IMPORTS/DEFINES edges
   // that aren't relevant to MRO.
   const parentsByGraphId = new Map<string, string[]>();
-  for (const rel of graph.iterRelationshipsByType('EXTENDS')) {
+  for (const rel of graph.iterRelationshipsByType("EXTENDS")) {
     let list = parentsByGraphId.get(rel.sourceId);
     if (list === undefined) {
       list = [];
@@ -94,7 +94,11 @@ export function buildMro(
  * simplified MRO. Multi-inheritance diamond hierarchies need a real
  * C3 implementation; per-language overrides land here.
  */
-export const defaultLinearize: LinearizeStrategy = (_classDefId, directParents, parentsByDefId) => {
+export const defaultLinearize: LinearizeStrategy = (
+  _classDefId,
+  directParents,
+  parentsByDefId,
+) => {
   const ancestors: string[] = [];
   const visited = new Set<string>();
   const queue: string[] = [...directParents];

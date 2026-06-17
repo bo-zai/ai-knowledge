@@ -23,23 +23,32 @@
  * Plan: `docs/plans/2026-04-20-001-refactor-emit-pipeline-generalization-plan.md`.
  */
 
-import type { ParsedFile, RegistryProviders } from '../../../shared/index.js';
-import type { KnowledgeGraph } from '../../../graph/types.js';
-import type { MutableSemanticModel, SemanticModel } from '../../model/semantic-model.js';
-import { reconcileOwnership, validateOwnershipParity } from './reconcile-ownership.js';
-import { validateBindingsImmutability } from './validate-bindings-immutability.js';
-import { extractParsedFile } from '../../scope-extractor-bridge.js';
-import { finalizeScopeModel } from '../../finalize-orchestrator.js';
-import { resolveReferenceSites, type ResolveStats } from '../../resolve-references.js';
-import { buildGraphNodeLookup } from '../graph-bridge/node-lookup.js';
-import { buildPopulatedMethodDispatch } from '../graph-bridge/method-dispatch.js';
-import { propagateImportedReturnTypes } from '../passes/imported-return-types.js';
-import { emitReceiverBoundCalls } from '../passes/receiver-bound-calls.js';
-import { emitFreeCallFallback } from '../passes/free-call-fallback.js';
-import { emitReferencesViaLookup } from '../graph-bridge/references-to-edges.js';
-import { emitImportEdges } from '../graph-bridge/imports-to-edges.js';
-import type { ScopeResolver } from '../contract/scope-resolver.js';
-import { buildWorkspaceResolutionIndex } from '../workspace-index.js';
+import type { ParsedFile, RegistryProviders } from "../../../shared/index.js";
+import type { KnowledgeGraph } from "../../../graph/types.js";
+import type {
+  MutableSemanticModel,
+  SemanticModel,
+} from "../../model/semantic-model.js";
+import {
+  reconcileOwnership,
+  validateOwnershipParity,
+} from "./reconcile-ownership.js";
+import { validateBindingsImmutability } from "./validate-bindings-immutability.js";
+import { extractParsedFile } from "../../scope-extractor-bridge.js";
+import { finalizeScopeModel } from "../../finalize-orchestrator.js";
+import {
+  resolveReferenceSites,
+  type ResolveStats,
+} from "../../resolve-references.js";
+import { buildGraphNodeLookup } from "../graph-bridge/node-lookup.js";
+import { buildPopulatedMethodDispatch } from "../graph-bridge/method-dispatch.js";
+import { propagateImportedReturnTypes } from "../passes/imported-return-types.js";
+import { emitReceiverBoundCalls } from "../passes/receiver-bound-calls.js";
+import { emitFreeCallFallback } from "../passes/free-call-fallback.js";
+import { emitReferencesViaLookup } from "../graph-bridge/references-to-edges.js";
+import { emitImportEdges } from "../graph-bridge/imports-to-edges.js";
+import type { ScopeResolver } from "../contract/scope-resolver.js";
+import { buildWorkspaceResolutionIndex } from "../workspace-index.js";
 
 interface RunScopeResolutionInput {
   readonly graph: KnowledgeGraph;
@@ -53,7 +62,10 @@ interface RunScopeResolutionInput {
    * `ParsedFile[]` to mirror the pipeline shape.
    */
   readonly model: MutableSemanticModel;
-  readonly files: readonly { readonly path: string; readonly content: string }[];
+  readonly files: readonly {
+    readonly path: string;
+    readonly content: string;
+  }[];
   readonly onWarn?: (message: string) => void;
   /**
    * Optional pre-parsed-Tree lookup keyed by file path. When the
@@ -88,7 +100,7 @@ export function runScopeResolution(
 ): RunScopeResolutionStats {
   const { graph, files } = input;
   const onWarn = input.onWarn ?? (() => {});
-  const PROF = process.env.PROF_SCOPE_RESOLUTION === '1';
+  const PROF = process.env.PROF_SCOPE_RESOLUTION === "1";
   const tStart = PROF ? process.hrtime.bigint() : 0n;
   let fileContents: Map<string, string> | undefined;
   const getFileContents = (): Map<string, string> => {
@@ -119,7 +131,9 @@ export function runScopeResolution(
     provider.populateOwners(parsed);
     parsedFiles.push(parsed);
   }
-  provider.populateWorkspaceOwners?.(parsedFiles, { fileContents: getFileContents() });
+  provider.populateWorkspaceOwners?.(parsedFiles, {
+    fileContents: getFileContents(),
+  });
 
   // Reconcile scope-resolution's ownership view into the SemanticModel.
   // See `reconcile-ownership.ts` for the full rationale (Contract
@@ -157,7 +171,12 @@ export function runScopeResolution(
   const finalized = finalizeScopeModel(parsedFiles, {
     hooks: {
       resolveImportTarget: (targetRaw, fromFile) =>
-        provider.resolveImportTarget(targetRaw, fromFile, allFilePaths, resolutionConfig),
+        provider.resolveImportTarget(
+          targetRaw,
+          fromFile,
+          allFilePaths,
+          resolutionConfig,
+        ),
       expandsWildcardTo: (targetModuleScope) =>
         provider.expandsWildcardTo?.(targetModuleScope, parsedFiles) ?? [],
       mergeBindings: (existing, incoming, scopeId) =>

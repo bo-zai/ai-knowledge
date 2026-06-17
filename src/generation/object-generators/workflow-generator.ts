@@ -7,7 +7,7 @@
  * - 触发条件和完成标志
  */
 
-import type { EvidenceBundle } from '../../evidence/evidence-bundle-schema.js';
+import type { EvidenceBundle } from "../../evidence/evidence-bundle-schema.js";
 
 interface WorkflowPromptInput {
   /** 证据包 */
@@ -23,7 +23,10 @@ interface WorkflowPromptInput {
 /**
  * Build WORKFLOW generation prompt.
  */
-export function buildWorkflowPrompt(input: WorkflowPromptInput): { system: string; user: string } {
+export function buildWorkflowPrompt(input: WorkflowPromptInput): {
+  system: string;
+  user: string;
+} {
   const system = `You must generate only JSON. Return exactly one JSON object that matches output_schema. Do not wrap the result in markdown, code fences, explanations, or additional text. You may only use supplied evidence. You may not invent workflows or domains. All output must be Chinese except code identifiers.
 
 CRITICAL RULES:
@@ -47,7 +50,7 @@ WORKFLOW REQUIREMENTS:
 
   const user = JSON.stringify(
     {
-      task: { object_type: 'WORKFLOW', generation_mode: 'bootstrap' },
+      task: { object_type: "WORKFLOW", generation_mode: "bootstrap" },
       evidence,
       context: {
         repo_name: input.repoName,
@@ -55,27 +58,27 @@ WORKFLOW REQUIREMENTS:
         capability_names: input.capability_names ?? [],
       },
       output_schema: {
-        id: 'string (WORKFLOW-{workflow_name})',
-        type: 'WORKFLOW',
-        workflow_name: 'string (流程名称)',
-        business_goal: 'string (业务目标)',
-        involved_domains: 'array of 2+ strings (涉及的能力域)',
+        id: "string (WORKFLOW-{workflow_name})",
+        type: "WORKFLOW",
+        workflow_name: "string (流程名称)",
+        business_goal: "string (业务目标)",
+        involved_domains: "array of 2+ strings (涉及的能力域)",
         steps: [
           {
-            order: 'number (步骤序号)',
-            domain: 'string (所属能力域)',
-            action: 'string (操作名称)',
-            description: 'string (步骤描述)',
+            order: "number (步骤序号)",
+            domain: "string (所属能力域)",
+            action: "string (操作名称)",
+            description: "string (步骤描述)",
           },
         ],
-        trigger_condition: 'string (触发条件)',
-        completion_flag: 'string (完成标志)',
-        key_branches: 'array of strings (optional - 关键分支)',
-        name_zh: 'string (中文显示名称)',
-        summary_zh: 'string (一句话定位)',
-        applicable_scope: 'string (适用范围)',
-        tags: 'array of 1-3 strings',
-        evidence: 'array of file paths',
+        trigger_condition: "string (触发条件)",
+        completion_flag: "string (完成标志)",
+        key_branches: "array of strings (optional - 关键分支)",
+        name_zh: "string (中文显示名称)",
+        summary_zh: "string (一句话定位)",
+        applicable_scope: "string (适用范围)",
+        tags: "array of 1-3 strings",
+        evidence: "array of file paths",
       },
     },
     null,
@@ -88,7 +91,9 @@ WORKFLOW REQUIREMENTS:
 /**
  * Build structured evidence from EvidenceBundle.
  */
-function buildEvidenceFromBundle(bundle: EvidenceBundle | undefined): Record<string, unknown> {
+function buildEvidenceFromBundle(
+  bundle: EvidenceBundle | undefined,
+): Record<string, unknown> {
   if (!bundle) {
     return { evidence_bundle: null };
   }

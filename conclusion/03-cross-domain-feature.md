@@ -16,6 +16,7 @@ CodeGraph context("优惠券 coupon 使用")
 ```
 
 一次并行返回：
+
 - context("订单提交") → OrderController.submit()、OrderService.submit() 及其调用链
 - context("优惠券") → CouponController、CouponService、CouponDO、UserCouponDO
 
@@ -28,11 +29,13 @@ CodeGraph explore OrderService CouponService CouponDO
 ```
 
 一次调用返回三个类的源码：
+
 - OrderService.submit()：校验商品 → 扣减库存 → 计算金额 → 创建订单 → 没有任何 coupon 相关代码
 - CouponService：有 checkValid()（校验有效性）、use()（核销）、receive()（领取）
 - CouponDO 字段：amount（面额）、minSpend（最低消费）、expireTime、status、applicableGoods（适用商品范围）
 
 **关键发现**：
+
 1. 订单服务完全不知道优惠券的存在 → 需要新建集成
 2. CouponService.checkValid() 已实现 → 可复用
 3. CouponService.use() → 需要确认是否已实现
@@ -85,6 +88,7 @@ AskUserQuestion:
 ### 第五步：设计集成方案
 
 基于前面的理解：
+
 1. SubmitOrderRequest 新增 couponId 字段（可选）
 2. OrderService.submit() 中，如果 couponId 不为空：调用 CouponService.checkValid() → 计算抵扣金额 → 记录优惠金额
 3. OrderDO 新增 discountAmount 字段
@@ -93,14 +97,17 @@ AskUserQuestion:
 6. CouponService 新增 rollback() 方法
 
 确认代码位置：
+
 ```
 CodeGraph node OrderController
 ```
+
 → com.app.service.OrderService → 按层分包 → 修改现有 Service
 
 ### 第六步：编码
 
 参考现有代码模式：
+
 - 乐观锁：从 payCallback() 中看到版本号更新模式，复用到优惠券状态更新
 - 事务：从 submit() 中看到 @Transactional 的使用模式
 - 异常处理：从现有校验逻辑中看到 throw BusinessException 的模式
@@ -108,6 +115,7 @@ CodeGraph node OrderController
 ### 第七步：验证
 
 边界情况：
+
 - 同一张优惠券被两个订单同时使用 → use() 中加乐观锁
 - 抵扣后订单金额为负数 → 限制抵扣金额不超过订单金额
 - 订单金额小于优惠券最低消费 → checkValid() 已处理
@@ -124,12 +132,12 @@ CodeGraph 覆盖了大部分信息需求。知识库可能在以下时刻有用�
 
 ## 本场景结论
 
-| 信息需求 | 实际获取方式 | 知识库的增量价值 |
-|---------|------------|:---:|
-| 订单和优惠券有无交互 | CodeGraph explore | 无 |
-| checkValid() 已实现、use() 待实现 | CodeGraph explore | 无 |
-| 支付回调位置和逻辑 | CodeGraph search + node | 无 |
-| 定时任务自动取消的竞态 | CodeGraph search OrderUnpaid | **中**——跨域流程知识可直接告知 |
-| 乐观锁保护模式 | 读 payCallback() 源码 | 低 |
-| 优惠券状态机 | 读 CouponService 源码 | **中**——概念知识可直接告知 |
-| applicableGoods 字段 | 读 CouponDO 源码 | 低 |
+| 信息需求                          | 实际获取方式                 |        知识库的增量价值        |
+| --------------------------------- | ---------------------------- | :----------------------------: |
+| 订单和优惠券有无交互              | CodeGraph explore            |               无               |
+| checkValid() 已实现、use() 待实现 | CodeGraph explore            |               无               |
+| 支付回调位置和逻辑                | CodeGraph search + node      |               无               |
+| 定时任务自动取消的竞态            | CodeGraph search OrderUnpaid | **中**——跨域流程知识可直接告知 |
+| 乐观锁保护模式                    | 读 payCallback() 源码        |               低               |
+| 优惠券状态机                      | 读 CouponService 源码        |   **中**——概念知识可直接告知   |
+| applicableGoods 字段              | 读 CouponDO 源码             |               低               |

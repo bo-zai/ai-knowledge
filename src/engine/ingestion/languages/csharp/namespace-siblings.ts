@@ -31,11 +31,17 @@
  * coincidences).
  */
 
-import type { SyntaxNode } from 'tree-sitter';
-import type { BindingRef, ParsedFile, Scope, ScopeId, SymbolDefinition } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import { getCsharpParser } from './query.js';
-import { getTreeSitterBufferSize } from '../../constants.js';
+import type { SyntaxNode } from "tree-sitter";
+import type {
+  BindingRef,
+  ParsedFile,
+  Scope,
+  ScopeId,
+  SymbolDefinition,
+} from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import { getCsharpParser } from "./query.js";
+import { getTreeSitterBufferSize } from "../../constants.js";
 
 interface CsharpFileStructure {
   /** Declared namespace names in file source order. Empty array means
@@ -52,8 +58,11 @@ interface CsharpFileStructure {
  *  re-parse files the orchestrator already parsed for `extractParsedFile`;
  *  falls back to a fresh parse on cache miss. Parser singleton is
  *  shared across calls. */
-function extractFileStructure(content: string, cachedTree: unknown): CsharpFileStructure {
-  type CsharpTree = ReturnType<ReturnType<typeof getCsharpParser>['parse']>;
+function extractFileStructure(
+  content: string,
+  cachedTree: unknown,
+): CsharpFileStructure {
+  type CsharpTree = ReturnType<ReturnType<typeof getCsharpParser>["parse"]>;
   const tree =
     (cachedTree as CsharpTree | undefined) ??
     getCsharpParser().parse(content, undefined, {
@@ -64,12 +73,12 @@ function extractFileStructure(content: string, cachedTree: unknown): CsharpFileS
 
   const visit = (node: SyntaxNode): void => {
     if (
-      node.type === 'namespace_declaration' ||
-      node.type === 'file_scoped_namespace_declaration'
+      node.type === "namespace_declaration" ||
+      node.type === "file_scoped_namespace_declaration"
     ) {
-      const nameNode = node.childForFieldName('name');
+      const nameNode = node.childForFieldName("name");
       if (nameNode !== null) namespaces.push(nameNode.text);
-    } else if (node.type === 'using_directive') {
+    } else if (node.type === "using_directive") {
       // Inspect the directive's own text for the `static` keyword
       // (tree-sitter-c-sharp does not expose it as a named child).
       // This is a single-node-scoped text inspection, not a whole-file
@@ -78,7 +87,7 @@ function extractFileStructure(content: string, cachedTree: unknown): CsharpFileS
         // Path lives on the `name:` field when the using-directive is
         // aliased (`using static A = X.Y.Z;`); otherwise it's the
         // first named child.
-        const aliasField = node.childForFieldName('name');
+        const aliasField = node.childForFieldName("name");
         let pathNode: SyntaxNode | null = null;
         if (aliasField !== null) {
           for (const c of node.namedChildren) {
@@ -131,7 +140,10 @@ export function populateCsharpNamespaceSiblings(
     const content = inputs.fileContents.get(parsed.filePath);
     if (content === undefined) continue;
     const cachedTree = inputs.treeCache?.get(parsed.filePath);
-    structureByFile.set(parsed.filePath, extractFileStructure(content, cachedTree));
+    structureByFile.set(
+      parsed.filePath,
+      extractFileStructure(content, cachedTree),
+    );
   }
 
   // Group namespace scopes by their dotted name. Each entry carries
@@ -157,9 +169,9 @@ export function populateCsharpNamespaceSiblings(
 
     // Declared namespace names, source order (AST walk visits children
     // left-to-right, matching the scope-extractor's ordering).
-    const names = struct.namespaces.length > 0 ? [...struct.namespaces] : [''];
+    const names = struct.namespaces.length > 0 ? [...struct.namespaces] : [""];
 
-    const namespaceScopes = parsed.scopes.filter((s) => s.kind === 'Namespace');
+    const namespaceScopes = parsed.scopes.filter((s) => s.kind === "Namespace");
     // With file-scoped namespaces (`namespace X;`), the Namespace
     // scope's range covers only the declaration line, not the rest of
     // the file — so classes below it land under the Module scope, not
@@ -168,7 +180,7 @@ export function populateCsharpNamespaceSiblings(
     // first declared namespace in the file. Multiple-namespace files
     // are rare enough that first-wins is the right first pass; fix
     // when the parity suite surfaces a case.
-    const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
+    const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
     const topLevelParentIds = new Set<ScopeId>();
     if (moduleScope !== undefined) topLevelParentIds.add(moduleScope.id);
     for (const ns of namespaceScopes) topLevelParentIds.add(ns.id);
@@ -189,11 +201,15 @@ export function populateCsharpNamespaceSiblings(
       });
     }
     for (const ns of namespaceScopes) {
-      bucket.scopes.push({ filePath: parsed.filePath, scopeId: ns.id, scope: ns });
+      bucket.scopes.push({
+        filePath: parsed.filePath,
+        scopeId: ns.id,
+        scope: ns,
+      });
     }
 
     for (const s of parsed.scopes) {
-      if (s.kind !== 'Class') continue;
+      if (s.kind !== "Class") continue;
       if (s.parent === null || !topLevelParentIds.has(s.parent)) continue;
       for (const def of s.ownedDefs) {
         if (isTypeDef(def)) {
@@ -212,7 +228,10 @@ export function populateCsharpNamespaceSiblings(
   // `materializeBindings` freezes). Walkers consult both channels
   // via `lookupBindingsAt`; we never need to consult or mutate
   // `indexes.bindings`.
-  const augmentations = indexes.bindingAugmentations as Map<ScopeId, Map<string, BindingRef[]>>;
+  const augmentations = indexes.bindingAugmentations as Map<
+    ScopeId,
+    Map<string, BindingRef[]>
+  >;
 
   // Cross-namespace type-binding propagation: for each file, mirror
   // method return-type bindings from same-namespace sibling files and
@@ -223,11 +242,11 @@ export function populateCsharpNamespaceSiblings(
   // because the return binding lives in the defining file's Module
   // scope, which isn't an ancestor of the importer's scope chain.
   for (const parsed of parsedFiles) {
-    const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
+    const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
     if (moduleScope === undefined) continue;
     const moduleTypeBindings = moduleScope.typeBindings as Map<
       string,
-      import('../../../shared/index.js').TypeRef
+      import("../../../shared/index.js").TypeRef
     >;
 
     // Accessible namespaces = this file's own namespaces + every
@@ -238,9 +257,9 @@ export function populateCsharpNamespaceSiblings(
     if (struct !== undefined) {
       for (const n of struct.namespaces) accessibleNamespaces.add(n);
     }
-    if (accessibleNamespaces.size === 0) accessibleNamespaces.add('');
+    if (accessibleNamespaces.size === 0) accessibleNamespaces.add("");
     for (const imp of parsed.parsedImports) {
-      if (imp.kind === 'namespace' && imp.targetRaw !== null) {
+      if (imp.kind === "namespace" && imp.targetRaw !== null) {
         accessibleNamespaces.add(imp.targetRaw);
       }
     }
@@ -251,9 +270,9 @@ export function populateCsharpNamespaceSiblings(
     // the bucket map with every prefix.
     const expandedNamespaces = new Set<string>(accessibleNamespaces);
     for (const ns of accessibleNamespaces) {
-      const segments = ns.split('.');
+      const segments = ns.split(".");
       for (let i = segments.length - 1; i > 0; i--) {
-        expandedNamespaces.add(segments.slice(0, i).join('.'));
+        expandedNamespaces.add(segments.slice(0, i).join("."));
       }
     }
 
@@ -262,7 +281,7 @@ export function populateCsharpNamespaceSiblings(
       if (bucket === undefined) continue;
       for (const scopeInfo of bucket.scopes) {
         if (scopeInfo.filePath === parsed.filePath) continue;
-        if (scopeInfo.scope.kind !== 'Module') continue;
+        if (scopeInfo.scope.kind !== "Module") continue;
         for (const [boundName, typeRef] of scopeInfo.scope.typeBindings) {
           if (moduleTypeBindings.has(boundName)) continue;
           moduleTypeBindings.set(boundName, typeRef);
@@ -279,11 +298,11 @@ export function populateCsharpNamespaceSiblings(
   for (const parsed of parsedFiles) {
     const struct = structureByFile.get(parsed.filePath);
     if (struct === undefined) continue;
-    const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
+    const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
     if (moduleScope === undefined) continue;
 
     for (const fullPath of struct.usingStaticPaths) {
-      const lastDot = fullPath.lastIndexOf('.');
+      const lastDot = fullPath.lastIndexOf(".");
       if (lastDot === -1) continue;
       const className = fullPath.slice(lastDot + 1);
       const enclosingNs = fullPath.slice(0, lastDot);
@@ -292,8 +311,8 @@ export function populateCsharpNamespaceSiblings(
       const bucket = buckets.get(enclosingNs);
       if (bucket === undefined) continue;
       const targetDef = bucket.classDefs.find((d) => {
-        const q = d.qualifiedName ?? '';
-        const simple = q.includes('.') ? q.slice(q.lastIndexOf('.') + 1) : q;
+        const q = d.qualifiedName ?? "";
+        const simple = q.includes(".") ? q.slice(q.lastIndexOf(".") + 1) : q;
         return simple === className;
       });
       if (targetDef === undefined) continue;
@@ -301,22 +320,32 @@ export function populateCsharpNamespaceSiblings(
       // Inject the class's member methods into the importer's module
       // scope. `memberByOwner` wasn't built yet here, so we walk the
       // file's localDefs to find members with `ownerId === targetDef.nodeId`.
-      const targetFile = parsedFiles.find((p) => p.filePath === targetDef.filePath);
+      const targetFile = parsedFiles.find(
+        (p) => p.filePath === targetDef.filePath,
+      );
       if (targetFile === undefined) continue;
       for (const memberDef of targetFile.localDefs) {
-        if ((memberDef as { ownerId?: string }).ownerId !== targetDef.nodeId) continue;
-        if (memberDef.type !== 'Method' && memberDef.type !== 'Function') continue;
-        const mq = memberDef.qualifiedName ?? '';
-        const simpleName = mq.includes('.') ? mq.slice(mq.lastIndexOf('.') + 1) : mq;
-        if (simpleName === '') continue;
+        if ((memberDef as { ownerId?: string }).ownerId !== targetDef.nodeId)
+          continue;
+        if (memberDef.type !== "Method" && memberDef.type !== "Function")
+          continue;
+        const mq = memberDef.qualifiedName ?? "";
+        const simpleName = mq.includes(".")
+          ? mq.slice(mq.lastIndexOf(".") + 1)
+          : mq;
+        if (simpleName === "") continue;
 
         // Append to the augmentation bucket for the importer's module
         // scope. `findCallableBindingInScope` reads via
         // `lookupBindingsAt`, which fans out across `bindings` +
         // `bindingAugmentations`.
-        const bucketArr = getAugmentationBucket(augmentations, moduleScope.id, simpleName);
+        const bucketArr = getAugmentationBucket(
+          augmentations,
+          moduleScope.id,
+          simpleName,
+        );
         if (bucketArr.some((b) => b.def.nodeId === memberDef.nodeId)) continue;
-        bucketArr.push({ def: memberDef, origin: 'import' });
+        bucketArr.push({ def: memberDef, origin: "import" });
       }
     }
   }
@@ -329,22 +358,28 @@ export function populateCsharpNamespaceSiblings(
   // `using Models;`. Legacy uses csproj directory↔namespace mapping;
   // the scope-resolver layer uses the declared namespace directly.
   for (const parsed of parsedFiles) {
-    const moduleScope = parsed.scopes.find((s) => s.kind === 'Module');
+    const moduleScope = parsed.scopes.find((s) => s.kind === "Module");
     if (moduleScope === undefined) continue;
     for (const imp of parsed.parsedImports) {
-      if (imp.kind !== 'namespace') continue;
+      if (imp.kind !== "namespace") continue;
       const targetNs = imp.targetRaw;
-      if (targetNs === null || targetNs === '') continue;
+      if (targetNs === null || targetNs === "") continue;
       const bucket = buckets.get(targetNs);
       if (bucket === undefined) continue;
       for (const def of bucket.classDefs) {
         if (def.filePath === parsed.filePath) continue;
-        const q = def.qualifiedName ?? '';
-        const simpleName = q.includes('.') ? q.slice(q.lastIndexOf('.') + 1) : q;
-        if (simpleName === '') continue;
-        const bucketArr = getAugmentationBucket(augmentations, moduleScope.id, simpleName);
+        const q = def.qualifiedName ?? "";
+        const simpleName = q.includes(".")
+          ? q.slice(q.lastIndexOf(".") + 1)
+          : q;
+        if (simpleName === "") continue;
+        const bucketArr = getAugmentationBucket(
+          augmentations,
+          moduleScope.id,
+          simpleName,
+        );
         if (bucketArr.some((b) => b.def.nodeId === def.nodeId)) continue;
-        bucketArr.push({ def, origin: 'namespace' });
+        bucketArr.push({ def, origin: "namespace" });
       }
     }
   }
@@ -356,9 +391,9 @@ export function populateCsharpNamespaceSiblings(
     const defsByName = new Map<string, SymbolDefinition[]>();
     for (const def of bucket.classDefs) {
       // Simple name = last segment of qualifiedName (e.g. `App.User` → `User`).
-      const q = def.qualifiedName ?? '';
-      const key = q.includes('.') ? q.slice(q.lastIndexOf('.') + 1) : q;
-      if (key === '') continue;
+      const q = def.qualifiedName ?? "";
+      const key = q.includes(".") ? q.slice(q.lastIndexOf(".") + 1) : q;
+      if (key === "") continue;
       const arr = defsByName.get(key) ?? [];
       arr.push(def);
       defsByName.set(key, arr);
@@ -369,15 +404,19 @@ export function populateCsharpNamespaceSiblings(
         // Skip names already present locally — `origin: 'local'` in
         // scope.bindings would naturally shadow the cross-file
         // namespace entry, but we also keep this index lean.
-        const local = bucket.scopes.find((s) => s.filePath === filePath)?.scope.bindings.get(name);
-        if (local !== undefined && local.some((b) => b.origin === 'local')) continue;
+        const local = bucket.scopes
+          .find((s) => s.filePath === filePath)
+          ?.scope.bindings.get(name);
+        if (local !== undefined && local.some((b) => b.origin === "local"))
+          continue;
 
         let bucketArr: BindingRef[] | null = null;
         for (const def of defs) {
           if (def.filePath === filePath) continue; // don't self-reference
-          if (bucketArr === null) bucketArr = getAugmentationBucket(augmentations, scopeId, name);
+          if (bucketArr === null)
+            bucketArr = getAugmentationBucket(augmentations, scopeId, name);
           if (bucketArr.some((b) => b.def.nodeId === def.nodeId)) continue;
-          bucketArr.push({ def, origin: 'namespace' });
+          bucketArr.push({ def, origin: "namespace" });
         }
       }
     }
@@ -410,10 +449,10 @@ function getAugmentationBucket(
 
 function isTypeDef(def: SymbolDefinition): boolean {
   return (
-    def.type === 'Class' ||
-    def.type === 'Interface' ||
-    def.type === 'Struct' ||
-    def.type === 'Record' ||
-    def.type === 'Enum'
+    def.type === "Class" ||
+    def.type === "Interface" ||
+    def.type === "Struct" ||
+    def.type === "Record" ||
+    def.type === "Enum"
   );
 }

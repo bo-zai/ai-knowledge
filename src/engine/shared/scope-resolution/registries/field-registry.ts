@@ -12,10 +12,10 @@
  *     `explicitReceiver` and `ownerScopedContributor` knobs are.
  */
 
-import type { Resolution, ScopeId } from '../types.js';
-import { lookupCore, type CoreLookupParams } from './lookup-core.js';
-import type { OwnerScopedContributor, RegistryContext } from './context.js';
-import { FIELD_KINDS } from './context.js';
+import type { Resolution, ScopeId } from "../types.js";
+import { lookupCore, type CoreLookupParams } from "./lookup-core.js";
+import type { OwnerScopedContributor, RegistryContext } from "./context.js";
+import { FIELD_KINDS } from "./context.js";
 
 export interface FieldLookupOptions {
   readonly explicitReceiver?: { readonly name: string };
@@ -23,7 +23,11 @@ export interface FieldLookupOptions {
 }
 
 export interface FieldRegistry {
-  lookup(name: string, scope: ScopeId, options?: FieldLookupOptions): readonly Resolution[];
+  lookup(
+    name: string,
+    scope: ScopeId,
+    options?: FieldLookupOptions,
+  ): readonly Resolution[];
 }
 
 export function buildFieldRegistry(ctx: RegistryContext): FieldRegistry {

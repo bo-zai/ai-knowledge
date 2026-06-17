@@ -1,9 +1,12 @@
-export function buildFlowPrompt(input: unknown): { system: string; user: string } {
+export function buildFlowPrompt(input: unknown): {
+  system: string;
+  user: string;
+} {
   const system =
-    'You must generate only JSON. You may only use supplied evidence. You may not invent steps or outcomes. All output must be Chinese except code identifiers.';
+    "You must generate only JSON. You may only use supplied evidence. You may not invent steps or outcomes. All output must be Chinese except code identifiers.";
   const user = JSON.stringify(
     {
-      task: { object_type: 'FLOW', generation_mode: 'bootstrap' },
+      task: { object_type: "FLOW", generation_mode: "bootstrap" },
       evidence: input,
     },
     null,

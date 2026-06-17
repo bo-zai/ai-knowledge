@@ -13,24 +13,33 @@
  *      `utils/call-analysis.ts` (`inferCallForm`, `extractReceiverName`, etc.).
  */
 
-import type { SyntaxNode } from '../utils/ast-helpers.js';
+import type { SyntaxNode } from "../utils/ast-helpers.js";
 import {
   inferCallForm,
   extractReceiverName,
   extractReceiverNode,
   extractMixedChain,
   countCallArguments,
-} from '../utils/call-analysis.js';
-import type { CallExtractor, CallExtractionConfig, ExtractedCallSite } from '../call-types.js';
+} from "../utils/call-analysis.js";
+import type {
+  CallExtractor,
+  CallExtractionConfig,
+  ExtractedCallSite,
+} from "../call-types.js";
 
 /**
  * Create a CallExtractor from a declarative config.
  */
-export function createCallExtractor(config: CallExtractionConfig): CallExtractor {
+export function createCallExtractor(
+  config: CallExtractionConfig,
+): CallExtractor {
   return {
     language: config.language,
 
-    extract(callNode: SyntaxNode, callNameNode: SyntaxNode | undefined): ExtractedCallSite | null {
+    extract(
+      callNode: SyntaxNode,
+      callNameNode: SyntaxNode | undefined,
+    ): ExtractedCallSite | null {
       // ── Path 1: Language-specific call site ──────────────────────────
       // Non-standard call shapes (e.g. Java `::` method references) are
       // handled entirely by the config hook.  When it returns a result,
@@ -46,7 +55,9 @@ export function createCallExtractor(config: CallExtractionConfig): CallExtractor
         if (seed) {
           return {
             ...seed,
-            ...(config.typeAsReceiverHeuristic ? { typeAsReceiverHeuristic: true } : {}),
+            ...(config.typeAsReceiverHeuristic
+              ? { typeAsReceiverHeuristic: true }
+              : {}),
           };
         }
       }
@@ -56,13 +67,14 @@ export function createCallExtractor(config: CallExtractionConfig): CallExtractor
 
       const calledName = callNameNode.text;
       const callForm = inferCallForm(callNode, callNameNode);
-      let receiverName = callForm === 'member' ? extractReceiverName(callNameNode) : undefined;
-      let receiverMixedChain: ExtractedCallSite['receiverMixedChain'];
+      let receiverName =
+        callForm === "member" ? extractReceiverName(callNameNode) : undefined;
+      let receiverMixedChain: ExtractedCallSite["receiverMixedChain"];
 
       // When the receiver is a complex expression (call chain, field chain,
       // or mixed), extractReceiverName returns undefined.  Walk the receiver
       // node to build a unified mixed chain for deferred resolution.
-      if (callForm === 'member' && receiverName === undefined) {
+      if (callForm === "member" && receiverName === undefined) {
         const receiverNode = extractReceiverNode(callNameNode);
         if (receiverNode) {
           const extracted = extractMixedChain(receiverNode);
@@ -79,7 +91,9 @@ export function createCallExtractor(config: CallExtractionConfig): CallExtractor
         ...(receiverName !== undefined ? { receiverName } : {}),
         argCount: countCallArguments(callNode),
         ...(receiverMixedChain !== undefined ? { receiverMixedChain } : {}),
-        ...(config.typeAsReceiverHeuristic ? { typeAsReceiverHeuristic: true } : {}),
+        ...(config.typeAsReceiverHeuristic
+          ? { typeAsReceiverHeuristic: true }
+          : {}),
       };
     },
   };

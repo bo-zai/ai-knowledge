@@ -5,9 +5,9 @@
  * 新增语言只需实现 LanguageAdapter 接口并注册。
  */
 
-import { javaAdapter } from './java-adapter.js';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { javaAdapter } from "./java-adapter.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 /**
  * 内部枚举信息
@@ -89,7 +89,7 @@ export interface LanguageAdapter {
  * 已注册的语言适配器映射
  */
 const adapters: Map<string, LanguageAdapter> = new Map([
-  ['java', javaAdapter],
+  ["java", javaAdapter],
   // 未来扩展：
   // ['python', pythonAdapter],
   // ['typescript', typescriptAdapter],
@@ -124,29 +124,29 @@ export function getSupportedLanguages(): string[] {
  * 项目配置文件与语言映射
  */
 const PROJECT_CONFIG_TO_LANGUAGE: Record<string, string> = {
-  'pom.xml': 'java',
-  'build.gradle': 'java',
-  'build.gradle.kts': 'java',
-  'package.json': 'javascript',  // 需进一步检测 TypeScript
-  'go.mod': 'go',
-  'requirements.txt': 'python',
-  'pyproject.toml': 'python',
-  'Cargo.toml': 'rust',
+  "pom.xml": "java",
+  "build.gradle": "java",
+  "build.gradle.kts": "java",
+  "package.json": "javascript", // 需进一步检测 TypeScript
+  "go.mod": "go",
+  "requirements.txt": "python",
+  "pyproject.toml": "python",
+  "Cargo.toml": "rust",
 };
 
 /**
  * 文件扩展名与语言映射
  */
 const EXTENSION_TO_LANGUAGE: Record<string, string> = {
-  '.java': 'java',
-  '.kt': 'java',  // Kotlin 也使用 Java 适配器（可扩展）
-  '.ts': 'typescript',
-  '.tsx': 'typescript',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.go': 'go',
-  '.py': 'python',
-  '.rs': 'rust',
+  ".java": "java",
+  ".kt": "java", // Kotlin 也使用 Java 适配器（可扩展）
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".js": "javascript",
+  ".jsx": "javascript",
+  ".go": "go",
+  ".py": "python",
+  ".rs": "rust",
 };
 
 /**
@@ -161,14 +161,16 @@ const EXTENSION_TO_LANGUAGE: Record<string, string> = {
  */
 export async function detectProjectLanguage(repoPath: string): Promise<string> {
   // 1. 检查项目配置文件
-  for (const [configFile, language] of Object.entries(PROJECT_CONFIG_TO_LANGUAGE)) {
+  for (const [configFile, language] of Object.entries(
+    PROJECT_CONFIG_TO_LANGUAGE,
+  )) {
     try {
       await fs.access(path.join(repoPath, configFile));
       // TypeScript 特殊处理：检查 tsconfig.json
-      if (language === 'javascript') {
+      if (language === "javascript") {
         try {
-          await fs.access(path.join(repoPath, 'tsconfig.json'));
-          return 'typescript';
+          await fs.access(path.join(repoPath, "tsconfig.json"));
+          return "typescript";
         } catch {
           // 没有 tsconfig.json，可能是纯 JavaScript
         }
@@ -184,7 +186,7 @@ export async function detectProjectLanguage(repoPath: string): Promise<string> {
 
   // 找出最多的扩展名
   let maxCount = 0;
-  let detectedLanguage = 'java';  // 默认 Java（兼容现有逻辑）
+  let detectedLanguage = "java"; // 默认 Java（兼容现有逻辑）
 
   for (const [ext, count] of Object.entries(extensionCounts)) {
     if (count > maxCount && EXTENSION_TO_LANGUAGE[ext]) {
@@ -202,16 +204,29 @@ export async function detectProjectLanguage(repoPath: string): Promise<string> {
  * @param repoPath - 项目根路径
  * @returns 扩展名计数映射
  */
-async function countFileExtensions(repoPath: string): Promise<Map<string, number>> {
+async function countFileExtensions(
+  repoPath: string,
+): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
-  const excludeDirs = ['node_modules', 'target', 'build', 'dist', '.git', '.idea', '.vscode'];
+  const excludeDirs = [
+    "node_modules",
+    "target",
+    "build",
+    "dist",
+    ".git",
+    ".idea",
+    ".vscode",
+  ];
 
   async function walk(dir: string): Promise<void> {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          if (!excludeDirs.includes(entry.name) && !entry.name.startsWith('.')) {
+          if (
+            !excludeDirs.includes(entry.name) &&
+            !entry.name.startsWith(".")
+          ) {
             await walk(path.join(dir, entry.name));
           }
         } else if (entry.isFile()) {
@@ -227,7 +242,7 @@ async function countFileExtensions(repoPath: string): Promise<Map<string, number
   }
 
   // 先检查 src 目录
-  const srcPath = path.join(repoPath, 'src');
+  const srcPath = path.join(repoPath, "src");
   try {
     await fs.access(srcPath);
     await walk(srcPath);

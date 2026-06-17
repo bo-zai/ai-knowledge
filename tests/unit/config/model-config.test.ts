@@ -1,27 +1,27 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { describe, expect, it } from "vitest";
 
 import {
   loadLlmConfigFile,
   resolveModelConfig,
-} from '../../../src/config/model-config.js';
-import { LLM_DEFAULTS } from '../../../src/config/defaults.js';
+} from "../../../src/config/model-config.js";
+import { LLM_DEFAULTS } from "../../../src/config/defaults.js";
 
-describe('model-config', () => {
-  it('loads an explicit JSON config file', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'llm-config-'));
-    const configPath = join(dir, 'custom-llm.json');
+describe("model-config", () => {
+  it("loads an explicit JSON config file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "llm-config-"));
+    const configPath = join(dir, "custom-llm.json");
 
     await writeFile(
       configPath,
       JSON.stringify(
         {
-          model: 'gpt-4o-mini',
-          baseUrl: 'https://example.test/v1',
-          apiKeyEnv: 'CUSTOM_KEY',
-          apiKey: 'custom-secret',
+          model: "gpt-4o-mini",
+          baseUrl: "https://example.test/v1",
+          apiKeyEnv: "CUSTOM_KEY",
+          apiKey: "custom-secret",
           concurrency: 5,
           timeout: 60,
           maxRetries: 2,
@@ -29,28 +29,28 @@ describe('model-config', () => {
         null,
         2,
       ),
-      'utf8',
+      "utf8",
     );
 
     const config = await loadLlmConfigFile(configPath);
 
     expect(config).toEqual({
-      model: 'gpt-4o-mini',
-      baseUrl: 'https://example.test/v1',
-      apiKeyEnv: 'CUSTOM_KEY',
-      apiKey: 'custom-secret',
+      model: "gpt-4o-mini",
+      baseUrl: "https://example.test/v1",
+      apiKeyEnv: "CUSTOM_KEY",
+      apiKey: "custom-secret",
       concurrency: 5,
       timeout: 60,
       maxRetries: 2,
     });
   });
 
-  it('resolves config with file config', () => {
+  it("resolves config with file config", () => {
     const resolved = resolveModelConfig({
       fileConfig: {
-        model: 'file-model',
-        baseUrl: 'https://file.test/v1',
-        apiKeyEnv: 'FILE_KEY',
+        model: "file-model",
+        baseUrl: "https://file.test/v1",
+        apiKeyEnv: "FILE_KEY",
         concurrency: 4,
         timeout: 90,
         maxRetries: 2,
@@ -58,9 +58,9 @@ describe('model-config', () => {
     });
 
     expect(resolved).toEqual({
-      model: 'file-model',
-      baseUrl: 'https://file.test/v1',
-      apiKeyEnv: 'FILE_KEY',
+      model: "file-model",
+      baseUrl: "https://file.test/v1",
+      apiKeyEnv: "FILE_KEY",
       apiKey: LLM_DEFAULTS.apiKey,
       concurrency: 4,
       timeoutMs: 90000,
@@ -68,7 +68,7 @@ describe('model-config', () => {
     });
   });
 
-  it('uses defaults when no file config provided', () => {
+  it("uses defaults when no file config provided", () => {
     const resolved = resolveModelConfig({});
 
     expect(resolved).toEqual({
@@ -81,7 +81,7 @@ describe('model-config', () => {
     });
   });
 
-  it('falls back to defaults for invalid concurrency', () => {
+  it("falls back to defaults for invalid concurrency", () => {
     const resolved = resolveModelConfig({
       fileConfig: {
         concurrency: 0,
@@ -91,7 +91,7 @@ describe('model-config', () => {
     expect(resolved.concurrency).toBe(LLM_DEFAULTS.concurrency);
   });
 
-  it('falls back to defaults for invalid timeout', () => {
+  it("falls back to defaults for invalid timeout", () => {
     const resolved = resolveModelConfig({
       fileConfig: {
         timeout: -1,

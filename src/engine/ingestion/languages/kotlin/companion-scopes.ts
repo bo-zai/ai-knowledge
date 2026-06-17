@@ -1,4 +1,4 @@
-import type { ScopeId } from '../../../shared/index.js';
+import type { ScopeId } from "../../../shared/index.js";
 
 /**
  * Per-file set of `ScopeId`s that came from a `companion_object` AST node

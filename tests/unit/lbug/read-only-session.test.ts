@@ -1,5 +1,5 @@
-import path from 'path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import path from "path";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const poolMocks = vi.hoisted(() => ({
   initLbug: vi.fn(),
@@ -8,14 +8,14 @@ const poolMocks = vi.hoisted(() => ({
   closeLbug: vi.fn(),
 }));
 
-vi.mock('../../../src/engine/lbug/pool-adapter.js', () => poolMocks);
+vi.mock("../../../src/engine/lbug/pool-adapter.js", () => poolMocks);
 
 import {
   initReadOnlyLbugWithDb,
   withReadOnlyLbug,
-} from '../../../src/engine/lbug/read-only-session.js';
+} from "../../../src/engine/lbug/read-only-session.js";
 
-describe('withReadOnlyLbug', () => {
+describe("withReadOnlyLbug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     poolMocks.initLbug.mockResolvedValue(undefined);
@@ -24,32 +24,37 @@ describe('withReadOnlyLbug', () => {
     poolMocks.closeLbug.mockResolvedValue(undefined);
   });
 
-  it('通过稳定的只读池执行查询', async () => {
-    const dbPath = path.join('repo', '.knowledge', 'lbug');
+  it("通过稳定的只读池执行查询", async () => {
+    const dbPath = path.join("repo", ".knowledge", "lbug");
 
-    const rows = await withReadOnlyLbug(dbPath, query => query('MATCH (n) RETURN n'));
+    const rows = await withReadOnlyLbug(dbPath, (query) =>
+      query("MATCH (n) RETURN n"),
+    );
 
     const repoId = poolMocks.initLbug.mock.calls[0][0] as string;
     expect(rows).toEqual([{ count: 1 }]);
     expect(repoId).toBe(`read-only:${path.resolve(dbPath)}`);
     expect(poolMocks.initLbug).toHaveBeenCalledWith(repoId, dbPath);
-    expect(poolMocks.executeQuery).toHaveBeenCalledWith(repoId, 'MATCH (n) RETURN n');
+    expect(poolMocks.executeQuery).toHaveBeenCalledWith(
+      repoId,
+      "MATCH (n) RETURN n",
+    );
     expect(poolMocks.closeLbug).not.toHaveBeenCalled();
   });
 
-  it('查询失败时保留池供后续查询复用', async () => {
-    const dbPath = path.join('repo', '.knowledge', 'lbug');
-    poolMocks.executeQuery.mockRejectedValue(new Error('query failed'));
+  it("查询失败时保留池供后续查询复用", async () => {
+    const dbPath = path.join("repo", ".knowledge", "lbug");
+    poolMocks.executeQuery.mockRejectedValue(new Error("query failed"));
 
     await expect(
-      withReadOnlyLbug(dbPath, query => query('MATCH (n) RETURN n')),
-    ).rejects.toThrow('query failed');
+      withReadOnlyLbug(dbPath, (query) => query("MATCH (n) RETURN n")),
+    ).rejects.toThrow("query failed");
 
     expect(poolMocks.closeLbug).not.toHaveBeenCalled();
   });
 
-  it('将分析阶段数据库句柄交给同一路径只读池', async () => {
-    const dbPath = path.join('repo', '.knowledge', 'lbug');
+  it("将分析阶段数据库句柄交给同一路径只读池", async () => {
+    const dbPath = path.join("repo", ".knowledge", "lbug");
     const db = {} as never;
 
     await initReadOnlyLbugWithDb(dbPath, db);

@@ -9,15 +9,15 @@
  * 不调用 LLM，仅验证数据结构和逻辑正确性
  */
 
-import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
-import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
-import { createTraceChainBuilder } from './trace-chain-builder.js';
-import { createTableAnchorCollector } from './table-anchor-collector.js';
-import { createCandidateBuilder } from './candidate-builder.js';
-import type { TraceResult, MapperInfo, DomainClusterInput } from './types.js';
-import { logger } from '../shared/logger.js';
-import fs from 'fs/promises';
-import path from 'path';
+import { getStoragePaths, loadMeta } from "../engine/storage/repo-manager.js";
+import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
+import { createTraceChainBuilder } from "./trace-chain-builder.js";
+import { createTableAnchorCollector } from "./table-anchor-collector.js";
+import { createCandidateBuilder } from "./candidate-builder.js";
+import type { TraceResult, MapperInfo, DomainClusterInput } from "./types.js";
+import { logger } from "../shared/logger.js";
+import fs from "fs/promises";
+import path from "path";
 
 /**
  * 验证配置
@@ -76,7 +76,9 @@ export interface ValidationResult {
 /**
  * 运行验证
  */
-export async function runValidation(config: ValidationConfig): Promise<ValidationResult> {
+export async function runValidation(
+  config: ValidationConfig,
+): Promise<ValidationResult> {
   const startTime = Date.now();
   const repoPath = config.repoPath;
   const { lbugPath, storagePath } = getStoragePaths(repoPath);
@@ -97,7 +99,7 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
         candidates: [],
         relations: [],
         success: false,
-        error: 'No analysis index found. Run `rkg init` first.',
+        error: "No analysis index found. Run `rkg init` first.",
         executionTimeMs: Date.now() - startTime,
       };
     }
@@ -116,30 +118,32 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
         candidates: [],
         relations: [],
         success: false,
-        error: 'No graph database found. Run `rkg init` first.',
+        error: "No graph database found. Run `rkg init` first.",
         executionTimeMs: Date.now() - startTime,
       };
     }
 
     // 使用 withReadOnlyLbug 执行追溯
-    const traceResults = await withReadOnlyLbug(lbugPath, async query => {
+    const traceResults = await withReadOnlyLbug(lbugPath, async (query) => {
       const traceBuilder = createTraceChainBuilder(query, repoPath);
       const tableCollector = createTableAnchorCollector(query, repoPath);
 
       // 1. 发现入口点
-      logger.info('Discovering entry points...');
+      logger.info("Discovering entry points...");
       const entryPoints = await traceBuilder.discoverEntryPoints();
       logger.info(`Found ${entryPoints.length} entry points`);
 
       // 2. 追溯每个入口点
-      logger.info('Tracing entry points...');
+      logger.info("Tracing entry points...");
       const results: TraceResult[] = [];
 
       for (const entryPoint of entryPoints) {
         try {
           const traceResult = await traceBuilder.traceEntryPoint(entryPoint);
           results.push(traceResult);
-          logger.debug(`Traced ${entryPoint.className}: ${traceResult.tables.length} tables, ${traceResult.mappers.length} mappers`);
+          logger.debug(
+            `Traced ${entryPoint.className}: ${traceResult.tables.length} tables, ${traceResult.mappers.length} mappers`,
+          );
         } catch (err) {
           logger.warn(`Failed to trace ${entryPoint.className}: ${err}`);
         }
@@ -149,22 +153,27 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
       const allMappers: MapperInfo[] = [];
       for (const result of results) {
         for (const mapper of result.mappers) {
-          if (!allMappers.some(m => m.className === mapper.className)) {
+          if (!allMappers.some((m) => m.className === mapper.className)) {
             allMappers.push(mapper);
           }
         }
       }
 
       // 4. 分析表的外键关系
-      logger.info('Analyzing foreign keys...');
-      const allTables = results.flatMap(r => r.tables);
-      const allEntities = results.flatMap(r => r.entities);
-      const enrichedTables = await tableCollector.analyzeForeignKeys(allTables, allEntities);
+      logger.info("Analyzing foreign keys...");
+      const allTables = results.flatMap((r) => r.tables);
+      const allEntities = results.flatMap((r) => r.entities);
+      const enrichedTables = await tableCollector.analyzeForeignKeys(
+        allTables,
+        allEntities,
+      );
 
       // 更新 traceResults 的表信息
       for (const result of results) {
         for (const table of result.tables) {
-          const enriched = enrichedTables.find(t => t.tableName === table.tableName);
+          const enriched = enrichedTables.find(
+            (t) => t.tableName === table.tableName,
+          );
           if (enriched) {
             table.relationType = enriched.relationType;
             table.foreignKey = enriched.foreignKey;
@@ -178,12 +187,15 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
     logger.info(`Trace completed: ${traceResults.length} results`);
 
     // 5. 构建候选
-    logger.info('Building candidates...');
+    logger.info("Building candidates...");
     const candidateBuilder = createCandidateBuilder();
-    const domainClusterInput = candidateBuilder.buildDomainClusterInput(traceResults, repoPath);
+    const domainClusterInput = candidateBuilder.buildDomainClusterInput(
+      traceResults,
+      repoPath,
+    );
 
     // 6. 构建验证结果
-    const candidates = domainClusterInput.candidates.map(c => ({
+    const candidates = domainClusterInput.candidates.map((c) => ({
       candidateId: c.candidateId,
       anchorTable: c.anchorTable,
       entryPointCount: c.entryPoints.length,
@@ -192,7 +204,7 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
       serviceCount: c.services.length,
     }));
 
-    const relations = domainClusterInput.candidateRelations.map(r => ({
+    const relations = domainClusterInput.candidateRelations.map((r) => ({
       candidateIdA: r.candidateIdA,
       candidateIdB: r.candidateIdB,
       sharedTables: r.sharedTables,
@@ -216,24 +228,35 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
 
     // 7. 输出到文件（可选）
     if (config.outputDir) {
-      const outputFilePath = path.join(config.outputDir, `validation-${Date.now()}.json`);
+      const outputFilePath = path.join(
+        config.outputDir,
+        `validation-${Date.now()}.json`,
+      );
       await fs.mkdir(config.outputDir, { recursive: true });
-      await fs.writeFile(outputFilePath, JSON.stringify(result, null, 2), 'utf-8');
+      await fs.writeFile(
+        outputFilePath,
+        JSON.stringify(result, null, 2),
+        "utf-8",
+      );
       logger.info(`Validation result saved to: ${outputFilePath}`);
     }
 
     // 输出完整候选信息（用于人工检查）
     const fullOutputPath = path.join(
-      config.outputDir ?? path.join(storagePath, 'validation'),
-      `candidates-${Date.now()}.json`
+      config.outputDir ?? path.join(storagePath, "validation"),
+      `candidates-${Date.now()}.json`,
     );
     await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
-    await fs.writeFile(fullOutputPath, JSON.stringify(domainClusterInput, null, 2), 'utf-8');
+    await fs.writeFile(
+      fullOutputPath,
+      JSON.stringify(domainClusterInput, null, 2),
+      "utf-8",
+    );
     logger.info(`Full candidate data saved to: ${fullOutputPath}`);
 
     return result;
   } catch (err) {
-    logger.error('Validation failed:', err);
+    logger.error("Validation failed:", err);
     return {
       repoPath,
       entryPointCount: 0,
@@ -253,7 +276,9 @@ export async function runValidation(config: ValidationConfig): Promise<Validatio
 /**
  * 批量验证多个项目
  */
-export async function runBatchValidation(configs: ValidationConfig[]): Promise<ValidationResult[]> {
+export async function runBatchValidation(
+  configs: ValidationConfig[],
+): Promise<ValidationResult[]> {
   const results: ValidationResult[] = [];
 
   for (const config of configs) {

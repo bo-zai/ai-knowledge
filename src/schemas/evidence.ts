@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const evidenceFactSchema = z.object({
   id: z.string().min(1),
@@ -16,7 +16,7 @@ export const evidenceFactSchema = z.object({
 export const sliceEvidenceBundleSchema = z.object({
   slice: z.object({
     id: z.string().min(1),
-    kind: z.enum(['route', 'process', 'tool', 'community', 'database']),
+    kind: z.enum(["route", "process", "tool", "community", "database"]),
     title: z.string().min(1),
     scope: z.string().min(1),
     seed: z.string().min(1),

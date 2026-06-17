@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildModuleEvidence(input: {
   moduleName: string;
@@ -9,16 +9,16 @@ export function buildModuleEvidence(input: {
   return {
     slice: {
       id: `module:${input.moduleName}`,
-      kind: 'tool',
+      kind: "tool",
       title: input.moduleName,
       scope: input.filePath,
       seed: input.moduleName,
     },
     facts: [
       {
-        id: 'F-001',
+        id: "F-001",
         claim: `Module ${input.moduleName} is defined in ${input.filePath}`,
-        source_kind: 'analysis-runtime',
+        source_kind: "analysis-runtime",
         refs: [{ file: input.filePath }],
       },
     ],

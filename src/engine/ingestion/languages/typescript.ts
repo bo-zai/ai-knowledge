@@ -7,44 +7,47 @@
  * queries (TypeScript grammar has interface/type nodes), and language ID.
  */
 
-import { SupportedLanguages } from '../../shared/index.js';
-import type { NodeLabel } from '../../shared/index.js';
-import { defineLanguage } from '../language-provider.js';
-import type { AstFrameworkPatternConfig } from '../language-provider.js';
-import { createClassExtractor } from '../class-extractors/generic.js';
+import { SupportedLanguages } from "../../shared/index.js";
+import type { NodeLabel } from "../../shared/index.js";
+import { defineLanguage } from "../language-provider.js";
+import type { AstFrameworkPatternConfig } from "../language-provider.js";
+import { createClassExtractor } from "../class-extractors/generic.js";
 import {
   typescriptClassConfig,
   javascriptClassConfig,
-} from '../class-extractors/configs/typescript-javascript.js';
-import type { SyntaxNode } from '../utils/ast-helpers.js';
-import { typeConfig as typescriptConfig } from '../type-extractors/typescript.js';
-import { tsExportChecker } from '../export-detection.js';
-import { createImportResolver } from '../import-resolvers/resolver-factory.js';
+} from "../class-extractors/configs/typescript-javascript.js";
+import type { SyntaxNode } from "../utils/ast-helpers.js";
+import { typeConfig as typescriptConfig } from "../type-extractors/typescript.js";
+import { tsExportChecker } from "../export-detection.js";
+import { createImportResolver } from "../import-resolvers/resolver-factory.js";
 import {
   typescriptImportConfig,
   javascriptImportConfig,
-} from '../import-resolvers/configs/typescript-javascript.js';
-import { extractTsNamedBindings } from '../named-bindings/typescript.js';
-import { TYPESCRIPT_QUERIES, JAVASCRIPT_QUERIES } from '../tree-sitter-queries.js';
-import { typescriptFieldExtractor } from '../field-extractors/typescript.js';
-import { createFieldExtractor } from '../field-extractors/generic.js';
-import { javascriptConfig } from '../field-extractors/configs/typescript-javascript.js';
-import { createMethodExtractor } from '../method-extractors/generic.js';
+} from "../import-resolvers/configs/typescript-javascript.js";
+import { extractTsNamedBindings } from "../named-bindings/typescript.js";
+import {
+  TYPESCRIPT_QUERIES,
+  JAVASCRIPT_QUERIES,
+} from "../tree-sitter-queries.js";
+import { typescriptFieldExtractor } from "../field-extractors/typescript.js";
+import { createFieldExtractor } from "../field-extractors/generic.js";
+import { javascriptConfig } from "../field-extractors/configs/typescript-javascript.js";
+import { createMethodExtractor } from "../method-extractors/generic.js";
 import {
   typescriptMethodConfig,
   javascriptMethodConfig,
-} from '../method-extractors/configs/typescript-javascript.js';
-import { createVariableExtractor } from '../variable-extractors/generic.js';
+} from "../method-extractors/configs/typescript-javascript.js";
+import { createVariableExtractor } from "../variable-extractors/generic.js";
 import {
   typescriptVariableConfig,
   javascriptVariableConfig,
-} from '../variable-extractors/configs/typescript-javascript.js';
-import { createCallExtractor } from '../call-extractors/generic.js';
+} from "../variable-extractors/configs/typescript-javascript.js";
+import { createCallExtractor } from "../call-extractors/generic.js";
 import {
   typescriptCallConfig,
   javascriptCallConfig,
-} from '../call-extractors/configs/typescript-javascript.js';
-import { createHeritageExtractor } from '../heritage-extractors/generic.js';
+} from "../call-extractors/configs/typescript-javascript.js";
+import { createHeritageExtractor } from "../heritage-extractors/generic.js";
 import {
   emitTsScopeCaptures,
   interpretTsImport,
@@ -55,7 +58,7 @@ import {
   typescriptMergeBindings,
   typescriptArityCompatibility,
   resolveTsImportTarget,
-} from './typescript/index.js';
+} from "./typescript/index.js";
 
 /**
  * TypeScript/JavaScript: arrow_function and function_expression are
@@ -86,43 +89,49 @@ import {
 const tsExtractFunctionName = (
   node: SyntaxNode,
 ): { funcName: string | null; label: NodeLabel } | null => {
-  if (node.type !== 'arrow_function' && node.type !== 'function_expression') return null;
+  if (node.type !== "arrow_function" && node.type !== "function_expression")
+    return null;
 
   const parent = node.parent;
   if (!parent) return null;
 
-  if (parent.type === 'variable_declarator') {
-    let nameNode = parent.childForFieldName?.('name');
+  if (parent.type === "variable_declarator") {
+    let nameNode = parent.childForFieldName?.("name");
     if (!nameNode) {
       for (let i = 0; i < parent.childCount; i++) {
         const c = parent.child(i);
-        if (c?.type === 'identifier') {
+        if (c?.type === "identifier") {
           nameNode = c;
           break;
         }
       }
     }
-    return { funcName: nameNode?.text ?? null, label: 'Function' };
+    return { funcName: nameNode?.text ?? null, label: "Function" };
   }
 
   // Object property pair: `{ addItem: (item) => ... }`.
   // tree-sitter-typescript uses `pair`; tree-sitter-javascript also exposes
   // `pair`. (Older grammars used `property_assignment`; we accept both.)
-  if (parent.type === 'pair' || parent.type === 'property_assignment') {
-    const keyNode = parent.childForFieldName?.('key');
-    if (!keyNode) return { funcName: null, label: 'Function' };
-    if (keyNode.type === 'property_identifier' || keyNode.type === 'identifier') {
-      return { funcName: keyNode.text, label: 'Function' };
+  if (parent.type === "pair" || parent.type === "property_assignment") {
+    const keyNode = parent.childForFieldName?.("key");
+    if (!keyNode) return { funcName: null, label: "Function" };
+    if (
+      keyNode.type === "property_identifier" ||
+      keyNode.type === "identifier"
+    ) {
+      return { funcName: keyNode.text, label: "Function" };
     }
-    if (keyNode.type === 'string') {
+    if (keyNode.type === "string") {
       // `"add-item": () => ...` — the literal text inside the quotes.
-      const fragment = keyNode.children?.find((c: SyntaxNode) => c.type === 'string_fragment');
+      const fragment = keyNode.children?.find(
+        (c: SyntaxNode) => c.type === "string_fragment",
+      );
       const text = fragment?.text ?? null;
-      return { funcName: text, label: 'Function' };
+      return { funcName: text, label: "Function" };
     }
     // computed_property_name (`[ACTION_KEY]`) and other dynamic keys have
     // no static name — fall through anonymous.
-    return { funcName: null, label: 'Function' };
+    return { funcName: null, label: "Function" };
   }
 
   // HOC-wrapped variable declarations: `const Button = forwardRef((p, r) => { ... })`,
@@ -140,145 +149,145 @@ const tsExtractFunctionName = (
   // mostly-harmless `Function:x` (consumed as a value, never invoked),
   // accepted as a small false-positive cost vs. the much larger gain of
   // capturing the React UI-component idiom.
-  if (parent.type === 'arguments') {
+  if (parent.type === "arguments") {
     const callExpr = parent.parent;
-    if (!callExpr || callExpr.type !== 'call_expression') {
-      return { funcName: null, label: 'Function' };
+    if (!callExpr || callExpr.type !== "call_expression") {
+      return { funcName: null, label: "Function" };
     }
     const declarator = callExpr.parent;
-    if (!declarator || declarator.type !== 'variable_declarator') {
-      return { funcName: null, label: 'Function' };
+    if (!declarator || declarator.type !== "variable_declarator") {
+      return { funcName: null, label: "Function" };
     }
-    const nameNode = declarator.childForFieldName?.('name');
-    if (nameNode?.type === 'identifier') {
-      return { funcName: nameNode.text, label: 'Function' };
+    const nameNode = declarator.childForFieldName?.("name");
+    if (nameNode?.type === "identifier") {
+      return { funcName: nameNode.text, label: "Function" };
     }
-    return { funcName: null, label: 'Function' };
+    return { funcName: null, label: "Function" };
   }
 
-  return { funcName: null, label: 'Function' };
+  return { funcName: null, label: "Function" };
 };
 
 export const BUILT_INS: ReadonlySet<string> = new Set([
-  'console',
-  'log',
-  'warn',
-  'error',
-  'info',
-  'debug',
-  'setTimeout',
-  'setInterval',
-  'clearTimeout',
-  'clearInterval',
-  'parseInt',
-  'parseFloat',
-  'isNaN',
-  'isFinite',
-  'encodeURI',
-  'decodeURI',
-  'encodeURIComponent',
-  'decodeURIComponent',
-  'JSON',
-  'parse',
-  'stringify',
-  'Object',
-  'Array',
-  'String',
-  'Number',
-  'Boolean',
-  'Symbol',
-  'BigInt',
-  'Map',
-  'Set',
-  'WeakMap',
-  'WeakSet',
-  'Promise',
-  'resolve',
-  'reject',
-  'then',
-  'catch',
-  'finally',
-  'Math',
-  'Date',
-  'RegExp',
-  'Error',
-  'require',
-  'import',
-  'export',
-  'fetch',
-  'Response',
-  'Request',
-  'useState',
-  'useEffect',
-  'useCallback',
-  'useMemo',
-  'useRef',
-  'useContext',
-  'useReducer',
-  'useLayoutEffect',
-  'useImperativeHandle',
-  'useDebugValue',
-  'createElement',
-  'createContext',
-  'createRef',
-  'forwardRef',
-  'memo',
-  'lazy',
-  'map',
-  'filter',
-  'reduce',
-  'forEach',
-  'find',
-  'findIndex',
-  'some',
-  'every',
-  'includes',
-  'indexOf',
-  'slice',
-  'splice',
-  'concat',
-  'join',
-  'split',
-  'push',
-  'pop',
-  'shift',
-  'unshift',
-  'sort',
-  'reverse',
-  'keys',
-  'values',
-  'entries',
-  'assign',
-  'freeze',
-  'seal',
-  'hasOwnProperty',
-  'toString',
-  'valueOf',
+  "console",
+  "log",
+  "warn",
+  "error",
+  "info",
+  "debug",
+  "setTimeout",
+  "setInterval",
+  "clearTimeout",
+  "clearInterval",
+  "parseInt",
+  "parseFloat",
+  "isNaN",
+  "isFinite",
+  "encodeURI",
+  "decodeURI",
+  "encodeURIComponent",
+  "decodeURIComponent",
+  "JSON",
+  "parse",
+  "stringify",
+  "Object",
+  "Array",
+  "String",
+  "Number",
+  "Boolean",
+  "Symbol",
+  "BigInt",
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "Promise",
+  "resolve",
+  "reject",
+  "then",
+  "catch",
+  "finally",
+  "Math",
+  "Date",
+  "RegExp",
+  "Error",
+  "require",
+  "import",
+  "export",
+  "fetch",
+  "Response",
+  "Request",
+  "useState",
+  "useEffect",
+  "useCallback",
+  "useMemo",
+  "useRef",
+  "useContext",
+  "useReducer",
+  "useLayoutEffect",
+  "useImperativeHandle",
+  "useDebugValue",
+  "createElement",
+  "createContext",
+  "createRef",
+  "forwardRef",
+  "memo",
+  "lazy",
+  "map",
+  "filter",
+  "reduce",
+  "forEach",
+  "find",
+  "findIndex",
+  "some",
+  "every",
+  "includes",
+  "indexOf",
+  "slice",
+  "splice",
+  "concat",
+  "join",
+  "split",
+  "push",
+  "pop",
+  "shift",
+  "unshift",
+  "sort",
+  "reverse",
+  "keys",
+  "values",
+  "entries",
+  "assign",
+  "freeze",
+  "seal",
+  "hasOwnProperty",
+  "toString",
+  "valueOf",
 ]);
 
 export const typescriptProvider = defineLanguage({
   id: SupportedLanguages.TypeScript,
-  extensions: ['.ts', '.tsx'],
+  extensions: [".ts", ".tsx"],
   entryPointPatterns: [/^use[A-Z]/],
   astFrameworkPatterns: [
     {
-      framework: 'nestjs',
+      framework: "nestjs",
       entryPointMultiplier: 3.2,
-      reason: 'nestjs-decorator',
-      patterns: ['@Controller', '@Get', '@Post', '@Put', '@Delete', '@Patch'],
+      reason: "nestjs-decorator",
+      patterns: ["@Controller", "@Get", "@Post", "@Put", "@Delete", "@Patch"],
     },
     {
-      framework: 'expo-router',
+      framework: "expo-router",
       entryPointMultiplier: 2.5,
-      reason: 'expo-router-navigation',
+      reason: "expo-router-navigation",
       patterns: [
-        'router.push',
-        'router.replace',
-        'router.navigate',
-        'useRouter',
-        'useLocalSearchParams',
-        'useSegments',
-        'expo-router',
+        "router.push",
+        "router.replace",
+        "router.navigate",
+        "useRouter",
+        "useLocalSearchParams",
+        "useSegments",
+        "expo-router",
       ],
     },
   ] satisfies AstFrameworkPatternConfig[],
@@ -320,27 +329,27 @@ export const typescriptProvider = defineLanguage({
 
 export const javascriptProvider = defineLanguage({
   id: SupportedLanguages.JavaScript,
-  extensions: ['.js', '.jsx'],
+  extensions: [".js", ".jsx"],
   entryPointPatterns: [/^use[A-Z]/],
   astFrameworkPatterns: [
     {
-      framework: 'nestjs',
+      framework: "nestjs",
       entryPointMultiplier: 3.2,
-      reason: 'nestjs-decorator',
-      patterns: ['@Controller', '@Get', '@Post', '@Put', '@Delete', '@Patch'],
+      reason: "nestjs-decorator",
+      patterns: ["@Controller", "@Get", "@Post", "@Put", "@Delete", "@Patch"],
     },
     {
-      framework: 'expo-router',
+      framework: "expo-router",
       entryPointMultiplier: 2.5,
-      reason: 'expo-router-navigation',
+      reason: "expo-router-navigation",
       patterns: [
-        'router.push',
-        'router.replace',
-        'router.navigate',
-        'useRouter',
-        'useLocalSearchParams',
-        'useSegments',
-        'expo-router',
+        "router.push",
+        "router.replace",
+        "router.navigate",
+        "useRouter",
+        "useLocalSearchParams",
+        "useSegments",
+        "expo-router",
       ],
     },
   ] satisfies AstFrameworkPatternConfig[],

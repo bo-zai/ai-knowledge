@@ -11,76 +11,88 @@
  * already attached) so these functions are straight-line tag readers.
  */
 
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from '../../../shared/index.js';
+import type {
+  CaptureMatch,
+  ParsedImport,
+  ParsedTypeBinding,
+  TypeRef,
+} from "../../../shared/index.js";
 
 // ─── interpretImport ──────────────────────────────────────────────────────
 
-export function interpretPythonImport(captures: CaptureMatch): ParsedImport | null {
+export function interpretPythonImport(
+  captures: CaptureMatch,
+): ParsedImport | null {
   // Markers attached by `splitImportStatement` (import-decomposer.ts):
   //   `@import.kind`  : 'plain' | 'aliased' | 'from' | 'from-alias' | 'wildcard' | 'dynamic'
   //   `@import.name`  : the imported symbol name (or module name for plain imports)
   //   `@import.alias` : the local alias name (for `as` forms)
   //   `@import.source`: the module path (always present except for `dynamic`)
-  const kindCap = captures['@import.kind'];
-  const nameCap = captures['@import.name'];
-  const aliasCap = captures['@import.alias'];
-  const sourceCap = captures['@import.source'];
+  const kindCap = captures["@import.kind"];
+  const nameCap = captures["@import.name"];
+  const aliasCap = captures["@import.alias"];
+  const sourceCap = captures["@import.source"];
 
   const kind = kindCap?.text;
   if (kind === undefined) return null;
 
   switch (kind) {
-    case 'plain': {
+    case "plain": {
       // `import numpy`
       if (sourceCap === undefined) return null;
       return {
-        kind: 'namespace',
-        localName: sourceCap.text.split('.')[0]!, // `import a.b.c` exposes `a`
+        kind: "namespace",
+        localName: sourceCap.text.split(".")[0]!, // `import a.b.c` exposes `a`
         importedName: sourceCap.text,
         targetRaw: sourceCap.text,
       };
     }
-    case 'aliased': {
+    case "aliased": {
       // `import numpy as np`
       if (sourceCap === undefined || aliasCap === undefined) return null;
       return {
-        kind: 'namespace',
+        kind: "namespace",
         localName: aliasCap.text,
         importedName: sourceCap.text,
         targetRaw: sourceCap.text,
       };
     }
-    case 'from': {
+    case "from": {
       // `from m import x`
       if (sourceCap === undefined || nameCap === undefined) return null;
       return {
-        kind: 'named',
+        kind: "named",
         localName: nameCap.text,
         importedName: nameCap.text,
         targetRaw: sourceCap.text,
       };
     }
-    case 'from-alias': {
+    case "from-alias": {
       // `from m import x as y`
-      if (sourceCap === undefined || nameCap === undefined || aliasCap === undefined) return null;
+      if (
+        sourceCap === undefined ||
+        nameCap === undefined ||
+        aliasCap === undefined
+      )
+        return null;
       return {
-        kind: 'alias',
+        kind: "alias",
         localName: aliasCap.text,
         importedName: nameCap.text,
         alias: aliasCap.text,
         targetRaw: sourceCap.text,
       };
     }
-    case 'wildcard': {
+    case "wildcard": {
       // `from m import *`
       if (sourceCap === undefined) return null;
-      return { kind: 'wildcard', targetRaw: sourceCap.text };
+      return { kind: "wildcard", targetRaw: sourceCap.text };
     }
-    case 'dynamic': {
+    case "dynamic": {
       // `importlib.import_module(...)` — preserved for diagnostics.
       return {
-        kind: 'dynamic-unresolved',
-        localName: '',
+        kind: "dynamic-unresolved",
+        localName: "",
         targetRaw: sourceCap?.text ?? null,
       };
     }
@@ -91,12 +103,14 @@ export function interpretPythonImport(captures: CaptureMatch): ParsedImport | nu
 
 // ─── interpretTypeBinding ─────────────────────────────────────────────────
 
-export function interpretPythonTypeBinding(captures: CaptureMatch): ParsedTypeBinding | null {
+export function interpretPythonTypeBinding(
+  captures: CaptureMatch,
+): ParsedTypeBinding | null {
   // Synthesized `self` / `cls` captures carry `@type-binding.name` and
   // `@type-binding.type` directly — same shape as parameter annotations,
   // source differs.
-  const nameCap = captures['@type-binding.name'];
-  const typeCap = captures['@type-binding.type'];
+  const nameCap = captures["@type-binding.name"];
+  const typeCap = captures["@type-binding.type"];
   if (nameCap === undefined || typeCap === undefined) return null;
 
   // Strip surrounding quotes for PEP 484 forward references:
@@ -106,7 +120,9 @@ export function interpretPythonTypeBinding(captures: CaptureMatch): ParsedTypeBi
   // non-nullable ones.  Finally strip single-arg generic wrappers so
   // `list[User]` / `Iterable[User]` behave like `User` for iterable
   // for-loop chain propagation.
-  const rawType = stripGeneric(stripNullable(stripForwardRefQuotes(typeCap.text.trim())));
+  const rawType = stripGeneric(
+    stripNullable(stripForwardRefQuotes(typeCap.text.trim())),
+  );
 
   // Order matters: more specific anchor captures take precedence. `self`
   // and `cls` are synthesized with their own marker captures; the SCM
@@ -114,15 +130,19 @@ export function interpretPythonTypeBinding(captures: CaptureMatch): ParsedTypeBi
   // `@type-binding.annotation`, `@type-binding.constructor`) distinguish
   // the variable-annotation and constructor-inferred forms from the
   // classic parameter annotation.
-  let source: TypeRef['source'] = 'parameter-annotation';
-  if (captures['@type-binding.self'] !== undefined) source = 'self';
+  let source: TypeRef["source"] = "parameter-annotation";
+  if (captures["@type-binding.self"] !== undefined) source = "self";
   // `cls` is a self-like receiver; share the source label so downstream
   // `Registry.lookup` Step 2 treats them identically.
-  else if (captures['@type-binding.cls'] !== undefined) source = 'self';
-  else if (captures['@type-binding.constructor'] !== undefined) source = 'constructor-inferred';
-  else if (captures['@type-binding.annotation'] !== undefined) source = 'annotation';
-  else if (captures['@type-binding.alias'] !== undefined) source = 'assignment-inferred';
-  else if (captures['@type-binding.return'] !== undefined) source = 'return-annotation';
+  else if (captures["@type-binding.cls"] !== undefined) source = "self";
+  else if (captures["@type-binding.constructor"] !== undefined)
+    source = "constructor-inferred";
+  else if (captures["@type-binding.annotation"] !== undefined)
+    source = "annotation";
+  else if (captures["@type-binding.alias"] !== undefined)
+    source = "assignment-inferred";
+  else if (captures["@type-binding.return"] !== undefined)
+    source = "return-annotation";
 
   return { boundName: nameCap.text, rawTypeName: rawType, source };
 }
@@ -180,14 +200,16 @@ function stripGeneric(text: string): string {
  */
 function stripNullable(text: string): string {
   // `Optional[X]` / `typing.Optional[X]` / `t.Optional[X]`
-  const optMatch = text.match(/^(?:[A-Za-z_][A-Za-z0-9_]*\.)?Optional\[(.+)\]$/);
+  const optMatch = text.match(
+    /^(?:[A-Za-z_][A-Za-z0-9_]*\.)?Optional\[(.+)\]$/,
+  );
   if (optMatch !== null) return optMatch[1].trim();
 
   // Binary union forms. A three-arm or larger union (`User | None | Error`)
   // is ambiguous for single-receiver inference, so we leave it alone.
-  const parts = text.split('|').map((p) => p.trim());
+  const parts = text.split("|").map((p) => p.trim());
   if (parts.length !== 2) return text;
-  if (parts[0] === 'None') return parts[1];
-  if (parts[1] === 'None') return parts[0];
+  if (parts[0] === "None") return parts[1];
+  if (parts[1] === "None") return parts[0];
   return text;
 }

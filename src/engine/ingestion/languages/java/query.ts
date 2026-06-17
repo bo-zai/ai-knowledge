@@ -26,8 +26,8 @@
  * tree-sitter init cost per file.
  */
 
-import Parser from 'tree-sitter';
-import Java from 'tree-sitter-java';
+import Parser from "tree-sitter";
+import Java from "tree-sitter-java";
 
 const JAVA_SCOPE_QUERY = `
 ;; Scopes
@@ -259,14 +259,17 @@ let _query: Parser.Query | null = null;
 export function getJavaParser(): Parser {
   if (_parser === null) {
     _parser = new Parser();
-    _parser.setLanguage(Java as Parameters<Parser['setLanguage']>[0]);
+    _parser.setLanguage(Java as Parameters<Parser["setLanguage"]>[0]);
   }
   return _parser;
 }
 
 export function getJavaScopeQuery(): Parser.Query {
   if (_query === null) {
-    _query = new Parser.Query(Java as Parameters<Parser['setLanguage']>[0], JAVA_SCOPE_QUERY);
+    _query = new Parser.Query(
+      Java as Parameters<Parser["setLanguage"]>[0],
+      JAVA_SCOPE_QUERY,
+    );
   }
   return _query;
 }

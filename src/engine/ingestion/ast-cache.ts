@@ -1,5 +1,5 @@
-import { LRUCache } from 'lru-cache';
-import Parser from 'tree-sitter';
+import { LRUCache } from "lru-cache";
+import Parser from "tree-sitter";
 
 /**
  * Minimal structural shape consumers need when reading Trees back
@@ -49,7 +49,7 @@ export const createASTCache = (maxSize: number = 50): ASTCache => {
         // will hand freed memory to scope-resolution.
         (tree as unknown as { delete?: () => void }).delete?.();
       } catch (e) {
-        console.warn('Failed to delete tree from WASM memory', e);
+        console.warn("Failed to delete tree from WASM memory", e);
       }
     },
   });

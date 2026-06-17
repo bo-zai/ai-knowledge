@@ -15,7 +15,7 @@ import type {
   EntryPointInfo,
   EntityInfo,
   MapperInfo,
-} from './types.js';
+} from "./types.js";
 
 /**
  * 表锚点聚合器配置
@@ -68,7 +68,11 @@ export class TableAnchorAggregator {
     const tableAnchors: TableAnchor[] = [];
 
     for (const [tableName, contexts] of Array.from(tableGroups.entries())) {
-      const anchor = this.buildTableAnchor(tableName, contexts, discoveryResults);
+      const anchor = this.buildTableAnchor(
+        tableName,
+        contexts,
+        discoveryResults,
+      );
       tableAnchors.push(anchor);
     }
 
@@ -85,7 +89,11 @@ export class TableAnchorAggregator {
 
     for (const result of discoveryResults) {
       for (const tracePath of result.tracePaths) {
-        for (let tableIndex = 0; tableIndex < tracePath.tables.length; tableIndex++) {
+        for (
+          let tableIndex = 0;
+          tableIndex < tracePath.tables.length;
+          tableIndex++
+        ) {
           const table = tracePath.tables[tableIndex];
           const context: TraceSourceContext = {
             tracePath,
@@ -163,7 +171,9 @@ export class TableAnchorAggregator {
    *
    * 去重：同一模块对同一表的多次追溯只保留一次
    */
-  private buildTableTraceSources(contexts: TraceSourceContext[]): TableTraceSource[] {
+  private buildTableTraceSources(
+    contexts: TraceSourceContext[],
+  ): TableTraceSource[] {
     const sourceMap = new Map<string, TableTraceSource>();
 
     for (const ctx of contexts) {
@@ -189,7 +199,7 @@ export class TableAnchorAggregator {
     const entity = this.findRelatedEntity(ctx);
     const mapper = this.findRelatedMapper(ctx);
 
-    return `${modulePath}:${entity?.className || mapper?.className || 'unknown'}`;
+    return `${modulePath}:${entity?.className || mapper?.className || "unknown"}`;
   }
 
   /**
@@ -215,11 +225,11 @@ export class TableAnchorAggregator {
     return {
       modulePath,
       moduleName,
-      entityClassName: entity?.className || '',
-      entityFilePath: entity?.filePath || '',
+      entityClassName: entity?.className || "",
+      entityFilePath: entity?.filePath || "",
       entryPoints,
-      mapperClassName: mapper?.className || '',
-      mapperFilePath: mapper?.filePath || '',
+      mapperClassName: mapper?.className || "",
+      mapperFilePath: mapper?.filePath || "",
       confidence,
     };
   }
@@ -250,7 +260,7 @@ export class TableAnchorAggregator {
       return tracePath.entities[0].modulePath;
     }
 
-    return '';
+    return "";
   }
 
   /**
@@ -279,7 +289,7 @@ export class TableAnchorAggregator {
       return tracePath.entities[0].moduleName;
     }
 
-    return '';
+    return "";
   }
 
   /**
@@ -297,8 +307,13 @@ export class TableAnchorAggregator {
     }
 
     // 如果只有一个 Entity 或表数量与 Entity 数量匹配
-    if (tracePath.entities.length === 1 || tracePath.entities.length === tracePath.tables.length) {
-      return tracePath.entities[Math.min(tableIndex, tracePath.entities.length - 1)];
+    if (
+      tracePath.entities.length === 1 ||
+      tracePath.entities.length === tracePath.tables.length
+    ) {
+      return tracePath.entities[
+        Math.min(tableIndex, tracePath.entities.length - 1)
+      ];
     }
 
     // 默认返回第一个
@@ -316,8 +331,13 @@ export class TableAnchorAggregator {
     }
 
     // 如果只有一个 Mapper 或表数量与 Mapper 数量匹配
-    if (tracePath.mappers.length === 1 || tracePath.mappers.length === tracePath.tables.length) {
-      return tracePath.mappers[Math.min(tableIndex, tracePath.mappers.length - 1)];
+    if (
+      tracePath.mappers.length === 1 ||
+      tracePath.mappers.length === tracePath.tables.length
+    ) {
+      return tracePath.mappers[
+        Math.min(tableIndex, tracePath.mappers.length - 1)
+      ];
     }
 
     // 默认返回第一个

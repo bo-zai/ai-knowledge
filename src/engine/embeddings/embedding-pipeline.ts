@@ -9,17 +9,17 @@
  * 5. Create vector index for semantic search
  */
 
-import { createHash } from 'crypto';
+import { createHash } from "crypto";
 import {
   initEmbedder,
   embedBatch,
   embedText,
   embeddingToArray,
   isEmbedderReady,
-} from './embedder.js';
-import { generateEmbeddingText } from './text-generator.js';
-import { chunkNode, characterChunk } from './chunker.js';
-import { extractStructuralNames } from './structural-extractor.js';
+} from "./embedder.js";
+import { generateEmbeddingText } from "./text-generator.js";
+import { chunkNode, characterChunk } from "./chunker.js";
+import { extractStructuralNames } from "./structural-extractor.js";
 import {
   type EmbeddingProgress,
   type EmbeddingConfig,
@@ -33,22 +33,25 @@ import {
   LABELS_WITH_EXPORTED,
   STRUCTURAL_LABELS,
   collectBestChunks,
-} from './types.js';
-import { resolveEmbeddingConfig } from './config.js';
-import { rankExactEmbeddingRows, type ExactEmbeddingRow } from './exact-search.js';
+} from "./types.js";
+import { resolveEmbeddingConfig } from "./config.js";
+import {
+  rankExactEmbeddingRows,
+  type ExactEmbeddingRow,
+} from "./exact-search.js";
 import {
   EMBEDDING_TABLE_NAME,
   EMBEDDING_INDEX_NAME,
   CREATE_VECTOR_INDEX_QUERY,
   STALE_HASH_SENTINEL,
-} from '../lbug/schema.js';
-import { loadVectorExtension } from '../lbug/lbug-adapter.js';
-import { getExactScanLimit } from '../platform/capabilities.js';
+} from "../lbug/schema.js";
+import { loadVectorExtension } from "../lbug/lbug-adapter.js";
+import { getExactScanLimit } from "../platform/capabilities.js";
 
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === "development";
 
 const vectorUnavailableMessage =
-  'VECTOR extension is unavailable for this LadybugDB runtime; semantic search will use exact scan when embeddings exist.';
+  "VECTOR extension is unavailable for this LadybugDB runtime; semantic search will use exact scan when embeddings exist.";
 
 const ensureVectorExtensionAvailable = async (): Promise<boolean> => {
   const vectorReady = await loadVectorExtension();
@@ -62,7 +65,7 @@ const ensureVectorExtensionAvailable = async (): Promise<boolean> => {
  * invalidate existing vectors, such as metadata/header shape changes,
  * structural container context changes, or preceding-context formatting rules.
  */
-export const EMBEDDING_TEXT_VERSION = 'v2';
+export const EMBEDDING_TEXT_VERSION = "v2";
 
 /**
  * Compute a stable content fingerprint for an embeddable node.
@@ -83,7 +86,11 @@ export const contentHashForNode = (
     node.content,
     config,
   );
-  return createHash('sha1').update(EMBEDDING_TEXT_VERSION).update('\n').update(text).digest('hex');
+  return createHash("sha1")
+    .update(EMBEDDING_TEXT_VERSION)
+    .update("\n")
+    .update(text)
+    .digest("hex");
 };
 
 /**
@@ -136,16 +143,19 @@ const queryEmbeddableNodes = async (
 
       const rows = await executeQuery(query);
       for (const row of rows) {
-        const hasExportedColumn = label === LABEL_METHOD || LABELS_WITH_EXPORTED.has(label);
+        const hasExportedColumn =
+          label === LABEL_METHOD || LABELS_WITH_EXPORTED.has(label);
         allNodes.push({
           id: row.id ?? row[0],
           name: row.name ?? row[1],
           label: row.label ?? row[2],
           filePath: row.filePath ?? row[3],
-          content: row.content ?? row[4] ?? '',
+          content: row.content ?? row[4] ?? "",
           startLine: row.startLine ?? row[5],
           endLine: row.endLine ?? row[6],
-          isExported: hasExportedColumn ? (row.isExported ?? row[7]) : undefined,
+          isExported: hasExportedColumn
+            ? (row.isExported ?? row[7])
+            : undefined,
           description: row.description ?? (hasExportedColumn ? row[8] : row[7]),
           ...(label === LABEL_METHOD
             ? {
@@ -212,7 +222,7 @@ const createVectorIndex = async (
     return true;
   } catch (error) {
     if (isDev) {
-      console.warn('Vector index creation warning:', error);
+      console.warn("Vector index creation warning:", error);
     }
     return false;
   }
@@ -222,7 +232,7 @@ export interface EmbeddingPipelineResult {
   nodesProcessed: number;
   chunksProcessed: number;
   vectorIndexReady: boolean;
-  semanticMode: 'vector-index' | 'exact-scan';
+  semanticMode: "vector-index" | "exact-scan";
 }
 
 /**
@@ -260,7 +270,7 @@ export const runEmbeddingPipeline = async (
 
     // Phase 1: Load embedding model
     onProgress({
-      phase: 'loading-model',
+      phase: "loading-model",
       percent: 0,
       modelDownloadPercent: 0,
     });
@@ -269,7 +279,7 @@ export const runEmbeddingPipeline = async (
       await initEmbedder((modelProgress: ModelProgress) => {
         const downloadPercent = modelProgress.progress ?? 0;
         onProgress({
-          phase: 'loading-model',
+          phase: "loading-model",
           percent: Math.round(downloadPercent * 0.2),
           modelDownloadPercent: downloadPercent,
         });
@@ -277,13 +287,13 @@ export const runEmbeddingPipeline = async (
     }
 
     onProgress({
-      phase: 'loading-model',
+      phase: "loading-model",
       percent: 20,
       modelDownloadPercent: 100,
     });
 
     if (isDev) {
-      console.log('🔍 Querying embeddable nodes...');
+      console.log("🔍 Querying embeddable nodes...");
     }
 
     // Phase 2: Query embeddable nodes
@@ -325,7 +335,9 @@ export const runEmbeddingPipeline = async (
       // (Kuzu forbids SET on vector-indexed properties; DELETE-then-INSERT is the sanctioned pattern)
       if (staleNodeIds.length > 0) {
         if (isDev) {
-          console.log(`🔄 Deleting ${staleNodeIds.length} stale embedding rows for re-embed`);
+          console.log(
+            `🔄 Deleting ${staleNodeIds.length} stale embedding rows for re-embed`,
+          );
         }
         try {
           await executeWithReusedStatement(
@@ -337,7 +349,7 @@ export const runEmbeddingPipeline = async (
           // All other errors risk vector-index corruption (Kuzu requires DELETE-before-INSERT
           // for vector-indexed properties) — propagate so the pipeline aborts cleanly.
           const msg = err instanceof Error ? err.message : String(err);
-          if (!msg.includes('does not exist')) {
+          if (!msg.includes("does not exist")) {
             throw new Error(
               `[embed] Failed to delete stale embedding rows — aborting to prevent vector-index corruption: ${msg}`,
             );
@@ -365,7 +377,7 @@ export const runEmbeddingPipeline = async (
       const vectorIndexReady = await createVectorIndex(executeQuery);
 
       onProgress({
-        phase: 'ready',
+        phase: "ready",
         percent: 100,
         nodesProcessed: 0,
         totalNodes: 0,
@@ -374,7 +386,7 @@ export const runEmbeddingPipeline = async (
         nodesProcessed: 0,
         chunksProcessed: 0,
         vectorIndexReady,
-        semanticMode: vectorIndexReady ? 'vector-index' : 'exact-scan',
+        semanticMode: vectorIndexReady ? "vector-index" : "exact-scan",
       };
     }
 
@@ -385,7 +397,7 @@ export const runEmbeddingPipeline = async (
     let processedNodes = 0;
 
     onProgress({
-      phase: 'embedding',
+      phase: "embedding",
       percent: 20,
       nodesProcessed: 0,
       totalNodes,
@@ -415,7 +427,10 @@ export const runEmbeddingPipeline = async (
         // Extract structural names for class-like nodes via AST extractors
         if (!isShort && STRUCTURAL_LABELS.has(node.label)) {
           try {
-            const names = await extractStructuralNames(node.content, node.filePath);
+            const names = await extractStructuralNames(
+              node.content,
+              node.filePath,
+            );
             node.methodNames = names.methodNames;
             node.fieldNames = names.fieldNames;
           } catch {
@@ -424,9 +439,16 @@ export const runEmbeddingPipeline = async (
         }
 
         // Compute content hash once per node (re-use cached value for stale nodes)
-        const hash = computedStaleHashes.get(node.id) ?? contentHashForNode(node, finalConfig);
+        const hash =
+          computedStaleHashes.get(node.id) ??
+          contentHashForNode(node, finalConfig);
 
-        let chunks: Array<{ text: string; chunkIndex: number; startLine: number; endLine: number }>;
+        let chunks: Array<{
+          text: string;
+          chunkIndex: number;
+          startLine: number;
+          endLine: number;
+        }>;
         if (isShort) {
           chunks = [{ text: node.content, chunkIndex: 0, startLine, endLine }];
         } else {
@@ -447,11 +469,17 @@ export const runEmbeddingPipeline = async (
                 chunkErr,
               );
             }
-            chunks = characterChunk(node.content, startLine, endLine, chunkSize, overlap);
+            chunks = characterChunk(
+              node.content,
+              startLine,
+              endLine,
+              chunkSize,
+              overlap,
+            );
           }
         }
 
-        let prevTail = '';
+        let prevTail = "";
         for (const chunk of chunks) {
           const text = generateEmbeddingText(
             node,
@@ -468,7 +496,7 @@ export const runEmbeddingPipeline = async (
             endLine: chunk.endLine,
             contentHash: hash,
           });
-          prevTail = overlap > 0 ? chunk.text.slice(-overlap) : '';
+          prevTail = overlap > 0 ? chunk.text.slice(-overlap) : "";
         }
       }
 
@@ -502,7 +530,7 @@ export const runEmbeddingPipeline = async (
 
       const embeddingProgress = 20 + (processedNodes / totalNodes) * 70;
       onProgress({
-        phase: 'embedding',
+        phase: "embedding",
         percent: Math.round(embeddingProgress),
         nodesProcessed: processedNodes,
         totalNodes,
@@ -513,20 +541,20 @@ export const runEmbeddingPipeline = async (
 
     // Phase 4: Create vector index
     onProgress({
-      phase: 'indexing',
+      phase: "indexing",
       percent: 90,
       nodesProcessed: totalNodes,
       totalNodes,
     });
 
     if (isDev) {
-      console.log('📇 Creating vector index...');
+      console.log("📇 Creating vector index...");
     }
 
     const vectorIndexReady = await createVectorIndex(executeQuery);
 
     onProgress({
-      phase: 'ready',
+      phase: "ready",
       percent: 100,
       nodesProcessed: totalNodes,
       totalNodes,
@@ -541,17 +569,18 @@ export const runEmbeddingPipeline = async (
       nodesProcessed: totalNodes,
       chunksProcessed: totalChunks,
       vectorIndexReady,
-      semanticMode: vectorIndexReady ? 'vector-index' : 'exact-scan',
+      semanticMode: vectorIndexReady ? "vector-index" : "exact-scan",
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
 
     if (isDev) {
-      console.error('❌ Embedding pipeline error:', error);
+      console.error("❌ Embedding pipeline error:", error);
     }
 
     onProgress({
-      phase: 'error',
+      phase: "error",
       percent: 0,
       error: errorMessage,
     });
@@ -570,12 +599,14 @@ export const semanticSearch = async (
   maxDistance: number = 0.5,
 ): Promise<SemanticSearchResult[]> => {
   if (!isEmbedderReady()) {
-    throw new Error('Embedding model not initialized. Run embedding pipeline first.');
+    throw new Error(
+      "Embedding model not initialized. Run embedding pipeline first.",
+    );
   }
 
   const queryEmbedding = await embedText(query);
   const queryVec = embeddingToArray(queryEmbedding);
-  const queryVecStr = `[${queryVec.join(',')}]`;
+  const queryVecStr = `[${queryVec.join(",")}]`;
 
   let bestChunks = new Map<
     string,
@@ -630,15 +661,17 @@ export const semanticSearch = async (
         embedding: row.embedding ?? row[4] ?? [],
       }));
       bestChunks = new Map(
-        rankExactEmbeddingRows(exactRows, queryVec, k, maxDistance).map((row) => [
-          row.nodeId,
-          {
-            distance: row.distance,
-            chunkIndex: row.chunkIndex,
-            startLine: row.startLine,
-            endLine: row.endLine,
-          },
-        ]),
+        rankExactEmbeddingRows(exactRows, queryVec, k, maxDistance).map(
+          (row) => [
+            row.nodeId,
+            {
+              distance: row.distance,
+              chunkIndex: row.chunkIndex,
+              startLine: row.startLine,
+              endLine: row.endLine,
+            },
+          ],
+        ),
       );
     }
   }
@@ -653,8 +686,9 @@ export const semanticSearch = async (
     Array<{ nodeId: string; distance: number } & Record<string, any>>
   >();
   for (const [nodeId, chunk] of Array.from(bestChunks.entries()).slice(0, k)) {
-    const labelEndIdx = nodeId.indexOf(':');
-    const label = labelEndIdx > 0 ? nodeId.substring(0, labelEndIdx) : 'Unknown';
+    const labelEndIdx = nodeId.indexOf(":");
+    const label =
+      labelEndIdx > 0 ? nodeId.substring(0, labelEndIdx) : "Unknown";
     if (!byLabel.has(label)) byLabel.set(label, []);
     byLabel.get(label)!.push({ nodeId, ...chunk });
   }
@@ -663,7 +697,9 @@ export const semanticSearch = async (
   const results: SemanticSearchResult[] = [];
 
   for (const [label, items] of byLabel) {
-    const idList = items.map((i) => `'${i.nodeId.replace(/'/g, "''")}'`).join(', ');
+    const idList = items
+      .map((i) => `'${i.nodeId.replace(/'/g, "''")}'`)
+      .join(", ");
     try {
       const nodeQuery = `
         MATCH (n:\`${label}\`) WHERE n.id IN [${idList}]
@@ -681,9 +717,9 @@ export const semanticSearch = async (
         if (nodeRow) {
           results.push({
             nodeId: item.nodeId,
-            name: nodeRow.name ?? nodeRow[1] ?? '',
+            name: nodeRow.name ?? nodeRow[1] ?? "",
             label,
-            filePath: nodeRow.filePath ?? nodeRow[2] ?? '',
+            filePath: nodeRow.filePath ?? nodeRow[2] ?? "",
             distance: item.distance,
             startLine: item.startLine,
             endLine: item.endLine,

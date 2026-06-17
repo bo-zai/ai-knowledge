@@ -7,11 +7,11 @@
  * edge-drop. Language-NEUTRAL — keyed only on the literal prefixes; no provider
  * branching belongs here.
  */
-export type MarkerKind = 'heritage' | 'property';
+export type MarkerKind = "heritage" | "property";
 
 const PREFIX_BY_KIND: Record<MarkerKind, string> = {
-  heritage: '__heritage__:',
-  property: '__property__:',
+  heritage: "__heritage__:",
+  property: "__property__:",
 };
 
 export const HERITAGE_MARKER_PREFIX = PREFIX_BY_KIND.heritage;
@@ -24,27 +24,38 @@ export const PROPERTY_MARKER_PREFIX = PREFIX_BY_KIND.property;
  * arg `Outer::Mixin` → `Outer.Mixin`). This makes the #1981 silent edge-drop a
  * loud failure instead.
  */
-export function encodeMarker(kind: MarkerKind, fields: readonly string[]): string {
+export function encodeMarker(
+  kind: MarkerKind,
+  fields: readonly string[],
+): string {
   for (const field of fields) {
-    if (field.includes(':')) {
+    if (field.includes(":")) {
       throw new Error(
         `encodeMarker: field "${field}" contains the ':' delimiter; normalize it before encoding`,
       );
     }
   }
-  return PREFIX_BY_KIND[kind] + fields.join(':');
+  return PREFIX_BY_KIND[kind] + fields.join(":");
 }
 
 /**
  * Parse a marker string back into its kind + positional fields, or `null` if `raw`
  * is not a marker. Mirrors the historical `slice(PREFIX.length).split(':')`.
  */
-export function decodeMarker(raw: string): { kind: MarkerKind; fields: string[] } | null {
+export function decodeMarker(
+  raw: string,
+): { kind: MarkerKind; fields: string[] } | null {
   if (raw.startsWith(PREFIX_BY_KIND.heritage)) {
-    return { kind: 'heritage', fields: raw.slice(PREFIX_BY_KIND.heritage.length).split(':') };
+    return {
+      kind: "heritage",
+      fields: raw.slice(PREFIX_BY_KIND.heritage.length).split(":"),
+    };
   }
   if (raw.startsWith(PREFIX_BY_KIND.property)) {
-    return { kind: 'property', fields: raw.slice(PREFIX_BY_KIND.property.length).split(':') };
+    return {
+      kind: "property",
+      fields: raw.slice(PREFIX_BY_KIND.property.length).split(":"),
+    };
   }
   return null;
 }
@@ -54,5 +65,8 @@ export function decodeMarker(raw: string): { kind: MarkerKind; fields: string[] 
  * `startsWith('__heritage__:') || startsWith('__property__:')` pair.
  */
 export function isHeritageMarker(raw: string): boolean {
-  return raw.startsWith(PREFIX_BY_KIND.heritage) || raw.startsWith(PREFIX_BY_KIND.property);
+  return (
+    raw.startsWith(PREFIX_BY_KIND.heritage) ||
+    raw.startsWith(PREFIX_BY_KIND.property)
+  );
 }

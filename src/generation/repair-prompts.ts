@@ -1,31 +1,73 @@
-import type { KnowledgeType } from '../schemas/knowledge-type.js';
+import type { KnowledgeType } from "../schemas/knowledge-type.js";
 
 /**
  * JSON 解析错误类型
  */
 export type JsonParseErrorType =
-  | 'format'       // markdown 包裹等格式问题
-  | 'prefix_text'  // 前缀文本（如 "我需要..."）
-  | 'syntax'       // JSON 语法错误（括号不匹配等）
-  | 'content'      // 输出解释文本而非 JSON
-  | 'truncated'    // 输出截断不完整
-  | 'empty'        // 空输出
-  | 'not_object'   // 不是对象类型
-  | 'timeout';     // LLM 调用超时
+  | "format" // markdown 包裹等格式问题
+  | "prefix_text" // 前缀文本（如 "我需要..."）
+  | "syntax" // JSON 语法错误（括号不匹配等）
+  | "content" // 输出解释文本而非 JSON
+  | "truncated" // 输出截断不完整
+  | "empty" // 空输出
+  | "not_object" // 不是对象类型
+  | "timeout"; // LLM 调用超时
 
 /**
  * 知识类型的必须字段列表
  */
 export const REQUIRED_FIELDS_BY_TYPE: Record<KnowledgeType, string[]> = {
-  ARCHITECTURE: ['architecture_overview_name', 'summary_zh', 'project_type', 'tech_stack', 'structure_pattern'],
-  CONCEPT: ['concept_name', 'summary_zh', 'aliases', 'business_meaning_zh', 'evidence'],
-  CAPABILITY: ['capability_name', 'summary_zh', 'aliases', 'business_scenario', 'entry_points'],
-  BOUNDARY: ['boundary_name', 'summary_zh', 'aliases', 'constraints', 'config_evidence'],
-  WORKFLOW: ['workflow_name', 'summary_zh', 'aliases', 'steps', 'triggers'],
-  DATA_MODEL: ['model_name', 'summary_zh', 'aliases', 'fields', 'evidence'],
-  EXTERNAL: ['external_name', 'summary_zh', 'aliases', 'service_type', 'integration_points'],
-  CONSTRAINT: ['constraint_name', 'summary_zh', 'aliases', 'rule_type', 'evidence'],
-  RELATION: ['relation_name', 'summary_zh', 'aliases', 'from_entity', 'to_entity'],
+  ARCHITECTURE: [
+    "architecture_overview_name",
+    "summary_zh",
+    "project_type",
+    "tech_stack",
+    "structure_pattern",
+  ],
+  CONCEPT: [
+    "concept_name",
+    "summary_zh",
+    "aliases",
+    "business_meaning_zh",
+    "evidence",
+  ],
+  CAPABILITY: [
+    "capability_name",
+    "summary_zh",
+    "aliases",
+    "business_scenario",
+    "entry_points",
+  ],
+  BOUNDARY: [
+    "boundary_name",
+    "summary_zh",
+    "aliases",
+    "constraints",
+    "config_evidence",
+  ],
+  WORKFLOW: ["workflow_name", "summary_zh", "aliases", "steps", "triggers"],
+  DATA_MODEL: ["model_name", "summary_zh", "aliases", "fields", "evidence"],
+  EXTERNAL: [
+    "external_name",
+    "summary_zh",
+    "aliases",
+    "service_type",
+    "integration_points",
+  ],
+  CONSTRAINT: [
+    "constraint_name",
+    "summary_zh",
+    "aliases",
+    "rule_type",
+    "evidence",
+  ],
+  RELATION: [
+    "relation_name",
+    "summary_zh",
+    "aliases",
+    "from_entity",
+    "to_entity",
+  ],
 };
 
 /**
@@ -129,7 +171,8 @@ export function getFullRepairPrompt(
   rawOutput: string,
   context: Record<string, unknown>,
 ): string {
-  const fieldStructure = FIELD_STRUCTURES_BY_TYPE[type] || FIELD_STRUCTURES_BY_TYPE.CONCEPT;
+  const fieldStructure =
+    FIELD_STRUCTURES_BY_TYPE[type] || FIELD_STRUCTURES_BY_TYPE.CONCEPT;
   // 增加截断长度到 2000 字符，保留更多上下文信息帮助修复
   const contextSnippet = JSON.stringify(context).slice(0, 2000);
 
@@ -162,12 +205,13 @@ export function getSimpleRepairPrompt(
   type: KnowledgeType,
   rawOutput: string,
 ): string {
-  const requiredFields = REQUIRED_FIELDS_BY_TYPE[type] || REQUIRED_FIELDS_BY_TYPE.CONCEPT;
+  const requiredFields =
+    REQUIRED_FIELDS_BY_TYPE[type] || REQUIRED_FIELDS_BY_TYPE.CONCEPT;
 
   return `
 将以下内容转换为有效的 JSON 格式（${type} 类型）。
 
-必须字段：${requiredFields.join(', ')}
+必须字段：${requiredFields.join(", ")}
 
 原始输出：
 ${rawOutput}
@@ -210,47 +254,61 @@ export function getRepairPrompt(
  * - attempt=2: 使用原始 systemPrompt（配合原始 userPrompt，保留完整证据）
  * - attempt>=3: 使用简化 systemPrompt（配合 repairPrompt，尝试修复格式）
  */
-export function getRetrySystemPrompt(attempt: number, originalSystem: string): string {
+export function getRetrySystemPrompt(
+  attempt: number,
+  originalSystem: string,
+): string {
   // 第2次重试保持原始 systemPrompt
   if (attempt <= 2) {
     return originalSystem;
   }
   // 第3次及以后使用简化 systemPrompt
-  return '你是 JSON 格式修复专家。请输出有效的 JSON 格式。';
+  return "你是 JSON 格式修复专家。请输出有效的 JSON 格式。";
 }
 
 /**
  * 分类 JSON 解析错误类型
  */
-export function classifyJsonError(rawOutput: string, parseError: Error): JsonParseErrorType {
+export function classifyJsonError(
+  rawOutput: string,
+  parseError: Error,
+): JsonParseErrorType {
   const msg = parseError.message.toLowerCase();
   const output = rawOutput.trim();
 
   // 空输出
   if (output.length === 0) {
-    return 'empty';
+    return "empty";
   }
 
   // 前缀文本（中文开头）
   if (/^[^\[{]/.test(output) && /[一-龥]/.test(output.slice(0, 20))) {
-    return 'prefix_text';
+    return "prefix_text";
   }
 
   // 截断（输出不完整，没有结束括号）
-  if (!output.endsWith('}') && !output.endsWith(']') && !output.endsWith('```')) {
-    return 'truncated';
+  if (
+    !output.endsWith("}") &&
+    !output.endsWith("]") &&
+    !output.endsWith("```")
+  ) {
+    return "truncated";
   }
 
   // 语法错误
-  if (msg.includes('unexpected token') || msg.includes('expected') || msg.includes('comma')) {
-    return 'syntax';
+  if (
+    msg.includes("unexpected token") ||
+    msg.includes("expected") ||
+    msg.includes("comma")
+  ) {
+    return "syntax";
   }
 
   // 格式问题（markdown 包裹）
-  if (output.includes('```json') || output.includes('```')) {
-    return 'format';
+  if (output.includes("```json") || output.includes("```")) {
+    return "format";
   }
 
   // 默认为内容问题
-  return 'content';
+  return "content";
 }

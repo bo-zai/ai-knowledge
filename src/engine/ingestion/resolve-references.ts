@@ -55,8 +55,8 @@ import {
   type RegistryProviders,
   type Resolution,
   type ScopeId,
-} from '../shared';
-import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
+} from "../shared";
+import type { ScopeResolutionIndexes } from "./model/scope-resolution-indexes.js";
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -83,7 +83,9 @@ export interface ResolveReferencesOutput {
  * matching registry and produce a `ReferenceIndex` keyed by source scope
  * + target def.
  */
-export function resolveReferenceSites(input: ResolveReferencesInput): ResolveReferencesOutput {
+export function resolveReferenceSites(
+  input: ResolveReferencesInput,
+): ResolveReferencesOutput {
   const { scopes } = input;
   const providers: RegistryProviders = input.providers ?? {};
 
@@ -111,7 +113,12 @@ export function resolveReferenceSites(input: ResolveReferencesInput): ResolveRef
   for (const site of scopes.referenceSites) {
     sitesProcessed++;
 
-    const resolutions = lookupForSite(site, classRegistry, methodRegistry, fieldRegistry);
+    const resolutions = lookupForSite(
+      site,
+      classRegistry,
+      methodRegistry,
+      fieldRegistry,
+    );
     if (resolutions.length === 0) {
       unresolved++;
       continue;
@@ -138,12 +145,17 @@ export function resolveReferenceSites(input: ResolveReferencesInput): ResolveRef
 
   // Freeze inner arrays so consumers don't accidentally mutate.
   const frozenBySource = new Map<ScopeId, readonly Reference[]>();
-  for (const [k, v] of bySourceScope) frozenBySource.set(k, Object.freeze([...v]));
+  for (const [k, v] of bySourceScope)
+    frozenBySource.set(k, Object.freeze([...v]));
   const frozenByTarget = new Map<string, readonly Reference[]>();
-  for (const [k, v] of byTargetDef) frozenByTarget.set(k, Object.freeze([...v]));
+  for (const [k, v] of byTargetDef)
+    frozenByTarget.set(k, Object.freeze([...v]));
 
   return {
-    referenceIndex: { bySourceScope: frozenBySource, byTargetDef: frozenByTarget },
+    referenceIndex: {
+      bySourceScope: frozenBySource,
+      byTargetDef: frozenByTarget,
+    },
     stats: { sitesProcessed, referencesEmitted, unresolved },
   };
 }
@@ -176,19 +188,23 @@ function lookupForSite(
   fieldRegistry: FieldRegistry,
 ): readonly Resolution[] {
   switch (site.kind) {
-    case 'call': {
-      const opts: Parameters<MethodRegistry['lookup']>[2] = {
-        ...(site.arity !== undefined ? { callsite: { arity: site.arity } } : {}),
-        ...(site.explicitReceiver !== undefined ? { explicitReceiver: site.explicitReceiver } : {}),
+    case "call": {
+      const opts: Parameters<MethodRegistry["lookup"]>[2] = {
+        ...(site.arity !== undefined
+          ? { callsite: { arity: site.arity } }
+          : {}),
+        ...(site.explicitReceiver !== undefined
+          ? { explicitReceiver: site.explicitReceiver }
+          : {}),
       };
       return methodRegistry.lookup(site.name, site.inScope, opts);
     }
-    case 'inherits':
-    case 'type-reference': {
+    case "inherits":
+    case "type-reference": {
       return classRegistry.lookup(site.name, site.inScope);
     }
-    case 'read':
-    case 'write': {
+    case "read":
+    case "write": {
       // Try field first; fall through to method then class so bare-name
       // reads of a function (e.g. `cb = save`) still resolve.
       const fieldHits = fieldRegistry.lookup(site.name, site.inScope);
@@ -197,7 +213,7 @@ function lookupForSite(
       if (methodHits.length > 0) return methodHits;
       return classRegistry.lookup(site.name, site.inScope);
     }
-    case 'import-use': {
+    case "import-use": {
       // Try class, method, then field. The lexical-hit Step 1 in
       // `lookupCore` handles the actual binding lookup; the choice of
       // registry only narrows `acceptedKinds`.

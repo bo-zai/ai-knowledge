@@ -1,4 +1,4 @@
-import type { KnowledgeType } from '../schemas/knowledge-type.js';
+import type { KnowledgeType } from "../schemas/knowledge-type.js";
 
 export interface KnowledgePackageFile {
   path: string;

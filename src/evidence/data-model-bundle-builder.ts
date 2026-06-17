@@ -11,8 +11,8 @@ import {
   buildAllDbTableBundles,
   type DbTableEvidenceBundle,
   type FieldCandidate,
-} from './db-bundle-builder.js';
-import type { EntityRelationType } from '../schemas/data-model.js';
+} from "./db-bundle-builder.js";
+import type { EntityRelationType } from "../schemas/data-model.js";
 
 export interface DataModelAggregateBundle {
   /** 聚合名称（建议的业务名称） */
@@ -58,7 +58,11 @@ export interface AggregateEntityInfo {
   description_zh: string;
 
   /** 聚合角色 */
-  role: 'aggregate_root' | 'sub_entity' | 'associated_entity' | 'relation_table';
+  role:
+    | "aggregate_root"
+    | "sub_entity"
+    | "associated_entity"
+    | "relation_table";
 
   /** 所属模块 */
   module?: string;
@@ -117,17 +121,17 @@ export interface CrossReferenceInfo {
 
 /** 外键字段命名模式 */
 const FOREIGN_KEY_PATTERNS = [
-  /_id$/,        // xxx_id
-  /_fk$/,        // xxx_fk
-  /^fk_/,        // fk_xxx
-  /Id$/,         // Java 风格 xxxId
+  /_id$/, // xxx_id
+  /_fk$/, // xxx_fk
+  /^fk_/, // fk_xxx
+  /Id$/, // Java 风格 xxxId
 ];
 
 /**
  * 判断字段是否可能是外键
  */
 export function isForeignKeyField(fieldName: string): boolean {
-  return FOREIGN_KEY_PATTERNS.some(pattern => pattern.test(fieldName));
+  return FOREIGN_KEY_PATTERNS.some((pattern) => pattern.test(fieldName));
 }
 
 /**
@@ -138,10 +142,10 @@ export function isForeignKeyField(fieldName: string): boolean {
 export function inferForeignKeyTarget(fieldName: string): string | null {
   // 移除常见后缀
   const cleaned = fieldName
-    .replace(/_id$/, '')
-    .replace(/_fk$/, '')
-    .replace(/^fk_/, '')
-    .replace(/Id$/, '');
+    .replace(/_id$/, "")
+    .replace(/_fk$/, "")
+    .replace(/^fk_/, "")
+    .replace(/Id$/, "");
 
   if (cleaned === fieldName) {
     return null; // 没有外键后缀
@@ -165,16 +169,16 @@ export function inferRelationType(
   isListField: boolean,
 ): EntityRelationType {
   if (isListField) {
-    return 'one_to_many'; // 一方持有 List<另一方>
+    return "one_to_many"; // 一方持有 List<另一方>
   }
 
   // 外键在源实体中 → 多对一（源实体引用目标实体）
   if (isForeignKeyField(relationField)) {
-    return 'many_to_one';
+    return "many_to_one";
   }
 
   // 默认假设为多对一
-  return 'many_to_one';
+  return "many_to_one";
 }
 
 /**
@@ -195,10 +199,16 @@ export function identifyAggregateRoot(
   for (const relation of relations) {
     // one_to_many: source 是"一"方
     // many_to_one: target 是"一"方
-    if (relation.relation_type === 'one_to_many') {
-      oneSideCounts.set(relation.source_entity, (oneSideCounts.get(relation.source_entity) ?? 0) + 1);
-    } else if (relation.relation_type === 'many_to_one') {
-      oneSideCounts.set(relation.target_entity, (oneSideCounts.get(relation.target_entity) ?? 0) + 1);
+    if (relation.relation_type === "one_to_many") {
+      oneSideCounts.set(
+        relation.source_entity,
+        (oneSideCounts.get(relation.source_entity) ?? 0) + 1,
+      );
+    } else if (relation.relation_type === "many_to_one") {
+      oneSideCounts.set(
+        relation.target_entity,
+        (oneSideCounts.get(relation.target_entity) ?? 0) + 1,
+      );
     }
   }
 
@@ -246,7 +256,11 @@ export function extractForeignKeyRelations(
  */
 function buildAggregateEntityInfo(
   tableBundle: DbTableEvidenceBundle,
-  role: 'aggregate_root' | 'sub_entity' | 'associated_entity' | 'relation_table',
+  role:
+    | "aggregate_root"
+    | "sub_entity"
+    | "associated_entity"
+    | "relation_table",
 ): AggregateEntityInfo {
   // 提取关键字段
   const keyFields: FieldSummary[] = tableBundle.fieldCandidates
@@ -258,7 +272,8 @@ function buildAggregateEntityInfo(
       return {
         name: field.name,
         type: field.javaType ?? field.type,
-        description_zh: field.javaFieldComment || field.mappedJavaProperty || field.name,
+        description_zh:
+          field.javaFieldComment || field.mappedJavaProperty || field.name,
         is_foreign_key: isFk,
         foreign_key_target: fkTarget ?? undefined,
       };
@@ -274,9 +289,8 @@ function buildAggregateEntityInfo(
   const descriptions = tableBundle.entityEvidence
     .map((e) => e.classComment)
     .filter((c) => c && c.trim().length > 0);
-  const description = descriptions.length > 0
-    ? descriptions[0]!
-    : `${tableBundle.table}表`;
+  const description =
+    descriptions.length > 0 ? descriptions[0]! : `${tableBundle.table}表`;
 
   return {
     entity_name: tableBundle.table,
@@ -299,7 +313,10 @@ export async function buildAggregateBundle(
   companionRepoPath?: string,
 ): Promise<DataModelAggregateBundle> {
   // 1. 构建所有表的证据包
-  const allTableBundles = await buildAllDbTableBundles(repoPath, companionRepoPath);
+  const allTableBundles = await buildAllDbTableBundles(
+    repoPath,
+    companionRepoPath,
+  );
 
   // 2. 筛选相关表（核心表 + 外键关联的表）
   const relatedTables = new Set<string>(coreTables);
@@ -320,13 +337,15 @@ export async function buildAggregateBundle(
   }
 
   // 3. 获取相关表的证据包
-  const tableBundles = allTableBundles.filter((b) => relatedTables.has(b.table));
+  const tableBundles = allTableBundles.filter((b) =>
+    relatedTables.has(b.table),
+  );
 
   // 4. 构建实体信息
   const entities: AggregateEntityInfo[] = tableBundles.map((bundle) => {
     // 判断角色：核心表为聚合根候选，其他为子实体或关联实体
     const isCore = coreTables.includes(bundle.table);
-    const role = isCore ? 'aggregate_root' : 'associated_entity';
+    const role = isCore ? "aggregate_root" : "associated_entity";
     return buildAggregateEntityInfo(bundle, role);
   });
 
@@ -341,7 +360,7 @@ export async function buildAggregateBundle(
           entityRelations.push({
             source_entity: bundle.table,
             target_entity: targetTable,
-            relation_type: 'many_to_one',
+            relation_type: "many_to_one",
             relation_field: field.name,
             description_zh: `${bundle.table} 通过 ${field.name} 关联 ${targetTable}`,
           });
@@ -360,13 +379,15 @@ export async function buildAggregateBundle(
   if (aggregateRoot) {
     for (const entity of entities) {
       if (entity.entity_name === aggregateRoot) {
-        entity.role = 'aggregate_root';
+        entity.role = "aggregate_root";
       } else {
         // 判断是子实体还是关联实体
         const hasRelationToRoot = entityRelations.some(
-          (r) => r.target_entity === aggregateRoot && r.source_entity === entity.entity_name,
+          (r) =>
+            r.target_entity === aggregateRoot &&
+            r.source_entity === entity.entity_name,
         );
-        entity.role = hasRelationToRoot ? 'sub_entity' : 'associated_entity';
+        entity.role = hasRelationToRoot ? "sub_entity" : "associated_entity";
       }
     }
   }
@@ -405,11 +426,11 @@ export async function buildAggregateBundle(
   // 9. 生成聚合名称建议
   const suggestedName = aggregateRoot
     ? inferAggregateName(aggregateRoot, entities)
-    : 'unknown_aggregate';
+    : "unknown_aggregate";
 
   return {
     suggested_aggregate_name: suggestedName,
-    aggregate_root: aggregateRoot ?? coreTables[0] ?? 'unknown',
+    aggregate_root: aggregateRoot ?? coreTables[0] ?? "unknown",
     entities,
     entity_relations: entityRelations,
     cross_references: crossReferences,
@@ -417,7 +438,7 @@ export async function buildAggregateBundle(
     service_classes: [...serviceClasses],
     table_bundles: tableBundles,
     provenance: {
-      source: 'aggregate-analysis',
+      source: "aggregate-analysis",
       repoPath,
       generatedAt: new Date().toISOString(),
     },
@@ -440,7 +461,7 @@ function inferAggregateName(
   const rootEntity = entities.find((e) => e.entity_name === aggregateRoot);
   if (rootEntity && rootEntity.entity_name_zh) {
     // 如果描述中已有"聚合"字样，直接使用
-    if (rootEntity.entity_name_zh.includes('聚合')) {
+    if (rootEntity.entity_name_zh.includes("聚合")) {
       return rootEntity.entity_name_zh;
     }
     return `${rootEntity.entity_name_zh}聚合`;
@@ -448,7 +469,7 @@ function inferAggregateName(
 
   // 从表名推断
   // pms_product → 商品, oms_order → 订单, ums_admin → 用户
-  const tableName = aggregateRoot.replace(/^(pms_|oms_|ums_|sms_)/, '');
+  const tableName = aggregateRoot.replace(/^(pms_|oms_|ums_|sms_)/, "");
   return `${tableName}聚合`;
 }
 
@@ -462,7 +483,10 @@ export async function buildAllAggregateBundles(
   companionRepoPath?: string,
 ): Promise<DataModelAggregateBundle[]> {
   // 1. 构建所有表的证据包
-  const allTableBundles = await buildAllDbTableBundles(repoPath, companionRepoPath);
+  const allTableBundles = await buildAllDbTableBundles(
+    repoPath,
+    companionRepoPath,
+  );
 
   // 2. 识别所有表的外键关系
   const allRelations: EntityRelationInfo[] = [];
@@ -475,7 +499,7 @@ export async function buildAllAggregateBundles(
           allRelations.push({
             source_entity: bundle.table,
             target_entity: targetTable,
-            relation_type: 'many_to_one',
+            relation_type: "many_to_one",
             relation_field: field.name,
           });
         }
@@ -518,7 +542,9 @@ export async function buildAllAggregateBundles(
     }
 
     // 检查是否所有表都已处理
-    const allProcessed = [...relatedTables].every((t) => processedTables.has(t));
+    const allProcessed = [...relatedTables].every((t) =>
+      processedTables.has(t),
+    );
     if (allProcessed) {
       continue;
     }
@@ -556,7 +582,7 @@ export async function buildAllAggregateBundles(
 
 function toSnakeCase(value: string): string {
   return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/-/g, '_')
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/-/g, "_")
     .toLowerCase();
 }

@@ -5,9 +5,9 @@
  * Keeps individual config files small.
  */
 
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { FieldVisibility } from '../../field-types.js';
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { FieldVisibility } from "../../field-types.js";
 
 // ---------------------------------------------------------------------------
 // Modifier scanning
@@ -21,7 +21,7 @@ import type { FieldVisibility } from '../../field-types.js';
  * named after a contextual keyword (e.g. `abstract()` in TypeScript).
  */
 export function hasKeyword(node: SyntaxNode, keyword: string): boolean {
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child || child === nameNode) continue;
@@ -35,7 +35,11 @@ export function hasKeyword(node: SyntaxNode, keyword: string): boolean {
  * Useful for languages that group modifiers under a wrapper node
  * (e.g. Java 'modifiers', Kotlin 'modifiers').
  */
-export function hasModifier(node: SyntaxNode, modifierType: string, keyword: string): boolean {
+export function hasModifier(
+  node: SyntaxNode,
+  modifierType: string,
+  keyword: string,
+): boolean {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (child && child.type === modifierType) {
@@ -59,7 +63,7 @@ export function findVisibility(
   defaultVis: FieldVisibility,
   modifierNodeType?: string,
 ): FieldVisibility {
-  const nameNode = node.childForFieldName('name');
+  const nameNode = node.childForFieldName("name");
   // Direct keyword children
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
@@ -75,7 +79,8 @@ export function findVisibility(
         for (let j = 0; j < child.childCount; j++) {
           const mod = child.child(j);
           const modText = mod?.text.trim() as FieldVisibility | undefined;
-          if (modText && (keywords as ReadonlySet<string>).has(modText)) return modText;
+          if (modText && (keywords as ReadonlySet<string>).has(modText))
+            return modText;
         }
       }
     }
@@ -90,7 +95,10 @@ export function findVisibility(
 /**
  * Extract the text of the first named child whose type is in `types`.
  */
-export function firstChildText(node: SyntaxNode, types: ReadonlySet<string>): string | undefined {
+export function firstChildText(
+  node: SyntaxNode,
+  types: ReadonlySet<string>,
+): string | undefined {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (child && types.has(child.type)) return child.text;
@@ -101,7 +109,10 @@ export function firstChildText(node: SyntaxNode, types: ReadonlySet<string>): st
 /**
  * Extract the first named child node whose type is in `types`.
  */
-export function firstChildOfType(node: SyntaxNode, types: ReadonlySet<string>): SyntaxNode | null {
+export function firstChildOfType(
+  node: SyntaxNode,
+  types: ReadonlySet<string>,
+): SyntaxNode | null {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (child && types.has(child.type)) return child;
@@ -113,7 +124,10 @@ export function firstChildOfType(node: SyntaxNode, types: ReadonlySet<string>): 
  * Get type text from a named field on the node, using extractSimpleTypeName.
  * Falls back to raw .text of the field child if extractSimpleTypeName returns undefined.
  */
-export function typeFromField(node: SyntaxNode, fieldName: string): string | undefined {
+export function typeFromField(
+  node: SyntaxNode,
+  fieldName: string,
+): string | undefined {
   const typeNode = node.childForFieldName(fieldName);
   if (!typeNode) return undefined;
   return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
@@ -125,7 +139,7 @@ export function typeFromField(node: SyntaxNode, fieldName: string): string | und
 export function typeFromAnnotation(node: SyntaxNode): string | undefined {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child && child.type === 'type_annotation') {
+    if (child && child.type === "type_annotation") {
       const inner = child.firstNamedChild;
       if (inner) return extractSimpleTypeName(inner) ?? inner.text?.trim();
     }
@@ -166,7 +180,7 @@ export function collectModifierTexts(node: SyntaxNode): Set<string> {
   const result = new Set<string>();
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (child && child.type === 'modifier') {
+    if (child && child.type === "modifier") {
       result.add(child.text.trim());
     }
   }

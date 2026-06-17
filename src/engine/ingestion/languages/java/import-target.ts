@@ -10,7 +10,7 @@
  * Returns `null` for unresolvable / JDK imports.
  */
 
-import type { ParsedImport, WorkspaceIndex } from '../../../shared/index.js';
+import type { ParsedImport, WorkspaceIndex } from "../../../shared/index.js";
 
 export interface JavaResolveContext {
   readonly fromFile: string;
@@ -24,22 +24,23 @@ export function resolveJavaImportTarget(
   const ctx = workspaceIndex as JavaResolveContext | undefined;
   if (
     ctx === undefined ||
-    typeof (ctx as { fromFile?: unknown }).fromFile !== 'string' ||
+    typeof (ctx as { fromFile?: unknown }).fromFile !== "string" ||
     !((ctx as { allFilePaths?: unknown }).allFilePaths instanceof Set)
   ) {
     return null;
   }
-  if (parsedImport.kind === 'dynamic-unresolved') return null;
-  if (parsedImport.targetRaw === null || parsedImport.targetRaw === '') return null;
+  if (parsedImport.kind === "dynamic-unresolved") return null;
+  if (parsedImport.targetRaw === null || parsedImport.targetRaw === "")
+    return null;
 
   // Strip trailing `.*` for wildcard imports: `com.example.*` → `com.example`
   let target = parsedImport.targetRaw;
-  if (target.endsWith('.*')) {
+  if (target.endsWith(".*")) {
     target = target.slice(0, -2);
   }
 
   // Package path: `com.example.User` → `com/example/User`
-  const pathLike = target.replace(/\./g, '/');
+  const pathLike = target.replace(/\./g, "/");
   const suffix = `/${pathLike}`;
 
   let exactFile: string | null = null;
@@ -49,8 +50,8 @@ export function resolveJavaImportTarget(
   const suffixDirPrefix = `/${dirPrefix}`;
 
   for (const raw of ctx.allFilePaths) {
-    const f = raw.replace(/\\/g, '/');
-    if (!f.endsWith('.java')) continue;
+    const f = raw.replace(/\\/g, "/");
+    if (!f.endsWith(".java")) continue;
     if (f === `${pathLike}.java`) {
       exactFile = raw;
       break;
@@ -64,7 +65,7 @@ export function resolveJavaImportTarget(
       if (atRoot || atNested) {
         const idx = atRoot ? 0 : f.indexOf(suffixDirPrefix) + 1;
         const after = f.slice(idx + dirPrefix.length);
-        if (after.length > 0 && !after.includes('/')) {
+        if (after.length > 0 && !after.includes("/")) {
           directoryChild = raw;
         }
       }
@@ -77,18 +78,18 @@ export function resolveJavaImportTarget(
 
   // Progressive prefix stripping — handles `import com.example.User;`
   // in a repo laid out `User.java` (no `com/example/` prefix).
-  const segments = pathLike.split('/').filter(Boolean);
+  const segments = pathLike.split("/").filter(Boolean);
   for (let skip = 1; skip < segments.length; skip++) {
-    const tail = segments.slice(skip).join('/');
-    if (tail === '') continue;
+    const tail = segments.slice(skip).join("/");
+    if (tail === "") continue;
     const tailFile = `${tail}.java`;
     const tailSuffix = `/${tailFile}`;
     const tailDir = `${tail}/`;
     const tailSuffixDir = `/${tailDir}`;
     let tailDirectChild: string | null = null;
     for (const raw of ctx.allFilePaths) {
-      const f = raw.replace(/\\/g, '/');
-      if (!f.endsWith('.java')) continue;
+      const f = raw.replace(/\\/g, "/");
+      if (!f.endsWith(".java")) continue;
       if (f === tailFile) return raw;
       if (f.endsWith(tailSuffix)) return raw;
       if (tailDirectChild === null) {
@@ -97,7 +98,7 @@ export function resolveJavaImportTarget(
         if (atRoot || atNested) {
           const idx = atRoot ? 0 : f.indexOf(tailSuffixDir) + 1;
           const after = f.slice(idx + tailDir.length);
-          if (after.length > 0 && !after.includes('/')) tailDirectChild = raw;
+          if (after.length > 0 && !after.includes("/")) tailDirectChild = raw;
         }
       }
     }

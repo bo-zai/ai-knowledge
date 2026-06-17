@@ -12,7 +12,7 @@
  * resolving callsite file → enclosing module).
  */
 
-import type { ScopeId } from './types.js';
+import type { ScopeId } from "./types.js";
 
 export interface ModuleScopeIndex {
   readonly byFilePath: ReadonlyMap<string, ScopeId>;
@@ -46,7 +46,9 @@ export interface ModuleScopeEntry {
  *
  * Pure function — safe to call repeatedly; no side effects.
  */
-export function buildModuleScopeIndex(entries: readonly ModuleScopeEntry[]): ModuleScopeIndex {
+export function buildModuleScopeIndex(
+  entries: readonly ModuleScopeEntry[],
+): ModuleScopeIndex {
   const byFilePath = new Map<string, ScopeId>();
   for (const { filePath, moduleScopeId } of entries) {
     if (byFilePath.has(filePath)) continue; // first-write-wins

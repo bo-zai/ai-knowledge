@@ -12,16 +12,16 @@
  * Part of RFC #909 Ring 2 SHARED — #918.
  */
 
-import type { Resolution, ResolutionEvidence } from '../types.js';
+import type { Resolution, ResolutionEvidence } from "../types.js";
 
 // ─── Diff record shape ──────────────────────────────────────────────────────
 
 export type ShadowAgreement =
-  | 'both-agree' // top match identical (same DefId)
-  | 'only-legacy' // legacy resolved; new did not
-  | 'only-new' // new resolved; legacy did not
-  | 'both-disagree' // both resolved, but to different targets
-  | 'both-empty'; // both returned empty
+  | "both-agree" // top match identical (same DefId)
+  | "only-legacy" // legacy resolved; new did not
+  | "only-new" // new resolved; legacy did not
+  | "both-disagree" // both resolved, but to different targets
+  | "both-empty"; // both returned empty
 
 export interface ShadowDiff {
   readonly callsite: ShadowCallsite;
@@ -78,10 +78,12 @@ export function diffResolutions(
   const newTop: Resolution | null = newResult.length > 0 ? newResult[0] : null;
 
   const agreement: ShadowAgreement = (() => {
-    if (legacyTop === null && newTop === null) return 'both-empty';
-    if (legacyTop === null) return 'only-new';
-    if (newTop === null) return 'only-legacy';
-    return legacyTop.def.nodeId === newTop.def.nodeId ? 'both-agree' : 'both-disagree';
+    if (legacyTop === null && newTop === null) return "both-empty";
+    if (legacyTop === null) return "only-new";
+    if (newTop === null) return "only-legacy";
+    return legacyTop.def.nodeId === newTop.def.nodeId
+      ? "both-agree"
+      : "both-disagree";
   })();
 
   const evidenceDelta = computeEvidenceDelta(legacyTop, newTop, agreement);
@@ -111,9 +113,9 @@ function computeEvidenceDelta(
   newResult: Resolution | null,
   agreement: ShadowAgreement,
 ): readonly ResolutionEvidence[] {
-  if (agreement === 'both-agree' || agreement === 'both-empty') return [];
-  if (agreement === 'only-legacy') return legacy!.evidence;
-  if (agreement === 'only-new') return newResult!.evidence;
+  if (agreement === "both-agree" || agreement === "both-empty") return [];
+  if (agreement === "only-legacy") return legacy!.evidence;
+  if (agreement === "only-new") return newResult!.evidence;
 
   // both-disagree: symmetric difference keyed on `kind`
   const legacyKinds = new Set(legacy!.evidence.map((e) => e.kind));

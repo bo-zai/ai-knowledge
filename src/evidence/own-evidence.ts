@@ -1,4 +1,4 @@
-import type { SliceEvidenceBundle } from './types.js';
+import type { SliceEvidenceBundle } from "./types.js";
 
 export function buildOwnEvidence(input: {
   componentName: string;
@@ -9,16 +9,16 @@ export function buildOwnEvidence(input: {
   return {
     slice: {
       id: `ownership:${input.componentName}`,
-      kind: 'community',
+      kind: "community",
       title: `Ownership: ${input.componentName}`,
       scope: input.componentName,
       seed: input.componentName,
     },
     facts: [
       {
-        id: 'F-001',
+        id: "F-001",
         claim: `${input.componentName} is owned by ${input.ownerName} (${input.ownerType})`,
-        source_kind: 'analysis-runtime',
+        source_kind: "analysis-runtime",
         refs: [{ file: input.componentName }],
       },
     ],

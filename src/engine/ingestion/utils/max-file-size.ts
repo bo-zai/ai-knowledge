@@ -1,4 +1,4 @@
-import { TREE_SITTER_MAX_BUFFER } from '../constants.js';
+import { TREE_SITTER_MAX_BUFFER } from "../constants.js";
 
 /** Default threshold (512 KB). Files larger than this are skipped by the walker. */
 export const DEFAULT_MAX_FILE_SIZE_BYTES = 512 * 1024;

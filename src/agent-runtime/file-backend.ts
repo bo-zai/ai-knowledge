@@ -5,11 +5,11 @@
  * 参考 deepagents 的 FilesystemBackend 接口实现
  */
 
-import { constants as fsConstants, realpathSync } from 'node:fs';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { glob } from 'glob';
-import { logger } from '../shared/logger';
+import { constants as fsConstants, realpathSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { glob } from "glob";
+import { logger } from "../shared/logger";
 
 // ── 类型定义 ──────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ export interface FileBackendConfig {
 // ── 常量 ───────────────────────────────────────────────────────────
 
 const DEFAULT_MAX_FILE_SIZE_MB = 10;
-const DEFAULT_ENCODING: BufferEncoding = 'utf-8';
+const DEFAULT_ENCODING: BufferEncoding = "utf-8";
 const LINE_NUMBER_WIDTH = 6;
 const MAX_LINE_LENGTH = 10_000;
 const MAX_GREP_MATCHES = 200;
@@ -87,7 +87,7 @@ const MAX_LS_ENTRIES = 300;
 /**
  * 是否支持 O_NOFOLLOW（防止符号链接攻击）
  */
-const SUPPORTS_NOFOLLOW = typeof fsConstants.O_NOFOLLOW === 'number';
+const SUPPORTS_NOFOLLOW = typeof fsConstants.O_NOFOLLOW === "number";
 
 // ── FileBackend 类 ─────────────────────────────────────────────────
 
@@ -112,10 +112,14 @@ export class FileBackend {
   constructor(config: FileBackendConfig = {}) {
     this.cwd = config.rootDir ? path.resolve(config.rootDir) : process.cwd();
     this.virtualMode = config.virtualMode ?? false;
-    this.maxFileSizeBytes = (config.maxFileSizeMb ?? DEFAULT_MAX_FILE_SIZE_MB) * 1024 * 1024;
+    this.maxFileSizeBytes =
+      (config.maxFileSizeMb ?? DEFAULT_MAX_FILE_SIZE_MB) * 1024 * 1024;
     this.encoding = config.encoding ?? DEFAULT_ENCODING;
 
-    logger.debug('FileBackend 初始化', { cwd: this.cwd, virtualMode: this.virtualMode });
+    logger.debug("FileBackend 初始化", {
+      cwd: this.cwd,
+      virtualMode: this.virtualMode,
+    });
   }
 
   // ── 路径安全 ─────────────────────────────────────────────────────
@@ -124,9 +128,12 @@ export class FileBackend {
    * 检查路径是否在根目录内
    */
   protected isWithinRoot(resolvedPath: string): boolean {
-    const normalizedRoot = this.cwd.replace(/\\/g, '/').toLowerCase();
-    const normalizedPath = resolvedPath.replace(/\\/g, '/').toLowerCase();
-    return normalizedPath.startsWith(normalizedRoot + '/') || normalizedPath === normalizedRoot;
+    const normalizedRoot = this.cwd.replace(/\\/g, "/").toLowerCase();
+    const normalizedPath = resolvedPath.replace(/\\/g, "/").toLowerCase();
+    return (
+      normalizedPath.startsWith(normalizedRoot + "/") ||
+      normalizedPath === normalizedRoot
+    );
   }
 
   /**
@@ -138,10 +145,10 @@ export class FileBackend {
    */
   protected resolvePath(key: string): string {
     // 虚拟模式：将 "/" 开头的路径映射到 cwd
-    if (this.virtualMode && key.startsWith('/')) {
+    if (this.virtualMode && key.startsWith("/")) {
       const virtualPath = key.slice(1);
       // 禁止遍历（..、~）
-      if (virtualPath.includes('..') || virtualPath.startsWith('~')) {
+      if (virtualPath.includes("..") || virtualPath.startsWith("~")) {
         throw new Error(`路径遍历检测: ${key}`);
       }
       const resolved = path.resolve(this.cwd, virtualPath);
@@ -155,8 +162,8 @@ export class FileBackend {
     const resolved = path.resolve(this.cwd, key);
 
     // 检查路径遍历
-    const normalizedKey = key.replace(/\\/g, '/');
-    if (normalizedKey.includes('..')) {
+    const normalizedKey = key.replace(/\\/g, "/");
+    if (normalizedKey.includes("..")) {
       // 允许合法的 .. 使用（只要结果在 cwd 内）
       if (!this.isWithinRoot(resolved)) {
         throw new Error(`路径遍历超出根目录: ${key}`);
@@ -174,8 +181,8 @@ export class FileBackend {
    * @param dirPath - 目录路径
    * @returns FileInfo 数组
    */
-  async ls(dirPath: string = '/'): Promise<FileInfo[]> {
-    const resolved = this.resolvePath(dirPath === '/' ? '.' : dirPath);
+  async ls(dirPath: string = "/"): Promise<FileInfo[]> {
+    const resolved = this.resolvePath(dirPath === "/" ? "." : dirPath);
 
     try {
       const entries = await fs.readdir(resolved, { withFileTypes: true });
@@ -184,7 +191,7 @@ export class FileBackend {
       for (const entry of entries) {
         const fullPath = path.join(resolved, entry.name);
         const relativePath = this.virtualMode
-          ? '/' + path.relative(this.cwd, fullPath).split(path.sep).join('/')
+          ? "/" + path.relative(this.cwd, fullPath).split(path.sep).join("/")
           : fullPath;
 
         if (entry.isDirectory()) {
@@ -218,16 +225,21 @@ export class FileBackend {
           path: `(截断) 共 ${infos.length} 条，显示前 ${MAX_LS_ENTRIES} 条`,
           is_dir: false,
         });
-        logger.debug('ls 结果截断', { total: infos.length, capped: MAX_LS_ENTRIES });
+        logger.debug("ls 结果截断", {
+          total: infos.length,
+          capped: MAX_LS_ENTRIES,
+        });
         return capped;
       }
 
-      logger.debug('ls 完成', { path: dirPath, count: infos.length });
+      logger.debug("ls 完成", { path: dirPath, count: infos.length });
       return infos;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('ls 失败', { path: dirPath, error: msg });
-      return [{ path: `错误: 无法读取目录 '${dirPath}': ${msg}`, is_dir: false }];
+      logger.error("ls 失败", { path: dirPath, error: msg });
+      return [
+        { path: `错误: 无法读取目录 '${dirPath}': ${msg}`, is_dir: false },
+      ];
     }
   }
 
@@ -262,7 +274,7 @@ export class FileBackend {
       }
     }
 
-    return result.join('\n');
+    return result.join("\n");
   }
 
   /**
@@ -284,7 +296,10 @@ export class FileBackend {
         if (!stat.isFile()) {
           throw new Error(`'${filePath}' 不是文件`);
         }
-        const fd = await fs.open(resolvedPath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+        const fd = await fs.open(
+          resolvedPath,
+          fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+        );
         try {
           buffer = await fd.readFile();
         } finally {
@@ -304,17 +319,17 @@ export class FileBackend {
       // 文件大小检查
       if (buffer.length > this.maxFileSizeBytes) {
         throw new Error(
-          `文件过大 (${Math.round(buffer.length / 1024 / 1024)}MB)，超过限制 ${Math.round(this.maxFileSizeBytes / 1024 / 1024)}MB`
+          `文件过大 (${Math.round(buffer.length / 1024 / 1024)}MB)，超过限制 ${Math.round(this.maxFileSizeBytes / 1024 / 1024)}MB`,
         );
       }
 
       const content = buffer.toString(this.encoding);
 
-      if (!content || content.trim() === '') {
-        return '系统提醒: 文件存在但内容为空';
+      if (!content || content.trim() === "") {
+        return "系统提醒: 文件存在但内容为空";
       }
 
-      const lines = content.split('\n');
+      const lines = content.split("\n");
       if (offset >= lines.length) {
         return `错误: 行偏移 ${offset} 超出文件长度 (${lines.length} 行)`;
       }
@@ -329,11 +344,16 @@ export class FileBackend {
         return header + formatted;
       }
 
-      logger.debug('read_file 完成', { path: filePath, lines: total, offset, limit });
+      logger.debug("read_file 完成", {
+        path: filePath,
+        lines: total,
+        offset,
+        limit,
+      });
       return formatted;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('read_file 失败', { path: filePath, error: msg });
+      logger.error("read_file 失败", { path: filePath, error: msg });
       return `错误: 读取文件 '${filePath}' 失败: ${msg}`;
     }
   }
@@ -377,7 +397,10 @@ export class FileBackend {
 
         const fd = await fs.open(
           resolvedPath,
-          fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW
+          fsConstants.O_WRONLY |
+            fsConstants.O_CREAT |
+            fsConstants.O_TRUNC |
+            fsConstants.O_NOFOLLOW,
         );
         try {
           await fd.writeFile(content, this.encoding);
@@ -388,11 +411,11 @@ export class FileBackend {
         await fs.writeFile(resolvedPath, content, this.encoding);
       }
 
-      logger.info('write_file 完成', { path: filePath, size: contentSize });
+      logger.info("write_file 完成", { path: filePath, size: contentSize });
       return { path: filePath };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('write_file 失败', { path: filePath, error: msg });
+      logger.error("write_file 失败", { path: filePath, error: msg });
       return { error: `写入文件 '${filePath}' 失败: ${msg}` };
     }
   }
@@ -412,7 +435,7 @@ export class FileBackend {
     filePath: string,
     oldString: string,
     newString: string,
-    replaceAll = false
+    replaceAll = false,
   ): Promise<EditResult> {
     const resolvedPath = this.resolvePath(filePath);
 
@@ -424,7 +447,10 @@ export class FileBackend {
         if (!stat.isFile()) {
           throw new Error(`'${filePath}' 不是文件`);
         }
-        const fd = await fs.open(resolvedPath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+        const fd = await fs.open(
+          resolvedPath,
+          fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+        );
         try {
           const buffer = await fd.readFile();
           content = buffer.toString(this.encoding);
@@ -452,7 +478,10 @@ export class FileBackend {
       // 执行替换
       let newContent: string;
       if (replaceAll) {
-        newContent = content.replace(new RegExp(this.escapeRegExp(oldString), 'g'), newString);
+        newContent = content.replace(
+          new RegExp(this.escapeRegExp(oldString), "g"),
+          newString,
+        );
       } else {
         // 单次替换，检查唯一性
         const count = this.countOccurrences(content, oldString);
@@ -468,7 +497,7 @@ export class FileBackend {
       if (SUPPORTS_NOFOLLOW) {
         const fd = await fs.open(
           resolvedPath,
-          fsConstants.O_WRONLY | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW
+          fsConstants.O_WRONLY | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW,
         );
         try {
           await fd.writeFile(newContent, this.encoding);
@@ -479,11 +508,11 @@ export class FileBackend {
         await fs.writeFile(resolvedPath, newContent, this.encoding);
       }
 
-      logger.info('edit_file 完成', { path: filePath, replaceAll });
+      logger.info("edit_file 完成", { path: filePath, replaceAll });
       return { path: filePath };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('edit_file 失败', { path: filePath, error: msg });
+      logger.error("edit_file 失败", { path: filePath, error: msg });
       return { error: `编辑文件 '${filePath}' 失败: ${msg}` };
     }
   }
@@ -492,7 +521,7 @@ export class FileBackend {
    * 转义正则表达式特殊字符
    */
   private escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   /**
@@ -519,8 +548,8 @@ export class FileBackend {
    * @param searchPath - 搜索路径（默认根目录）
    * @returns FileInfo 数组
    */
-  async glob(pattern: string, searchPath = '/'): Promise<FileInfo[]> {
-    const resolved = this.resolvePath(searchPath === '/' ? '.' : searchPath);
+  async glob(pattern: string, searchPath = "/"): Promise<FileInfo[]> {
+    const resolved = this.resolvePath(searchPath === "/" ? "." : searchPath);
 
     try {
       const matches = await glob(pattern, {
@@ -534,7 +563,7 @@ export class FileBackend {
         try {
           const stat = await fs.stat(match);
           const relativePath = this.virtualMode
-            ? '/' + path.relative(this.cwd, match).split(path.sep).join('/')
+            ? "/" + path.relative(this.cwd, match).split(path.sep).join("/")
             : match;
 
           infos.push({
@@ -546,7 +575,7 @@ export class FileBackend {
         } catch {
           // 无法获取 stat
           const relativePath = this.virtualMode
-            ? '/' + path.relative(this.cwd, match).split(path.sep).join('/')
+            ? "/" + path.relative(this.cwd, match).split(path.sep).join("/")
             : match;
           infos.push({ path: relativePath });
         }
@@ -559,15 +588,19 @@ export class FileBackend {
           path: `(截断) 共 ${infos.length} 条，显示前 ${MAX_GLOB_ENTRIES} 条。使用更具体的模式或路径。`,
           is_dir: false,
         });
-        logger.debug('glob 结果截断', { pattern, total: infos.length });
+        logger.debug("glob 结果截断", { pattern, total: infos.length });
         return capped;
       }
 
-      logger.debug('glob 完成', { pattern, path: searchPath, count: infos.length });
+      logger.debug("glob 完成", {
+        pattern,
+        path: searchPath,
+        count: infos.length,
+      });
       return infos;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('glob 失败', { pattern, error: msg });
+      logger.error("glob 失败", { pattern, error: msg });
       return [{ path: `错误: glob 搜索失败: ${msg}`, is_dir: false }];
     }
   }
@@ -584,10 +617,10 @@ export class FileBackend {
    */
   async grep(
     pattern: string,
-    dirPath = '/',
-    globPattern?: string
+    dirPath = "/",
+    globPattern?: string,
   ): Promise<GrepMatch[]> {
-    const resolved = this.resolvePath(dirPath === '/' ? '.' : dirPath);
+    const resolved = this.resolvePath(dirPath === "/" ? "." : dirPath);
 
     try {
       // 检查路径是否存在
@@ -606,12 +639,12 @@ export class FileBackend {
         searchFiles = [resolved];
       } else {
         // 目录搜索
-        const globPatternToUse = globPattern ?? '**/*';
+        const globPatternToUse = globPattern ?? "**/*";
         searchFiles = await glob(globPatternToUse, {
           cwd: resolved,
           absolute: true,
           nodir: true,
-          ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**'],
+          ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**"],
         });
       }
 
@@ -624,18 +657,19 @@ export class FileBackend {
           if (stat.size > this.maxFileSizeBytes) continue;
 
           const content = await fs.readFile(filePath, this.encoding);
-          const lines = content.split('\n');
+          const lines = content.split("\n");
 
           for (let i = 0; i < lines.length; i++) {
             if (lines[i].includes(pattern)) {
               const relativePath = this.virtualMode
-                ? '/' + path.relative(this.cwd, filePath).split(path.sep).join('/')
+                ? "/" +
+                  path.relative(this.cwd, filePath).split(path.sep).join("/")
                 : filePath;
 
               // 截断过长行
               const text =
                 lines[i].length > 1000
-                  ? lines[i].slice(0, 1000) + '...(截断)'
+                  ? lines[i].slice(0, 1000) + "...(截断)"
                   : lines[i];
 
               results.push({
@@ -668,19 +702,23 @@ export class FileBackend {
 
       if (capped.length < results.length) {
         capped.push({
-          path: '(截断)',
+          path: "(截断)",
           line: 0,
           text: `共 ${results.length} 个匹配，显示前 ${capped.length} 个。使用更具体的模式或路径。`,
         });
-        logger.debug('grep 结果截断', { pattern, total: results.length });
+        logger.debug("grep 结果截断", { pattern, total: results.length });
       }
 
-      logger.debug('grep 完成', { pattern, path: dirPath, count: capped.length });
+      logger.debug("grep 完成", {
+        pattern,
+        path: dirPath,
+        count: capped.length,
+      });
       return capped;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logger.error('grep 失败', { pattern, error: msg });
-      return [{ path: `错误: grep 搜索失败: ${msg}`, line: 0, text: '' }];
+      logger.error("grep 失败", { pattern, error: msg });
+      return [{ path: `错误: grep 搜索失败: ${msg}`, line: 0, text: "" }];
     }
   }
 

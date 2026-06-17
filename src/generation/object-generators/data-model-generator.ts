@@ -8,8 +8,12 @@
  * - 跨聚合引用
  */
 
-import type { DbTableEvidenceBundle } from '../../evidence/db-bundle-builder.js';
-import type { DataModelAggregateBundle, AggregateEntityInfo, EntityRelationInfo } from '../../evidence/data-model-bundle-builder.js';
+import type { DbTableEvidenceBundle } from "../../evidence/db-bundle-builder.js";
+import type {
+  DataModelAggregateBundle,
+  AggregateEntityInfo,
+  EntityRelationInfo,
+} from "../../evidence/data-model-bundle-builder.js";
 
 interface DataModelPromptInput {
   /** 聚合证据包 */
@@ -28,7 +32,10 @@ const MAX_CROSS_REFERENCE_COUNT = 5;
 /**
  * Build DATA_MODEL generation prompt.
  */
-export function buildDataModelPrompt(input: DataModelPromptInput): { system: string; user: string } {
+export function buildDataModelPrompt(input: DataModelPromptInput): {
+  system: string;
+  user: string;
+} {
   const system = `You must generate only JSON. Return exactly one JSON object that matches output_schema. Do not wrap the result in markdown, code fences, explanations, or additional text. You may only use supplied evidence. You may not invent entities, relations, or aggregates. All output must be Chinese except code identifiers.
 
 CRITICAL RULES:
@@ -57,45 +64,50 @@ RELATION TYPE MEANINGS:
 
   const user = JSON.stringify(
     {
-      task: { object_type: 'DATA_MODEL', generation_mode: 'bootstrap' },
+      task: { object_type: "DATA_MODEL", generation_mode: "bootstrap" },
       evidence,
       context: {
         repo_name: input.repoName,
         concept_names: input.concept_names ?? [],
       },
       output_schema: {
-        id: 'string (DATA_MODEL-{aggregate_name})',
-        type: 'DATA_MODEL',
+        id: "string (DATA_MODEL-{aggregate_name})",
+        type: "DATA_MODEL",
         aggregate_name: 'string (business-oriented name, e.g., "订单聚合")',
         aggregate_name_zh: 'string (Chinese name, e.g., "订单聚合")',
-        aggregate_description_zh: 'string (what business scenario this aggregate covers)',
-        scope_zh: 'string (when this aggregate applies, when it does NOT apply)',
+        aggregate_description_zh:
+          "string (what business scenario this aggregate covers)",
+        scope_zh:
+          "string (when this aggregate applies, when it does NOT apply)",
         entities: [
           {
-            entity_name: 'string (table name or Java class name)',
-            entity_name_zh: 'string (Chinese description)',
-            description_zh: 'string (entity role in the aggregate)',
-            role: 'aggregate_root | sub_entity | associated_entity | relation_table',
-            module: 'string (optional - deployable module name like mall-admin)',
+            entity_name: "string (table name or Java class name)",
+            entity_name_zh: "string (Chinese description)",
+            description_zh: "string (entity role in the aggregate)",
+            role: "aggregate_root | sub_entity | associated_entity | relation_table",
+            module:
+              "string (optional - deployable module name like mall-admin)",
           },
         ],
         entity_relations: [
           {
-            source_entity: 'string',
-            target_entity: 'string',
-            relation_type: 'one_to_one | one_to_many | many_to_one | many_to_many',
-            relation_field: 'string (which field implements the relation)',
-            description_zh: 'string (optional - relation explanation)',
+            source_entity: "string",
+            target_entity: "string",
+            relation_type:
+              "one_to_one | one_to_many | many_to_one | many_to_many",
+            relation_field: "string (which field implements the relation)",
+            description_zh: "string (optional - relation explanation)",
           },
         ],
         cross_references: [
           {
-            aggregate_name: 'string (referenced aggregate name)',
-            entity_name: 'string (referenced entity name)',
-            reference_field: 'string (field in current aggregate)',
+            aggregate_name: "string (referenced aggregate name)",
+            entity_name: "string (referenced entity name)",
+            reference_field: "string (field in current aggregate)",
           },
         ],
-        module: 'string (optional - which deployable module owns this aggregate)',
+        module:
+          "string (optional - which deployable module owns this aggregate)",
       },
     },
     null,
@@ -108,7 +120,9 @@ RELATION TYPE MEANINGS:
 /**
  * Build structured evidence from DataModelAggregateBundle.
  */
-function buildEvidenceFromBundle(bundle: DataModelAggregateBundle | undefined): Record<string, unknown> {
+function buildEvidenceFromBundle(
+  bundle: DataModelAggregateBundle | undefined,
+): Record<string, unknown> {
   if (!bundle) {
     return { aggregate_bundle: null };
   }
@@ -118,8 +132,13 @@ function buildEvidenceFromBundle(bundle: DataModelAggregateBundle | undefined): 
       suggested_aggregate_name: bundle.suggested_aggregate_name,
       aggregate_root: bundle.aggregate_root,
       entities: buildEntityEvidence(bundle.entities.slice(0, MAX_ENTITY_COUNT)),
-      entity_relations: buildRelationEvidence(bundle.entity_relations.slice(0, MAX_RELATION_COUNT)),
-      cross_references: bundle.cross_references.slice(0, MAX_CROSS_REFERENCE_COUNT),
+      entity_relations: buildRelationEvidence(
+        bundle.entity_relations.slice(0, MAX_RELATION_COUNT),
+      ),
+      cross_references: bundle.cross_references.slice(
+        0,
+        MAX_CROSS_REFERENCE_COUNT,
+      ),
       mapper_files: bundle.mapper_files.slice(0, 10),
       service_classes: bundle.service_classes.slice(0, 10),
       key_evidence: buildKeyEvidence(bundle.table_bundles),
@@ -127,7 +146,9 @@ function buildEvidenceFromBundle(bundle: DataModelAggregateBundle | undefined): 
   };
 }
 
-function buildEntityEvidence(entities: AggregateEntityInfo[]): Array<Record<string, unknown>> {
+function buildEntityEvidence(
+  entities: AggregateEntityInfo[],
+): Array<Record<string, unknown>> {
   return entities.map((entity) => ({
     entity_name: entity.entity_name,
     entity_name_zh: entity.entity_name_zh,
@@ -145,7 +166,9 @@ function buildEntityEvidence(entities: AggregateEntityInfo[]): Array<Record<stri
   }));
 }
 
-function buildRelationEvidence(relations: EntityRelationInfo[]): Array<Record<string, unknown>> {
+function buildRelationEvidence(
+  relations: EntityRelationInfo[],
+): Array<Record<string, unknown>> {
   return relations.map((relation) => ({
     source_entity: relation.source_entity,
     target_entity: relation.target_entity,
@@ -160,7 +183,9 @@ function buildRelationEvidence(relations: EntityRelationInfo[]): Array<Record<st
  *
  * 提取关键证据信息，帮助 LLM 理解聚合的业务含义。
  */
-function buildKeyEvidence(tableBundles: DbTableEvidenceBundle[]): Array<Record<string, unknown>> {
+function buildKeyEvidence(
+  tableBundles: DbTableEvidenceBundle[],
+): Array<Record<string, unknown>> {
   const keyEvidence: Array<Record<string, unknown>> = [];
 
   for (const bundle of tableBundles.slice(0, 5)) {

@@ -5,40 +5,40 @@
  * 优先路径：利用已有的 Tree-sitter 解析结果，避免重新解析文件。
  */
 
-import type { Connection } from '@ladybugdb/core';
+import type { Connection } from "@ladybugdb/core";
 import {
   openLbugConnection,
   closeLbugConnection,
   type LbugConnectionHandle,
-} from '../engine/lbug/lbug-config.js';
+} from "../engine/lbug/lbug-config.js";
 import type {
   GraphClassNode,
   GraphPropertyNode,
   GraphMethodNode,
-} from './types.js';
+} from "./types.js";
 
 /**
  * 多语言表名需要反引号转义
  */
 const BACKTICK_TABLES = new Set([
-  'Struct',
-  'Enum',
-  'Macro',
-  'Typedef',
-  'Union',
-  'Namespace',
-  'Trait',
-  'Impl',
-  'TypeAlias',
-  'Const',
-  'Static',
-  'Property',
-  'Record',
-  'Delegate',
-  'Annotation',
-  'Constructor',
-  'Template',
-  'Module',
+  "Struct",
+  "Enum",
+  "Macro",
+  "Typedef",
+  "Union",
+  "Namespace",
+  "Trait",
+  "Impl",
+  "TypeAlias",
+  "Const",
+  "Static",
+  "Property",
+  "Record",
+  "Delegate",
+  "Annotation",
+  "Constructor",
+  "Template",
+  "Module",
 ]);
 
 function escapeTableName(table: string): string {
@@ -58,7 +58,7 @@ export async function queryClassNode(
   filePath: string,
   className: string,
 ): Promise<GraphClassNode | null> {
-  const escapedPath = filePath.replace(/\\/g, '\\\\').replace(/'/g, "''");
+  const escapedPath = filePath.replace(/\\/g, "\\\\").replace(/'/g, "''");
   const escapedName = className.replace(/'/g, "''");
 
   try {
@@ -76,13 +76,17 @@ export async function queryClassNode(
 
     const row = rows[0];
     return {
-      id: String(row.id ?? row[0] ?? ''),
+      id: String(row.id ?? row[0] ?? ""),
       name: String(row.name ?? row[1] ?? className),
       filePath: String(row.filePath ?? row[2] ?? filePath),
       startLine: Number(row.startLine ?? row[3] ?? 0),
       endLine: Number(row.endLine ?? row[4] ?? 0),
-      content: row.content ?? row[5] ? String(row.content ?? row[5]) : undefined,
-      description: row.description ?? row[6] ? String(row.description ?? row[6]) : undefined,
+      content:
+        (row.content ?? row[5]) ? String(row.content ?? row[5]) : undefined,
+      description:
+        (row.description ?? row[6])
+          ? String(row.description ?? row[6])
+          : undefined,
     };
   } catch {
     return null;
@@ -101,7 +105,7 @@ export async function queryClassProperties(
   classId: string,
 ): Promise<GraphPropertyNode[]> {
   const escapedId = classId.replace(/'/g, "''");
-  const propertyTable = escapeTableName('Property');
+  const propertyTable = escapeTableName("Property");
 
   try {
     const result = await conn.query(`
@@ -114,12 +118,13 @@ export async function queryClassProperties(
     const rows = await queryResult.getAll();
 
     return rows.map((row) => ({
-      id: String(row.id ?? row[0] ?? ''),
-      name: String(row.name ?? row[1] ?? ''),
-      filePath: String(row.filePath ?? row[2] ?? ''),
+      id: String(row.id ?? row[0] ?? ""),
+      name: String(row.name ?? row[1] ?? ""),
+      filePath: String(row.filePath ?? row[2] ?? ""),
       startLine: Number(row.startLine ?? row[3] ?? 0),
       endLine: Number(row.endLine ?? row[4] ?? 0),
-      content: row.content ?? row[5] ? String(row.content ?? row[5]) : undefined,
+      content:
+        (row.content ?? row[5]) ? String(row.content ?? row[5]) : undefined,
     }));
   } catch {
     return [];
@@ -151,14 +156,18 @@ export async function queryClassMethods(
     const rows = await queryResult.getAll();
 
     return rows.map((row) => ({
-      id: String(row.id ?? row[0] ?? ''),
-      name: String(row.name ?? row[1] ?? ''),
-      filePath: String(row.filePath ?? row[2] ?? ''),
+      id: String(row.id ?? row[0] ?? ""),
+      name: String(row.name ?? row[1] ?? ""),
+      filePath: String(row.filePath ?? row[2] ?? ""),
       startLine: Number(row.startLine ?? row[3] ?? 0),
       endLine: Number(row.endLine ?? row[4] ?? 0),
-      content: row.content ?? row[5] ? String(row.content ?? row[5]) : undefined,
+      content:
+        (row.content ?? row[5]) ? String(row.content ?? row[5]) : undefined,
       parameterCount: Number(row.parameterCount ?? row[6] ?? 0),
-      returnType: row.returnType ?? row[7] ? String(row.returnType ?? row[7]) : undefined,
+      returnType:
+        (row.returnType ?? row[7])
+          ? String(row.returnType ?? row[7])
+          : undefined,
     }));
   } catch {
     return [];
@@ -175,8 +184,24 @@ export async function queryClassMethods(
 export async function batchQueryGraphData(
   dbPath: string,
   candidates: Array<{ filePath: string; className: string }>,
-): Promise<Map<string, { classNode: GraphClassNode; properties: GraphPropertyNode[]; methods: GraphMethodNode[] } | null>> {
-  const results = new Map<string, { classNode: GraphClassNode; properties: GraphPropertyNode[]; methods: GraphMethodNode[] } | null>();
+): Promise<
+  Map<
+    string,
+    {
+      classNode: GraphClassNode;
+      properties: GraphPropertyNode[];
+      methods: GraphMethodNode[];
+    } | null
+  >
+> {
+  const results = new Map<
+    string,
+    {
+      classNode: GraphClassNode;
+      properties: GraphPropertyNode[];
+      methods: GraphMethodNode[];
+    } | null
+  >();
 
   if (candidates.length === 0) return results;
 
@@ -191,7 +216,11 @@ export async function batchQueryGraphData(
 
   try {
     for (const candidate of candidates) {
-      const classNode = await queryClassNode(handle.conn, candidate.filePath, candidate.className);
+      const classNode = await queryClassNode(
+        handle.conn,
+        candidate.filePath,
+        candidate.className,
+      );
       if (!classNode) {
         results.set(`${candidate.filePath}:${candidate.className}`, null);
         continue;
@@ -216,9 +245,11 @@ export async function batchQueryGraphData(
 /**
  * 带重试的连接打开
  */
-async function openLbugConnectionWithRetry(dbPath: string): Promise<LbugConnectionHandle | null> {
+async function openLbugConnectionWithRetry(
+  dbPath: string,
+): Promise<LbugConnectionHandle | null> {
   try {
-    const lbug = await import('@ladybugdb/core');
+    const lbug = await import("@ladybugdb/core");
     return await openLbugConnection(lbug.default, dbPath);
   } catch {
     return null;

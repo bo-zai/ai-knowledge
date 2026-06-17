@@ -1,31 +1,39 @@
-import { KnowledgeGraph } from '../graph/types.js';
-import { ASTCache } from './ast-cache.js';
-import Parser from 'tree-sitter';
-import { isLanguageAvailable, loadParser, loadLanguage } from '../tree-sitter/parser-loader.js';
-import { getProvider, getProviderForFile, providersWithImplicitWiring } from './languages/index.js';
-import type { LanguageProvider } from './language-provider.js';
-import { generateId } from '../lib/utils.js';
-import { getLanguageFromFilename } from '../shared';
-import { isVerboseIngestionEnabled } from './utils/verbose.js';
-import { yieldToEventLoop } from './utils/event-loop.js';
-import type { ExtractedImport } from './workers/parse-worker.js';
-import { getTreeSitterBufferSize } from './constants.js';
-import { loadImportConfigs } from './language-config.js';
-import { buildSuffixIndex } from './import-resolvers/utils.js';
+import { KnowledgeGraph } from "../graph/types.js";
+import { ASTCache } from "./ast-cache.js";
+import Parser from "tree-sitter";
+import {
+  isLanguageAvailable,
+  loadParser,
+  loadLanguage,
+} from "../tree-sitter/parser-loader.js";
+import {
+  getProvider,
+  getProviderForFile,
+  providersWithImplicitWiring,
+} from "./languages/index.js";
+import type { LanguageProvider } from "./language-provider.js";
+import { generateId } from "../lib/utils.js";
+import { getLanguageFromFilename } from "../shared";
+import { isVerboseIngestionEnabled } from "./utils/verbose.js";
+import { yieldToEventLoop } from "./utils/event-loop.js";
+import type { ExtractedImport } from "./workers/parse-worker.js";
+import { getTreeSitterBufferSize } from "./constants.js";
+import { loadImportConfigs } from "./language-config.js";
+import { buildSuffixIndex } from "./import-resolvers/utils.js";
 import type {
   ResolutionContext,
   ModuleAliasMap,
   NamedImportMap,
-} from './model/resolution-context.js';
+} from "./model/resolution-context.js";
 import type {
   ImportResult,
   ResolveCtx,
   ImportResolutionContext,
-} from './import-resolvers/types.js';
-import type { NamedBinding } from './named-bindings/types.js';
-import type { SyntaxNode } from './utils/ast-helpers.js';
-import { isDev } from './utils/env.js';
-import { isRegistryPrimary } from './registry-primary-flag.js';
+} from "./import-resolvers/types.js";
+import type { NamedBinding } from "./named-bindings/types.js";
+import type { SyntaxNode } from "./utils/ast-helpers.js";
+import { isDev } from "./utils/env.js";
+import { isRegistryPrimary } from "./registry-primary-flag.js";
 
 // Type: Map<FilePath, Set<ResolvedFilePath>>
 // Stores all files that a given file imports from
@@ -55,7 +63,12 @@ function wireImplicitImports(
 
   for (const [provider, langFiles] of grouped) {
     if (langFiles.length > 1) {
-      provider.implicitImportWirer?.(langFiles, importMap, addImportEdge, projectConfig);
+      provider.implicitImportWirer?.(
+        langFiles,
+        importMap,
+        addImportEdge,
+        projectConfig,
+      );
     }
   }
 }
@@ -67,12 +80,20 @@ export type PackageMap = Map<string, Set<string>>;
 
 // ImportResolutionContext is defined in ./import-resolvers/types.ts — re-exported here for consumers.
 
-export function buildImportResolutionContext(allPaths: string[]): ImportResolutionContext {
+export function buildImportResolutionContext(
+  allPaths: string[],
+): ImportResolutionContext {
   const allFileList = allPaths;
-  const normalizedFileList = allFileList.map((p) => p.replace(/\\/g, '/'));
+  const normalizedFileList = allFileList.map((p) => p.replace(/\\/g, "/"));
   const allFilePaths = new Set(allFileList);
   const index = buildSuffixIndex(normalizedFileList, allFileList);
-  return { allFilePaths, allFileList, normalizedFileList, index, resolveCache: new Map() };
+  return {
+    allFilePaths,
+    allFileList,
+    normalizedFileList,
+    index,
+    resolveCache: new Map(),
+  };
 }
 
 // Config loaders extracted to ./language-config.ts (Phase 2 refactor)
@@ -92,9 +113,10 @@ export function preprocessImportPath(
   importNode: SyntaxNode,
   provider: LanguageProvider,
 ): string | null {
-  const cleaned = sourceText.replace(/['"<>]/g, '');
+  const cleaned = sourceText.replace(/['"<>]/g, "");
   // Defense-in-depth: reject null bytes and control characters (matches Ruby call-routing pattern)
-  if (!cleaned || cleaned.length > 2048 || /[\x00-\x1f]/.test(cleaned)) return null;
+  if (!cleaned || cleaned.length > 2048 || /[\x00-\x1f]/.test(cleaned))
+    return null;
   if (provider.importPathPreprocessor) {
     return provider.importPathPreprocessor(cleaned, importNode);
   }
@@ -108,17 +130,17 @@ function createImportEdgeHelpers(graph: KnowledgeGraph, importMap: ImportMap) {
   const addImportGraphEdge = (filePath: string, resolvedPath: string) => {
     const language = getLanguageFromFilename(filePath);
     if (language !== null && isRegistryPrimary(language)) return;
-    const sourceId = generateId('File', filePath);
-    const targetId = generateId('File', resolvedPath);
-    const relId = generateId('IMPORTS', `${filePath}->${resolvedPath}`);
+    const sourceId = generateId("File", filePath);
+    const targetId = generateId("File", resolvedPath);
+    const relId = generateId("IMPORTS", `${filePath}->${resolvedPath}`);
     totalImportsResolved++;
     graph.addRelationship({
       id: relId,
       sourceId,
       targetId,
-      type: 'IMPORTS',
+      type: "IMPORTS",
       confidence: 1.0,
-      reason: '',
+      reason: "",
     });
   };
 
@@ -128,7 +150,11 @@ function createImportEdgeHelpers(graph: KnowledgeGraph, importMap: ImportMap) {
     importMap.get(filePath)!.add(resolvedPath);
   };
 
-  return { addImportEdge, addImportGraphEdge, getResolvedCount: () => totalImportsResolved };
+  return {
+    addImportEdge,
+    addImportGraphEdge,
+    getResolvedCount: () => totalImportsResolved,
+  };
 }
 
 /**
@@ -150,7 +176,7 @@ function applyImportResult(
 ): void {
   if (!result) return;
 
-  if (result.kind === 'package' && packageMap) {
+  if (result.kind === "package" && packageMap) {
     // Store directory suffix in PackageMap (skip ImportMap expansion)
     for (const resolvedFile of result.files) {
       addImportGraphEdge(filePath, resolvedFile);
@@ -184,7 +210,8 @@ function applyImportResult(
     // of overloaded methods), remove the entry so resolution falls through to Tier 2a
     // import-scoped which sees all candidates and can apply arity narrowing.
     if (namedBindings && namedImportMap) {
-      if (!namedImportMap.has(filePath)) namedImportMap.set(filePath, new Map());
+      if (!namedImportMap.has(filePath))
+        namedImportMap.set(filePath, new Map());
       const fileBindings = namedImportMap.get(filePath)!;
 
       if (files.length === 1) {
@@ -209,8 +236,10 @@ function applyImportResult(
           if (binding.isModuleAlias) continue;
           const lowerName = binding.exported.toLowerCase();
           const matchedFile = files.find((f) => {
-            const base = f.replace(/\\/g, '/').split('/').pop() ?? '';
-            const nameWithoutExt = base.substring(0, base.lastIndexOf('.')).toLowerCase();
+            const base = f.replace(/\\/g, "/").split("/").pop() ?? "";
+            const nameWithoutExt = base
+              .substring(0, base.lastIndexOf("."))
+              .toLowerCase();
             return nameWithoutExt === lowerName;
           });
           if (matchedFile) {
@@ -255,7 +284,7 @@ export const processImports = async (
   const skippedByLang = logSkipped ? new Map<string, number>() : null;
   const resolveCache = new Map<string, string | null>();
   // Pre-compute normalized file list once (forward slashes)
-  const normalizedFileList = allFileList.map((p) => p.replace(/\\/g, '/'));
+  const normalizedFileList = allFileList.map((p) => p.replace(/\\/g, "/"));
   // Build suffix index for O(1) lookups
   const index = buildSuffixIndex(normalizedFileList, allFileList);
 
@@ -263,7 +292,7 @@ export const processImports = async (
   let totalImportsFound = 0;
 
   // Load language-specific configs once before the file loop
-  const configs = await loadImportConfigs(repoRoot || '');
+  const configs = await loadImportConfigs(repoRoot || "");
   const resolveCtx: ResolveCtx = {
     allFilePaths,
     allFileList,
@@ -272,10 +301,8 @@ export const processImports = async (
     resolveCache,
     configs,
   };
-  const { addImportEdge, addImportGraphEdge, getResolvedCount } = createImportEdgeHelpers(
-    graph,
-    importMap,
-  );
+  const { addImportEdge, addImportGraphEdge, getResolvedCount } =
+    createImportEdgeHelpers(graph, importMap);
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -325,12 +352,18 @@ export const processImports = async (
     } catch (queryError: any) {
       if (isDev) {
         console.group(`🔴 Query Error: ${file.path}`);
-        console.log('Language:', language);
-        console.log('Query (first 200 chars):', queryStr.substring(0, 200) + '...');
-        console.log('Error:', queryError?.message || queryError);
-        console.log('File content (first 300 chars):', file.content.substring(0, 300));
-        console.log('AST root type:', tree.rootNode?.type);
-        console.log('AST has errors:', tree.rootNode?.hasError);
+        console.log("Language:", language);
+        console.log(
+          "Query (first 200 chars):",
+          queryStr.substring(0, 200) + "...",
+        );
+        console.log("Error:", queryError?.message || queryError);
+        console.log(
+          "File content (first 300 chars):",
+          file.content.substring(0, 300),
+        );
+        console.log("AST root type:", tree.rootNode?.type);
+        console.log("AST has errors:", tree.rootNode?.hasError);
         console.groupEnd();
       }
 
@@ -342,22 +375,35 @@ export const processImports = async (
       const captureMap: Record<string, any> = {};
       match.captures.forEach((c) => (captureMap[c.name] = c.node));
 
-      if (captureMap['import']) {
-        const sourceNode = captureMap['import.source'];
+      if (captureMap["import"]) {
+        const sourceNode = captureMap["import.source"];
         if (!sourceNode) {
           if (isDev) {
-            console.log(`⚠️ Import captured but no source node in ${file.path}`);
+            console.log(
+              `⚠️ Import captured but no source node in ${file.path}`,
+            );
           }
           return;
         }
 
-        const rawImportPath = preprocessImportPath(sourceNode.text, captureMap['import'], provider);
+        const rawImportPath = preprocessImportPath(
+          sourceNode.text,
+          captureMap["import"],
+          provider,
+        );
         if (!rawImportPath) return;
         totalImportsFound++;
 
-        const result = provider.importResolver(rawImportPath, file.path, resolveCtx);
+        const result = provider.importResolver(
+          rawImportPath,
+          file.path,
+          resolveCtx,
+        );
         const extractor = provider.namedBindingExtractor;
-        const bindings = namedImportMap && extractor ? extractor(captureMap['import']) : undefined;
+        const bindings =
+          namedImportMap && extractor
+            ? extractor(captureMap["import"])
+            : undefined;
         applyImportResult(
           result,
           file.path,
@@ -372,13 +418,20 @@ export const processImports = async (
       }
 
       // ---- Language-specific call-as-import routing (Ruby require, etc.) ----
-      if (captureMap['call']) {
-        const callNameNode = captureMap['call.name'];
+      if (captureMap["call"]) {
+        const callNameNode = captureMap["call.name"];
         if (callNameNode) {
-          const routed = provider.callRouter?.(callNameNode.text, captureMap['call']);
-          if (routed && routed.kind === 'import') {
+          const routed = provider.callRouter?.(
+            callNameNode.text,
+            captureMap["call"],
+          );
+          if (routed && routed.kind === "import") {
             totalImportsFound++;
-            const result = provider.importResolver(routed.importPath, file.path, resolveCtx);
+            const result = provider.importResolver(
+              routed.importPath,
+              file.path,
+              resolveCtx,
+            );
             applyImportResult(
               result,
               file.path,
@@ -429,12 +482,14 @@ export const processImportsFromExtracted = async (
   const packageMap = ctx.packageMap;
   const namedImportMap = ctx.namedImportMap;
   const moduleAliasMap = ctx.moduleAliasMap;
-  const importCtx = prebuiltCtx ?? buildImportResolutionContext(files.map((f) => f.path));
-  const { allFilePaths, allFileList, normalizedFileList, index, resolveCache } = importCtx;
+  const importCtx =
+    prebuiltCtx ?? buildImportResolutionContext(files.map((f) => f.path));
+  const { allFilePaths, allFileList, normalizedFileList, index, resolveCache } =
+    importCtx;
 
   let totalImportsFound = 0;
 
-  const configs = await loadImportConfigs(repoRoot || '');
+  const configs = await loadImportConfigs(repoRoot || "");
   const resolveCtx: ResolveCtx = {
     allFilePaths,
     allFileList,
@@ -443,10 +498,8 @@ export const processImportsFromExtracted = async (
     resolveCache,
     configs,
   };
-  const { addImportEdge, addImportGraphEdge, getResolvedCount } = createImportEdgeHelpers(
-    graph,
-    importMap,
-  );
+  const { addImportEdge, addImportGraphEdge, getResolvedCount } =
+    createImportEdgeHelpers(graph, importMap);
 
   // Group by file for progress reporting (users see file count, not import count)
   const importsByFile = new Map<string, ExtractedImport[]>();
@@ -473,7 +526,11 @@ export const processImportsFromExtracted = async (
       totalImportsFound++;
 
       const provider = getProvider(imp.language);
-      const result = provider.importResolver(imp.rawImportPath, filePath, resolveCtx);
+      const result = provider.importResolver(
+        imp.rawImportPath,
+        filePath,
+        resolveCtx,
+      );
       applyImportResult(
         result,
         filePath,

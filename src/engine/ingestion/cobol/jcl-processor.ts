@@ -16,9 +16,9 @@
  * Pattern follows detectCrossProgamContracts() in pipeline.ts.
  */
 
-import { parseJcl, type JclParseResults } from './jcl-parser.js';
-import type { KnowledgeGraph } from '../../graph/types.js';
-import { generateId } from '../../lib/utils.js';
+import { parseJcl, type JclParseResults } from "./jcl-parser.js";
+import type { KnowledgeGraph } from "../../graph/types.js";
+import { generateId } from "../../lib/utils.js";
 
 export interface JclProcessResult {
   jobCount: number;
@@ -48,9 +48,9 @@ export function processJclFiles(
   // Collect all Module names for step -> program linking
   const moduleNames = new Map<string, string>(); // uppercase name -> node id
   graph.forEachNode((node) => {
-    if (node.label === 'Module') {
+    if (node.label === "Module") {
       const nodeName = node.properties.name;
-      if (typeof nodeName === 'string') {
+      if (typeof nodeName === "string") {
         moduleNames.set(nodeName.toUpperCase(), node.id);
       }
     }
@@ -88,13 +88,13 @@ function integrateJclResults(
 
   // 1. Create Job nodes
   for (const job of parsed.jobs) {
-    const jobId = generateId('CodeElement', `${filePath}:job:${job.name}`);
-    const classPart = job.class ? ` class:${job.class}` : '';
-    const msgPart = job.msgclass ? ` msgclass:${job.msgclass}` : '';
+    const jobId = generateId("CodeElement", `${filePath}:job:${job.name}`);
+    const classPart = job.class ? ` class:${job.class}` : "";
+    const msgPart = job.msgclass ? ` msgclass:${job.msgclass}` : "";
 
     graph.addNode({
       id: jobId,
-      label: 'CodeElement',
+      label: "CodeElement",
       properties: {
         name: job.name,
         filePath,
@@ -105,14 +105,14 @@ function integrateJclResults(
     });
 
     // Link File -> Job (CONTAINS)
-    const fileId = generateId('File', filePath);
+    const fileId = generateId("File", filePath);
     graph.addRelationship({
       id: `${fileId}_contains_${jobId}`,
-      type: 'CONTAINS',
+      type: "CONTAINS",
       sourceId: fileId,
       targetId: jobId,
       confidence: 1.0,
-      reason: 'jcl-job',
+      reason: "jcl-job",
     });
 
     jobCount++;
@@ -121,19 +121,22 @@ function integrateJclResults(
   // 1.5 Pre-register in-stream PROCs so steps can reference them
   // (fixes ordering bug: steps processed before PROCs were registered)
   for (const proc of parsed.procs) {
-    const procId = generateId('Module', `${filePath}:proc:${proc.name}`);
+    const procId = generateId("Module", `${filePath}:proc:${proc.name}`);
     moduleNames.set(proc.name.toUpperCase(), procId);
   }
 
   // 2. Create Step nodes and link to programs
   for (const step of parsed.steps) {
-    const stepId = generateId('CodeElement', `${filePath}:step:${step.jobName}:${step.name}`);
-    const pgmPart = step.program ? ` pgm:${step.program}` : '';
-    const procPart = step.proc ? ` proc:${step.proc}` : '';
+    const stepId = generateId(
+      "CodeElement",
+      `${filePath}:step:${step.jobName}:${step.name}`,
+    );
+    const pgmPart = step.program ? ` pgm:${step.program}` : "";
+    const procPart = step.proc ? ` proc:${step.proc}` : "";
 
     graph.addNode({
       id: stepId,
-      label: 'CodeElement',
+      label: "CodeElement",
       properties: {
         name: step.name,
         filePath,
@@ -147,14 +150,17 @@ function integrateJclResults(
 
     // Link Job -> Step (CONTAINS)
     if (step.jobName) {
-      const jobId = generateId('CodeElement', `${filePath}:job:${step.jobName}`);
+      const jobId = generateId(
+        "CodeElement",
+        `${filePath}:job:${step.jobName}`,
+      );
       graph.addRelationship({
         id: `${jobId}_contains_${stepId}`,
-        type: 'CONTAINS',
+        type: "CONTAINS",
         sourceId: jobId,
         targetId: stepId,
         confidence: 1.0,
-        reason: 'jcl-step',
+        reason: "jcl-step",
       });
     }
 
@@ -164,11 +170,11 @@ function integrateJclResults(
       if (moduleId) {
         graph.addRelationship({
           id: `${stepId}_calls_${moduleId}`,
-          type: 'CALLS',
+          type: "CALLS",
           sourceId: stepId,
           targetId: moduleId,
           confidence: 0.95,
-          reason: 'jcl-exec-pgm',
+          reason: "jcl-exec-pgm",
         });
         programLinks++;
       }
@@ -180,11 +186,11 @@ function integrateJclResults(
       if (procModuleId) {
         graph.addRelationship({
           id: `${stepId}_calls_proc_${procModuleId}`,
-          type: 'CALLS',
+          type: "CALLS",
           sourceId: stepId,
           targetId: procModuleId,
           confidence: 0.9,
-          reason: 'jcl-exec-proc',
+          reason: "jcl-exec-proc",
         });
       }
     }
@@ -199,13 +205,13 @@ function integrateJclResults(
 
     // Create dataset node (deduplicated per file)
     const datasetKey = `${filePath}:dataset:${dd.dataset}`;
-    const datasetId = generateId('CodeElement', datasetKey);
+    const datasetId = generateId("CodeElement", datasetKey);
 
     if (!seenDatasets.has(dd.dataset)) {
-      const dispPart = dd.disp ? ` disp:${dd.disp}` : '';
+      const dispPart = dd.disp ? ` disp:${dd.disp}` : "";
       graph.addNode({
         id: datasetId,
-        label: 'CodeElement',
+        label: "CodeElement",
         properties: {
           name: dd.dataset,
           filePath,
@@ -224,7 +230,7 @@ function integrateJclResults(
     if (stepId) {
       graph.addRelationship({
         id: `${stepId}_dd_${dd.ddName}_${datasetId}`,
-        type: 'CALLS',
+        type: "CALLS",
         sourceId: stepId,
         targetId: datasetId,
         confidence: 0.85,
@@ -237,16 +243,16 @@ function integrateJclResults(
   for (const proc of parsed.procs) {
     if (!proc.isInStream) continue;
 
-    const procId = generateId('Module', `${filePath}:proc:${proc.name}`);
+    const procId = generateId("Module", `${filePath}:proc:${proc.name}`);
     graph.addNode({
       id: procId,
-      label: 'Module',
+      label: "Module",
       properties: {
         name: proc.name,
         filePath,
         startLine: proc.line,
         endLine: proc.line,
-        description: 'jcl-proc-instream',
+        description: "jcl-proc-instream",
       },
     });
 
@@ -258,14 +264,14 @@ function integrateJclResults(
   for (const inc of parsed.includes) {
     const moduleId = moduleNames.get(inc.member.toUpperCase());
     if (moduleId) {
-      const fileId = generateId('File', filePath);
+      const fileId = generateId("File", filePath);
       graph.addRelationship({
         id: `${fileId}_includes_${moduleId}`,
-        type: 'IMPORTS',
+        type: "IMPORTS",
         sourceId: fileId,
         targetId: moduleId,
         confidence: 0.9,
-        reason: 'jcl-include',
+        reason: "jcl-include",
       });
     }
   }

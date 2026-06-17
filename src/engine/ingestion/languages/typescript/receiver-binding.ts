@@ -44,27 +44,34 @@
  *   `@type-binding.type`  (the enclosing type's name)
  */
 
-import type { Capture, CaptureMatch } from '../../../shared/index.js';
-import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
+import type { Capture, CaptureMatch } from "../../../shared/index.js";
+import {
+  nodeToCapture,
+  syntheticCapture,
+  type SyntaxNode,
+} from "../../utils/ast-helpers.js";
 
 /** Node types that define a TypeScript "type with instance members". */
 const TYPE_DECL_NODE_TYPES = new Set([
-  'class_declaration',
-  'abstract_class_declaration',
-  'class',
-  'class_expression',
-  'interface_declaration',
+  "class_declaration",
+  "abstract_class_declaration",
+  "class",
+  "class_expression",
+  "interface_declaration",
 ]);
 
 /** Scope function nodes that could be a class method body. */
 const CLASS_MEMBER_FUNCTION_TYPES = new Set([
-  'method_definition',
-  'method_signature',
-  'abstract_method_signature',
+  "method_definition",
+  "method_signature",
+  "abstract_method_signature",
 ]);
 
 /** Function-like values that can back a class field (`m = () => {}`). */
-const CLASS_FIELD_FUNCTION_TYPES = new Set(['arrow_function', 'function_expression']);
+const CLASS_FIELD_FUNCTION_TYPES = new Set([
+  "arrow_function",
+  "function_expression",
+]);
 
 /**
  * Produce zero or one `CaptureMatch` synthesizing `this` for `fnNode`.
@@ -77,7 +84,9 @@ const CLASS_FIELD_FUNCTION_TYPES = new Set(['arrow_function', 'function_expressi
  * The caller is responsible for passing a `fnNode` whose type is one
  * of the scope function nodes the scope query emits.
  */
-export function synthesizeTsReceiverBinding(fnNode: SyntaxNode): CaptureMatch | null {
+export function synthesizeTsReceiverBinding(
+  fnNode: SyntaxNode,
+): CaptureMatch | null {
   // Classify the function's role.
   const role = classifyFunctionRole(fnNode);
   if (role === null) return null;
@@ -103,7 +112,7 @@ export function synthesizeTsReceiverBinding(fnNode: SyntaxNode): CaptureMatch | 
   // the method node itself as the anchor; scope-extractor attaches
   // it to the function scope created by the `@scope.function`
   // anchor at the same range.
-  const anchorNode = fnNode.childForFieldName('body') ?? fnNode;
+  const anchorNode = fnNode.childForFieldName("body") ?? fnNode;
 
   return buildThisBinding(anchorNode, typeName);
 }
@@ -131,8 +140,8 @@ function classifyFunctionRole(fnNode: SyntaxNode): FunctionRole | null {
     // the arrow/function-expression is a DIRECT value of a field do
     // we treat it as a class method with synthesized `this`.
     const parent = fnNode.parent;
-    if (parent !== null && parent.type === 'public_field_definition') {
-      const valueField = parent.childForFieldName('value');
+    if (parent !== null && parent.type === "public_field_definition") {
+      const valueField = parent.childForFieldName("value");
       if (valueField !== null && valueField.startIndex === fnNode.startIndex) {
         return { memberNode: parent };
       }
@@ -151,7 +160,7 @@ function isStaticMember(memberNode: SyntaxNode): boolean {
     if (c === null) continue;
     // `static` can appear as an unnamed token or as a `readonly` /
     // `static` keyword node depending on grammar version; check text.
-    if (c.text === 'static') return true;
+    if (c.text === "static") return true;
   }
   return false;
 }
@@ -171,16 +180,27 @@ function findEnclosingType(node: SyntaxNode): SyntaxNode | null {
  *  outer variable's name is the usable handle, but wiring it would
  *  require a separate walk; defer to a follow-up). */
 function getTypeDeclName(typeNode: SyntaxNode): string | null {
-  const nameField = typeNode.childForFieldName('name');
+  const nameField = typeNode.childForFieldName("name");
   if (nameField === null) return null;
   return nameField.text;
 }
 
-function buildThisBinding(anchorNode: SyntaxNode, typeText: string): CaptureMatch {
+function buildThisBinding(
+  anchorNode: SyntaxNode,
+  typeText: string,
+): CaptureMatch {
   const m: Record<string, Capture> = {
-    '@type-binding.this': nodeToCapture('@type-binding.this', anchorNode),
-    '@type-binding.name': syntheticCapture('@type-binding.name', anchorNode, 'this'),
-    '@type-binding.type': syntheticCapture('@type-binding.type', anchorNode, typeText),
+    "@type-binding.this": nodeToCapture("@type-binding.this", anchorNode),
+    "@type-binding.name": syntheticCapture(
+      "@type-binding.name",
+      anchorNode,
+      "this",
+    ),
+    "@type-binding.type": syntheticCapture(
+      "@type-binding.type",
+      anchorNode,
+      typeText,
+    ),
   };
   return m;
 }

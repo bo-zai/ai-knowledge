@@ -16,7 +16,7 @@ export type {
   ProjectTypeIdentificationResult,
   PackageInfo,
   GenerationMeta,
-} from './project-context.js';
+} from "./project-context.js";
 
 // 项目类型识别
 export {
@@ -25,7 +25,7 @@ export {
   saveProjectContext,
   loadProjectContext,
   buildProjectContext,
-} from './project-type-identifier.js';
+} from "./project-type-identifier.js";
 
 // 分析单元划分
 export {
@@ -35,12 +35,12 @@ export {
   saveModuleTopology,
   loadModuleTopology,
   ModuleDiscoveryCoordinator,
-} from './analysis-unit.js';
+} from "./analysis-unit.js";
 
 export type {
   ModuleDiscoveryResult,
   RepoType,
-} from './module-discovery/types.js';
+} from "./module-discovery/types.js";
 
 export type {
   ModuleInfo,
@@ -51,7 +51,7 @@ export type {
   AnalysisUnit,
   AnalysisUnitResult,
   SignalDetectionResult,
-} from '../schemas/module.js';
+} from "../schemas/module.js";
 
 // 架构概览生成
 export {
@@ -59,7 +59,7 @@ export {
   collectArchitectureEvidence,
   type ArchitectureGenerationResult,
   type ArchitectureOverview,
-} from './architecture-generator.js';
+} from "./architecture-generator.js";
 
 // 生成元信息
 export {
@@ -67,4 +67,4 @@ export {
   saveGenerationMeta,
   getCurrentCommitHash,
   shouldReidentifyProjectType,
-} from './meta-file.js';
+} from "./meta-file.js";

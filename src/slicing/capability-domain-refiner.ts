@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import type { CapabilityDomainCandidate } from './capability-domain-clusterer.js';
+import { z } from "zod";
+import type { CapabilityDomainCandidate } from "./capability-domain-clusterer.js";
 
 const RefinedDomainSchema = z.object({
   id: z.string(),
@@ -25,27 +25,29 @@ export interface RefinedCapabilityDomain {
   targetTerms: string[];
 }
 
-export function buildCapabilityDomainRefinePrompt(candidates: CapabilityDomainCandidate[]): {
+export function buildCapabilityDomainRefinePrompt(
+  candidates: CapabilityDomainCandidate[],
+): {
   systemPrompt: string;
   userPrompt: string;
 } {
   const systemPrompt = [
-    'You refine repository-derived business capability domains.',
-    'Use only the provided candidate domains and function clusters.',
-    'Return strict JSON only.',
-    'A capability domain is a business area made of related user-visible business actions.',
-    'Do not create technical domains such as controller/service/config/upload unless evidence forces it.',
-  ].join('\n');
+    "You refine repository-derived business capability domains.",
+    "Use only the provided candidate domains and function clusters.",
+    "Return strict JSON only.",
+    "A capability domain is a business area made of related user-visible business actions.",
+    "Do not create technical domains such as controller/service/config/upload unless evidence forces it.",
+  ].join("\n");
 
   const payload = {
-    candidate_domains: candidates.map(candidate => ({
+    candidate_domains: candidates.map((candidate) => ({
       id: candidate.id,
       name_hint: candidate.nameHint,
       summary: candidate.summary,
       target_terms: candidate.targetTerms,
       primary_objects: candidate.primaryObjects,
       related_entities: candidate.relatedEntities,
-      functions: candidate.functionClusters.map(cluster => ({
+      functions: candidate.functionClusters.map((cluster) => ({
         id: cluster.clusterId,
         canonical_name: cluster.canonicalName,
         normalized_verb: cluster.normalizedVerb,
@@ -58,25 +60,25 @@ export function buildCapabilityDomainRefinePrompt(candidates: CapabilityDomainCa
     output_schema: {
       domains: [
         {
-          id: 'string',
-          domain_name: 'string',
-          summary: 'string',
-          included_function_ids: ['string'],
-          core_function_ids: ['string'],
-          supporting_function_ids: ['string'],
-          target_terms: ['string'],
+          id: "string",
+          domain_name: "string",
+          summary: "string",
+          included_function_ids: ["string"],
+          core_function_ids: ["string"],
+          supporting_function_ids: ["string"],
+          target_terms: ["string"],
         },
       ],
     },
   };
 
   const userPrompt = [
-    'Refine the following candidate capability domains.',
-    'You may merge candidates if they clearly describe one business area.',
-    'Keep function membership explicit.',
-    'Mark query/list/detail functions as supporting unless they are clearly core.',
+    "Refine the following candidate capability domains.",
+    "You may merge candidates if they clearly describe one business area.",
+    "Keep function membership explicit.",
+    "Mark query/list/detail functions as supporting unless they are clearly core.",
     JSON.stringify(payload, null, 2),
-  ].join('\n\n');
+  ].join("\n\n");
 
   return { systemPrompt, userPrompt };
 }
@@ -87,10 +89,12 @@ function stripJsonFence(text: string): string {
   return match?.[1]?.trim() ?? trimmed;
 }
 
-export function parseCapabilityDomainRefineResponse(text: string): RefinedCapabilityDomain[] {
+export function parseCapabilityDomainRefineResponse(
+  text: string,
+): RefinedCapabilityDomain[] {
   const parsed = JSON.parse(stripJsonFence(text));
   const result = RefinePayloadSchema.parse(parsed);
-  return result.domains.map(domain => ({
+  return result.domains.map((domain) => ({
     id: domain.id,
     name: domain.domain_name,
     summary: domain.summary,

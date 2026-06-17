@@ -10,7 +10,7 @@
  * (stops the chain without producing import edges).
  */
 
-import type { ImportResolverFn, ImportResolutionConfig } from './types.js';
+import type { ImportResolverFn, ImportResolutionConfig } from "./types.js";
 
 /**
  * Create an ImportResolverFn from a declarative config.
@@ -23,7 +23,9 @@ import type { ImportResolverFn, ImportResolutionConfig } from './types.js';
  * pure data transforms that never throw; any unexpected exception indicates
  * a bug in the strategy implementation.
  */
-export function createImportResolver(config: ImportResolutionConfig): ImportResolverFn {
+export function createImportResolver(
+  config: ImportResolutionConfig,
+): ImportResolverFn {
   const { strategies } = config;
   return (rawImportPath, filePath, ctx) => {
     for (const strategy of strategies) {

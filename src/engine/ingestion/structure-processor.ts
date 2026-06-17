@@ -1,16 +1,16 @@
-import { generateId } from '../lib/utils.js';
-import type { GraphNode, GraphRelationship } from '../shared';
-import { KnowledgeGraph } from '../graph/types.js';
+import { generateId } from "../lib/utils.js";
+import type { GraphNode, GraphRelationship } from "../shared";
+import { KnowledgeGraph } from "../graph/types.js";
 
 export const processStructure = (graph: KnowledgeGraph, paths: string[]) => {
   paths.forEach((path) => {
-    const parts = path.split('/');
-    let currentPath = '';
-    let parentId = '';
+    const parts = path.split("/");
+    let currentPath = "";
+    let parentId = "";
 
     parts.forEach((part, index) => {
       const isFile = index === parts.length - 1;
-      const label = isFile ? 'File' : 'Folder';
+      const label = isFile ? "File" : "Folder";
 
       currentPath = currentPath ? `${currentPath}/${part}` : part;
 
@@ -27,15 +27,15 @@ export const processStructure = (graph: KnowledgeGraph, paths: string[]) => {
       graph.addNode(node);
 
       if (parentId) {
-        const relId = generateId('CONTAINS', `${parentId}->${nodeId}`);
+        const relId = generateId("CONTAINS", `${parentId}->${nodeId}`);
 
         const relationship: GraphRelationship = {
           id: relId,
-          type: 'CONTAINS',
+          type: "CONTAINS",
           sourceId: parentId,
           targetId: nodeId,
           confidence: 1.0,
-          reason: '',
+          reason: "",
         };
 
         graph.addRelationship(relationship);

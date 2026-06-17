@@ -15,8 +15,19 @@
  */
 
 export interface JclParseResults {
-  jobs: Array<{ name: string; line: number; class?: string; msgclass?: string }>;
-  steps: Array<{ name: string; jobName: string; program?: string; proc?: string; line: number }>;
+  jobs: Array<{
+    name: string;
+    line: number;
+    class?: string;
+    msgclass?: string;
+  }>;
+  steps: Array<{
+    name: string;
+    jobName: string;
+    program?: string;
+    proc?: string;
+    line: number;
+  }>;
   ddStatements: Array<{
     ddName: string;
     stepName: string;
@@ -28,7 +39,11 @@ export interface JclParseResults {
   includes: Array<{ member: string; line: number }>;
   sets: Array<{ variable: string; value: string; line: number }>;
   jcllib: Array<{ order: string[]; line: number }>;
-  conditionals: Array<{ type: 'IF' | 'ELSE' | 'ENDIF'; condition?: string; line: number }>;
+  conditionals: Array<{
+    type: "IF" | "ELSE" | "ENDIF";
+    condition?: string;
+    line: number;
+  }>;
 }
 
 // ── JCL statement patterns ─────────────────────────────────────────────
@@ -73,28 +88,28 @@ const PEND_RE = /^\/\/\s+PEND\b/i;
 
 function extractParam(params: string, key: string): string | undefined {
   // Match KEY=VALUE or KEY='VALUE' in JCL parameter string
-  const re = new RegExp(`${key}=(?:'([^']*)'|(\\S+?))(?:[,\\s]|$)`, 'i');
+  const re = new RegExp(`${key}=(?:'([^']*)'|(\\S+?))(?:[,\\s]|$)`, "i");
   const m = params.match(re);
   return m ? (m[1] ?? m[2]) : undefined;
 }
 
 function extractPgm(params: string): string | undefined {
-  return extractParam(params, 'PGM');
+  return extractParam(params, "PGM");
 }
 
 function extractProc(params: string): string | undefined {
   // If no PGM= keyword, the first positional parameter is the proc name
   if (/PGM=/i.test(params)) return undefined;
-  const cleaned = params.replace(/,.*/, '').trim();
+  const cleaned = params.replace(/,.*/, "").trim();
   // Proc name is the first token (no = sign)
-  if (cleaned && !cleaned.includes('=')) {
-    return cleaned.replace(/[,\s].*/s, '').toUpperCase();
+  if (cleaned && !cleaned.includes("=")) {
+    return cleaned.replace(/[,\s].*/s, "").toUpperCase();
   }
   return undefined;
 }
 
 function extractDsn(params: string): string | undefined {
-  return extractParam(params, 'DSN') ?? extractParam(params, 'DSNAME');
+  return extractParam(params, "DSN") ?? extractParam(params, "DSNAME");
 }
 
 function extractDisp(params: string): string | undefined {
@@ -135,12 +150,12 @@ export function parseJcl(content: string, filePath: string): JclParseResults {
     while (
       i + 1 < rawLines.length &&
       line.length >= 72 &&
-      line[71] !== ' ' &&
-      rawLines[i + 1].startsWith('//')
+      line[71] !== " " &&
+      rawLines[i + 1].startsWith("//")
     ) {
       i++;
       // Continuation text starts after // and leading spaces
-      const contText = rawLines[i].substring(2).replace(/^\s+/, ' ');
+      const contText = rawLines[i].substring(2).replace(/^\s+/, " ");
       // Remove the continuation marker (col 72+) from current line
       line = line.substring(0, 71).trimEnd() + contText;
     }
@@ -149,37 +164,43 @@ export function parseJcl(content: string, filePath: string): JclParseResults {
     i++;
   }
 
-  let currentJobName = '';
-  let currentStepName = '';
-  let inStreamProcName = '';
+  let currentJobName = "";
+  let currentStepName = "";
+  let inStreamProcName = "";
 
   for (const { text, lineNum } of lines) {
     // Skip JCL comments (starting with //* )
-    if (text.startsWith('//*')) continue;
+    if (text.startsWith("//*")) continue;
     // Skip non-JCL lines (don't start with //)
-    if (!text.startsWith('//')) continue;
+    if (!text.startsWith("//")) continue;
 
     // PROC definition (in-stream)
     const procMatch = text.match(PROC_RE);
     if (procMatch) {
       const procName = procMatch[1] || inStreamProcName;
       if (procName) {
-        results.procs.push({ name: procName.toUpperCase(), line: lineNum, isInStream: true });
+        results.procs.push({
+          name: procName.toUpperCase(),
+          line: lineNum,
+          isInStream: true,
+        });
       }
-      inStreamProcName = procName?.toUpperCase() || '';
+      inStreamProcName = procName?.toUpperCase() || "";
       continue;
     }
 
     // PEND (end of in-stream proc)
     if (PEND_RE.test(text)) {
-      inStreamProcName = '';
+      inStreamProcName = "";
       continue;
     }
 
     // JCLLIB ORDER=
     const jcllibMatch = text.match(JCLLIB_RE);
     if (jcllibMatch) {
-      const libs = jcllibMatch[1].split(',').map((s) => s.trim().replace(/'/g, ''));
+      const libs = jcllibMatch[1]
+        .split(",")
+        .map((s) => s.trim().replace(/'/g, ""));
       results.jcllib.push({ order: libs, line: lineNum });
       continue;
     }
@@ -187,22 +208,29 @@ export function parseJcl(content: string, filePath: string): JclParseResults {
     // IF/ELSE/ENDIF
     const ifMatch = text.match(IF_RE);
     if (ifMatch) {
-      results.conditionals.push({ type: 'IF', condition: ifMatch[1].trim(), line: lineNum });
+      results.conditionals.push({
+        type: "IF",
+        condition: ifMatch[1].trim(),
+        line: lineNum,
+      });
       continue;
     }
     if (ELSE_RE.test(text)) {
-      results.conditionals.push({ type: 'ELSE', line: lineNum });
+      results.conditionals.push({ type: "ELSE", line: lineNum });
       continue;
     }
     if (ENDIF_RE.test(text)) {
-      results.conditionals.push({ type: 'ENDIF', line: lineNum });
+      results.conditionals.push({ type: "ENDIF", line: lineNum });
       continue;
     }
 
     // INCLUDE MEMBER=
     const includeMatch = text.match(INCLUDE_RE);
     if (includeMatch) {
-      results.includes.push({ member: includeMatch[1].toUpperCase(), line: lineNum });
+      results.includes.push({
+        member: includeMatch[1].toUpperCase(),
+        line: lineNum,
+      });
       continue;
     }
 
@@ -211,7 +239,7 @@ export function parseJcl(content: string, filePath: string): JclParseResults {
     if (setMatch) {
       results.sets.push({
         variable: setMatch[1].toUpperCase(),
-        value: setMatch[2].trim().replace(/,\s*$/, ''),
+        value: setMatch[2].trim().replace(/,\s*$/, ""),
         line: lineNum,
       });
       continue;
@@ -225,8 +253,8 @@ export function parseJcl(content: string, filePath: string): JclParseResults {
       results.jobs.push({
         name: currentJobName,
         line: lineNum,
-        class: extractParam(params, 'CLASS'),
-        msgclass: extractParam(params, 'MSGCLASS'),
+        class: extractParam(params, "CLASS"),
+        msgclass: extractParam(params, "MSGCLASS"),
       });
       continue;
     }

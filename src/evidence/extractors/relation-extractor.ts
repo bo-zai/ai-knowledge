@@ -1,8 +1,8 @@
-import type { EvidenceBundle } from '../evidence-bundle-schema.js';
-import type { EvidenceGroup } from '../type-evidence-builder.js';
-import type { GenerateTarget } from '../../knowledge/generate-scope.js';
-import type { ReadOnlyQueryExecutor } from '../../engine/lbug/read-only-session.js';
-import { extractPackagePath } from './shared.js';
+import type { EvidenceBundle } from "../evidence-bundle-schema.js";
+import type { EvidenceGroup } from "../type-evidence-builder.js";
+import type { GenerateTarget } from "../../knowledge/generate-scope.js";
+import type { ReadOnlyQueryExecutor } from "../../engine/lbug/read-only-session.js";
+import { extractPackagePath } from "./shared.js";
 
 /**
  * RELATION: Query Service call relations grouped by source Service.
@@ -12,7 +12,7 @@ export async function queryRelationEvidenceByPackage(
   target: GenerateTarget | undefined,
   executeQuery: ReadOnlyQueryExecutor,
 ): Promise<EvidenceGroup[]> {
-  const repoName = repoPath.split('/').pop() || 'unknown';
+  const repoName = repoPath.split("/").pop() || "unknown";
 
   const callCypher = `
     MATCH (s1:Class) WHERE s1.name =~ '(?i).*Service$'
@@ -33,13 +33,16 @@ export async function queryRelationEvidenceByPackage(
   }
 
   // Group by source Service
-  const serviceGroups = new Map<string, Array<{
-    fromService: string;
-    toService: string;
-    fromMethod: string;
-    toMethod: string;
-    filePath: string;
-  }>>();
+  const serviceGroups = new Map<
+    string,
+    Array<{
+      fromService: string;
+      toService: string;
+      fromMethod: string;
+      toMethod: string;
+      filePath: string;
+    }>
+  >();
 
   for (const row of callResults) {
     const fromService = row.fromService as string;
@@ -56,8 +59,8 @@ export async function queryRelationEvidenceByPackage(
     const groupId = `RELATION-${serviceName}`;
     const bundleId = `BUNDLE-RELATION-${serviceName}`.toUpperCase();
 
-    const flowTraces: EvidenceBundle['flowTraces'] = calls.map((c, idx) => ({
-      ref: `evidence://flow/FLOW-${String(idx + 1).padStart(3, '0')}`,
+    const flowTraces: EvidenceBundle["flowTraces"] = calls.map((c, idx) => ({
+      ref: `evidence://flow/FLOW-${String(idx + 1).padStart(3, "0")}`,
       steps: [
         { action: `${c.fromService}.${c.fromMethod}`, location: c.filePath },
         { action: `${c.toService}.${c.toMethod}` },

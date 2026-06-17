@@ -20,14 +20,18 @@
  * either don't trigger the call branch or skip this pass entirely.
  */
 
-import type { ScopeId, SymbolDefinition, TypeRef } from '../../../shared/index.js';
-import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { WorkspaceResolutionIndex } from '../workspace-index.js';
+import type {
+  ScopeId,
+  SymbolDefinition,
+  TypeRef,
+} from "../../../shared/index.js";
+import type { ScopeResolutionIndexes } from "../../model/scope-resolution-indexes.js";
+import type { WorkspaceResolutionIndex } from "../workspace-index.js";
 import {
   findClassBindingInScope,
   findExportedDefByName,
   findReceiverTypeBinding,
-} from '../scope/walkers.js';
+} from "../scope/walkers.js";
 
 /** Max depth for compound-receiver chain resolution (`a().b().c().d()`).
  *  Practical code rarely exceeds 3-4 hops; the cap prevents
@@ -36,7 +40,9 @@ const COMPOUND_RECEIVER_MAX_DEPTH = 4;
 
 const MAP_TUPLE_SENTINEL_RE = /^__MAP_TUPLE_(\d+)__:(.+)$/;
 
-function parseMapTupleSentinel(text: string): { tupleIdx: number; rhs: string } | null {
+function parseMapTupleSentinel(
+  text: string,
+): { tupleIdx: number; rhs: string } | null {
   const match = MAP_TUPLE_SENTINEL_RE.exec(text);
   if (match === null) return null;
   const [, idxStr, rhs] = match;
@@ -82,12 +88,15 @@ export function resolveCompoundReceiverClass(
   // a direct class-name lookup. The class-name fallback handles
   // "static receiver" shapes like `UserService.findUser()` where
   // `UserService` isn't a variable but a class imported into scope.
-  if (!text.includes('.') && !text.includes('(')) {
+  if (!text.includes(".") && !text.includes("(")) {
     const mapTuple = parseMapTupleSentinel(text);
     if (mapTuple !== null) {
       const rhsTb = findReceiverTypeBinding(inScope, mapTuple.rhs, scopes);
       if (rhsTb === undefined) return undefined;
-      const arg = extractShallowMapTypeArgByIndex(rhsTb.rawName, mapTuple.tupleIdx);
+      const arg = extractShallowMapTypeArgByIndex(
+        rhsTb.rawName,
+        mapTuple.tupleIdx,
+      );
       if (arg === undefined) return undefined;
       return findClassBindingInScope(rhsTb.declaredAtScope, arg, scopes);
     }
@@ -99,19 +108,30 @@ export function resolveCompoundReceiverClass(
       // the literal-sentinel branch above.
       const boundMapTuple = parseMapTupleSentinel(tb.rawName);
       if (boundMapTuple !== null) {
-        const rhsTb = findReceiverTypeBinding(inScope, boundMapTuple.rhs, scopes);
+        const rhsTb = findReceiverTypeBinding(
+          inScope,
+          boundMapTuple.rhs,
+          scopes,
+        );
         if (rhsTb === undefined) return undefined;
-        const arg = extractShallowMapTypeArgByIndex(rhsTb.rawName, boundMapTuple.tupleIdx);
+        const arg = extractShallowMapTypeArgByIndex(
+          rhsTb.rawName,
+          boundMapTuple.tupleIdx,
+        );
         if (arg === undefined) return undefined;
         return findClassBindingInScope(rhsTb.declaredAtScope, arg, scopes);
       }
 
-      const viaTb = findClassBindingInScope(tb.declaredAtScope, tb.rawName, scopes);
+      const viaTb = findClassBindingInScope(
+        tb.declaredAtScope,
+        tb.rawName,
+        scopes,
+      );
       if (viaTb !== undefined) return viaTb;
 
       // Member-alias / call-result shapes store the RHS path on rawName
       // (`user.address`, `addr.getCity`) — resolve as a compound chain.
-      if (tb.rawName.includes('.') && !tb.rawName.includes('(')) {
+      if (tb.rawName.includes(".") && !tb.rawName.includes("(")) {
         const dotted = resolveCompoundReceiverClass(
           tb.rawName,
           inScope,
@@ -133,7 +153,7 @@ export function resolveCompoundReceiverClass(
       }
 
       // Callable alias (`const user = getUser()` → type rawName `getUser`)
-      if (!tb.rawName.includes('.') && !tb.rawName.includes('(')) {
+      if (!tb.rawName.includes(".") && !tb.rawName.includes("(")) {
         const callAlias = resolveCompoundReceiverClass(
           `${tb.rawName}()`,
           inScope,
@@ -152,13 +172,13 @@ export function resolveCompoundReceiverClass(
   // expression's return type. We only handle the canonical `f()` /
   // `obj.method()` shape; nested-arg expressions like `f(g())` are
   // out of scope for V1 (depth-capped recursion catches infinite loops).
-  if (text.endsWith(')')) {
+  if (text.endsWith(")")) {
     const openIdx = matchingOpenParen(text);
     if (openIdx === -1) return undefined;
     const fnExpr = text.slice(0, openIdx).trim();
     if (fnExpr.length === 0) return undefined;
 
-    const lastDot = fnExpr.lastIndexOf('.');
+    const lastDot = fnExpr.lastIndexOf(".");
     if (lastDot === -1) {
       // Free call `name()`. Look up function in scope, then its
       // return-type typeBinding (which lives in the function's
@@ -167,7 +187,11 @@ export function resolveCompoundReceiverClass(
       if (fnDef === undefined) return undefined;
       const retType = findReceiverTypeBinding(inScope, fnExpr, scopes);
       if (retType === undefined) return undefined;
-      return findClassBindingInScope(retType.declaredAtScope, retType.rawName, scopes);
+      return findClassBindingInScope(
+        retType.declaredAtScope,
+        retType.rawName,
+        scopes,
+      );
     }
 
     // `obj.method()` — resolve obj's class, look up method's return
@@ -185,7 +209,10 @@ export function resolveCompoundReceiverClass(
     if (objClass === undefined) return undefined;
 
     let retType: TypeRef | undefined;
-    const ownerChain = [objClass.nodeId, ...scopes.methodDispatch.mroFor(objClass.nodeId)];
+    const ownerChain = [
+      objClass.nodeId,
+      ...scopes.methodDispatch.mroFor(objClass.nodeId),
+    ];
     for (const ownerId of ownerChain) {
       const cs = classScopeByDefId.get(ownerId);
       const candidate = cs?.typeBindings.get(methodName);
@@ -240,19 +267,29 @@ export function resolveCompoundReceiverClass(
     // `Map<K,V>.values()` / `this.repos.values()` — lib `Map` often has no
     // parsed return-type binding; infer `V` from the receiver field's
     // `Map<…>` annotation when the method is `values`.
-    if (retType === undefined && methodName === 'values') {
-      const mapVal = resolveMapValueTypeNameFromPrefix(objExpr, inScope, scopes, index, options);
+    if (retType === undefined && methodName === "values") {
+      const mapVal = resolveMapValueTypeNameFromPrefix(
+        objExpr,
+        inScope,
+        scopes,
+        index,
+        options,
+      );
       if (mapVal !== undefined) {
         retType = {
           rawName: mapVal,
           declaredAtScope: inScope,
-          source: 'return-annotation',
+          source: "return-annotation",
         };
       }
     }
 
     if (retType === undefined) return undefined;
-    return findClassBindingInScope(retType.declaredAtScope, retType.rawName, scopes);
+    return findClassBindingInScope(
+      retType.declaredAtScope,
+      retType.rawName,
+      scopes,
+    );
   }
 
   // Mixed dotted + call chain: `obj.field.method().field.method()…`.
@@ -275,7 +312,7 @@ export function resolveCompoundReceiverClass(
     const last = parts[parts.length - 1];
     const headInner = parts[0];
     if (last === undefined || headInner === undefined) return undefined;
-    const prefix = parts.slice(0, -1).join('.');
+    const prefix = parts.slice(0, -1).join(".");
     let prefixType: TypeRef | undefined;
     if (parts.length === 2) {
       prefixType = findReceiverTypeBinding(inScope, prefix, scopes);
@@ -288,7 +325,11 @@ export function resolveCompoundReceiverClass(
       for (let i = 1; i < parts.length - 1 && cur !== undefined; i++) {
         const segment = parts[i];
         if (segment === undefined) break;
-        const cls = findClassBindingInScope(cur.declaredAtScope, cur.rawName, scopes);
+        const cls = findClassBindingInScope(
+          cur.declaredAtScope,
+          cur.rawName,
+          scopes,
+        );
         if (cls === undefined) {
           cur = undefined;
           break;
@@ -299,9 +340,16 @@ export function resolveCompoundReceiverClass(
       prefixType = cur;
     }
     if (prefixType !== undefined) {
-      const elemName = options.unwrapCollectionAccessor(prefixType.rawName, last);
+      const elemName = options.unwrapCollectionAccessor(
+        prefixType.rawName,
+        last,
+      );
       if (elemName !== undefined) {
-        return findClassBindingInScope(prefixType.declaredAtScope, elemName, scopes);
+        return findClassBindingInScope(
+          prefixType.declaredAtScope,
+          elemName,
+          scopes,
+        );
       }
     }
   }
@@ -311,7 +359,11 @@ export function resolveCompoundReceiverClass(
   const headMemberName = stripCallParens(head);
   const headType = findReceiverTypeBinding(inScope, headMemberName, scopes);
   let currentClass: SymbolDefinition | undefined = headType
-    ? findClassBindingInScope(headType.declaredAtScope, headType.rawName, scopes)
+    ? findClassBindingInScope(
+        headType.declaredAtScope,
+        headType.rawName,
+        scopes,
+      )
     : findClassBindingInScope(inScope, headMemberName, scopes);
   // `const user = getUser(); user.address` — the typeBinding for `user`
   // is an alias to the callee name (`getUser`), not a class. When
@@ -320,8 +372,8 @@ export function resolveCompoundReceiverClass(
   if (
     currentClass === undefined &&
     headType !== undefined &&
-    !headType.rawName.includes('.') &&
-    !headType.rawName.includes('(')
+    !headType.rawName.includes(".") &&
+    !headType.rawName.includes("(")
   ) {
     currentClass = resolveCompoundReceiverClass(
       `${headType.rawName}()`,
@@ -359,8 +411,8 @@ export function resolveCompoundReceiverClass(
       // Trailing segment may be a method name without `()` — e.g.
       // `this.repos.values` from a for-of iterable capture. Try the
       // call-shaped resolver before giving up.
-      if (!segment.includes('(')) {
-        const prefix = parts.slice(0, i).join('.');
+      if (!segment.includes("(")) {
+        const prefix = parts.slice(0, i).join(".");
         const asCall = resolveCompoundReceiverClass(
           `${prefix}.${memberName}()`,
           inScope,
@@ -373,7 +425,11 @@ export function resolveCompoundReceiverClass(
       }
       return undefined;
     }
-    let nextClass = findClassBindingInScope(memberType.declaredAtScope, memberType.rawName, scopes);
+    let nextClass = findClassBindingInScope(
+      memberType.declaredAtScope,
+      memberType.rawName,
+      scopes,
+    );
     if (nextClass === undefined) {
       const fromMap = unwrapMapValueToClass(memberType, scopes);
       if (fromMap !== undefined) nextClass = fromMap;
@@ -396,9 +452,10 @@ function splitChainAtTopLevel(text: string): string[] {
   let last = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
-    if (ch === '(' || ch === '[' || ch === '<') depth++;
-    else if (ch === ')' || ch === ']' || ch === '>') depth = Math.max(0, depth - 1);
-    else if (ch === '.' && depth === 0) {
+    if (ch === "(" || ch === "[" || ch === "<") depth++;
+    else if (ch === ")" || ch === "]" || ch === ">")
+      depth = Math.max(0, depth - 1);
+    else if (ch === "." && depth === 0) {
       out.push(text.slice(last, i));
       last = i + 1;
     }
@@ -415,8 +472,8 @@ function splitChainAtTopLevel(text: string): string[] {
  * are discarded — the compound resolver is return-type only.
  */
 function stripCallParens(segment: string): string {
-  if (!segment.endsWith(')')) return segment;
-  const open = segment.indexOf('(');
+  if (!segment.endsWith(")")) return segment;
+  const open = segment.indexOf("(");
   if (open === -1) return segment;
   return segment.slice(0, open);
 }
@@ -424,12 +481,12 @@ function stripCallParens(segment: string): string {
 /** Find the index of the `(` that matches the trailing `)` of a
  *  call-expression text. Returns -1 if unbalanced. */
 function matchingOpenParen(text: string): number {
-  if (!text.endsWith(')')) return -1;
+  if (!text.endsWith(")")) return -1;
   let depth = 0;
   for (let i = text.length - 1; i >= 0; i--) {
     const ch = text[i];
-    if (ch === ')') depth++;
-    else if (ch === '(') {
+    if (ch === ")") depth++;
+    else if (ch === "(") {
       depth--;
       if (depth === 0) return i;
     }
@@ -438,26 +495,29 @@ function matchingOpenParen(text: string): number {
 }
 
 /** Type arguments of a shallow `Map<K,V>` / `ReadonlyMap<K,V>` (depth-aware). */
-function extractShallowMapTypeArgByIndex(mapText: string, wantIndex: number): string | undefined {
+function extractShallowMapTypeArgByIndex(
+  mapText: string,
+  wantIndex: number,
+): string | undefined {
   const t = mapText.trim();
   const m = /^(?:ReadonlyMap|Map)\s*</.exec(t);
   if (m === null || m.index !== 0) return undefined;
   const openIdx = m[0].length - 1;
-  if (t[openIdx] !== '<') return undefined;
+  if (t[openIdx] !== "<") return undefined;
   let depth = 1;
   const args: string[] = [];
   let segStart = openIdx + 1;
   for (let i = openIdx + 1; i < t.length; i++) {
     const ch = t[i];
-    if (ch === '<') depth++;
-    else if (ch === '>') {
+    if (ch === "<") depth++;
+    else if (ch === ">") {
       depth--;
       if (depth === 0) {
         const tail = t.slice(segStart, i).trim();
         if (tail.length > 0) args.push(tail);
         break;
       }
-    } else if (ch === ',' && depth === 1) {
+    } else if (ch === "," && depth === 1) {
       args.push(t.slice(segStart, i).trim());
       segStart = i + 1;
     }
@@ -494,13 +554,17 @@ function resolveMapValueTypeNameFromPrefix(
   const headMemberName = stripCallParens(head);
   const headType = findReceiverTypeBinding(inScope, headMemberName, scopes);
   let currentClass: SymbolDefinition | undefined = headType
-    ? findClassBindingInScope(headType.declaredAtScope, headType.rawName, scopes)
+    ? findClassBindingInScope(
+        headType.declaredAtScope,
+        headType.rawName,
+        scopes,
+      )
     : findClassBindingInScope(inScope, headMemberName, scopes);
   if (
     currentClass === undefined &&
     headType !== undefined &&
-    !headType.rawName.includes('.') &&
-    !headType.rawName.includes('(')
+    !headType.rawName.includes(".") &&
+    !headType.rawName.includes("(")
   ) {
     currentClass = resolveCompoundReceiverClass(
       `${headType.rawName}()`,
@@ -519,7 +583,10 @@ function resolveMapValueTypeNameFromPrefix(
     const cs = classScopeByDefId.get(currentClass.nodeId);
     if (cs === undefined) return undefined;
     let memberType = cs.typeBindings.get(memberName);
-    if (memberType === undefined && options.hoistTypeBindingsToModule === true) {
+    if (
+      memberType === undefined &&
+      options.hoistTypeBindingsToModule === true
+    ) {
       let curId: ScopeId | null = cs.parent;
       while (curId !== null) {
         const curScope = scopes.scopeTree.getScope(curId);
@@ -534,7 +601,11 @@ function resolveMapValueTypeNameFromPrefix(
     }
     if (memberType === undefined) return undefined;
     lastMemberType = memberType;
-    let nextClass = findClassBindingInScope(memberType.declaredAtScope, memberType.rawName, scopes);
+    let nextClass = findClassBindingInScope(
+      memberType.declaredAtScope,
+      memberType.rawName,
+      scopes,
+    );
     if (nextClass === undefined) {
       const fromMap = unwrapMapValueToClass(memberType, scopes);
       if (fromMap !== undefined) nextClass = fromMap;

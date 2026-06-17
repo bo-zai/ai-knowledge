@@ -14,7 +14,7 @@ import type {
   ServiceChainNode,
   EntryPointInfo,
   ServiceCluster,
-} from './types.js';
+} from "./types.js";
 
 /**
  * Service 调用链聚类器配置
@@ -45,7 +45,9 @@ export class ServiceCallClusterImpl {
    * @param pathResults - 发现路径结果
    * @returns Service 聚类映射（Service 名称 -> 聚类信息）
    */
-  async cluster(pathResults: DiscoveryPathResult[]): Promise<Map<string, ServiceCluster>> {
+  async cluster(
+    pathResults: DiscoveryPathResult[],
+  ): Promise<Map<string, ServiceCluster>> {
     const clusterMap = new Map<string, ServiceCluster>();
 
     // 1. 收集所有 Service 调用信息
@@ -54,15 +56,16 @@ export class ServiceCallClusterImpl {
     // 2. 分析每个 Service 的调用者
     for (const [serviceName, callers] of serviceCallMap) {
       // 入口点调用者
-      const entryPointCallers = callers.entryPoints.map(ep =>
-        `${ep.kind}:${ep.className}`,
+      const entryPointCallers = callers.entryPoints.map(
+        (ep) => `${ep.kind}:${ep.className}`,
       );
 
       // 其他 Service 调用者
-      const callerServices = callers.services.map(svc => svc.className);
+      const callerServices = callers.services.map((svc) => svc.className);
 
       // 判断是否为域核心（被多个入口点调用）
-      const isDomainCore = entryPointCallers.length >= this.config.coreThreshold;
+      const isDomainCore =
+        entryPointCallers.length >= this.config.coreThreshold;
 
       // 从入口点推断业务域提示
       const domainHint = this.inferDomainHint(callers.entryPoints, serviceName);
@@ -82,9 +85,11 @@ export class ServiceCallClusterImpl {
   /**
    * 获取业务域核心 Service 列表
    */
-  async getDomainCoreServices(pathResults: DiscoveryPathResult[]): Promise<ServiceCluster[]> {
+  async getDomainCoreServices(
+    pathResults: DiscoveryPathResult[],
+  ): Promise<ServiceCluster[]> {
     const clusterMap = await this.cluster(pathResults);
-    return [...clusterMap.values()].filter(cluster => cluster.isDomainCore);
+    return [...clusterMap.values()].filter((cluster) => cluster.isDomainCore);
   }
 
   /**
@@ -94,8 +99,14 @@ export class ServiceCallClusterImpl {
    */
   private collectServiceCalls(
     pathResults: DiscoveryPathResult[],
-  ): Map<string, { entryPoints: EntryPointInfo[]; services: ServiceChainNode[] }> {
-    const callMap = new Map<string, { entryPoints: EntryPointInfo[]; services: ServiceChainNode[] }>();
+  ): Map<
+    string,
+    { entryPoints: EntryPointInfo[]; services: ServiceChainNode[] }
+  > {
+    const callMap = new Map<
+      string,
+      { entryPoints: EntryPointInfo[]; services: ServiceChainNode[] }
+    >();
 
     for (const result of pathResults) {
       for (const path of result.tracePaths) {
@@ -120,9 +131,11 @@ export class ServiceCallClusterImpl {
             // 入口点调用第一个 Service
             for (const ep of entryPoints) {
               // 去重添加
-              if (!existing.entryPoints.some(e =>
-                e.className === ep.className && e.kind === ep.kind,
-              )) {
+              if (
+                !existing.entryPoints.some(
+                  (e) => e.className === ep.className && e.kind === ep.kind,
+                )
+              ) {
                 existing.entryPoints.push(ep);
               }
             }
@@ -131,7 +144,11 @@ export class ServiceCallClusterImpl {
           // 记录调用该 Service 的其他 Service
           if (i > 0 && this.config.includeCallerServices) {
             const callerService = serviceChain[i - 1];
-            if (!existing.services.some(s => s.className === callerService.className)) {
+            if (
+              !existing.services.some(
+                (s) => s.className === callerService.className,
+              )
+            ) {
               existing.services.push(callerService);
             }
           }
@@ -149,7 +166,10 @@ export class ServiceCallClusterImpl {
    *
    * 分析入口点的类名和方法名，推断业务域
    */
-  private inferDomainHint(entryPoints: EntryPointInfo[], serviceName: string): string | undefined {
+  private inferDomainHint(
+    entryPoints: EntryPointInfo[],
+    serviceName: string,
+  ): string | undefined {
     if (entryPoints.length === 0) {
       return undefined;
     }
@@ -198,9 +218,9 @@ export class ServiceCallClusterImpl {
    */
   private convertCamelToSnake(camel: string): string {
     return camel
-      .replace(/([A-Z])/g, '_$1')
+      .replace(/([A-Z])/g, "_$1")
       .toLowerCase()
-      .replace(/^_/, '');
+      .replace(/^_/, "");
   }
 
   /**
@@ -215,7 +235,7 @@ export class ServiceCallClusterImpl {
     const domainMap = new Map<string, ServiceCluster[]>();
 
     for (const cluster of clusterMap.values()) {
-      const domainKey = cluster.domainHint ?? 'unknown';
+      const domainKey = cluster.domainHint ?? "unknown";
 
       const existing = domainMap.get(domainKey) ?? [];
       existing.push(cluster);

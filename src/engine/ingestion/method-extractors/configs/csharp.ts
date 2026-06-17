@@ -1,28 +1,33 @@
 // gitnexus/src/core/ingestion/method-extractors/configs/csharp.ts
 // Verified against tree-sitter-c-sharp 0.23.1
 
-import { SupportedLanguages } from '../../../shared/index.js';
+import { SupportedLanguages } from "../../../shared/index.js";
 import type {
   MethodExtractionConfig,
   MethodInfo,
   MethodExtractorContext,
   ParameterInfo,
   MethodVisibility,
-} from '../../method-types.js';
+} from "../../method-types.js";
 import {
   findVisibility,
   hasModifier,
   hasKeyword,
   collectModifierTexts,
-} from '../../field-extractors/configs/helpers.js';
-import { extractSimpleTypeName } from '../../type-extractors/shared.js';
-import type { SyntaxNode } from '../../utils/ast-helpers.js';
+} from "../../field-extractors/configs/helpers.js";
+import { extractSimpleTypeName } from "../../type-extractors/shared.js";
+import type { SyntaxNode } from "../../utils/ast-helpers.js";
 
 // ---------------------------------------------------------------------------
 // C# helpers
 // ---------------------------------------------------------------------------
 
-const CSHARP_VIS = new Set<MethodVisibility>(['public', 'private', 'protected', 'internal']);
+const CSHARP_VIS = new Set<MethodVisibility>([
+  "public",
+  "private",
+  "protected",
+  "internal",
+]);
 
 /**
  * Walk the parameter_list of a method or constructor and return typed ParameterInfo
@@ -40,7 +45,7 @@ const CSHARP_VIS = new Set<MethodVisibility>(['public', 'private', 'protected', 
  *   - isOptional: an '=' token appears among the children (indicates a default value)
  */
 function extractCSharpParameters(node: SyntaxNode): ParameterInfo[] {
-  const paramList = node.childForFieldName('parameters');
+  const paramList = node.childForFieldName("parameters");
   if (!paramList) return [];
   return extractParametersFromList(paramList);
 }
@@ -59,7 +64,7 @@ function extractParametersFromList(paramList: SyntaxNode): ParameterInfo[] {
 
     // `params` variadic: bare unnamed `params` keyword followed by type + identifier
     // siblings at the parameter_list level (not wrapped in a `parameter` node).
-    if (!child.isNamed && child.type === 'params') {
+    if (!child.isNamed && child.type === "params") {
       let typeNode: SyntaxNode | null = null;
       let nameText: string | undefined;
       let j = i + 1;
@@ -69,10 +74,10 @@ function extractParametersFromList(paramList: SyntaxNode): ParameterInfo[] {
           j++;
           continue;
         }
-        if (sibling.isNamed && sibling.type !== 'parameter') {
+        if (sibling.isNamed && sibling.type !== "parameter") {
           if (!typeNode) {
             typeNode = sibling;
-          } else if (sibling.type === 'identifier') {
+          } else if (sibling.type === "identifier") {
             nameText = sibling.text;
             i = j;
             break;
@@ -96,10 +101,10 @@ function extractParametersFromList(paramList: SyntaxNode): ParameterInfo[] {
     }
 
     // Regular named `parameter` node
-    if (child.isNamed && child.type === 'parameter') {
-      const nameNode = child.childForFieldName('name');
+    if (child.isNamed && child.type === "parameter") {
+      const nameNode = child.childForFieldName("name");
       if (nameNode && nameNode.text.trim()) {
-        const typeNode = child.childForFieldName('type');
+        const typeNode = child.childForFieldName("type");
         let typeName: string | null = typeNode
           ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim() ?? null)
           : null;
@@ -107,9 +112,14 @@ function extractParametersFromList(paramList: SyntaxNode): ParameterInfo[] {
         // Detect ref / out modifiers inside the parameter node — prefix the type string
         for (let j = 0; j < child.namedChildCount; j++) {
           const c = child.namedChild(j);
-          if (!c || c.type !== 'modifier') continue;
+          if (!c || c.type !== "modifier") continue;
           const modText = c.text.trim();
-          if (modText === 'out' || modText === 'ref' || modText === 'in' || modText === 'this') {
+          if (
+            modText === "out" ||
+            modText === "ref" ||
+            modText === "in" ||
+            modText === "this"
+          ) {
             typeName = typeName ? `${modText} ${typeName}` : modText;
             break;
           }
@@ -119,7 +129,7 @@ function extractParametersFromList(paramList: SyntaxNode): ParameterInfo[] {
         let isOptional = false;
         for (let j = 0; j < child.childCount; j++) {
           const c = child.child(j);
-          if (c && c.text.trim() === '=') {
+          if (c && c.text.trim() === "=") {
             isOptional = true;
             break;
           }
@@ -151,11 +161,11 @@ function extractCSharpAnnotations(node: SyntaxNode): string[] {
   const annotations: string[] = [];
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
-    if (!child || child.type !== 'attribute_list') continue;
+    if (!child || child.type !== "attribute_list") continue;
     // Skip targeted attribute lists (e.g. [return: ...], [method: ...])
     let hasTarget = false;
     for (let j = 0; j < child.namedChildCount; j++) {
-      if (child.namedChild(j)?.type === 'attribute_target_specifier') {
+      if (child.namedChild(j)?.type === "attribute_target_specifier") {
         hasTarget = true;
         break;
       }
@@ -163,9 +173,9 @@ function extractCSharpAnnotations(node: SyntaxNode): string[] {
     if (hasTarget) continue;
     for (let j = 0; j < child.namedChildCount; j++) {
       const attr = child.namedChild(j);
-      if (!attr || attr.type !== 'attribute') continue;
-      const nameNode = attr.childForFieldName('name');
-      if (nameNode) annotations.push('@' + nameNode.text);
+      if (!attr || attr.type !== "attribute") continue;
+      const nameNode = attr.childForFieldName("name");
+      if (nameNode) annotations.push("@" + nameNode.text);
     }
   }
   return annotations;
@@ -178,58 +188,66 @@ function extractCSharpAnnotations(node: SyntaxNode): string[] {
 export const csharpMethodConfig: MethodExtractionConfig = {
   language: SupportedLanguages.CSharp,
   typeDeclarationNodes: [
-    'class_declaration',
-    'struct_declaration',
-    'interface_declaration',
-    'record_declaration',
+    "class_declaration",
+    "struct_declaration",
+    "interface_declaration",
+    "record_declaration",
   ],
   methodNodeTypes: [
-    'method_declaration',
-    'constructor_declaration',
-    'destructor_declaration',
-    'operator_declaration',
-    'conversion_operator_declaration',
-    'local_function_statement',
+    "method_declaration",
+    "constructor_declaration",
+    "destructor_declaration",
+    "operator_declaration",
+    "conversion_operator_declaration",
+    "local_function_statement",
   ],
-  bodyNodeTypes: ['declaration_list'],
+  bodyNodeTypes: ["declaration_list"],
 
   extractName(node) {
     // destructor_declaration: prefix with ~ to distinguish from constructor
-    if (node.type === 'destructor_declaration') {
-      const name = node.childForFieldName('name')?.text;
+    if (node.type === "destructor_declaration") {
+      const name = node.childForFieldName("name")?.text;
       return name ? `~${name}` : undefined;
     }
     // operator_declaration: no 'name' field — use 'operator' field (e.g., +, ==)
-    if (node.type === 'operator_declaration') {
-      const op = node.childForFieldName('operator');
+    if (node.type === "operator_declaration") {
+      const op = node.childForFieldName("operator");
       return op ? `operator ${op.text.trim()}` : undefined;
     }
     // conversion_operator_declaration: no 'name' field — implicit/explicit + target type
-    if (node.type === 'conversion_operator_declaration') {
-      const typeNode = node.childForFieldName('type');
+    if (node.type === "conversion_operator_declaration") {
+      const typeNode = node.childForFieldName("type");
       const typeName = typeNode
         ? (extractSimpleTypeName(typeNode) ?? typeNode.text?.trim())
         : undefined;
       for (let i = 0; i < node.childCount; i++) {
         const c = node.child(i);
-        if (c && !c.isNamed && (c.text === 'implicit' || c.text === 'explicit')) {
+        if (
+          c &&
+          !c.isNamed &&
+          (c.text === "implicit" || c.text === "explicit")
+        ) {
           return typeName ? `${c.text} operator ${typeName}` : undefined;
         }
       }
       return typeName ? `operator ${typeName}` : undefined;
     }
-    return node.childForFieldName('name')?.text;
+    return node.childForFieldName("name")?.text;
   },
 
   extractReturnType(node) {
     // Constructors and destructors have no return type
     // operator_declaration and conversion_operator_declaration use 'type' field, not 'returns'
-    const returnsNode = node.childForFieldName('returns');
+    const returnsNode = node.childForFieldName("returns");
     if (returnsNode) return returnsNode.text?.trim();
     // Fallback for operator/conversion declarations that use 'type' as return type field
-    if (node.type === 'operator_declaration' || node.type === 'conversion_operator_declaration') {
-      const typeNode = node.childForFieldName('type');
-      if (typeNode) return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
+    if (
+      node.type === "operator_declaration" ||
+      node.type === "conversion_operator_declaration"
+    ) {
+      const typeNode = node.childForFieldName("type");
+      if (typeNode)
+        return extractSimpleTypeName(typeNode) ?? typeNode.text?.trim();
     }
     return undefined;
   },
@@ -239,20 +257,28 @@ export const csharpMethodConfig: MethodExtractionConfig = {
   extractVisibility(node) {
     // Detect compound C# visibilities: protected internal, private protected
     const mods = collectModifierTexts(node);
-    if (mods.has('protected') && mods.has('internal')) return 'protected internal';
-    if (mods.has('private') && mods.has('protected')) return 'private protected';
-    return findVisibility(node, CSHARP_VIS, 'private', 'modifier');
+    if (mods.has("protected") && mods.has("internal"))
+      return "protected internal";
+    if (mods.has("private") && mods.has("protected"))
+      return "private protected";
+    return findVisibility(node, CSHARP_VIS, "private", "modifier");
   },
 
   isStatic(node) {
-    return hasKeyword(node, 'static') || hasModifier(node, 'modifier', 'static');
+    return (
+      hasKeyword(node, "static") || hasModifier(node, "modifier", "static")
+    );
   },
 
   isAbstract(node, ownerNode) {
-    if (hasKeyword(node, 'abstract') || hasModifier(node, 'modifier', 'abstract')) return true;
+    if (
+      hasKeyword(node, "abstract") ||
+      hasModifier(node, "modifier", "abstract")
+    )
+      return true;
     // Interface methods are implicitly abstract when they have no body
-    if (ownerNode.type === 'interface_declaration') {
-      const body = node.childForFieldName('body');
+    if (ownerNode.type === "interface_declaration") {
+      const body = node.childForFieldName("body");
       return !body;
     }
     return false;
@@ -260,25 +286,33 @@ export const csharpMethodConfig: MethodExtractionConfig = {
 
   isFinal(node) {
     // C# uses 'sealed' instead of 'final'
-    return hasKeyword(node, 'sealed') || hasModifier(node, 'modifier', 'sealed');
+    return (
+      hasKeyword(node, "sealed") || hasModifier(node, "modifier", "sealed")
+    );
   },
 
   extractAnnotations: extractCSharpAnnotations,
 
   isVirtual(node) {
-    return hasKeyword(node, 'virtual') || hasModifier(node, 'modifier', 'virtual');
+    return (
+      hasKeyword(node, "virtual") || hasModifier(node, "modifier", "virtual")
+    );
   },
 
   isOverride(node) {
-    return hasKeyword(node, 'override') || hasModifier(node, 'modifier', 'override');
+    return (
+      hasKeyword(node, "override") || hasModifier(node, "modifier", "override")
+    );
   },
 
   isAsync(node) {
-    return hasKeyword(node, 'async') || hasModifier(node, 'modifier', 'async');
+    return hasKeyword(node, "async") || hasModifier(node, "modifier", "async");
   },
 
   isPartial(node) {
-    return hasKeyword(node, 'partial') || hasModifier(node, 'modifier', 'partial');
+    return (
+      hasKeyword(node, "partial") || hasModifier(node, "modifier", "partial")
+    );
   },
 
   extractPrimaryConstructor(
@@ -291,14 +325,14 @@ export const csharpMethodConfig: MethodExtractionConfig = {
     let paramList: SyntaxNode | null = null;
     for (let i = 0; i < ownerNode.namedChildCount; i++) {
       const child = ownerNode.namedChild(i);
-      if (child?.type === 'parameter_list') {
+      if (child?.type === "parameter_list") {
         paramList = child;
         break;
       }
     }
     if (!paramList) return null;
 
-    const name = ownerNode.childForFieldName('name')?.text;
+    const name = ownerNode.childForFieldName("name")?.text;
     if (!name) return null;
 
     const parameters = extractParametersFromList(paramList);

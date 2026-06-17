@@ -9,8 +9,13 @@
  * - 计算表关联密度并更新置信度加成
  */
 
-import type { TableAnchor, RelatedTableInfo, MapperInfo, DiscoveryPathResult } from './types.js';
-import { parseMapperFile } from '../../../mybatis/mapper-parser.js';
+import type {
+  TableAnchor,
+  RelatedTableInfo,
+  MapperInfo,
+  DiscoveryPathResult,
+} from "./types.js";
+import { parseMapperFile } from "../../../mybatis/mapper-parser.js";
 
 /**
  * 表关联补充器配置
@@ -53,13 +58,19 @@ export class TableRelationSupplementImpl {
     }
 
     // 2. 从 pathResults 中提取 Mapper 信息分析 JOIN（异步）
-    const mapperJoinRelations = await this.extractJoinRelationsFromPaths(pathResults ?? []);
+    const mapperJoinRelations = await this.extractJoinRelationsFromPaths(
+      pathResults ?? [],
+    );
 
     // 3. 从 traceSources 中提取 Mapper XML 中的关联
-    const traceSourceRelations = this.extractRelationsFromTraceSources(tableAnchors);
+    const traceSourceRelations =
+      this.extractRelationsFromTraceSources(tableAnchors);
 
     // 4. 合并关联关系
-    const allRelations = this.mergeRelations(mapperJoinRelations, traceSourceRelations);
+    const allRelations = this.mergeRelations(
+      mapperJoinRelations,
+      traceSourceRelations,
+    );
 
     // 5. 更新每个锚点的关联信息
     const supplementedAnchors: TableAnchor[] = [];
@@ -82,7 +93,9 @@ export class TableRelationSupplementImpl {
   /**
    * 从 DiscoveryPathResult 中提取 JOIN 关联关系（异步）
    */
-  private async extractJoinRelationsFromPaths(pathResults: DiscoveryPathResult[]): Promise<Map<string, RelatedTableInfo[]>> {
+  private async extractJoinRelationsFromPaths(
+    pathResults: DiscoveryPathResult[],
+  ): Promise<Map<string, RelatedTableInfo[]>> {
     const relations = new Map<string, RelatedTableInfo[]>();
 
     // 收集所有需要解析的 Mapper
@@ -99,7 +112,9 @@ export class TableRelationSupplementImpl {
 
     // 并行解析所有 Mapper XML
     const parseResults = await Promise.all(
-      mappersToParse.map(mapper => this.parseJoinRelationsFromMapperXml(mapper)),
+      mappersToParse.map((mapper) =>
+        this.parseJoinRelationsFromMapperXml(mapper),
+      ),
     );
 
     // 合并所有解析结果
@@ -127,7 +142,9 @@ export class TableRelationSupplementImpl {
    * - RIGHT [OUTER] JOIN: 置信度 0.6
    * - CROSS JOIN: 置信度 0.5
    */
-  private async parseJoinRelationsFromMapperXml(mapper: MapperInfo): Promise<Map<string, RelatedTableInfo[]>> {
+  private async parseJoinRelationsFromMapperXml(
+    mapper: MapperInfo,
+  ): Promise<Map<string, RelatedTableInfo[]>> {
     const relations = new Map<string, RelatedTableInfo[]>();
 
     if (!mapper.xmlPath) {
@@ -151,10 +168,11 @@ export class TableRelationSupplementImpl {
         // 去重合并
         for (const rel of related) {
           const isDuplicate = existing.some(
-            e => e.tableName === rel.tableName &&
-                 e.relationType === rel.relationType &&
-                 e.sourceField === rel.sourceField &&
-                 e.targetField === rel.targetField,
+            (e) =>
+              e.tableName === rel.tableName &&
+              e.relationType === rel.relationType &&
+              e.sourceField === rel.sourceField &&
+              e.targetField === rel.targetField,
           );
           if (!isDuplicate) {
             existing.push(rel);
@@ -176,26 +194,30 @@ export class TableRelationSupplementImpl {
    */
   private extractJoinRelationsFromSql(
     sql: string,
-    stmtType: 'select' | 'insert' | 'update' | 'delete',
+    stmtType: "select" | "insert" | "update" | "delete",
   ): Map<string, RelatedTableInfo[]> {
     const relations = new Map<string, RelatedTableInfo[]>();
 
     // 只有 SELECT 语句通常包含 JOIN
-    if (stmtType !== 'select') {
+    if (stmtType !== "select") {
       return relations;
     }
 
     // 标准化 SQL：移除多余空白，统一大小写
-    const normalizedSql = sql.replace(/\s+/g, ' ').toUpperCase();
+    const normalizedSql = sql.replace(/\s+/g, " ").toUpperCase();
 
     // JOIN 模式匹配
     // 匹配：[LEFT|RIGHT|INNER|OUTER] JOIN table_name [alias] ON condition
-    const joinPattern = /(?:INNER\s+)?(?:LEFT\s+(?:OUTER\s+)?)?(?:RIGHT\s+(?:OUTER\s+)?)?(?:CROSS\s+)?JOIN\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?\s+ON\s+([^()]+?)(?=(?:INNER|LEFT|RIGHT|CROSS|JOIN|WHERE|GROUP|ORDER|UNION|HAVING|LIMIT|$))/gi;
+    const joinPattern =
+      /(?:INNER\s+)?(?:LEFT\s+(?:OUTER\s+)?)?(?:RIGHT\s+(?:OUTER\s+)?)?(?:CROSS\s+)?JOIN\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?\s+ON\s+([^()]+?)(?=(?:INNER|LEFT|RIGHT|CROSS|JOIN|WHERE|GROUP|ORDER|UNION|HAVING|LIMIT|$))/gi;
 
     // 首先提取 FROM 子句中的主表
-    const fromMatch = normalizedSql.match(/FROM\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/i);
+    const fromMatch = normalizedSql.match(
+      /FROM\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/i,
+    );
     const primaryTable = fromMatch ? fromMatch[1].toLowerCase() : null;
-    const primaryAlias = fromMatch && fromMatch[2] ? fromMatch[2].toLowerCase() : primaryTable;
+    const primaryAlias =
+      fromMatch && fromMatch[2] ? fromMatch[2].toLowerCase() : primaryTable;
 
     // 构建 alias -> table 的映射
     const aliasToTable = new Map<string, string>();
@@ -218,7 +240,8 @@ export class TableRelationSupplementImpl {
       const confidence = this.getJoinConfidence(joinType);
 
       // 解析 ON 条件提取关联字段
-      const { sourceField, targetField, sourceTable, targetTable } = this.parseOnClause(onClause, aliasToTable);
+      const { sourceField, targetField, sourceTable, targetTable } =
+        this.parseOnClause(onClause, aliasToTable);
 
       // 确定主表（FROM 子句中的表或 ON 条件中引用的表）
       const effectivePrimaryTable = sourceTable || primaryTable;
@@ -227,7 +250,7 @@ export class TableRelationSupplementImpl {
         // 为被 JOIN 的表创建关联记录
         const relatedInfo: RelatedTableInfo = {
           tableName: joinedTable,
-          relationType: 'join',
+          relationType: "join",
           sourceField,
           targetField,
           confidence,
@@ -241,7 +264,7 @@ export class TableRelationSupplementImpl {
         // 这样可以双向发现关联关系
         const reverseRelatedInfo: RelatedTableInfo = {
           tableName: effectivePrimaryTable,
-          relationType: 'join',
+          relationType: "join",
           sourceField: targetField,
           targetField: sourceField,
           confidence: confidence * 0.8, // 反向关联置信度稍低
@@ -259,27 +282,31 @@ export class TableRelationSupplementImpl {
   /**
    * 确定 JOIN 类型
    */
-  private determineJoinType(joinClause: string): 'inner' | 'left' | 'right' | 'cross' {
+  private determineJoinType(
+    joinClause: string,
+  ): "inner" | "left" | "right" | "cross" {
     const upper = joinClause.toUpperCase();
-    if (upper.includes('INNER')) return 'inner';
-    if (upper.includes('LEFT')) return 'left';
-    if (upper.includes('RIGHT')) return 'right';
-    if (upper.includes('CROSS')) return 'cross';
+    if (upper.includes("INNER")) return "inner";
+    if (upper.includes("LEFT")) return "left";
+    if (upper.includes("RIGHT")) return "right";
+    if (upper.includes("CROSS")) return "cross";
     // 默认为 INNER JOIN（只有 JOIN 关键字时）
-    return 'inner';
+    return "inner";
   }
 
   /**
    * 根据 JOIN 类型获取置信度
    */
-  private getJoinConfidence(joinType: 'inner' | 'left' | 'right' | 'cross'): number {
+  private getJoinConfidence(
+    joinType: "inner" | "left" | "right" | "cross",
+  ): number {
     switch (joinType) {
-      case 'inner':
+      case "inner":
         return 0.8;
-      case 'left':
-      case 'right':
+      case "left":
+      case "right":
         return 0.6;
-      case 'cross':
+      case "cross":
         return 0.5;
       default:
         return 0.5;
@@ -304,10 +331,11 @@ export class TableRelationSupplementImpl {
     targetTable: string | undefined;
   } {
     // 移除括号内的子查询等复杂条件
-    const simplifiedOn = onClause.replace(/\([^)]+\)/g, '').trim();
+    const simplifiedOn = onClause.replace(/\([^)]+\)/g, "").trim();
 
     // 匹配 column = column 模式
-    const columnPattern = /([A-Z_][A-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)\s*=\s*([A-Z_][A-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)/i;
+    const columnPattern =
+      /([A-Z_][A-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)\s*=\s*([A-Z_][A-Z0-9_]*)\.([A-Z_][A-Z0-9_]*)/i;
     const match = simplifiedOn.match(columnPattern);
 
     if (match) {
@@ -353,16 +381,18 @@ export class TableRelationSupplementImpl {
   /**
    * 将 SQL parts 拼接为完整 SQL 字符串
    */
-  private concatenateSqlParts(parts: Array<{ kind: string; value: string }>): string {
+  private concatenateSqlParts(
+    parts: Array<{ kind: string; value: string }>,
+  ): string {
     return parts
       .map((p) => {
-        if (p.kind === 'include') {
+        if (p.kind === "include") {
           return `<include refid="${p.value}" />`;
         }
         return p.value;
       })
-      .join(' ')
-      .replace(/\s+/g, ' ')
+      .join(" ")
+      .replace(/\s+/g, " ")
       .trim();
   }
 
@@ -372,7 +402,9 @@ export class TableRelationSupplementImpl {
    * 分析每个 traceSource 的 Mapper 和 Entity 信息，
    * 推断表之间的关联关系。
    */
-  private extractRelationsFromTraceSources(tableAnchors: TableAnchor[]): Map<string, RelatedTableInfo[]> {
+  private extractRelationsFromTraceSources(
+    tableAnchors: TableAnchor[],
+  ): Map<string, RelatedTableInfo[]> {
     const relations = new Map<string, RelatedTableInfo[]>();
 
     for (const anchor of tableAnchors) {
@@ -423,16 +455,16 @@ export class TableRelationSupplementImpl {
       // 推断的表名不能是当前表
       if (inferredTableName !== currentTableName) {
         // 检查是否有外键字段（如 order_id, user_id）
-        const fkField = columns.find(col =>
-          col === `${inferredTableName}_id` || col.endsWith('_id'),
+        const fkField = columns.find(
+          (col) => col === `${inferredTableName}_id` || col.endsWith("_id"),
         );
 
         if (fkField) {
           relations.push({
             tableName: inferredTableName,
-            relationType: 'foreign_key',
+            relationType: "foreign_key",
             sourceField: fkField,
-            targetField: 'id',
+            targetField: "id",
             confidence: 0.6, // 推断置信度较低
           });
         }
@@ -462,7 +494,9 @@ export class TableRelationSupplementImpl {
       for (const rel of related) {
         // 检查是否已存在相同关联
         const isDuplicate = existing.some(
-          e => e.tableName === rel.tableName && e.relationType === rel.relationType,
+          (e) =>
+            e.tableName === rel.tableName &&
+            e.relationType === rel.relationType,
         );
         if (!isDuplicate) {
           existing.push(rel);
@@ -489,7 +523,7 @@ export class TableRelationSupplementImpl {
     }
 
     // 计算被发现的关联表数量（这些表也在锚点列表中）
-    const discoveredRelatedCount = relations.filter(rel =>
+    const discoveredRelatedCount = relations.filter((rel) =>
       anchorMap.has(rel.tableName),
     ).length;
 
@@ -511,9 +545,9 @@ export class TableRelationSupplementImpl {
    */
   private convertCamelToSnake(camel: string): string {
     return camel
-      .replace(/([A-Z])/g, '_$1')
+      .replace(/([A-Z])/g, "_$1")
       .toLowerCase()
-      .replace(/^_/, '');
+      .replace(/^_/, "");
   }
 }
 

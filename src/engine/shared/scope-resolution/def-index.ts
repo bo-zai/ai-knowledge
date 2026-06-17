@@ -11,8 +11,8 @@
  * Consumed by: #917 (`Registry.lookup` implementations), #915 (SCC finalize).
  */
 
-import type { SymbolDefinition } from './symbol-definition.js';
-import type { DefId } from './types.js';
+import type { SymbolDefinition } from "./symbol-definition.js";
+import type { DefId } from "./types.js";
 
 export interface DefIndex {
   readonly byId: ReadonlyMap<DefId, SymbolDefinition>;

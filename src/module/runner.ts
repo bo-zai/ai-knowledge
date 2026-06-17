@@ -4,11 +4,11 @@
  * 整合发现、分析、写入流程
  */
 
-import { logger, setLogLevel } from '../shared/logger.js';
-import { createModuleDiscoverer } from './discoverer.js';
-import { createModuleAnalyzer } from './analyzer.js';
-import { createModuleWriter } from './writer.js';
-import type { ModuleConfig, ModuleResult, ModuleTopology } from './types.js';
+import { logger, setLogLevel } from "../shared/logger.js";
+import { createModuleDiscoverer } from "./discoverer.js";
+import { createModuleAnalyzer } from "./analyzer.js";
+import { createModuleWriter } from "./writer.js";
+import type { ModuleConfig, ModuleResult, ModuleTopology } from "./types.js";
 
 /**
  * 运行模块划分
@@ -22,7 +22,7 @@ import type { ModuleConfig, ModuleResult, ModuleTopology } from './types.js';
 export async function runModule(config: ModuleConfig): Promise<ModuleResult> {
   // 设置日志级别
   if (config.verbose) {
-    setLogLevel('debug');
+    setLogLevel("debug");
   }
 
   const repoPath = config.repoPath;
@@ -40,7 +40,7 @@ export async function runModule(config: ModuleConfig): Promise<ModuleResult> {
   if (!config.force) {
     const existing = await writer.load(outputRoot);
     if (existing) {
-      logger.info('Using existing module topology (use --force to reanalyze)');
+      logger.info("Using existing module topology (use --force to reanalyze)");
       return {
         topology: existing,
         outputPath: writer.getPath(outputRoot),
@@ -50,25 +50,31 @@ export async function runModule(config: ModuleConfig): Promise<ModuleResult> {
   }
 
   // 2. 模块发现
-  logger.info('Discovering modules...');
+  logger.info("Discovering modules...");
   const discoveryResult = await discoverer.discover(repoPath, maxDepth);
 
   // 3. 构建拓扑
   let topology = discoverer.buildTopology(discoveryResult);
 
   // 4. 详细耦合度评估
-  logger.info('Evaluating coupling signals...');
-  const couplingSignals = await analyzer.evaluateCouplingSignals(repoPath, discoveryResult.modules);
+  logger.info("Evaluating coupling signals...");
+  const couplingSignals = await analyzer.evaluateCouplingSignals(
+    repoPath,
+    discoveryResult.modules,
+  );
 
   // 更新拓扑中的耦合信号
   topology = {
     ...topology,
-    couplingSignals: couplingSignals.map(s => ({
+    couplingSignals: couplingSignals.map((s) => ({
       signal: s.signal,
       detected: s.detected,
       evidence: s.evidence,
     })),
-    couplingMode: analyzer.decideCouplingMode(couplingSignals, discoveryResult.modules),
+    couplingMode: analyzer.decideCouplingMode(
+      couplingSignals,
+      discoveryResult.modules,
+    ),
   };
 
   // 5. 保存结果
@@ -95,7 +101,9 @@ export async function runModule(config: ModuleConfig): Promise<ModuleResult> {
  *
  * 用于其他命令复用模块划分结果
  */
-export async function loadModuleTopology(outputRoot: string): Promise<ModuleTopology | null> {
+export async function loadModuleTopology(
+  outputRoot: string,
+): Promise<ModuleTopology | null> {
   const writer = createModuleWriter();
   return writer.load(outputRoot);
 }

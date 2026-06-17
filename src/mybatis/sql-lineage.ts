@@ -15,11 +15,11 @@ import {
   type MapperDocument,
   type StatementDraft,
   type ResolvedStatement,
-} from './index.js';
-import type { DbTableContext } from '../query/index-service.js';
+} from "./index.js";
+import type { DbTableContext } from "../query/index-service.js";
 
 export interface SqlLineageEdge {
-  type: 'QUERIES' | 'ACCESSES';
+  type: "QUERIES" | "ACCESSES";
   from: string;
   to: string;
   evidence: {
@@ -46,12 +46,14 @@ export function buildLineageEdges(mapper: MapperDocument): SqlLineageEdge[] {
   const namespace = mapper.namespace;
 
   // Resolve all statements first
-  const resolvedStatements = mapper.statements.map((stmt) => resolveStatementSql(stmt, mapper));
+  const resolvedStatements = mapper.statements.map((stmt) =>
+    resolveStatementSql(stmt, mapper),
+  );
 
   for (const stmt of resolvedStatements) {
     // Create method-to-statement edge
     edges.push({
-      type: 'QUERIES',
+      type: "QUERIES",
       from: `${namespace}.${stmt.id}`,
       to: `sql:${stmt.id}`,
       evidence: {
@@ -66,7 +68,7 @@ export function buildLineageEdges(mapper: MapperDocument): SqlLineageEdge[] {
     const tables = extractTablesFromSql(stmt.sql);
     for (const table of tables) {
       edges.push({
-        type: 'ACCESSES',
+        type: "ACCESSES",
         from: `sql:${stmt.id}`,
         to: `table:${table}`,
         evidence: {
@@ -85,7 +87,9 @@ export function buildLineageEdges(mapper: MapperDocument): SqlLineageEdge[] {
 /**
  * Build mapper method bindings for Java-to-SQL linkage.
  */
-export function buildMapperMethodBindings(mapper: MapperDocument): MapperMethodBinding[] {
+export function buildMapperMethodBindings(
+  mapper: MapperDocument,
+): MapperMethodBinding[] {
   const bindings: MapperMethodBinding[] = [];
   const namespace = mapper.namespace;
 
@@ -93,7 +97,9 @@ export function buildMapperMethodBindings(mapper: MapperDocument): MapperMethodB
   const javaClass = namespace;
 
   // Resolve all statements
-  const resolvedStatements = mapper.statements.map((stmt) => resolveStatementSql(stmt, mapper));
+  const resolvedStatements = mapper.statements.map((stmt) =>
+    resolveStatementSql(stmt, mapper),
+  );
 
   for (const stmt of resolvedStatements) {
     bindings.push({
@@ -151,7 +157,7 @@ export function getTableLineage(
   }
 
   for (const edge of edges) {
-    if (statements.includes(edge.to) && edge.type === 'QUERIES') {
+    if (statements.includes(edge.to) && edge.type === "QUERIES") {
       methods.push(edge.from);
     }
   }
@@ -168,13 +174,15 @@ export function enrichDbContextWithLineage(
 ): DbTableContext {
   return {
     ...context,
-    queries: lineage.statements.map((s) => s.replace('sql:', '')),
+    queries: lineage.statements.map((s) => s.replace("sql:", "")),
   };
 }
 
 /**
  * Extract tables from a resolved statement (statement-scoped).
  */
-export function extractTablesFromResolvedStatement(stmt: ResolvedStatement): string[] {
+export function extractTablesFromResolvedStatement(
+  stmt: ResolvedStatement,
+): string[] {
   return extractTablesFromSql(stmt.sql);
 }

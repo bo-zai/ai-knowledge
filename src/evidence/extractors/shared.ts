@@ -1,4 +1,4 @@
-import type { ConceptCandidate } from '../concept-filter.js';
+import type { ConceptCandidate } from "../concept-filter.js";
 
 /**
  * Extract package path from file path.
@@ -6,23 +6,35 @@ import type { ConceptCandidate } from '../concept-filter.js';
  *          → entity/VO
  */
 export function extractPackagePath(filePath: string): string {
-  const parts = filePath.split('/');
+  const parts = filePath.split("/");
 
   // Find significant directories (exclude src/main/java, test, etc.)
-  const significantParts = parts.filter(p =>
-    !['src', 'main', 'java', 'test', 'kotlin', 'com', 'org', 'app', 'music', 'education'].includes(p.toLowerCase())
+  const significantParts = parts.filter(
+    (p) =>
+      ![
+        "src",
+        "main",
+        "java",
+        "test",
+        "kotlin",
+        "com",
+        "org",
+        "app",
+        "music",
+        "education",
+      ].includes(p.toLowerCase()),
   );
 
   // Take last 2-3 meaningful directories
   if (significantParts.length >= 2) {
-    return significantParts.slice(-2).join('/');
+    return significantParts.slice(-2).join("/");
   }
   if (significantParts.length === 1) {
     return significantParts[0];
   }
 
   // Fallback: use parent directory of file
-  return parts.slice(-2, -1).join('/') || 'root';
+  return parts.slice(-2, -1).join("/") || "root";
 }
 
 /**

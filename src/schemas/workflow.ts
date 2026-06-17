@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { commonKnowledgeSchema } from './knowledge-type.js';
+import { z } from "zod";
+import { commonKnowledgeSchema } from "./knowledge-type.js";
 
 /**
  * 跨域业务流程知识 Schema
@@ -31,7 +31,7 @@ export type WorkflowStep = z.infer<typeof workflowStepSchema>;
  * 跨域业务流程知识 Schema
  */
 export const workflowSchema = commonKnowledgeSchema.extend({
-  type: z.literal('WORKFLOW'),
+  type: z.literal("WORKFLOW"),
 
   /** 流程名称：业务化的流程名称 */
   workflow_name: z.string().min(1),

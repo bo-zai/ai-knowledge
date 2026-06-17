@@ -4,11 +4,16 @@
  * 执行耦合度评估和模块拓扑分析
  */
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { logger } from '../shared/logger.js';
-import type { ModuleInfo, ModuleTopology, CouplingMode, SignalDetectionResult } from './types.js';
-import { COUPLING_SIGNALS } from './types.js';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { logger } from "../shared/logger.js";
+import type {
+  ModuleInfo,
+  ModuleTopology,
+  CouplingMode,
+  SignalDetectionResult,
+} from "./types.js";
+import { COUPLING_SIGNALS } from "./types.js";
 
 /**
  * 模块分析器
@@ -44,7 +49,7 @@ export class ModuleAnalyzer {
 
     // 信号 6: 模块数量
     results.push({
-      signal: 'module-count',
+      signal: "module-count",
       detected: modules.length <= 10,
       evidence: `模块数量: ${modules.length}`,
     });
@@ -62,36 +67,36 @@ export class ModuleAnalyzer {
     modules: ModuleInfo[],
   ): CouplingMode {
     // 强信号直接决定
-    const sharedEntities = signals.find(s => s.signal === 'shared-entities');
-    const crossCalls = signals.find(s => s.signal === 'cross-module-calls');
+    const sharedEntities = signals.find((s) => s.signal === "shared-entities");
+    const crossCalls = signals.find((s) => s.signal === "cross-module-calls");
 
     // 有共享实体类或跨模块调用 → 紧耦合
     if (sharedEntities?.detected || crossCalls?.detected) {
-      return 'tightly-coupled';
+      return "tightly-coupled";
     }
 
     // 模块数量 > 10 → 松耦合
-    const moduleCount = signals.find(s => s.signal === 'module-count');
+    const moduleCount = signals.find((s) => s.signal === "module-count");
     if (moduleCount && !moduleCount.detected) {
-      return 'loosely-coupled';
+      return "loosely-coupled";
     }
 
     // 检查 deployable 模块数量
-    const deployableModules = modules.filter(m => m.role === 'deployable');
+    const deployableModules = modules.filter((m) => m.role === "deployable");
 
     // 只有一个 deployable → 紧耦合
     if (deployableModules.length <= 1) {
-      return 'tightly-coupled';
+      return "tightly-coupled";
     }
 
     // 所有 deployable 模块无共享模块依赖 → 松耦合
-    const sharedModules = modules.filter(m => m.role === 'shared');
+    const sharedModules = modules.filter((m) => m.role === "shared");
     if (sharedModules.length === 0) {
-      return 'loosely-coupled';
+      return "loosely-coupled";
     }
 
     // 默认：紧耦合（保守策略）
-    return 'tightly-coupled';
+    return "tightly-coupled";
   }
 
   /**
@@ -101,13 +106,13 @@ export class ModuleAnalyzer {
     repoPath: string,
     modules: ModuleInfo[],
   ): Promise<SignalDetectionResult> {
-    const sharedModules = modules.filter(m => m.role === 'shared');
+    const sharedModules = modules.filter((m) => m.role === "shared");
 
     if (sharedModules.length === 0) {
       return {
-        signal: 'shared-entities',
+        signal: "shared-entities",
         detected: false,
-        evidence: '无共享模块',
+        evidence: "无共享模块",
       };
     }
 
@@ -115,13 +120,13 @@ export class ModuleAnalyzer {
     for (const shared of sharedModules) {
       if (shared.usedBy.length >= 2) {
         const deployableUsers = shared.usedBy.filter(
-          name => modules.find(m => m.name === name)?.role === 'deployable'
+          (name) => modules.find((m) => m.name === name)?.role === "deployable",
         );
         if (deployableUsers.length >= 2) {
           return {
-            signal: 'shared-entities',
+            signal: "shared-entities",
             detected: true,
-            evidence: `共享模块 ${shared.name} 被多个可部署服务使用: ${deployableUsers.join(', ')}`,
+            evidence: `共享模块 ${shared.name} 被多个可部署服务使用: ${deployableUsers.join(", ")}`,
           };
         }
       }
@@ -129,20 +134,28 @@ export class ModuleAnalyzer {
 
     // 进一步检测：实体类目录
     for (const shared of sharedModules) {
-      const entityPatterns = ['entity', 'model', 'domain', 'dto'];
+      const entityPatterns = ["entity", "model", "domain", "dto"];
       const sharedPath = path.join(repoPath, shared.path.slice(0, -1));
 
       try {
-        const srcPath = path.join(sharedPath, 'src/main/java');
-        const entries = await fs.readdir(srcPath, { recursive: true, withFileTypes: true });
+        const srcPath = path.join(sharedPath, "src/main/java");
+        const entries = await fs.readdir(srcPath, {
+          recursive: true,
+          withFileTypes: true,
+        });
 
-        const hasEntityPackage = entries.some(
-          e => entityPatterns.some(p => path.join(e.parentPath || '', e.name).toLowerCase().includes(p))
+        const hasEntityPackage = entries.some((e) =>
+          entityPatterns.some((p) =>
+            path
+              .join(e.parentPath || "", e.name)
+              .toLowerCase()
+              .includes(p),
+          ),
         );
 
         if (hasEntityPackage && shared.usedBy.length >= 1) {
           return {
-            signal: 'shared-entities',
+            signal: "shared-entities",
             detected: true,
             evidence: `共享模块 ${shared.name} 包含实体类定义`,
           };
@@ -153,9 +166,9 @@ export class ModuleAnalyzer {
     }
 
     return {
-      signal: 'shared-entities',
+      signal: "shared-entities",
       detected: false,
-      evidence: '共享模块未被多个可部署服务使用',
+      evidence: "共享模块未被多个可部署服务使用",
     };
   }
 
@@ -165,35 +178,35 @@ export class ModuleAnalyzer {
   private async detectCrossModuleCalls(
     modules: ModuleInfo[],
   ): Promise<SignalDetectionResult> {
-    const deployableModules = modules.filter(m => m.role === 'deployable');
+    const deployableModules = modules.filter((m) => m.role === "deployable");
 
     if (deployableModules.length < 2) {
       return {
-        signal: 'cross-module-calls',
+        signal: "cross-module-calls",
         detected: false,
-        evidence: '只有一个可部署模块',
+        evidence: "只有一个可部署模块",
       };
     }
 
     // 检查 deployable 模块间的依赖
     for (const module of deployableModules) {
-      const crossDeps = module.dependencies.filter(
-        dep => deployableModules.some(m => m.name === dep)
+      const crossDeps = module.dependencies.filter((dep) =>
+        deployableModules.some((m) => m.name === dep),
       );
 
       if (crossDeps.length > 0) {
         return {
-          signal: 'cross-module-calls',
+          signal: "cross-module-calls",
           detected: true,
-          evidence: `可部署模块 ${module.name} 直接依赖其他可部署模块: ${crossDeps.join(', ')}`,
+          evidence: `可部署模块 ${module.name} 直接依赖其他可部署模块: ${crossDeps.join(", ")}`,
         };
       }
     }
 
     return {
-      signal: 'cross-module-calls',
+      signal: "cross-module-calls",
       detected: false,
-      evidence: '可部署模块之间无直接依赖',
+      evidence: "可部署模块之间无直接依赖",
     };
   }
 
@@ -204,13 +217,13 @@ export class ModuleAnalyzer {
     repoPath: string,
     modules: ModuleInfo[],
   ): Promise<SignalDetectionResult> {
-    const deployableModules = modules.filter(m => m.role === 'deployable');
+    const deployableModules = modules.filter((m) => m.role === "deployable");
 
     if (deployableModules.length < 2) {
       return {
-        signal: 'shared-db-config',
+        signal: "shared-db-config",
         detected: false,
-        evidence: '只有一个可部署模块',
+        evidence: "只有一个可部署模块",
       };
     }
 
@@ -219,16 +232,18 @@ export class ModuleAnalyzer {
     for (const module of deployableModules) {
       const modulePath = path.join(repoPath, module.path.slice(0, -1));
       const configPatterns = [
-        'src/main/resources/application.yml',
-        'src/main/resources/application.properties',
-        'src/main/resources/application.yaml',
+        "src/main/resources/application.yml",
+        "src/main/resources/application.properties",
+        "src/main/resources/application.yaml",
       ];
 
       for (const configPattern of configPatterns) {
         const configPath = path.join(modulePath, configPattern);
         try {
-          const content = await fs.readFile(configPath, 'utf-8');
-          const urlMatch = content.match(/(?:url|jdbcUrl)[\s:=]+['"]?([^'"\s]+)/);
+          const content = await fs.readFile(configPath, "utf-8");
+          const urlMatch = content.match(
+            /(?:url|jdbcUrl)[\s:=]+['"]?([^'"\s]+)/,
+          );
           if (urlMatch) {
             const dbUrl = urlMatch[1];
             const existing = dbConfigs.get(dbUrl) ?? [];
@@ -244,17 +259,17 @@ export class ModuleAnalyzer {
     for (const [dbUrl, moduleNames] of dbConfigs.entries()) {
       if (moduleNames.length >= 2) {
         return {
-          signal: 'shared-db-config',
+          signal: "shared-db-config",
           detected: true,
-          evidence: `多个模块使用相同数据库: ${moduleNames.join(', ')}`,
+          evidence: `多个模块使用相同数据库: ${moduleNames.join(", ")}`,
         };
       }
     }
 
     return {
-      signal: 'shared-db-config',
+      signal: "shared-db-config",
       detected: false,
-      evidence: '各模块使用独立数据库配置',
+      evidence: "各模块使用独立数据库配置",
     };
   }
 
@@ -266,18 +281,24 @@ export class ModuleAnalyzer {
     modules: ModuleInfo[],
   ): Promise<SignalDetectionResult> {
     const modulePomPaths = modules
-      .filter(m => m.type === 'java-maven-module')
-      .map(m => path.join(repoPath, m.path.slice(0, -1), 'pom.xml'));
+      .filter((m) => m.type === "java-maven-module")
+      .map((m) => path.join(repoPath, m.path.slice(0, -1), "pom.xml"));
 
     for (const pomPath of modulePomPaths) {
       try {
-        const content = await fs.readFile(pomPath, 'utf-8');
-        const txKeywords = ['seata', 'atomikos', 'bitronix', 'narayana', 'lcn-transaction'];
-        if (txKeywords.some(kw => content.toLowerCase().includes(kw))) {
+        const content = await fs.readFile(pomPath, "utf-8");
+        const txKeywords = [
+          "seata",
+          "atomikos",
+          "bitronix",
+          "narayana",
+          "lcn-transaction",
+        ];
+        if (txKeywords.some((kw) => content.toLowerCase().includes(kw))) {
           return {
-            signal: 'transaction-boundary',
+            signal: "transaction-boundary",
             detected: true,
-            evidence: '检测到分布式事务依赖',
+            evidence: "检测到分布式事务依赖",
           };
         }
       } catch {
@@ -286,9 +307,9 @@ export class ModuleAnalyzer {
     }
 
     return {
-      signal: 'transaction-boundary',
+      signal: "transaction-boundary",
       detected: false,
-      evidence: '未检测到跨模块事务',
+      evidence: "未检测到跨模块事务",
     };
   }
 
@@ -300,31 +321,32 @@ export class ModuleAnalyzer {
   ): Promise<SignalDetectionResult> {
     if (modules.length === 0) {
       return {
-        signal: 'same-tech-stack',
+        signal: "same-tech-stack",
         detected: false,
-        evidence: '无模块',
+        evidence: "无模块",
       };
     }
 
-    const types = modules.map(m => m.type);
+    const types = modules.map((m) => m.type);
     const uniqueTypes = new Set(types);
 
     // Java Maven 模块默认为 Spring Boot 技术栈
-    const allJavaMaven = types.every(t => t === 'java-maven-module');
+    const allJavaMaven = types.every((t) => t === "java-maven-module");
     if (allJavaMaven) {
       return {
-        signal: 'same-tech-stack',
+        signal: "same-tech-stack",
         detected: true,
-        evidence: '所有模块均为 Java Maven (Spring Boot)',
+        evidence: "所有模块均为 Java Maven (Spring Boot)",
       };
     }
 
     return {
-      signal: 'same-tech-stack',
+      signal: "same-tech-stack",
       detected: uniqueTypes.size === 1,
-      evidence: uniqueTypes.size === 1
-        ? `所有模块类型相同: ${types[0]}`
-        : `模块类型多样: ${uniqueTypes.size} 种`,
+      evidence:
+        uniqueTypes.size === 1
+          ? `所有模块类型相同: ${types[0]}`
+          : `模块类型多样: ${uniqueTypes.size} 种`,
     };
   }
 }
