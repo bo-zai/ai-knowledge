@@ -11,6 +11,7 @@ import { LLM_DEFAULTS } from '../config/defaults.js';
 import { logger } from '../shared/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import type {
   DomainClusterInput,
   DomainClusterResult,
@@ -20,15 +21,16 @@ import type {
 
 // ========== 提示词加载 ==========
 
+// 使用 fileURLToPath 正确获取模块目录路径（Windows 兼容）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROMPTS_DIR = path.join(__dirname, '..', 'prompts');
+
 /**
  * 加载提示词文件
- * 使用 import.meta.url 定位当前模块路径，避免 process.cwd() 问题
  */
 async function loadSystemPrompt(): Promise<string> {
-  // 获取当前模块所在目录
-  const currentModuleDir = path.dirname(new URL(import.meta.url).pathname);
-  // 提示词文件在 src/prompts 目录
-  const promptFile = path.join(currentModuleDir, '..', 'prompts', 'domain-cluster.md');
+  const promptFile = path.join(PROMPTS_DIR, 'domain-cluster.md');
 
   try {
     const content = await fs.readFile(promptFile, 'utf-8');
