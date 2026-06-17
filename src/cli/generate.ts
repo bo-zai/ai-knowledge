@@ -158,7 +158,7 @@ async function runConceptFiveLayerGeneration(
         logger.debug(`CONCEPT filter prompt for ${candidate.className}: ${prompt}`);
 
         // LLM调用（带超时控制）
-        const filterTimeout = 60000; // 60秒超时
+        const filterTimeout = LLM_DEFAULTS.shortTimeoutSeconds * 1000; // 短超时场景（秒转毫秒）
         const result = await Promise.race([
           claimsProvider('你是一个知识价值判断专家。', prompt),
           new Promise<{ rawText: string }>((_, reject) =>

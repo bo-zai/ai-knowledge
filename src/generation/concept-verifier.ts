@@ -78,7 +78,7 @@ export async function verifyConcept(
     claimsProvider,
     knowledgeType: 'CONCEPT',
     maxRetries: 2,  // 验证只重试2次
-    timeout: 60000, // 验证超时60秒
+    timeout: LLM_DEFAULTS.shortTimeoutSeconds * 1000, // 短超时场景（秒转毫秒）
     fallbackContext: {
       className,
       kebabId: toKebabCase(className),
