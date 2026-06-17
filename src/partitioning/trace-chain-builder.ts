@@ -128,9 +128,10 @@ export class TraceChainBuilder {
    * 发现 Scheduled 任务入口点
    */
   private async discoverScheduledTasks(): Promise<EntryPoint[]> {
+    // 使用 exists() 函数检查属性是否存在，避免 "Cannot find property" 错误
     const cypher = `
       MATCH (m:Method)
-      WHERE m.annotations IS NOT NULL
+      WHERE exists(m.annotations)
       AND NOT m.filePath CONTAINS 'test'
       AND NOT m.filePath CONTAINS 'spec'
       RETURN m.name AS methodName, m.filePath AS filePath, m.startLine AS startLine, m.annotations AS annotations
@@ -173,9 +174,10 @@ export class TraceChainBuilder {
    * 发现 MQ Consumer 入口点
    */
   private async discoverMqConsumers(): Promise<EntryPoint[]> {
+    // 使用 exists() 函数检查属性是否存在
     const cypher = `
       MATCH (c:Class)
-      WHERE c.annotations IS NOT NULL
+      WHERE exists(c.annotations)
       AND NOT c.filePath CONTAINS 'test'
       AND NOT c.filePath CONTAINS 'spec'
       RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine, c.annotations AS annotations

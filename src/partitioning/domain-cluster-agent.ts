@@ -22,10 +22,13 @@ import type {
 
 /**
  * 加载提示词文件
+ * 使用 import.meta.url 定位当前模块路径，避免 process.cwd() 问题
  */
 async function loadSystemPrompt(): Promise<string> {
-  const promptsDir = path.join(process.cwd(), 'src', 'prompts');
-  const promptFile = path.join(promptsDir, 'domain-cluster.md');
+  // 获取当前模块所在目录
+  const currentModuleDir = path.dirname(new URL(import.meta.url).pathname);
+  // 提示词文件在 src/prompts 目录
+  const promptFile = path.join(currentModuleDir, '..', 'prompts', 'domain-cluster.md');
 
   try {
     const content = await fs.readFile(promptFile, 'utf-8');
