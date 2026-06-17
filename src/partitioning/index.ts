@@ -50,6 +50,11 @@ export type {
   DomainMergeDecision,
   DomainMergeEvidence,
   DomainClusterResult,
+  // 增量更新相关类型
+  CandidateSnapshotEntry,
+  CandidateSnapshot,
+  StoredLlmDecision,
+  IncrementalUpdateResult,
 } from './types.js';
 
 // 核心组件
