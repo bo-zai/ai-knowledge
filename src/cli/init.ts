@@ -55,5 +55,3 @@ export async function runInit(options: InitOptions): Promise<void> {
   // 所有 Node.js 层面的资源已正确清理，可以安全强制退出。
   process.exit(0);
 }
-test;
-test;
