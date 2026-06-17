@@ -23,7 +23,7 @@ export const LLM_DEFAULTS = {
   concurrency: 1,
   timeoutSeconds: 300,
   /** 短超时场景（过滤、验证等） */
-  shortTimeoutSeconds: 60,
+  shortTimeoutSeconds: 120,
   maxRetries: 3,
 };
 
