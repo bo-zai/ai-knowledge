@@ -128,14 +128,14 @@ export class TraceChainBuilder {
    * 发现 Scheduled 任务入口点
    */
   private async discoverScheduledTasks(): Promise<EntryPoint[]> {
-    // 使用 exists() 函数检查属性是否存在，避免 "Cannot find property" 错误
+    // 查询所有 Method 节点，在代码中过滤 annotations
+    // LadybugDB 不支持 exists() 或 IS NOT NULL 语法
     const cypher = `
       MATCH (m:Method)
-      WHERE exists(m.annotations)
-      AND NOT m.filePath CONTAINS 'test'
+      WHERE NOT m.filePath CONTAINS 'test'
       AND NOT m.filePath CONTAINS 'spec'
       RETURN m.name AS methodName, m.filePath AS filePath, m.startLine AS startLine, m.annotations AS annotations
-      LIMIT 30
+      LIMIT 100
     `;
 
     const rows = await this.query(cypher);
@@ -149,6 +149,7 @@ export class TraceChainBuilder {
       if (!filePath || !methodName) continue;
 
       // 检查是否是 Scheduled（通过 annotations）
+      // annotations 可能不存在（undefined），需要安全检查
       const isScheduled = annotations?.some(ann => ann.includes('Scheduled')) ?? false;
 
       if (!isScheduled) continue;
@@ -174,14 +175,13 @@ export class TraceChainBuilder {
    * 发现 MQ Consumer 入口点
    */
   private async discoverMqConsumers(): Promise<EntryPoint[]> {
-    // 使用 exists() 函数检查属性是否存在
+    // 查询所有 Class 节点，在代码中过滤 annotations
     const cypher = `
       MATCH (c:Class)
-      WHERE exists(c.annotations)
-      AND NOT c.filePath CONTAINS 'test'
+      WHERE NOT c.filePath CONTAINS 'test'
       AND NOT c.filePath CONTAINS 'spec'
       RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine, c.annotations AS annotations
-      LIMIT 50
+      LIMIT 100
     `;
 
     const rows = await this.query(cypher);
@@ -195,10 +195,13 @@ export class TraceChainBuilder {
       if (!filePath || !className) continue;
 
       // 检查是否是 MQ Consumer
+      // annotations 可能不存在，需要安全检查
+      if (!annotations || annotations.length === 0) continue;
+
       let mqType: string | undefined;
       let mqTopic: string | undefined;
 
-      for (const ann of annotations ?? []) {
+      for (const ann of annotations) {
         if (ann.includes('RocketMQMessageListener')) {
           mqType = 'rocketmq';
           // 尝试提取 topic
