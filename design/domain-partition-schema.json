@@ -1,0 +1,422 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "domain-partition-schema-v2",
+  "title": "DomainPartition 精简结构",
+  "description": "只保留必须字段，可转换字段在读取时计算，可读取字段后续从文件获取",
+
+  "definitions": {
+    "TableInfo": {
+      "type": "object",
+      "properties": {
+        "tableName": { "type": "string", "description": "表名（必须）" },
+        "role": {
+          "type": "string",
+          "enum": ["primary", "related", "shard", "junction_table", "view_reference", "config_table"],
+          "description": "表角色（必须）"
+        },
+        "tableType": {
+          "type": "string",
+          "enum": ["table", "view"],
+          "default": "table",
+          "description": "表类型（必须，视图场景）"
+        },
+        "relationType": { "type": "string", "description": "关联类型：foreign_key（必须，关联表）" },
+        "foreignKey": { "type": "string", "description": "外键关系（必须，关联表）" },
+        "shardGroup": { "type": "string", "description": "分表组标识（必须，分表场景）" },
+        "junctionBetween": {
+          "type": "object",
+          "properties": {
+            "leftTable": { "type": "string" },
+            "rightTable": { "type": "string" },
+            "leftKey": { "type": "string" },
+            "rightKey": { "type": "string" }
+          },
+          "description": "关联表连接信息（必须，关联表场景）"
+        },
+        "baseTables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "视图基于的物理表（必须，视图场景）"
+        }
+      },
+      "required": ["tableName", "role"]
+    },
+
+    "CrossDomainCall": {
+      "type": "object",
+      "properties": {
+        "targetDomain": { "type": "string", "description": "目标域（必须）" },
+        "className": { "type": "string", "description": "调用的类名（必须）" },
+        "methodName": { "type": "string", "description": "调用的方法名（必须）" },
+        "callPurpose": { "type": "string", "description": "调用目的（可选）" }
+      },
+      "required": ["targetDomain", "className", "methodName"]
+    },
+
+    "CallChainNode": {
+      "type": "object",
+      "properties": {
+        "className": { "type": "string", "description": "类名（必须）" },
+        "interfaceName": { "type": "string", "description": "接口名（必须，多态场景）" },
+        "implementationType": {
+          "type": "string",
+          "enum": ["impl", "abstract", "delegate"],
+          "description": "实现类型（必须，多态场景）"
+        },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "role": {
+          "type": "string",
+          "enum": ["core_logic", "data_layer", "cross_domain_call"],
+          "description": "角色（必须）"
+        },
+        "crossDomainHint": { "type": "string", "description": "跨域提示（必须，跨域场景）" }
+      },
+      "required": ["className", "filePath", "role"]
+    },
+
+    "EntryPoint": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["controller", "scheduled", "mq_consumer"],
+          "description": "入口类型（必须）"
+        },
+        "clientType": {
+          "type": "string",
+          "enum": ["web", "app", "admin", "api"],
+          "description": "客户端类型（必须，Controller 场景）"
+        },
+        "className": { "type": "string", "description": "类名（必须）" },
+        "methodName": { "type": "string", "description": "方法名（必须）" },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "startLine": { "type": "integer", "description": "起始行号（必须）" },
+        "signature": { "type": "string", "description": "签名，如 @GetMapping(\"/list\")（必须）" },
+        "module": { "type": "string", "description": "所属模块（必须）" },
+        "callChain": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CallChainNode" },
+          "description": "调用链（必须）"
+        },
+        "crossDomainCalls": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CrossDomainCall" },
+          "description": "跨域调用（必须）"
+        },
+        "noServiceLayer": { "type": "boolean", "description": "标记无 Service 层（必须，纯 Mapper 场景）" },
+        "mqType": { "type": "string", "description": "MQ 类型（必须，MQ Consumer 场景）" },
+        "mqTopic": { "type": "string", "description": "MQ topic（必须，MQ Consumer 场景）" }
+      },
+      "required": ["kind", "className", "filePath", "module", "callChain"]
+    },
+
+    "ServiceInfo": {
+      "type": "object",
+      "properties": {
+        "className": { "type": "string", "description": "类名（必须）" },
+        "interfaceName": { "type": "string", "description": "接口名（必须，接口场景）" },
+        "implementationType": { "type": "string", "description": "实现类型（必须，多态场景）" },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "module": { "type": "string", "description": "所属模块（必须）" },
+        "polymorphismGroup": { "type": "string", "description": "多态分组标识（必须，多态场景）" }
+      },
+      "required": ["className", "filePath", "module"]
+    },
+
+    "MapperInfo": {
+      "type": "object",
+      "properties": {
+        "className": { "type": "string", "description": "类名（必须）" },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "xmlPath": { "type": "string", "description": "XML 文件路径（必须）" },
+        "module": { "type": "string", "description": "所属模块（必须）" },
+        "tablesOperated": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "操作的表列表（必须，决定是否合并 partition）"
+        }
+      },
+      "required": ["className", "filePath", "module"]
+    },
+
+    "EntityInfo": {
+      "type": "object",
+      "properties": {
+        "className": { "type": "string", "description": "类名（必须）" },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "module": { "type": "string", "description": "所属模块（必须）" },
+        "tablesMapped": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "映射的表列表（必须，分表场景）"
+        },
+        "entityRole": {
+          "type": "string",
+          "enum": ["canonical", "dto", "vo", "po", "do"],
+          "description": "Entity 角色（必须）"
+        }
+      },
+      "required": ["className", "filePath", "module"]
+    },
+
+    "BackendModule": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "模块名（必须）" },
+        "path": { "type": "string", "description": "模块路径（必须）" },
+        "role": {
+          "type": "string",
+          "enum": ["entry_and_logic_provider", "entry_provider", "logic_provider", "data_provider"],
+          "description": "模块角色（必须）"
+        }
+      },
+      "required": ["name", "path", "role"]
+    },
+
+    "FrontendPage": {
+      "type": "object",
+      "properties": {
+        "pageName": { "type": "string", "description": "页面名（必须）" },
+        "filePath": { "type": "string", "description": "文件路径（必须）" },
+        "module": { "type": "string", "description": "所属模块（必须）" },
+        "apiCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "backendApiId": { "type": "string", "description": "对应后端入口点（必须）" }
+            },
+            "required": ["backendApiId"]
+          },
+          "description": "API 调用列表（必须，前后端关联锚点）"
+        }
+      },
+      "required": ["pageName", "filePath", "module"]
+    },
+
+    "FrontendModule": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "模块名（必须）" },
+        "path": { "type": "string", "description": "模块路径（必须）" },
+        "framework": {
+          "type": "string",
+          "enum": ["vue", "react", "angular", "svelte"],
+          "description": "前端框架（必须）"
+        }
+      },
+      "required": ["name", "path", "framework"]
+    },
+
+    "FrontendBackendLink": {
+      "type": "object",
+      "properties": {
+        "frontendPageName": { "type": "string", "description": "前端页面名（必须）" },
+        "frontendModule": { "type": "string", "description": "前端模块（必须）" },
+        "backendApiIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "后端入口点 ID 列表（必须）"
+        },
+        "linkType": {
+          "type": "string",
+          "enum": ["page_to_api"],
+          "description": "关联类型（必须）"
+        }
+      },
+      "required": ["frontendPageName", "frontendModule", "backendApiIds", "linkType"]
+    },
+
+    "NoEntryTable": {
+      "type": "object",
+      "properties": {
+        "tableName": { "type": "string", "description": "表名（必须）" },
+        "tableType": {
+          "type": "string",
+          "enum": ["config_table", "dict_table", "system_table"],
+          "description": "表类型（必须）"
+        },
+        "suggestedDomain": { "type": "string", "description": "建议业务域（必须）" }
+      },
+      "required": ["tableName", "tableType"]
+    },
+
+    "CrossDomainRef": {
+      "type": "object",
+      "properties": {
+        "targetDomain": { "type": "string", "description": "目标域（必须）" },
+        "relationType": {
+          "type": "string",
+          "enum": ["service_call", "frontend_component", "shared_table"],
+          "description": "关联类型（必须）"
+        }
+      },
+      "required": ["targetDomain", "relationType"]
+    },
+
+    "ConfidenceBreakdown": {
+      "type": "object",
+      "properties": {
+        "traceDepth": { "type": "number", "minimum": 0, "maximum": 1 },
+        "crossModule": { "type": "number", "minimum": 0, "maximum": 1 },
+        "multiEntryPoint": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tableRelation": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "required": ["traceDepth"]
+    },
+
+    "FileHashes": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "后端文件 hash"
+        },
+        "frontend": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "前端文件 hash"
+        }
+      }
+    }
+  },
+
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "partitionId": {
+      "type": "string",
+      "description": "分区唯一标识，格式：domain:{table_name}（必须）"
+    },
+    "partitionHash": {
+      "type": "string",
+      "description": "分区结构 hash（必须，幂等校验）"
+    },
+    "algorithmVersion": {
+      "type": "string",
+      "description": "划分算法版本（必须，幂等校验）"
+    },
+
+    "tables": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TableInfo" },
+      "description": "表锚点列表（必须）"
+    },
+
+    "entryPoints": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/EntryPoint" },
+      "description": "后端入口点列表（必须）"
+    },
+
+    "sharedResources": {
+      "type": "object",
+      "properties": {
+        "coreLogic": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ServiceInfo" },
+          "description": "核心逻辑层（必须）"
+        },
+        "dataLayer": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/MapperInfo" },
+          "description": "数据层（必须）"
+        },
+        "entities": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/EntityInfo" },
+          "description": "实体类（必须）"
+        }
+      }
+    },
+
+    "backendModules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/BackendModule" },
+      "description": "后端模块信息（必须）"
+    },
+
+    "frontend": {
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FrontendPage" },
+          "description": "前端页面列表（必须）"
+        },
+        "modules": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/FrontendModule" },
+          "description": "前端模块信息（必须）"
+        }
+      },
+      "description": "前端关联信息（必须）"
+    },
+
+    "frontendBackendLinks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/FrontendBackendLink" },
+      "description": "前后端关联关系（必须）"
+    },
+
+    "noEntryTables": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/NoEntryTable" },
+      "description": "无入口点表（可选）"
+    },
+
+    "confidenceBreakdown": {
+      "$ref": "#/definitions/ConfidenceBreakdown",
+      "description": "置信度分解（必须）"
+    },
+
+    "crossDomainRefs": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/CrossDomainRef" },
+      "description": "跨域引用（必须）"
+    },
+
+    "domainKeywords": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "业务域关键词（可选，LLM 生成参考）"
+    },
+
+    "contentHash": {
+      "type": "string",
+      "description": "文件列表内容 hash（必须，变更检测）"
+    },
+    "fileHashes": {
+      "$ref": "#/definitions/FileHashes",
+      "description": "各文件 hash（必须，精确变更检测）"
+    },
+    "lastCommitHash": {
+      "type": "string",
+      "description": "最后分析的 git commit hash（必须，增量更新锚点）"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "更新时间（必须）"
+    }
+  },
+
+  "required": [
+    "partitionId",
+    "partitionHash",
+    "algorithmVersion",
+    "tables",
+    "entryPoints",
+    "sharedResources",
+    "backendModules",
+    "frontend",
+    "frontendBackendLinks",
+    "confidenceBreakdown",
+    "crossDomainRefs",
+    "contentHash",
+    "lastCommitHash",
+    "updatedAt"
+  ]
+}

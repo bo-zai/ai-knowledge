@@ -169,6 +169,18 @@ export async function runFullAnalysis(
     log('Migrating from KuzuDB to LadybugDB — rebuilding index...');
   }
 
+  // Force mode: delete old database file to ensure schema updates
+  // When schema changes (e.g. adding new columns), the old table structure
+  // must be removed so LadybugDB creates fresh tables with new schema.
+  if (options.force) {
+    try {
+      await fs.unlink(lbugPath);
+      log('Force mode: removed old database file for schema rebuild');
+    } catch {
+      // File may not exist, ignore
+    }
+  }
+
   const repoHasGit = hasGitDir(repoPath);
   const currentCommit = repoHasGit ? getCurrentCommit(repoPath) : '';
   const existingMeta = await loadMeta(storagePath);

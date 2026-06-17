@@ -1,12 +1,13 @@
-import { buildCapabilityMvpInventory } from '../slicing/capability-mvp-inventory.js';
+import { buildCapabilityInventory } from '../slicing/capability-inventory.js';
 import {
   runCapabilityKnowledgePipeline,
   type CapabilityClaimsProviderResult,
 } from './capability-knowledge-pipeline.js';
 import type { EvidenceBundle } from '../evidence/evidence-bundle-schema.js';
 import type { KnowledgePackageFile, KnowledgePackageObjectRef } from '../packaging/knowledge-package-contribution.js';
+import { TYPE_TO_DIR } from './type-directory-map.js';
 
-export interface FullCapabilityMvpCapabilityReport {
+export interface CapabilityBatchItemReport {
   id: string;
   name: string;
   status: 'succeeded' | 'failed';
@@ -17,19 +18,24 @@ export interface FullCapabilityMvpCapabilityReport {
   error?: string;
 }
 
-export interface FullCapabilityMvpResult {
+export interface CapabilityBatchPipelineResult {
   files: KnowledgePackageFile[];
   objects: KnowledgePackageObjectRef[];
   report: {
-    mode: 'full-mvp';
+    mode: 'capability-batch';
     succeeded: number;
     failed: number;
-    capabilities: FullCapabilityMvpCapabilityReport[];
+    capabilities: CapabilityBatchItemReport[];
   };
   warnings: string[];
 }
 
-function rewriteFullCapabilityFilePath(path: string, inventoryId: string): string | undefined {
+export interface CapabilityInventoryPromptResult {
+  rawText: string;
+  model: string;
+}
+
+function rewriteCapabilityFilePath(path: string, inventoryId: string): string | undefined {
   if (path === 'catalog.yaml') return undefined;
   if (path === 'reports/generation.json') return undefined;
   if (path === 'reports/capability-generation.json') {
@@ -41,42 +47,65 @@ function rewriteFullCapabilityFilePath(path: string, inventoryId: string): strin
   return path;
 }
 
-export async function runFullCapabilityMvpPipeline(input: {
+export async function runCapabilityBatchPipeline(input: {
   repoRoot: string;
   claimsProvider: (bundle: EvidenceBundle) => Promise<CapabilityClaimsProviderResult>;
+  inventoryPromptProvider?: (
+    systemPrompt: string,
+    userPrompt: string,
+  ) => Promise<CapabilityInventoryPromptResult>;
+  onItemSucceeded?: (item: {
+    inventoryId: string;
+    inventoryName: string;
+    result: Awaited<ReturnType<typeof runCapabilityKnowledgePipeline>>;
+  }) => Promise<void>;
   model?: string;
-}): Promise<FullCapabilityMvpResult> {
-  console.log('[DEBUG] runFullCapabilityMvpPipeline: starting');
-  // Auto-discover project capabilities
-  const inventory = await buildCapabilityMvpInventory(input.repoRoot);
-  console.log(`[DEBUG] runFullCapabilityMvpPipeline: inventory built, ${inventory.length} items`);
+}): Promise<CapabilityBatchPipelineResult> {
+  console.log('[DEBUG] runCapabilityBatchPipeline: starting');
+  // 先做静态聚类，再按需交给 LLM 做业务域归并与核心/辅助动作判定。
+  const inventory = await buildCapabilityInventory(
+    input.repoRoot,
+    input.inventoryPromptProvider,
+  );
+  console.log(`[DEBUG] runCapabilityBatchPipeline: inventory built, ${inventory.length} items`);
 
   if (inventory.length === 0) {
     throw new Error('No business capabilities discovered in project. Use --target or --terms to specify capability focus.');
   }
   const files: KnowledgePackageFile[] = [];
   const objects: KnowledgePackageObjectRef[] = [];
-  const capabilities: FullCapabilityMvpCapabilityReport[] = [];
+  const capabilities: CapabilityBatchItemReport[] = [];
   const warnings: string[] = [];
 
   for (const item of inventory) {
-    console.log(`[DEBUG] runFullCapabilityMvpPipeline: processing ${item.name}`);
+    console.log(`[DEBUG] runCapabilityBatchPipeline: processing ${item.name}`);
     try {
-      console.log(`[DEBUG] runFullCapabilityMvpPipeline: calling runCapabilityKnowledgePipeline for ${item.name}`);
+      console.log(`[DEBUG] runCapabilityBatchPipeline: calling runCapabilityKnowledgePipeline for ${item.name}`);
       const result = await runCapabilityKnowledgePipeline({
         repoRoot: input.repoRoot,
         targetTerms: item.targetTerms,
         targetPaths: item.targetPaths,
+        domainKey: item.id,
+        domainName: item.name,
+        modulePaths: item.targetPaths,
         claimsProvider: input.claimsProvider,
         llmMode: { requested: true, required: true, model: input.model },
       });
-      console.log(`[DEBUG] runFullCapabilityMvpPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`);
+      console.log(`[DEBUG] runCapabilityBatchPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`);
+
+      if (input.onItemSucceeded) {
+        await input.onItemSucceeded({
+          inventoryId: item.id,
+          inventoryName: item.name,
+          result,
+        });
+      }
 
       const primaryDoc = result.files.find(file => file.path.startsWith('capabilities/') && file.path.endsWith('.md'))?.path;
       const compatibilityView = result.files.find(file => file.path.startsWith('views/capabilities/') && file.path.endsWith('.md'))?.path;
 
       for (const file of result.files) {
-        const rewritten = rewriteFullCapabilityFilePath(file.path, item.id);
+        const rewritten = rewriteCapabilityFilePath(file.path, item.id);
         if (!rewritten) continue;
         files.push({ path: rewritten, content: file.content });
       }
@@ -84,7 +113,7 @@ export async function runFullCapabilityMvpPipeline(input: {
       objects.push(...result.objects.map(obj => ({
         id: obj.id,
         type: obj.type,
-        path: `objects/${obj.type.toLowerCase()}/${obj.id}.yaml`,
+        path: `objects/${TYPE_TO_DIR[obj.type] || 'unknown'}/${obj.id}.yaml`,
       })));
 
       capabilities.push({
@@ -112,11 +141,11 @@ export async function runFullCapabilityMvpPipeline(input: {
   const failed = capabilities.filter(c => c.status === 'failed').length;
 
   if (succeeded === 0) {
-    throw new Error(`Full capability MVP generation failed for all ${inventory.length} capabilities`);
+    throw new Error(`Capability batch generation failed for all ${inventory.length} capabilities`);
   }
 
   const report = {
-    mode: 'full-mvp' as const,
+    mode: 'capability-batch' as const,
     succeeded,
     failed,
     capabilities,

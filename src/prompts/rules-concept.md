@@ -1,29 +1,34 @@
-# 概念知识提取规则
+# 业务域知识提取规则
 
 ## 定义
 
-概念知识记录仓库中可见的业务概念的定义和业务含义。它回答"这个术语/状态/枚举/字段在业务上是什么意思"。
+CONCEPT 在本项目中表示**业务域主文档**，不是零散术语卡片。它回答的是：
+- 这是哪个业务域
+- 这个业务域解决什么问题
+- 这个业务域里有哪些核心业务对象和术语
+- 后续 capability 应该归属到哪个业务域
 
-**核心定位**：概念知识提供信息增量，而不是翻译代码名称。Agent 自己能读代码，知识库的价值是提供代码无法直接告诉它的业务理解。
+**核心定位**：生成业务域级知识，而不是翻译代码名称。Agent 自己能读代码，知识库的价值是提供代码无法直接告诉它的业务结构理解。
 
 ## 知识边界（不属于概念知识的）
 
-以下内容不属于概念知识，不要生成：
+以下内容不属于 CONCEPT 业务域知识，不要生成：
 - **API 入口**：Controller 类、HTTP 端点 → 属于能力目录
-- **业务逻辑入口**：Service 类 → 属于能力目录的域级上下文
+- **单个用户动作**：创建、删除、提交、审核等具体动作 → 属于 capability
 - **实体结构**：Entity/DO 的字段列表 → 属于数据模型
 - **外部交互**：SDK 使用方式 → 属于外部系统交互
 
 ## 提取重点
 
-1. **业务状态枚举**：值含义非显而易见的枚举（如状态码 101/201）
-2. **业务类型标识**：决定不同处理路径的类型字段（如 coursewareType=3 走特殊分支）
-3. **业务标识概念**：跨层复用的业务术语（如 openid、memberLevel）
-4. **状态组合规则**：多个字段组合表达的业务状态
+1. **业务域本身**：购物车、优惠券、班级、课程、支付等可独立讨论的业务区域
+2. **域内核心对象**：该业务域反复出现的业务对象、状态、标识、规则
+3. **域边界**：该业务域负责什么，不负责什么
+4. **域内术语**：支撑理解该业务域的关键术语、状态、类型
 
 ## 过滤规则
 
 **必须排除**：
+- 只解释单个枚举值、单个字段含义、单个状态码的碎片化知识
 - 值少于 3 个且命名自解释的简单枚举（如 GenderEnum: MALE, FEMALE）
 - Controller 类（以 Controller 结尾）
 - Service 类（以 Service 结尾，除非其中包含业务规则方法）
@@ -34,73 +39,60 @@
 
 ```json
 {
-  "concept_name": "订单状态",
-  "summary_zh": "订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等）",
-  "business_meaning_zh": "订单状态由状态码驱动，不同状态控制可执行的操作集合：\n- 101（待支付）：用户可取消订单，系统等待支付\n- 201（已支付）：等待商家发货，用户不可取消\n- 301（已发货）：等待用户确认收货\n- 402（已完成）：订单结束，可再次购买\n注意：超时未支付的订单会被定时任务自动取消（状态变为 401）",
-  "aliases": ["OrderStatus", "订单状态码", "orderStatus", "OrderStatusEnum"],
+  "concept_name": "订单域",
+  "domain_name": "订单域",
+  "domain_key": "order",
+  "summary_zh": "负责商品购买订单生命周期管理的业务域，覆盖下单、支付、取消、履约跟踪等订单相关能力。",
+  "business_meaning_zh": "订单域负责把商品购买请求转成可跟踪的订单，并协调支付、库存、优惠、履约等环节。它关注的是订单从创建到完成的业务闭环，而不是某一个接口或某一个状态码。",
+  "aliases": ["order", "Order", "订单管理", "订单域"],
+  "capability_refs": [],
   "value_explanation": [
-    { "value": "101", "business_meaning_zh": "待支付，用户可取消，超时自动取消" },
-    { "value": "201", "business_meaning_zh": "已支付，等待发货，不可取消" },
-    { "value": "301", "business_meaning_zh": "已发货，等待用户确认收货" },
-    { "value": "402", "business_meaning_zh": "已完成，订单结束" },
-    { "value": "401", "business_meaning_zh": "已取消，库存和优惠券已回滚" }
+    { "value": "待支付", "business_meaning_zh": "订单已创建但尚未完成支付" },
+    { "value": "已支付", "business_meaning_zh": "订单支付完成，进入履约环节" }
   ],
-  "key_differentiation": "订单状态 ≠ 支付状态，订单状态控制订单操作，支付状态反映支付结果。支付成功后订单状态变为 201",
-  "related_concepts": ["支付渠道", "退款状态"],
+  "key_differentiation": "订单域 ≠ 支付域，订单域负责订单主体与生命周期，支付域负责资金扣款与支付结果确认。",
+  "related_concepts": ["支付域", "优惠券域", "库存域"],
   "code_manifestation": [
-    { "kind": "enum", "name": "OrderStatusEnum", "location": "OrderDO.status" }
+    { "kind": "controller", "name": "OrderController", "location": "src/main/java/.../OrderController.java" },
+    { "kind": "service", "name": "OrderService", "location": "src/main/java/.../OrderService.java" }
   ],
-  "evidence": ["OrderStatusEnum.java", "OrderDO.java#status", "OrderService.java#submit"],
-  "applicable_scope": "仅适用于主订单流程，退款流程有独立状态机",
-  "tags": ["订单", "状态", "流转"]
-}
-```
-
-```json
-{
-  "concept_name": "课件类型",
-  "summary_zh": "课表中每个练习任务的分类标识，决定了数据来源和属性结构的不同处理路径",
-  "business_meaning_zh": "课表中的课件分为两种类型，它们走不同的数据来源和属性结构：\n- type=3（PRACTICE_MUSIC）：曲目课件，数据来自 TeachCategoryCourse，包含节拍（beat）、和弦（chord）属性\n- 其他类型：教学内容课件，数据来自 TeachCategoryContentCourse，额外包含节奏（rhythm）、列表类型（listType）属性\n两种课件在课表展示、学习统计和打分流程中走不同的处理路径。",
-  "aliases": ["课件分类", "CoursewareType", "coursewareType", "CoursewareTypeEnum"],
-  "value_explanation": [
-    { "value": "3", "business_meaning_zh": "曲目课件（PRACTICE_MUSIC），来自曲库，包含节拍和弦" },
-    { "value": "其他", "business_meaning_zh": "教学内容课件，来自教学内容库，包含节奏和列表类型" }
-  ],
-  "key_differentiation": "课件类型 ≠ 教学分类，教学分类是课程所属的分类目录，课件类型是具体练习任务的数据来源类型",
-  "related_concepts": ["教学分类", "课表"],
-  "code_manifestation": [
-    { "kind": "field", "name": "coursewareType", "location": "CoursewareDO.coursewareType" },
-    { "kind": "enum", "name": "CoursewareTypeEnum", "location": "CoursewareTypeEnum.java" }
-  ],
-  "evidence": ["CoursewareDO.java#coursewareType", "CoursewareTypeEnum.java", "CourseService.java#processCourseware"],
-  "applicable_scope": "仅适用于课表中的课件任务，不适用于学生自主练习场景",
-  "tags": ["课件", "教学", "课表"]
+  "evidence": ["OrderController.java", "OrderService.java", "OrderDO.java"],
+  "applicable_scope": "适用于订单主流程，不覆盖退款争议等售后子域",
+  "tags": ["订单", "交易", "履约"]
 }
 ```
 
 ## 字段填写要求
 
-### concept_name（概念名称）
-- 使用业务术语，不使用代码类名
-- 示例：`订单状态`（正确）vs `OrderStatusEnum`（错误）
+### concept_name / domain_name（业务域名称）
+- 使用业务域术语，不使用代码类名
+- 示例：`订单域`、`购物车域`
+
+### domain_key（业务域主键）
+- 必填。稳定英文 key，使用 kebab-case
+- 示例：`order`、`cart`、`coupon`
+- 后续 capability 会用它挂接到该业务域
 
 ### summary_zh（一句话定位）
-- 必填。格式：`概念在什么业务场景下的什么作用`
-- 示例：`订单从创建到完成的流转状态标识，控制订单可执行的操作（取消、发货、确认等）`
-- 反面示例：`订单状态枚举，定义了订单的状态值`（只翻译了代码名称，无信息增量）
+- 必填。格式：`这个业务域负责什么业务闭环/问题空间`
+- 反面示例：`订单相关概念定义`（没有说清业务域职责）
 
 ### business_meaning_zh（业务含义）
-- 必填。说明"这个概念在什么场景下起作用、它影响什么"
+- 必填。说明该业务域负责什么、和哪些相邻域有边界
 - 提供需要跨文件综合理解才能得出的信息
 - 不要翻译代码名称，不要罗列 Agent 可以直接 grep 到的信息
 
 ### aliases（别名）
 - 必填。必须包含：
-  - **业务英文别名**：业务术语的英文翻译（如 `order-status`、`courseware-type`），用于生成文件名
-  - 代码中的英文命名（如 OrderStatusEnum、coursewareType）
-  - 业务术语中的其他叫法（如"订单状态码"、"课件分类")
+  - **业务英文别名**：业务域的英文 key（如 `order`、`cart`），用于生成文件名
+  - 代码中的英文命名
+  - 业务术语中的其他叫法
 - **重要**：业务英文别名必须是 kebab-case 格式，不能是代码类名
-- 示例：`["order-status", "OrderStatusEnum", "订单状态码", "orderStatus"]`
+- 示例：`["order", "OrderController", "订单管理", "order-domain"]`
+
+### capability_refs（域内能力）
+- 必填。首次生成时通常为空数组：`[]`
+- 该字段后续由打包器回填，不要虚构 capability 名称
 
 ### value_explanation（值说明）
 - 适用枚举/状态类概念
@@ -112,12 +104,12 @@
 - 适用场景：存在容易混淆的近似概念
 - 说明区别，帮助 Agent 避免误解
 
-### related_concepts（关联概念）
-- 引用相关概念名称，不复制内容
-- 格式：概念名称列表
+### related_concepts（关联业务域）
+- 引用相邻业务域名称，不复制内容
+- 格式：业务域名称列表
 
 ### code_manifestation（代码体现）
-- 必填。说明该概念在代码中的具体表现
+- 必填。说明该业务域在代码中的主要落点
 - 格式：
   - `{ "kind": "enum", "name": "OrderStatusEnum", "location": "OrderDO.status" }`
   - `{ "kind": "field", "name": "coursewareType", "location": "CoursewareDO.coursewareType" }`
@@ -137,8 +129,9 @@
 
 ## 生成约束
 
-1. **禁止翻译代码名称**：如果一条描述的内容，Agent 读代码 5 分钟内能自己得出相同结论，不要生成
-2. **禁止推断业务背景**：只记录代码证据支撑的业务含义，不推断产品意图、未来规划
-3. **禁止遗漏 aliases**：英文别名必须提供，用于生成文件名
-4. **禁止遗漏 evidence**：证据字段帮助 Agent 定位代码
-5. **禁止使用代码类名作为概念名称**：`concept_name` 必须是业务术语
+1. **禁止把 CONCEPT 生成为术语碎片**：优先生成业务域，而不是单个状态码解释
+2. **禁止翻译代码名称**：如果一条描述的内容，Agent 读代码 5 分钟内能自己得出相同结论，不要生成
+3. **禁止推断业务背景**：只记录代码证据支撑的业务含义，不推断产品意图、未来规划
+4. **禁止遗漏 aliases**：英文别名必须提供，用于生成文件名
+5. **禁止遗漏 evidence**：证据字段帮助 Agent 定位代码
+6. **禁止使用代码类名作为概念名称**：`concept_name` / `domain_name` 必须是业务术语

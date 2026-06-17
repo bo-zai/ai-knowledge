@@ -175,6 +175,7 @@ function createEmptyBundle(type: KnowledgeType, target?: GenerateTarget): Eviden
     docs: [],
     negativeEvidence: [],
     openQuestions: [],
+    functionCandidates: [],
   };
 }
 
@@ -201,6 +202,7 @@ function mergeGroupsToBundle(groups: EvidenceGroup[], type: KnowledgeType, targe
     docs: groups.flatMap(g => g.bundle.docs || []),
     negativeEvidence: groups.flatMap(g => g.bundle.negativeEvidence || []),
     openQuestions: groups.flatMap(g => g.bundle.openQuestions || []),
+    functionCandidates: groups.flatMap(g => g.bundle.functionCandidates || []),
   };
 
   return merged;

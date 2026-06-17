@@ -8,7 +8,7 @@
 import { constants as fsConstants, realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import fg from 'fast-glob';
+import { glob } from 'glob';
 import { logger } from '../shared/logger';
 
 // ── 类型定义 ──────────────────────────────────────────────────────
@@ -523,11 +523,10 @@ export class FileBackend {
     const resolved = this.resolvePath(searchPath === '/' ? '.' : searchPath);
 
     try {
-      const matches = await fg(pattern, {
+      const matches = await glob(pattern, {
         cwd: resolved,
         absolute: true,
-        onlyFiles: false,
-        suppressErrors: true,
+        nodir: false,
       });
 
       const infos: FileInfo[] = [];
@@ -608,11 +607,10 @@ export class FileBackend {
       } else {
         // 目录搜索
         const globPatternToUse = globPattern ?? '**/*';
-        searchFiles = await fg(globPatternToUse, {
+        searchFiles = await glob(globPatternToUse, {
           cwd: resolved,
           absolute: true,
-          onlyFiles: true,
-          suppressErrors: true,
+          nodir: true,
           ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**'],
         });
       }

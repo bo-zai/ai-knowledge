@@ -8,6 +8,18 @@ import { toKebabCase, getTypeFromDir } from '../knowledge/type-directory-map.js'
 import type { KnowledgeType, LegacyType } from '../schemas/knowledge-type.js';
 import { getTypeDir } from '../schemas/knowledge-type.js';
 import type { ModuleTopology } from '../schemas/module.js';
+import {
+  deriveDomainKey,
+  loadDomainRegistry,
+  saveDomainRegistry,
+  sortDomainRegistry,
+  upsertCapabilityDomain,
+  upsertConceptDomain,
+  type DomainRegistry,
+} from './domain-registry.js';
+
+const MANAGED_CONCEPT_SECTION = 'AI-WIKI-CONCEPT-DOMAIN';
+const MANAGED_CAPABILITY_SECTION = 'AI-WIKI-CAPABILITY-DOMAIN';
 
 /**
  * Write knowledge package to output directory.
@@ -20,77 +32,8 @@ export async function writeKnowledgePackage(input: {
   contributions: KnowledgePackageContribution[];
 }): Promise<void> {
   const { layout, contributions } = input;
-
-  // 收集所有生成的对象
-  const objects = contributions.flatMap(c => c.objects);
-
-  // 先收集所有已生成概念的 ID 集合（用于修正关联链接）
-  const generatedConceptIds = new Set<string>();
-  for (const contribution of contributions) {
-    for (const file of contribution.files) {
-      const { id, type } = parseFileData(file);
-      if (type === 'CONCEPT' || type === 'CON') {
-        generatedConceptIds.add(toKebabCase(id));
-      }
-    }
-  }
-
-  // 按类型分组
-  const objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>> = {} as Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>;
-
-  // 写入各知识类型文件
-  for (const contribution of contributions) {
-    for (const file of contribution.files) {
-      // 解析文件路径，获取类型和内容
-      const { id, type, content } = parseFileData(file, generatedConceptIds);
-      const dirName = getTypeDir(type);
-      const dir = dirName as KnowledgeDir;
-
-      if (!objectsByType[dir]) {
-        objectsByType[dir] = [];
-      }
-
-      // 转换为 kebab-case 文件名
-      const fileName = toKebabCase(id) + '.md';
-      const filePath = path.join(layout.knowledgeDirs[dir], fileName);
-
-      // 写入 md 文件
-      await fs.writeFile(filePath, content, 'utf-8');
-
-      objectsByType[dir].push({ id, type, content });
-    }
-  }
-
-  // 生成各目录的 _index.md
-  for (const [dirName, dirObjects] of Object.entries(objectsByType)) {
-    if (dirObjects.length > 0) {
-      const indexPath = path.join(layout.knowledgeDirs[dirName as KnowledgeDir], '_index.md');
-      const indexContent = generateTypeIndex(dirName as KnowledgeDir, dirObjects);
-      await fs.writeFile(indexPath, indexContent, 'utf-8');
-    }
-  }
-
-  // 生成 concepts 目录的 _glossary.md（术语速查表）
-  // 设计文档 03 要求：Agent 在需求澄清阶段快速确认术语含义
-  if (objectsByType.concepts && objectsByType.concepts.length > 0) {
-    const glossaryPath = path.join(layout.knowledgeDirs.concepts, '_glossary.md');
-    const glossaryContent = generateGlossary(objectsByType.concepts);
-    await fs.writeFile(glossaryPath, glossaryContent, 'utf-8');
-  }
-
-  // 生成全局 index.md
-  // 尝试读取 modules.json（多模块项目）
-  let moduleTopology: ModuleTopology | undefined;
-  try {
-    const modulesJsonPath = path.join(layout.packageRoot, 'modules.json');
-    const modulesJsonContent = await fs.readFile(modulesJsonPath, 'utf-8');
-    moduleTopology = JSON.parse(modulesJsonContent) as ModuleTopology;
-  } catch {
-    // modules.json 不存在，单模块项目
-  }
-
-  const indexMdContent = generateGlobalIndex(layout, objectsByType, moduleTopology);
-  await fs.writeFile(layout.indexMdPath, indexMdContent, 'utf-8');
+  await writeContributionFiles(layout, contributions);
+  await rebuildPackageViews(layout);
 
   // 写入生成报告（放在 .internal/reports 目录下）
   const report = {
@@ -108,6 +51,220 @@ export async function writeKnowledgePackage(input: {
     JSON.stringify(report, null, 2) + '\n',
     'utf-8',
   );
+}
+
+export async function writeKnowledgeContributionIncremental(input: {
+  layout: PackageLayout;
+  knowledge: GenerateKnowledge;
+  target?: GenerateTarget;
+  contribution: KnowledgePackageContribution;
+  capabilityDomain?: {
+    domainKey: string;
+    domainName: string;
+    capabilityId: string;
+    capabilityName: string;
+    capabilityPath: string;
+    summaryZh?: string;
+  };
+}): Promise<void> {
+  await writeContributionFiles(input.layout, [input.contribution]);
+
+  if (input.capabilityDomain) {
+    const registry = await loadDomainRegistry(input.layout.packageRoot);
+    upsertCapabilityDomain(registry, input.capabilityDomain);
+    await saveDomainRegistry(input.layout.packageRoot, sortDomainRegistry(registry));
+  }
+
+  await rebuildPackageViews(input.layout);
+}
+
+async function writeContributionFiles(
+  layout: PackageLayout,
+  contributions: KnowledgePackageContribution[],
+): Promise<void> {
+  const generatedConceptIds = await collectKnownConceptIds(layout, contributions);
+
+  for (const contribution of contributions) {
+    for (const file of contribution.files) {
+      if (file.path.startsWith('objects/')) {
+        const rawObjectPath = path.join(layout.packageRoot, ...file.path.split('/'));
+        await fs.mkdir(path.dirname(rawObjectPath), { recursive: true });
+        await fs.writeFile(rawObjectPath, file.content, 'utf-8');
+
+        const projected = projectRawObjectFile(layout, file, generatedConceptIds);
+        if (projected) {
+          await fs.mkdir(path.dirname(projected.path), { recursive: true });
+          await fs.writeFile(projected.path, projected.content, 'utf-8');
+        }
+        continue;
+      }
+
+      const passthroughPath = getPassthroughPath(layout.packageRoot, file.path);
+      if (passthroughPath) {
+        await fs.mkdir(path.dirname(passthroughPath), { recursive: true });
+        await fs.writeFile(passthroughPath, file.content, 'utf-8');
+        continue;
+      }
+
+      const { id, type, content } = parseFileData(file, generatedConceptIds);
+      const dirName = getTypeDir(type);
+      const dir = dirName as KnowledgeDir;
+      const outputDir = layout.knowledgeDirs[dir];
+
+      if (!outputDir) {
+        const fallbackPath = path.join(layout.packageRoot, ...file.path.split('/'));
+        await fs.mkdir(path.dirname(fallbackPath), { recursive: true });
+        await fs.writeFile(fallbackPath, file.content, 'utf-8');
+        continue;
+      }
+
+      const fileName = toKebabCase(id) + '.md';
+      const filePath = path.join(outputDir, fileName);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, content, 'utf-8');
+    }
+  }
+}
+
+function projectRawObjectFile(
+  layout: PackageLayout,
+  file: { path: string; content: string },
+  generatedConceptIds: Set<string>,
+): { path: string; content: string } | undefined {
+  const parts = file.path.split('/').filter(Boolean);
+  if (parts.length < 3 || parts[0] !== 'objects') return undefined;
+
+  const dirName = parts[1]?.toLowerCase();
+  if (!dirName) return undefined;
+
+  const type = getTypeFromDir(dirName);
+  if (!type) return undefined;
+
+  const markdownType = type === 'CONCEPT' || type === 'CAPABILITY' ? type : undefined;
+  if (!markdownType) return undefined;
+
+  const fileName = parts[2] ?? '';
+  const id = fileName.replace(/\.(md|yaml)$/, '');
+  const projectedDir = layout.knowledgeDirs[dirName as KnowledgeDir];
+  if (!projectedDir) return undefined;
+
+  const content = yamlToMd(id, markdownType, file.content, generatedConceptIds);
+  return {
+    path: path.join(projectedDir, `${toKebabCase(id)}.md`),
+    content,
+  };
+}
+
+async function collectKnownConceptIds(
+  layout: PackageLayout,
+  contributions: KnowledgePackageContribution[],
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  try {
+    const entries = await fs.readdir(layout.knowledgeDirs.concepts, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.md') || entry.name.startsWith('_')) continue;
+      ids.add(entry.name.replace(/\.md$/, ''));
+    }
+  } catch {
+    // ignore
+  }
+
+  for (const contribution of contributions) {
+    for (const file of contribution.files) {
+      if (getPassthroughPath(layout.packageRoot, file.path)) continue;
+      const { id, type } = parseFileData(file);
+      if (type === 'CONCEPT' || type === 'CON') {
+        ids.add(toKebabCase(id));
+      }
+    }
+  }
+
+  return ids;
+}
+
+async function loadExistingMarkdownObjects(
+  layout: PackageLayout,
+): Promise<Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>> {
+  const objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>> = {} as Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>;
+
+  for (const [dirName, dirPath] of Object.entries(layout.knowledgeDirs) as Array<[KnowledgeDir, string]>) {
+    const objects: Array<{ id: string; type: KnowledgeType | LegacyType; content: string }> = [];
+    try {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || !entry.name.endsWith('.md') || entry.name.startsWith('_')) continue;
+        const id = entry.name.replace(/\.md$/, '');
+        const content = await fs.readFile(path.join(dirPath, entry.name), 'utf-8');
+        objects.push({
+          id,
+          type: getTypeFromDir(dirName) ?? 'CONCEPT',
+          content,
+        });
+      }
+    } catch {
+      // ignore
+    }
+    objectsByType[dirName] = objects;
+  }
+
+  return objectsByType;
+}
+
+async function rebuildPackageViews(layout: PackageLayout): Promise<void> {
+  let objectsByType = await loadExistingMarkdownObjects(layout);
+  let registry = await loadDomainRegistry(layout.packageRoot);
+  registry = buildDomainRegistryFromObjects(objectsByType, registry);
+  await saveDomainRegistry(layout.packageRoot, sortDomainRegistry(registry));
+
+  await rewriteConceptDocuments(layout, registry);
+  await rewriteCapabilityDocuments(layout, registry);
+
+  objectsByType = await loadExistingMarkdownObjects(layout);
+
+  for (const [dirName, dirObjects] of Object.entries(objectsByType) as Array<[KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>]> ) {
+    if (dirObjects.length === 0) continue;
+    const indexPath = path.join(layout.knowledgeDirs[dirName], '_index.md');
+    await fs.writeFile(indexPath, generateTypeIndex(dirName, dirObjects), 'utf-8');
+  }
+
+  if (objectsByType.concepts && objectsByType.concepts.length > 0) {
+    await fs.writeFile(
+      path.join(layout.knowledgeDirs.concepts, '_glossary.md'),
+      generateGlossary(objectsByType.concepts),
+      'utf-8',
+    );
+  }
+
+  let moduleTopology: ModuleTopology | undefined;
+  try {
+    const modulesJsonPath = path.join(layout.packageRoot, 'modules.json');
+    moduleTopology = JSON.parse(await fs.readFile(modulesJsonPath, 'utf-8')) as ModuleTopology;
+  } catch {
+    // ignore
+  }
+
+  await fs.writeFile(
+    layout.indexMdPath,
+    generateGlobalIndex(layout, objectsByType, registry, moduleTopology),
+    'utf-8',
+  );
+}
+
+function getPassthroughPath(packageRoot: string, relativePath: string): string | undefined {
+  const parts = relativePath.split('/').filter(Boolean);
+  if (parts.length === 0) return undefined;
+
+  if (parts[0] === 'objects') return undefined;
+  if (parts[0] === 'views' || parts[0] === 'reports' || parts[0] === 'debug' || parts[0] === 'evidence' || parts[0] === 'functions') {
+    return path.join(packageRoot, ...parts);
+  }
+
+  if (!getTypeFromDir(parts[0])) {
+    return path.join(packageRoot, ...parts);
+  }
+
+  return undefined;
 }
 
 /**
@@ -498,7 +655,7 @@ function generateTypeIndex(dir: KnowledgeDir, objects: Array<{ id: string; type:
   if (dir === 'concepts') {
     lines.push('| 概念 | 简要说明 | 标签 | 文件 |');
     lines.push('|------|---------|------|------|');
-    for (const obj of objects) {
+    for (const obj of objects.filter(isBusinessDomainConceptRecord)) {
       const fields = parseYamlFieldsFromMd(obj.content);
       const fileName = toKebabCase(obj.id) + '.md';
       // 使用概念名称而不是英文 ID
@@ -558,7 +715,195 @@ function parseYamlFieldsFromMd(mdContent: string): Record<string, unknown> {
     fields.tags = tagsMatch[1].split(', ');
   }
 
+  const domainKeyMatch = mdContent.match(/> 业务域Key：(.*?)\n/);
+  if (domainKeyMatch) {
+    fields.domain_key = domainKeyMatch[1].trim();
+  }
+
+  const domainNameMatch = mdContent.match(/> 业务域名：(.*?)\n/);
+  if (domainNameMatch) {
+    fields.domain_name = domainNameMatch[1].trim();
+  }
+
+  const ownedDomainMatch = mdContent.match(/> 所属业务域：(.*?)\n/);
+  if (ownedDomainMatch) {
+    fields.domain_name = ownedDomainMatch[1].trim();
+  }
+
   return fields;
+}
+
+function isBusinessDomainConceptRecord(obj: { id: string; content: string }): boolean {
+  const fields = parseYamlFieldsFromMd(obj.content);
+  const title = getStringField(fields, 'concept_name') ?? obj.id;
+  return !title.toUpperCase().startsWith('TERM-') && !obj.id.toLowerCase().startsWith('term-');
+}
+
+function stripManagedSection(content: string, marker: string): string {
+  const pattern = new RegExp(`\\n<!-- ${marker}:START -->[\\s\\S]*?<!-- ${marker}:END -->\\n?`, 'g');
+  return content.replace(pattern, '\n').trimEnd();
+}
+
+function appendManagedSection(content: string, marker: string, section: string): string {
+  const base = stripManagedSection(content, marker).trimEnd();
+  return `${base}\n\n<!-- ${marker}:START -->\n${section.trim()}\n<!-- ${marker}:END -->\n`;
+}
+
+function replaceDomainHeader(content: string, metadataLines: string[]): string {
+  const lines = content.split('\n');
+  if (lines.length === 0 || !lines[0].startsWith('# ')) {
+    return content;
+  }
+
+  const preserved = [lines[0], ''];
+  let index = 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line.trim() === '' || line.startsWith('> ')) {
+      index++;
+      continue;
+    }
+    break;
+  }
+  while (index < lines.length && lines[index].trim() === '') {
+    index++;
+  }
+
+  preserved.push(...metadataLines);
+  preserved.push('');
+  preserved.push(...lines.slice(index));
+  return preserved.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+function buildDomainRegistryFromObjects(
+  objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>,
+  previous: DomainRegistry,
+): DomainRegistry {
+  const registry: DomainRegistry = {
+    updatedAt: new Date().toISOString(),
+    domains: previous.domains.map(domain => ({
+      ...domain,
+      capabilityRefs: [...domain.capabilityRefs],
+      concept: domain.concept ? { ...domain.concept } : undefined,
+    })),
+  };
+
+  for (const obj of (objectsByType.concepts ?? []).filter(isBusinessDomainConceptRecord)) {
+    const fields = parseYamlFieldsFromMd(obj.content);
+    const domainName = getStringField(fields, 'domain_name') ?? getStringField(fields, 'concept_name') ?? obj.id;
+    const domainKey = getStringField(fields, 'domain_key') ?? deriveDomainKey({
+      domainName,
+      conceptId: obj.id,
+    });
+    upsertConceptDomain(registry, {
+      domainKey,
+      domainName,
+      conceptId: obj.id,
+      conceptPath: `concepts/${toKebabCase(obj.id)}.md`,
+      summaryZh: getStringField(fields, 'summary_zh'),
+    });
+  }
+
+  const conceptPathToDomainKey = new Map<string, string>();
+  for (const domain of registry.domains) {
+    if (domain.concept) {
+      conceptPathToDomainKey.set(path.normalize(domain.concept.conceptPath), domain.domainKey);
+    }
+  }
+
+  for (const obj of objectsByType.capabilities ?? []) {
+    const fields = parseYamlFieldsFromMd(obj.content);
+    const capabilityName = getStringField(fields, 'capability_name') ?? getStringField(fields, 'concept_name') ?? obj.id;
+    const domainName = getStringField(fields, 'domain_name');
+    const domainKey = getStringField(fields, 'domain_key');
+    const relatedConcept = getStringField(fields, 'related_concept');
+    const relatedConceptKey = relatedConcept ? conceptPathToDomainKey.get(path.normalize(relatedConcept)) : undefined;
+    if (!domainName && !domainKey && !relatedConceptKey) continue;
+    upsertCapabilityDomain(registry, {
+      domainKey: domainKey ?? relatedConceptKey ?? undefined,
+      domainName: domainName ?? capabilityName,
+      capabilityId: obj.id,
+      capabilityName,
+      capabilityPath: `capabilities/${toKebabCase(obj.id)}.md`,
+      summaryZh: getStringField(fields, 'summary_zh'),
+    });
+  }
+
+  return sortDomainRegistry(registry);
+}
+
+async function rewriteConceptDocuments(layout: PackageLayout, registry: DomainRegistry): Promise<void> {
+  for (const domain of registry.domains) {
+    if (!domain.concept) continue;
+    const conceptPath = path.join(layout.packageRoot, domain.concept.conceptPath);
+    let content: string;
+    try {
+      content = await fs.readFile(conceptPath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    const withHeader = replaceDomainHeader(content, [
+      `> 业务域名：${domain.domainName}`,
+      `> 业务域Key：${domain.domainKey}`,
+    ]);
+
+    const capabilityLines: string[] = [
+      '## 业务域内能力',
+      '',
+    ];
+    if (domain.capabilityRefs.length === 0) {
+      capabilityLines.push('- 当前还没有挂接到该业务域的 capability。');
+    } else {
+      capabilityLines.push('| 能力 | 摘要 | 文档 |');
+      capabilityLines.push('|------|------|------|');
+      for (const capability of domain.capabilityRefs) {
+        capabilityLines.push(
+          `| ${capability.capabilityName} | ${capability.summaryZh ?? '-'} | [查看](${path.relative(path.dirname(conceptPath), path.join(layout.packageRoot, capability.capabilityPath)).replace(/\\/g, '/')}) |`,
+        );
+      }
+    }
+
+    const rewritten = appendManagedSection(withHeader, MANAGED_CONCEPT_SECTION, capabilityLines.join('\n'));
+    await fs.writeFile(conceptPath, rewritten, 'utf-8');
+  }
+}
+
+async function rewriteCapabilityDocuments(layout: PackageLayout, registry: DomainRegistry): Promise<void> {
+  for (const domain of registry.domains) {
+    const conceptPath = domain.concept?.conceptPath;
+    for (const capability of domain.capabilityRefs) {
+      const capabilityPath = path.join(layout.packageRoot, capability.capabilityPath);
+      let content: string;
+      try {
+        content = await fs.readFile(capabilityPath, 'utf-8');
+      } catch {
+        continue;
+      }
+
+      const metadataLines = [
+        `> 所属业务域：${domain.domainName}`,
+        `> 业务域Key：${domain.domainKey}`,
+      ];
+      if (conceptPath) {
+        metadataLines.push(
+          `> 业务域文档：[${domain.domainName}](${path.relative(path.dirname(capabilityPath), path.join(layout.packageRoot, conceptPath)).replace(/\\/g, '/')})`,
+        );
+      }
+
+      const withHeader = replaceDomainHeader(content, metadataLines);
+      const sectionLines = [
+        '## 0. 业务域归属',
+        '',
+        `- 该 capability 属于业务域 **${domain.domainName}**。`,
+        conceptPath
+          ? `- 优先先阅读 [业务域主文档](${path.relative(path.dirname(capabilityPath), path.join(layout.packageRoot, conceptPath)).replace(/\\/g, '/')})，再进入当前 capability。`
+          : '- 当前业务域主文档尚未生成。',
+      ];
+      const rewritten = appendManagedSection(withHeader, MANAGED_CAPABILITY_SECTION, sectionLines.join('\n'));
+      await fs.writeFile(capabilityPath, rewritten, 'utf-8');
+    }
+  }
 }
 
 /**
@@ -568,6 +913,7 @@ function parseYamlFieldsFromMd(mdContent: string): Record<string, unknown> {
 function generateGlobalIndex(
   layout: PackageLayout,
   objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>,
+  registry: DomainRegistry,
   moduleTopology?: ModuleTopology,
 ): string {
   const lines: string[] = [];
@@ -591,17 +937,17 @@ function generateGlobalIndex(
   }
   lines.push('');
 
-  // 业务域导航表（设计文档 03 新增）
-  const domainNavigation = buildDomainNavigation(objectsByType, moduleTopology);
+  // 业务域导航表（按业务域聚合，模块仅作为证据来源展示）
+  const domainNavigation = buildDomainNavigation(objectsByType, registry, moduleTopology);
   if (domainNavigation.length > 0) {
     lines.push(`## 业务域导航`);
     lines.push('');
-    lines.push('按业务域聚合跨类型知识，帮助 Agent 按域检索而非按类型检索。');
+    lines.push('按业务域聚合跨类型知识，模块只作为证据来源，不作为一级分组键。');
     lines.push('');
-    lines.push('| 业务域 | 涉及模块 | 能力 | 概念 | 约束 | 数据聚合 |');
-    lines.push('|--------|----------|------|------|------|----------|');
+    lines.push('| 业务域 | 业务域文档 | 能力 | 约束 | 数据聚合 | 证据模块 |');
+    lines.push('|--------|------------|------|------|----------|----------|');
     for (const row of domainNavigation) {
-      lines.push(`| ${row.domain} | ${row.modules} | ${row.capabilities} | ${row.concepts} | ${row.constraints} | ${row.dataModels} |`);
+      lines.push(`| ${row.domain} | ${row.concepts} | ${row.capabilities} | ${row.constraints} | ${row.dataModels} | ${row.modules} |`);
     }
     lines.push('');
   }
@@ -612,7 +958,7 @@ function generateGlobalIndex(
     lines.push('');
     lines.push('| 概念 | 简要说明 | 文件 |');
     lines.push('|------|---------|------|');
-    for (const obj of objectsByType.concepts) {
+    for (const obj of objectsByType.concepts.filter(isBusinessDomainConceptRecord)) {
       const fields = parseYamlFieldsFromMd(obj.content);
       const fileName = toKebabCase(obj.id) + '.md';
       // 使用概念名称而不是英文 ID
@@ -674,9 +1020,9 @@ function generateGlobalIndex(
  */
 function buildDomainNavigation(
   objectsByType: Record<KnowledgeDir, Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>>,
+  registry: DomainRegistry,
   moduleTopology?: ModuleTopology,
 ): Array<{ domain: string; modules: string; capabilities: string; concepts: string; constraints: string; dataModels: string }> {
-  // 从 tags 中提取业务域
   const domainMap: Map<string, {
     capabilities: string[];
     concepts: string[];
@@ -685,58 +1031,21 @@ function buildDomainNavigation(
     modules: Set<string>;
   }> = new Map();
 
-  // 从概念知识中提取业务域（通过 tags）
-  if (objectsByType.concepts) {
-    for (const obj of objectsByType.concepts) {
-      const fields = parseYamlFieldsFromMd(obj.content);
-      const tags = getArrayField<string>(fields, 'tags') ?? [];
-
-      // 使用第一个 tag 作为业务域（或使用概念名称）
-      const domain = tags[0] ?? getStringField(fields, 'concept_name') ?? obj.id;
-      const conceptName = getStringField(fields, 'concept_name') ?? obj.id;
-      const fileName = toKebabCase(obj.id) + '.md';
-
-      if (!domainMap.has(domain)) {
-        domainMap.set(domain, {
-          capabilities: [],
-          concepts: [],
-          constraints: [],
-          dataModels: [],
-          modules: new Set(),
-        });
-      }
-
-      const entry = domainMap.get(domain)!;
-      entry.concepts.push(`[${conceptName}](concepts/${fileName})`);
-    }
-  }
-
-  // 从能力目录中提取业务域
-  if (objectsByType.capabilities) {
-    for (const obj of objectsByType.capabilities) {
-      // 能力目录的 ID 通常就是业务域名
-      const domain = obj.id;
-      const fileName = toKebabCase(obj.id) + '.md';
-
-      if (!domainMap.has(domain)) {
-        domainMap.set(domain, {
-          capabilities: [],
-          concepts: [],
-          constraints: [],
-          dataModels: [],
-          modules: new Set(),
-        });
-      }
-
-      const entry = domainMap.get(domain)!;
-      entry.capabilities.push(`[${obj.id}](capabilities/${fileName})`);
-    }
+  for (const domain of registry.domains) {
+    domainMap.set(domain.domainKey, {
+      capabilities: domain.capabilityRefs.map(item => `[${item.capabilityName}](${item.capabilityPath})`),
+      concepts: domain.concept ? [`[${domain.domainName}](${domain.concept.conceptPath})`] : ['-'],
+      constraints: [],
+      dataModels: [],
+      modules: new Set(),
+    });
   }
 
   // 从约束知识中提取业务域（通过 tags）
   if (objectsByType.constraints) {
     for (const obj of objectsByType.constraints) {
-      const domain = obj.id.split('-')[0] ?? obj.id; // 简化：从 ID 中提取域
+      const fields = parseYamlFieldsFromMd(obj.content);
+      const domain = getStringField(fields, 'domain_key') ?? obj.id.split('-')[0] ?? obj.id;
       const fileName = toKebabCase(obj.id) + '.md';
 
       if (!domainMap.has(domain)) {
@@ -757,7 +1066,8 @@ function buildDomainNavigation(
   // 从数据模型中提取业务域
   if (objectsByType['data-model']) {
     for (const obj of objectsByType['data-model']) {
-      const domain = obj.id.split('-')[0] ?? obj.id; // 简化：从 ID 中提取域
+      const fields = parseYamlFieldsFromMd(obj.content);
+      const domain = getStringField(fields, 'domain_key') ?? obj.id.split('-')[0] ?? obj.id;
       const fileName = toKebabCase(obj.id) + '.md';
 
       if (!domainMap.has(domain)) {
@@ -775,13 +1085,11 @@ function buildDomainNavigation(
     }
   }
 
-  // 如果是多模块项目，尝试从模块名推断业务域归属
+  // 如果是多模块项目，只记录证据覆盖的模块，不参与业务域分组
   if (moduleTopology && moduleTopology.moduleCount > 1) {
     for (const module of moduleTopology.modules) {
-      // 尝试匹配模块名与业务域
-      for (const [domain, entry] of domainMap.entries()) {
-        if (domain.toLowerCase().includes(module.name.toLowerCase()) ||
-            module.name.toLowerCase().includes(domain.toLowerCase())) {
+      for (const entry of domainMap.values()) {
+        if (module.path && entry.capabilities.some(item => item.includes(module.path))) {
           entry.modules.add(module.name);
         }
       }
@@ -791,7 +1099,9 @@ function buildDomainNavigation(
   // 转换为表格行
   const rows: Array<{ domain: string; modules: string; capabilities: string; concepts: string; constraints: string; dataModels: string }> = [];
 
-  for (const [domain, entry] of domainMap.entries()) {
+  for (const [domainKey, entry] of domainMap.entries()) {
+    const registryEntry = registry.domains.find(item => item.domainKey === domainKey);
+    const domain = registryEntry?.domainName ?? domainKey;
     // 每个域最多显示 3 个引用
     const capLinks = entry.capabilities.slice(0, 3).join(', ') || '-';
     const conLinks = entry.concepts.slice(0, 3).join(', ') || '-';
@@ -831,7 +1141,7 @@ function generateGlossary(objects: Array<{ id: string; type: KnowledgeType | Leg
   lines.push('| 术语 | 定义 | 别名 | 详情 |');
   lines.push('|------|------|------|------|');
 
-  for (const obj of objects) {
+  for (const obj of objects.filter(isBusinessDomainConceptRecord)) {
     const fields = parseYamlFieldsFromMd(obj.content);
     const fileName = toKebabCase(obj.id) + '.md';
 

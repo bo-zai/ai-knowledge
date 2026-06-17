@@ -134,6 +134,26 @@ export class DomainClusterAgent {
    * 构建输入消息
    */
   private buildInputMessage(input: DomainClusterInput): string {
+    // 构建 commit 历史部分
+    let commitHistorySection = '';
+    if (input.commitHistory && input.commitHistory.candidateCommits.size > 0) {
+      commitHistorySection = `
+## Git Commit 历史
+
+以下是每个候选的入口点文件的 commit 历史（最近 20 条），可以帮助理解业务语义：
+
+`;
+      for (const [candidateId, commits] of input.commitHistory.candidateCommits) {
+        if (commits.length > 0) {
+          commitHistorySection += `### ${candidateId}\n`;
+          for (const commit of commits) {
+            commitHistorySection += `- ${commit.hash.slice(0, 7)}: ${commit.message}\n`;
+          }
+          commitHistorySection += '\n';
+        }
+      }
+    }
+
     return `
 请分析以下候选分区，判断是否需要合并。
 
@@ -150,7 +170,7 @@ ${JSON.stringify(input.candidateRelations, null, 2)}
 
 ## 预分组
 ${JSON.stringify(input.candidateGroups, null, 2)}
-
+${commitHistorySection}
 请输出 JSON 数组格式的合并决策。
 `;
   }

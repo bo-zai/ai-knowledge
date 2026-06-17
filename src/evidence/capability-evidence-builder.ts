@@ -10,6 +10,7 @@ import type {
   NegativeEvidence,
   OpenQuestionSeed,
 } from './evidence-bundle-schema.js';
+import { buildFunctionClusters } from '../slicing/function-clusterer.js';
 
 function byEvidenceRelevance<T extends { targetRelevance?: number }>(left: T, right: T): number {
   return (right.targetRelevance ?? 0) - (left.targetRelevance ?? 0);
@@ -250,6 +251,12 @@ export function buildEvidenceBundle(candidate: CapabilityCandidate, repoName: st
   const flowTraces = buildFlowTraces(candidate);
   const negativeEvidence = buildNegativeEvidence(candidate);
   const openQuestions = buildOpenQuestions(candidate);
+  const functionCandidates = buildFunctionClusters({
+    entrySignals: scopedEntries,
+    behaviorSignals: scopedBehaviors,
+    testSignals: scopedTests,
+    docSignals: scopedDocs,
+  });
 
   return {
     bundleId: `BUNDLE-${candidate.candidateId.replace('CAND-', '')}`,
@@ -273,5 +280,6 @@ export function buildEvidenceBundle(candidate: CapabilityCandidate, repoName: st
     docs,
     negativeEvidence,
     openQuestions,
+    functionCandidates,
   };
 }

@@ -605,11 +605,11 @@ const getCopyQuery = (table: NodeTableName, filePath: string): string => {
     return `COPY ${t}(id, name, filePath, description) FROM "${filePath}" ${COPY_CSV_OPTS}`;
   }
   if (table === 'Method') {
-    return `COPY ${t}(id, name, filePath, startLine, endLine, isExported, content, description, parameterCount, returnType) FROM "${filePath}" ${COPY_CSV_OPTS}`;
+    return `COPY ${t}(id, name, filePath, startLine, endLine, isExported, content, description, parameterCount, returnType, annotations) FROM "${filePath}" ${COPY_CSV_OPTS}`;
   }
-  // TypeScript/JS code element tables have isExported; multi-language tables do not
+  // TypeScript/JS code element tables have isExported and annotations; multi-language tables do not
   if (TABLES_WITH_EXPORTED.has(table)) {
-    return `COPY ${t}(id, name, filePath, startLine, endLine, isExported, content, description) FROM "${filePath}" ${COPY_CSV_OPTS}`;
+    return `COPY ${t}(id, name, filePath, startLine, endLine, isExported, content, description, annotations) FROM "${filePath}" ${COPY_CSV_OPTS}`;
   }
   // Multi-language tables (Struct, Impl, Trait, Macro, etc.)
   return `COPY ${t}(id, name, filePath, startLine, endLine, content, description) FROM "${filePath}" ${COPY_CSV_OPTS}`;
@@ -653,11 +653,23 @@ export const insertNodeToLbug = async (
         ? `, description: ${escapeValue(properties.description)}`
         : '';
       query = `CREATE (n:Section {id: ${escapeValue(properties.id)}, name: ${escapeValue(properties.name)}, filePath: ${escapeValue(properties.filePath)}, startLine: ${properties.startLine || 0}, endLine: ${properties.endLine || 0}, level: ${properties.level || 1}, content: ${escapeValue(properties.content || '')}${descPart}})`;
+    } else if (label === 'Method') {
+      // Method has extra properties: parameterCount, returnType, annotations
+      const descPart = properties.description
+        ? `, description: ${escapeValue(properties.description)}`
+        : '';
+      const annPart = properties.annotations && Array.isArray(properties.annotations) && properties.annotations.length > 0
+        ? `, annotations: ${escapeValue(properties.annotations)}`
+        : '';
+      query = `CREATE (n:Method {id: ${escapeValue(properties.id)}, name: ${escapeValue(properties.name)}, filePath: ${escapeValue(properties.filePath)}, startLine: ${properties.startLine || 0}, endLine: ${properties.endLine || 0}, isExported: ${!!properties.isExported}, content: ${escapeValue(properties.content || '')}${descPart}, parameterCount: ${properties.parameterCount || 0}, returnType: ${escapeValue(properties.returnType || '')}${annPart}})`;
     } else if (TABLES_WITH_EXPORTED.has(label)) {
       const descPart = properties.description
         ? `, description: ${escapeValue(properties.description)}`
         : '';
-      query = `CREATE (n:${t} {id: ${escapeValue(properties.id)}, name: ${escapeValue(properties.name)}, filePath: ${escapeValue(properties.filePath)}, startLine: ${properties.startLine || 0}, endLine: ${properties.endLine || 0}, isExported: ${!!properties.isExported}, content: ${escapeValue(properties.content || '')}${descPart}})`;
+      const annPart = properties.annotations && Array.isArray(properties.annotations) && properties.annotations.length > 0
+        ? `, annotations: ${escapeValue(properties.annotations)}`
+        : '';
+      query = `CREATE (n:${t} {id: ${escapeValue(properties.id)}, name: ${escapeValue(properties.name)}, filePath: ${escapeValue(properties.filePath)}, startLine: ${properties.startLine || 0}, endLine: ${properties.endLine || 0}, isExported: ${!!properties.isExported}, content: ${escapeValue(properties.content || '')}${descPart}${annPart}})`;
     } else {
       // Multi-language tables (Struct, Impl, Trait, Macro, etc.) — no isExported
       const descPart = properties.description
@@ -731,11 +743,23 @@ export const batchInsertNodesToLbug = async (
             ? `, n.description = ${escapeValue(properties.description)}`
             : '';
           query = `MERGE (n:Section {id: ${escapeValue(properties.id)}}) SET n.name = ${escapeValue(properties.name)}, n.filePath = ${escapeValue(properties.filePath)}, n.startLine = ${properties.startLine || 0}, n.endLine = ${properties.endLine || 0}, n.level = ${properties.level || 1}, n.content = ${escapeValue(properties.content || '')}${descPart}`;
+        } else if (label === 'Method') {
+          // Method has extra properties: parameterCount, returnType, annotations
+          const descPart = properties.description
+            ? `, n.description = ${escapeValue(properties.description)}`
+            : '';
+          const annPart = properties.annotations && Array.isArray(properties.annotations) && properties.annotations.length > 0
+            ? `, n.annotations = ${escapeValue(properties.annotations)}`
+            : '';
+          query = `MERGE (n:Method {id: ${escapeValue(properties.id)}}) SET n.name = ${escapeValue(properties.name)}, n.filePath = ${escapeValue(properties.filePath)}, n.startLine = ${properties.startLine || 0}, n.endLine = ${properties.endLine || 0}, n.isExported = ${!!properties.isExported}, n.content = ${escapeValue(properties.content || '')}${descPart}, n.parameterCount = ${properties.parameterCount || 0}, n.returnType = ${escapeValue(properties.returnType || '')}${annPart}`;
         } else if (TABLES_WITH_EXPORTED.has(label)) {
           const descPart = properties.description
             ? `, n.description = ${escapeValue(properties.description)}`
             : '';
-          query = `MERGE (n:${t} {id: ${escapeValue(properties.id)}}) SET n.name = ${escapeValue(properties.name)}, n.filePath = ${escapeValue(properties.filePath)}, n.startLine = ${properties.startLine || 0}, n.endLine = ${properties.endLine || 0}, n.isExported = ${!!properties.isExported}, n.content = ${escapeValue(properties.content || '')}${descPart}`;
+          const annPart = properties.annotations && Array.isArray(properties.annotations) && properties.annotations.length > 0
+            ? `, n.annotations = ${escapeValue(properties.annotations)}`
+            : '';
+          query = `MERGE (n:${t} {id: ${escapeValue(properties.id)}}) SET n.name = ${escapeValue(properties.name)}, n.filePath = ${escapeValue(properties.filePath)}, n.startLine = ${properties.startLine || 0}, n.endLine = ${properties.endLine || 0}, n.isExported = ${!!properties.isExported}, n.content = ${escapeValue(properties.content || '')}${descPart}${annPart}`;
         } else {
           const descPart = properties.description
             ? `, n.description = ${escapeValue(properties.description)}`

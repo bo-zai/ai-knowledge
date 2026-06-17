@@ -74,6 +74,110 @@ export interface CapabilityLlmDebug {
   };
 }
 
+function buildFunctionMarkdown(input: {
+  capabilityId: string;
+  capabilityTitle: string;
+  flowObject: KnowledgeObject;
+  evidenceIndex: EvidenceIndexItem[];
+  capabilityModel: ReturnType<typeof buildCapabilityDocModel>;
+}): string {
+  const { capabilityId, capabilityTitle, flowObject, evidenceIndex, capabilityModel } = input;
+  const orderedSteps = Array.isArray(flowObject.metadata.orderedSteps) ? flowObject.metadata.orderedSteps : [];
+  const evidenceSteps = Array.isArray(flowObject.metadata.evidenceSteps) ? flowObject.metadata.evidenceSteps : [];
+  const flowEvidenceRefs = new Set([
+    ...flowObject.evidencePrimary,
+    ...flowObject.evidenceSupporting,
+  ]);
+
+  const lines: string[] = [];
+  lines.push(`# ${flowObject.id}`);
+  lines.push('');
+  lines.push(`> 所属 capability：${capabilityTitle} (${capabilityId})`);
+  lines.push(`> 生成时间：${new Date().toISOString()}`);
+  lines.push('');
+
+  lines.push('## 1. 功能定位');
+  lines.push('');
+  lines.push(flowObject.description);
+  lines.push('');
+
+  lines.push('## 2. 关联入口');
+  lines.push('');
+  if (capabilityModel.codeAnchors.length === 0) {
+    lines.push('- 当前知识包没有稳定入口锚点。');
+  } else {
+    for (const anchor of capabilityModel.codeAnchors) {
+      lines.push(`- ${anchor.symbolOrRoute} @ ${anchor.path}`);
+    }
+  }
+  lines.push('');
+
+  lines.push('## 3. 关键步骤');
+  lines.push('');
+  if (orderedSteps.length > 0) {
+    orderedSteps.forEach((step, index) => {
+      if (!step || typeof step !== 'object') return;
+      const action = typeof step.action === 'string' ? step.action : '';
+      const evidenceRef = typeof step.evidenceRef === 'string' ? step.evidenceRef : '';
+      if (action) {
+        lines.push(`${index + 1}. ${action}${evidenceRef ? ` (${evidenceRef})` : ''}`);
+      }
+    });
+  } else if (evidenceSteps.length > 0) {
+    evidenceSteps.forEach((step, index) => {
+      if (!step || typeof step !== 'object') return;
+      const action = typeof step.action === 'string' ? step.action : '';
+      if (action) {
+        lines.push(`${index + 1}. ${action}`);
+      }
+    });
+  } else {
+    lines.push('- 当前 FLOW 对象没有稳定步骤，只能把它视为功能占位。');
+  }
+  lines.push('');
+
+  lines.push('## 4. 入口与证据');
+  lines.push('');
+  const relatedEvidence = evidenceIndex.filter(item => flowEvidenceRefs.has(item.ref));
+  if (relatedEvidence.length === 0) {
+    lines.push('- 当前功能没有单独绑定证据索引条目。');
+  } else {
+    lines.push('| 证据 | 类型 | 位置 | 说明 |');
+    lines.push('| --- | --- | --- | --- |');
+    for (const item of relatedEvidence) {
+      lines.push(`| ${item.ref} | ${item.kind} | ${item.location ?? '-'} | ${item.summary ?? item.name ?? '-'} |`);
+    }
+  }
+  lines.push('');
+
+  lines.push('## 5. 相关数据与约束');
+  lines.push('');
+  if (capabilityModel.dataContracts.length === 0) {
+    lines.push('- 当前知识包没有稳定契约对象。');
+  } else {
+    for (const contract of capabilityModel.dataContracts) {
+      lines.push(`- ${contract.subject} (${contract.kind})`);
+    }
+  }
+  if (capabilityModel.unknowns.length > 0) {
+    lines.push('');
+    lines.push('待确认：');
+    for (const unknown of capabilityModel.unknowns) {
+      lines.push(`- ${unknown.question}`);
+    }
+  }
+  if (capabilityModel.validation.length > 0) {
+    lines.push('');
+    lines.push('验证关注点：');
+    for (const validation of capabilityModel.validation) {
+      lines.push(`- ${validation.goal}`);
+    }
+  }
+  lines.push('');
+
+  return lines.join('\n');
+}
+
 function buildObjectYaml(object: KnowledgeObject): string {
   const domain = inferDomainFromObject(object);
   const owner = (object.metadata.owner as string | undefined) ?? '';
@@ -312,7 +416,13 @@ export function buildCapabilityKnowledgeFiles(input: {
   }
 
   // 生成 capability markdown（主入口）
-  const capabilityMarkdown = buildCapabilityView(objects, capabilityId, evidenceIndex);
+  const capabilityModel = buildCapabilityDocModel({ objects, capabilityId, evidenceIndex });
+  const capabilityMarkdown = renderCapabilityMarkdown(capabilityModel, {
+    functionLinkPrefix: '../functions',
+  });
+  const compatibilityViewMarkdown = renderCapabilityMarkdown(capabilityModel, {
+    functionLinkPrefix: '../../functions',
+  });
 
   // 生成主 capability Markdown
   files.push({
@@ -323,8 +433,21 @@ export function buildCapabilityKnowledgeFiles(input: {
   // 生成兼容性 view
   files.push({
     path: `views/capabilities/${capabilityId}.md`,
-    content: capabilityMarkdown,
+    content: compatibilityViewMarkdown,
   });
+
+  for (const flowObject of objects.filter(obj => obj.type === 'FLOW')) {
+    files.push({
+      path: `functions/${flowObject.id}.md`,
+      content: buildFunctionMarkdown({
+        capabilityId,
+        capabilityTitle: capabilityModel.title,
+        flowObject,
+        evidenceIndex: evidenceIndex ?? [],
+        capabilityModel,
+      }),
+    });
+  }
 
   // 生成 evidence index
   if (evidenceIndex && evidenceIndex.length > 0) {

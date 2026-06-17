@@ -252,6 +252,8 @@ export function buildCapabilityClaimPrompt(bundle: EvidenceBundle): string {
     'BUSINESS OBJECT QUALITY RULES:',
     '- Generate business capability knowledge for AI agents, not generic code summaries.',
     '- TERM is business vocabulary only; reject mybatis, mapper, service, controller, xml, sql, dto, vo, req, resp, entity as standalone terms.',
+    '- FLOW must represent a stable business function or user-visible business action, not a raw endpoint or method.',
+    '- Prefer one FLOW per stable function candidate cluster. Merge entry/service/test/doc evidence that points to the same action.',
     '- FLOW steps must be business actions, not raw method names.',
     '- CON must describe business-relevant contract semantics; mapper methods and DTOs are evidence, not the whole contract.',
     '- MOD must include touchWhen and doNotTouchWhen guidance.',
@@ -294,6 +296,21 @@ export function buildCapabilityClaimPrompt(bundle: EvidenceBundle): string {
     lines.push('');
     lines.push('OPEN QUESTION SEEDS:');
     bundle.openQuestions.forEach(q => lines.push(`- ${q.id}: ${q.question}`));
+  }
+
+  if ((bundle.functionCandidates?.length ?? 0) > 0) {
+    lines.push('');
+    lines.push('BUSINESS FUNCTION CANDIDATES:');
+    lines.push('- These are statically clustered action candidates. Use them as the primary basis for FLOW/function judgment.');
+    lines.push('- Merge duplicates across entry/service/test/doc evidence when they describe one user-visible business action.');
+    lines.push('- Query/list/detail candidates are supporting functions unless the repository evidence clearly shows they are core.');
+    bundle.functionCandidates!.forEach(candidate => {
+      lines.push(`- ${candidate.id}: ${candidate.canonicalName} | verb=${candidate.normalizedVerb} | object=${candidate.normalizedObject} | core=${candidate.isCore} | relevance=${candidate.relevance.toFixed(2)}`);
+      lines.push(`  summary: ${candidate.summary}`);
+      candidate.signals.slice(0, 6).forEach(signal => {
+        lines.push(`  signal: ${signal.kind} "${signal.name}" at ${signal.location}`);
+      });
+    });
   }
 
   lines.push('');

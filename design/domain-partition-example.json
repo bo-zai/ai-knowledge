@@ -1,0 +1,352 @@
+{
+  "partitionId": "domain:oms_order",
+  "partitionHash": "sha256:e5f6g7h8i9j0",
+  "algorithmVersion": "1.0.0",
+
+  "tables": [
+    {
+      "tableName": "oms_order",
+      "role": "primary",
+      "tableType": "table"
+    },
+    {
+      "tableName": "oms_order_item",
+      "role": "related",
+      "relationType": "foreign_key",
+      "foreignKey": "order_id → oms_order.id"
+    },
+    {
+      "tableName": "oms_order_return",
+      "role": "related",
+      "relationType": "foreign_key",
+      "foreignKey": "order_id → oms_order.id"
+    },
+    {
+      "tableName": "oms_order_2024",
+      "role": "shard",
+      "shardGroup": "oms_order"
+    },
+    {
+      "tableName": "oms_order_2025",
+      "role": "shard",
+      "shardGroup": "oms_order"
+    },
+    {
+      "tableName": "pms_product_category",
+      "role": "junction_table",
+      "junctionBetween": {
+        "leftTable": "pms_product",
+        "rightTable": "pms_category",
+        "leftKey": "product_id",
+        "rightKey": "category_id"
+      }
+    },
+    {
+      "tableName": "v_order_summary",
+      "role": "view_reference",
+      "tableType": "view",
+      "baseTables": ["oms_order", "oms_order_item"]
+    }
+  ],
+
+  "entryPoints": [
+    {
+      "kind": "controller",
+      "clientType": "web",
+      "className": "OrderController",
+      "methodName": "createOrder",
+      "filePath": "mall-admin/src/main/java/com/macro/mall/controller/OrderController.java",
+      "startLine": 45,
+      "signature": "@PostMapping(\"/order/create\")",
+      "module": "mall-admin",
+      "callChain": [
+        {
+          "className": "OrderServiceImpl",
+          "interfaceName": "IOrderService",
+          "implementationType": "impl",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/OrderServiceImpl.java",
+          "role": "core_logic"
+        },
+        {
+          "className": "StockService",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/StockService.java",
+          "role": "cross_domain_call",
+          "crossDomainHint": "stock"
+        },
+        {
+          "className": "PaymentService",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/PaymentService.java",
+          "role": "cross_domain_call",
+          "crossDomainHint": "payment"
+        },
+        {
+          "className": "OrderMapper",
+          "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderMapper.java",
+          "role": "data_layer"
+        }
+      ],
+      "crossDomainCalls": [
+        {
+          "targetDomain": "stock",
+          "className": "StockService",
+          "methodName": "checkStock",
+          "callPurpose": "库存检查"
+        },
+        {
+          "targetDomain": "payment",
+          "className": "PaymentService",
+          "methodName": "processPayment",
+          "callPurpose": "支付处理"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "clientType": "web",
+      "className": "OrderController",
+      "methodName": "getOrderList",
+      "filePath": "mall-admin/src/main/java/com/macro/mall/controller/OrderController.java",
+      "startLine": 72,
+      "signature": "@GetMapping(\"/order/list\")",
+      "module": "mall-admin",
+      "callChain": [
+        {
+          "className": "OrderServiceImpl",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/OrderServiceImpl.java",
+          "role": "core_logic"
+        },
+        {
+          "className": "OrderMapper",
+          "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderMapper.java",
+          "role": "data_layer"
+        }
+      ]
+    },
+    {
+      "kind": "controller",
+      "clientType": "app",
+      "className": "AppOrderController",
+      "methodName": "getOrderList",
+      "filePath": "mall-portal/src/main/java/com/macro/mall/controller/AppOrderController.java",
+      "startLine": 32,
+      "signature": "@GetMapping(\"/app/order/list\")",
+      "module": "mall-portal",
+      "callChain": [
+        {
+          "className": "OrderServiceImpl",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/OrderServiceImpl.java",
+          "role": "core_logic"
+        },
+        {
+          "className": "OrderMapper",
+          "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderMapper.java",
+          "role": "data_layer"
+        }
+      ]
+    },
+    {
+      "kind": "scheduled",
+      "className": "StockSyncTask",
+      "methodName": "syncStock",
+      "filePath": "mall-admin/src/main/java/com/macro/mall/task/StockSyncTask.java",
+      "startLine": 25,
+      "module": "mall-admin",
+      "callChain": [
+        {
+          "className": "StockMapper",
+          "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/StockMapper.java",
+          "role": "data_layer"
+        }
+      ],
+      "noServiceLayer": true
+    },
+    {
+      "kind": "mq_consumer",
+      "className": "OrderMessageListener",
+      "methodName": "onMessage",
+      "filePath": "mall-admin/src/main/java/com/macro/mall/listener/OrderMessageListener.java",
+      "startLine": 18,
+      "module": "mall-admin",
+      "mqType": "rocketmq",
+      "mqTopic": "ORDER_TOPIC",
+      "callChain": [
+        {
+          "className": "OrderServiceImpl",
+          "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/OrderServiceImpl.java",
+          "role": "core_logic"
+        },
+        {
+          "className": "OrderMapper",
+          "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderMapper.java",
+          "role": "data_layer"
+        }
+      ]
+    }
+  ],
+
+  "sharedResources": {
+    "coreLogic": [
+      {
+        "className": "OrderServiceImpl",
+        "interfaceName": "IOrderService",
+        "implementationType": "impl",
+        "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/OrderServiceImpl.java",
+        "module": "mall-admin"
+      },
+      {
+        "className": "PhysicalOrderServiceImpl",
+        "interfaceName": "IOrderService",
+        "implementationType": "impl",
+        "filePath": "mall-admin/src/main/java/com/macro/mall/service/impl/PhysicalOrderServiceImpl.java",
+        "module": "mall-admin",
+        "polymorphismGroup": "order_service_impls"
+      }
+    ],
+    "dataLayer": [
+      {
+        "className": "OrderMapper",
+        "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderMapper.java",
+        "xmlPath": "mall-mbg/src/main/resources/mapper/OrderMapper.xml",
+        "module": "mall-mbg",
+        "tablesOperated": ["oms_order", "oms_order_item"]
+      },
+      {
+        "className": "OrderItemMapper",
+        "filePath": "mall-mbg/src/main/java/com/macro/mall/mapper/OrderItemMapper.java",
+        "xmlPath": "mall-mbg/src/main/resources/mapper/OrderItemMapper.xml",
+        "module": "mall-mbg",
+        "tablesOperated": ["oms_order_item"]
+      }
+    ],
+    "entities": [
+      {
+        "className": "OmsOrder",
+        "filePath": "mall-mbg/src/main/java/com/macro/mall/model/OmsOrder.java",
+        "module": "mall-mbg",
+        "tablesMapped": ["oms_order", "oms_order_2024", "oms_order_2025"],
+        "entityRole": "canonical"
+      },
+      {
+        "className": "OmsOrderDTO",
+        "filePath": "mall-admin/src/main/java/com/macro/mall/dto/OmsOrderDTO.java",
+        "module": "mall-admin",
+        "tablesMapped": ["oms_order"],
+        "entityRole": "dto"
+      },
+      {
+        "className": "OmsOrderVO",
+        "filePath": "mall-portal/src/main/java/com/macro/mall/vo/OmsOrderVO.java",
+        "module": "mall-portal",
+        "tablesMapped": ["oms_order"],
+        "entityRole": "vo"
+      },
+      {
+        "className": "OmsOrderItem",
+        "filePath": "mall-mbg/src/main/java/com/macro/mall/model/OmsOrderItem.java",
+        "module": "mall-mbg",
+        "tablesMapped": ["oms_order_item"],
+        "entityRole": "canonical"
+      }
+    ]
+  },
+
+  "backendModules": [
+    {
+      "name": "mall-admin",
+      "path": "mall-admin/src/main/java",
+      "role": "entry_and_logic_provider"
+    },
+    {
+      "name": "mall-portal",
+      "path": "mall-portal/src/main/java",
+      "role": "entry_provider"
+    },
+    {
+      "name": "mall-mbg",
+      "path": "mall-mbg/src/main/java",
+      "role": "data_provider"
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "pageName": "OrderListPage",
+        "filePath": "mall-admin-web/src/pages/order/OrderListPage.vue",
+        "module": "mall-admin-web",
+        "apiCalls": [
+          { "backendApiId": "controller:OrderController:getOrderList" },
+          { "backendApiId": "controller:OrderController:cancelOrder" }
+        ]
+      },
+      {
+        "pageName": "OrderCreatePage",
+        "filePath": "mall-admin-web/src/pages/order/OrderCreatePage.vue",
+        "module": "mall-admin-web",
+        "apiCalls": [
+          { "backendApiId": "controller:OrderController:createOrder" }
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "name": "mall-admin-web",
+        "path": "mall-admin-web/src",
+        "framework": "vue"
+      }
+    ]
+  },
+
+  "frontendBackendLinks": [
+    {
+      "frontendPageName": "OrderListPage",
+      "frontendModule": "mall-admin-web",
+      "backendApiIds": ["controller:OrderController:getOrderList", "controller:OrderController:cancelOrder"],
+      "linkType": "page_to_api"
+    },
+    {
+      "frontendPageName": "OrderCreatePage",
+      "frontendModule": "mall-admin-web",
+      "backendApiIds": ["controller:OrderController:createOrder"],
+      "linkType": "page_to_api"
+    }
+  ],
+
+  "noEntryTables": [
+    {
+      "tableName": "sys_config",
+      "tableType": "config_table",
+      "suggestedDomain": "system_config"
+    }
+  ],
+
+  "confidenceBreakdown": {
+    "traceDepth": 0.7,
+    "crossModule": 0.2,
+    "multiEntryPoint": 0.15,
+    "tableRelation": 0.1
+  },
+
+  "crossDomainRefs": [
+    { "targetDomain": "stock", "relationType": "service_call" },
+    { "targetDomain": "payment", "relationType": "service_call" }
+  ],
+
+  "domainKeywords": ["order", "订单", "购物", "下单", "订单管理"],
+
+  "contentHash": "sha256:a1b2c3d4",
+  "fileHashes": {
+    "backend": {
+      "OrderController.java": "sha256:abc123",
+      "OrderServiceImpl.java": "sha256:def456",
+      "OrderMapper.java": "sha256:ghi789",
+      "OrderMapper.xml": "sha256:jkl012"
+    },
+    "frontend": {
+      "OrderListPage.vue": "sha256:mno345",
+      "OrderCreatePage.vue": "sha256:pqr678"
+    }
+  },
+  "lastCommitHash": "abc123def456",
+  "updatedAt": "2026-06-16T10:00:00Z"
+}

@@ -2,17 +2,18 @@
  * DomainPartitioner 主入口
  *
  * 协调流程：
- * 1. 初始化图数据库连接
- * 2. 发现入口点（Controller, Scheduled, MQ Consumer）
- * 3. 追溯每个入口点的调用链
- * 4. 收集表锚点
- * 5. 构建 PartitionCandidate
- * 6. 增量更新判断（对比上次快照）
- * 7. LLM 语义分析（可选）
- * 8. 聚合 Partition
- * 9. 计算 fileHashes 和 lastCommitHash
- * 10. 精确文件更新
- * 11. 写入 JSON 文件（包含候选快照和 LLM 决策）
+ * 1. 加载模块拓扑（modules.json）
+ * 2. 初始化图数据库连接
+ * 3. 发现入口点（Controller, Scheduled, MQ Consumer）
+ * 4. 追溯每个入口点的调用链
+ * 5. 收集表锚点
+ * 6. 构建 PartitionCandidate
+ * 7. 增量更新判断（对比上次快照）
+ * 8. LLM 语义分析（可选）
+ * 9. 聚合 Partition
+ * 10. 计算 fileHashes 和 lastCommitHash
+ * 11. 精确文件更新
+ * 12. 写入 JSON 文件（包含候选快照和 LLM 决策）
  */
 
 import { getStoragePaths, loadMeta } from '../engine/storage/repo-manager.js';
@@ -25,6 +26,8 @@ import { createCandidateBuilder } from './candidate-builder.js';
 import { createDomainClusterAgentSync } from './domain-cluster-agent.js';
 import { createDomainClusterTools } from '../agent-tools/domain-cluster-tools.js';
 import { createAgentRuntime } from '../agent-runtime/runtime.js';
+import { runModule, loadModuleTopology } from '../module/index.js';
+import type { ModuleTopology } from '../module/index.js';
 import type {
   DomainPartition,
   PartitionConfig,
@@ -37,6 +40,8 @@ import type {
   StoredLlmDecision,
   IncrementalUpdateResult,
   PartitionCandidate,
+  CommitHistoryInfo,
+  CommitInfo,
 } from './types.js';
 import { getCurrentCommit } from '../engine/storage/git.js';
 import { logger } from '../shared/logger.js';
@@ -168,6 +173,62 @@ async function loadPreviousIndex(outputDir: string): Promise<PartitionIndex | un
 }
 
 /**
+ * 收集候选的 Git commit 历史
+ * 用于辅助 LLM 分析业务语义
+ */
+async function collectCommitHistory(
+  repoPath: string,
+  candidates: PartitionCandidate[]
+): Promise<CommitHistoryInfo | undefined> {
+  const candidateCommits = new Map<string, CommitInfo[]>();
+
+  try {
+    for (const candidate of candidates) {
+      const filePaths = candidate.entryPoints.map(ep => ep.filePath);
+
+      // 查询这些文件的 commit 历史（限制最近 20 条）
+      const result = await runGitCommand(
+        repoPath,
+        `git log --oneline -20 -- ${filePaths.map(f => `"${f}"`).join(' ')}`
+      );
+
+      const commits: CommitInfo[] = [];
+      for (const line of result.split('\n').filter(l => l.trim())) {
+        const match = line.match(/^([a-f0-9]+)\s+(.+)$/);
+        if (match) {
+          commits.push({
+            hash: match[1],
+            message: match[2],
+          });
+        }
+      }
+
+      if (commits.length > 0) {
+        candidateCommits.set(candidate.candidateId, commits);
+      }
+    }
+
+    if (candidateCommits.size > 0) {
+      logger.info(`Collected commit history for ${candidateCommits.size} candidates`);
+    }
+
+    return { candidateCommits };
+  } catch (err) {
+    logger.warn(`Failed to collect commit history: ${err}`);
+    return undefined;
+  }
+}
+
+/**
+ * 执行 git 命令
+ */
+async function runGitCommand(repoPath: string, command: string): Promise<string> {
+  const { execa } = await import('execa');
+  const result = await execa(command, { cwd: repoPath, shell: true });
+  return result.stdout;
+}
+
+/**
  * 运行 Domain Partitioning
  */
 export async function runDomainPartitioning(config: PartitionConfig): Promise<PartitionResult> {
@@ -178,6 +239,24 @@ export async function runDomainPartitioning(config: PartitionConfig): Promise<Pa
 
   logger.info(`Starting domain partitioning for: ${repoPath}`);
   logger.info(`LLM analysis enabled: ${enableLLMAnalysis}, Force mode: ${forceMode}`);
+
+  // ========== 加载模块拓扑（复用 modules.json） ==========
+  let moduleTopology: ModuleTopology | null = null;
+
+  // 尝试加载已有的 modules.json
+  moduleTopology = await loadModuleTopology(repoPath);
+
+  if (!moduleTopology) {
+    logger.info('No modules.json found, running module division...');
+    const moduleResult = await runModule({
+      repoPath,
+      force: false, // 不强制重新分析
+    });
+    moduleTopology = moduleResult.topology;
+    logger.info(`Module division completed: ${moduleTopology.moduleCount} modules, ${moduleTopology.couplingMode}`);
+  } else {
+    logger.info(`Using existing module topology: ${moduleTopology.moduleCount} modules, ${moduleTopology.couplingMode}`);
+  }
 
   // 确保图数据库索引存在
   const meta = await loadMeta(storagePath);
@@ -209,7 +288,8 @@ export async function runDomainPartitioning(config: PartitionConfig): Promise<Pa
 
   // 使用 withReadOnlyLbug 执行追溯
   const traceResults = await withReadOnlyLbug(lbugPath, async query => {
-    const traceBuilder = createTraceChainBuilder(query, repoPath);
+    // 创建 TraceChainBuilder，传入模块拓扑
+    const traceBuilder = createTraceChainBuilder(query, repoPath, moduleTopology!);
     const tableCollector = createTableAnchorCollector(query, repoPath);
 
     // 1. 发现入口点
@@ -265,6 +345,14 @@ export async function runDomainPartitioning(config: PartitionConfig): Promise<Pa
   logger.info('Building candidates...');
   const candidateBuilder = createCandidateBuilder();
   const domainClusterInput = candidateBuilder.buildDomainClusterInput(traceResults, repoPath);
+
+  // 5.1 收集 Git commit 历史（辅助分析）
+  if (enableLLMAnalysis) {
+    const commitHistory = await collectCommitHistory(repoPath, domainClusterInput.candidates);
+    if (commitHistory) {
+      domainClusterInput.commitHistory = commitHistory;
+    }
+  }
 
   // 6. 增量更新判断
   const incrementalCheck = checkIncrementalUpdate(

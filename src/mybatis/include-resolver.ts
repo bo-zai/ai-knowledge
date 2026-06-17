@@ -106,6 +106,14 @@ function normalizeSql(sql: string): string {
     { pattern: /GROUPBY/gi, replacement: 'GROUP BY' },
     // INSERT INTO glued
     { pattern: /INSERTINTO/gi, replacement: 'INSERT INTO' },
+    // Table name glued to WHERE (common MyBatis dynamic SQL issue)
+    // Match: tablenamewhere -> tablename WHERE
+    // Pattern: word + 'where' at word boundary -> word + ' WHERE'
+    { pattern: /(\w)where\b/gi, replacement: '$1 WHERE' },
+    // Table name glued to SET
+    { pattern: /(\w)set\b/gi, replacement: '$1 SET' },
+    // Table name glued to AND
+    { pattern: /(\w)and\b/gi, replacement: '$1 AND' },
   ];
 
   for (const { pattern, replacement } of keywordGluePatterns) {

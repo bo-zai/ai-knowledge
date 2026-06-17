@@ -116,6 +116,27 @@ export const CapabilityHintsSchema = z.object({
   summaryHint: z.string().optional(),
 });
 
+export const FunctionCandidateSchema = z.object({
+  id: z.string(),
+  canonicalName: z.string(),
+  normalizedVerb: z.string(),
+  normalizedObject: z.string(),
+  domainTerms: z.array(z.string()),
+  summary: z.string(),
+  sourceKinds: z.array(z.enum(['entry', 'behavior', 'test', 'doc'])),
+  isCore: z.boolean(),
+  relevance: z.number().min(0).max(1),
+  signals: z.array(z.object({
+    kind: z.enum(['entry', 'behavior', 'test', 'doc']),
+    name: z.string(),
+    location: z.string(),
+    summary: z.string().optional(),
+    role: z.string().optional(),
+    matchedTerms: z.array(z.string()),
+    relevance: z.number().min(0).max(1),
+  })),
+});
+
 export const EvidenceBundleSchema = z.object({
   bundleId: z.string().min(1),
   candidateId: z.string().min(1),
@@ -132,6 +153,7 @@ export const EvidenceBundleSchema = z.object({
   docs: z.array(EvidenceDocSnippetSchema),
   negativeEvidence: z.array(NegativeEvidenceSchema),
   openQuestions: z.array(OpenQuestionSeedSchema),
+  functionCandidates: z.array(FunctionCandidateSchema).optional(),
 });
 
 export type EvidenceEntryPoint = z.infer<typeof EvidenceEntryPointSchema>;
@@ -145,4 +167,5 @@ export type NegativeEvidence = z.infer<typeof NegativeEvidenceSchema>;
 export type OpenQuestionSeed = z.infer<typeof OpenQuestionSeedSchema>;
 export type RepoProfileLite = z.infer<typeof RepoProfileLiteSchema>;
 export type CapabilityHints = z.infer<typeof CapabilityHintsSchema>;
+export type FunctionCandidate = z.infer<typeof FunctionCandidateSchema>;
 export type EvidenceBundle = z.infer<typeof EvidenceBundleSchema>;

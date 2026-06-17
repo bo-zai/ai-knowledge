@@ -395,6 +395,30 @@ export interface DomainClusterInput {
   candidateGroups: CandidateGroup[];
   /** 项目上下文 */
   projectContext: ProjectContext;
+  /** Git commit 历史（可选，辅助分析） */
+  commitHistory?: CommitHistoryInfo;
+}
+
+/**
+ * CommitHistoryInfo - Git commit 历史信息
+ */
+export interface CommitHistoryInfo {
+  /** 每个候选的 commit 列表 */
+  candidateCommits: Map<string, CommitInfo[]>;
+}
+
+/**
+ * CommitInfo - 单个 commit 信息
+ */
+export interface CommitInfo {
+  /** commit hash */
+  hash: string;
+  /** commit message（原始内容） */
+  message: string;
+  /** commit 日期 */
+  date?: string;
+  /** commit 作者 */
+  author?: string;
 }
 
 /**

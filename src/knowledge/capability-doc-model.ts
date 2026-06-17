@@ -18,6 +18,7 @@ export interface CapabilityDocBehavior {
   summary: string;
   steps: CapabilityDocBehaviorStep[];
   evidenceRefs: string[];
+  functionDocName?: string;
 }
 
 export interface CapabilityDocCodeAnchor {
@@ -26,6 +27,11 @@ export interface CapabilityDocCodeAnchor {
   path: string;
   touchWhen: string[];
   doNotTouchWhen: string[];
+  evidenceRefs: string[];
+}
+
+export interface CapabilityDocModuleSurface {
+  path: string;
   evidenceRefs: string[];
 }
 
@@ -67,6 +73,8 @@ export interface CapabilityDocEvidence {
 
 export interface CapabilityDocModel {
   capabilityId: string;
+  domainKey?: string;
+  domainName?: string;
   title: string;
   summaryZh: string;
   includes: string[];
@@ -75,6 +83,7 @@ export interface CapabilityDocModel {
   terms: CapabilityDocTerm[];
   behaviors: CapabilityDocBehavior[];
   codeAnchors: CapabilityDocCodeAnchor[];
+  moduleSurfaces: CapabilityDocModuleSurface[];
   dataContracts: CapabilityDocDataContract[];
   unknowns: CapabilityDocUnknown[];
   validation: CapabilityDocValidation[];
@@ -161,6 +170,7 @@ export function buildCapabilityDocModel(input: {
         summary: o.description,
         steps,
         evidenceRefs: o.evidencePrimary,
+        functionDocName: `${o.id}.md`,
       };
     });
 
@@ -172,6 +182,13 @@ export function buildCapabilityDocModel(input: {
       path: asString(o.metadata.rootPath) ?? 'unknown',
       touchWhen: asStringArray(o.metadata.touchWhen),
       doNotTouchWhen: asStringArray(o.metadata.doNotTouchWhen),
+      evidenceRefs: o.evidencePrimary,
+    }));
+
+  const moduleSurfaces = objects
+    .filter(o => o.type === 'MOD')
+    .map(o => ({
+      path: asString(o.metadata.rootPath) ?? 'unknown',
       evidenceRefs: o.evidencePrimary,
     }));
 
@@ -253,6 +270,8 @@ export function buildCapabilityDocModel(input: {
 
   return {
     capabilityId,
+    domainKey: asString(cap?.metadata.domainKey),
+    domainName: asString(cap?.metadata.domainName),
     title,
     summaryZh,
     includes: asStringArray(cap?.metadata.successCriteria),
@@ -261,6 +280,7 @@ export function buildCapabilityDocModel(input: {
     terms,
     behaviors,
     codeAnchors,
+    moduleSurfaces,
     dataContracts,
     unknowns,
     validation,

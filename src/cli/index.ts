@@ -14,6 +14,17 @@ program
   .helpOption('-h, --help', 'display help for command');
 
 program
+  .command('init [path]')
+  .description('Initialize graph data (run embedded analysis). If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
+  .option('--force', 'Force re-analysis even if index exists')
+  .option('--verbose', 'Enable verbose logging')
+  .action(async (path, options) => {
+    const { runInit } = await import('./init.js');
+    await runInit({ ...options, path });
+  });
+
+program
   .command('generate [path]')
   .description('Generate ai-knowledge package. If no path specified, uses current directory.')
   .option('--repo <path>', 'Target repository path (overrides positional argument)')
@@ -41,6 +52,29 @@ program
   .action(async (path, options) => {
     const { runInitSkills } = await import('./init-skills.js');
     await runInitSkills({ ...options, path });
+  });
+
+program
+  .command('partition [path]')
+  .description('Run domain partitioning to generate partition JSON files. If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
+  .option('--force', 'Force re-partition even if partitions exist')
+  .option('--verbose', 'Enable verbose logging')
+  .action(async (path, options) => {
+    const { runPartition } = await import('./partition.js');
+    await runPartition({ ...options, path });
+  });
+
+program
+  .command('module [path]')
+  .description('Run module division to generate modules.json. If no path specified, uses current directory.')
+  .option('--repo <path>', 'Target repository path (overrides positional argument)')
+  .option('--force', 'Force re-analysis even if modules.json exists')
+  .option('--max-depth <number>', 'Maximum recursion depth for module discovery (default: 3)')
+  .option('--verbose', 'Enable verbose logging')
+  .action(async (path, options) => {
+    const { runModuleCommand } = await import('./module.js');
+    await runModuleCommand({ ...options, path });
   });
 
 program

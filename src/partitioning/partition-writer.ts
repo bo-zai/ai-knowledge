@@ -39,6 +39,12 @@ export class PartitionWriter {
    * 写入单个 Partition JSON 文件
    */
   async writePartition(partition: DomainPartition): Promise<string> {
+    // 防止空 tables 导致的错误
+    if (!partition.tables || partition.tables.length === 0) {
+      logger.warn(`Partition ${partition.partitionId} has no tables, skipping`);
+      return '';
+    }
+
     const anchorTable = partition.tables.find(t => t.role === 'primary')?.tableName ?? partition.tables[0].tableName;
     const fileName = `${anchorTable}.json`;
     const filePath = path.join(this.outputDir, fileName);
@@ -61,15 +67,23 @@ export class PartitionWriter {
   ): Promise<string[]> {
     await this.ensureOutputDir();
 
+    // 过滤空分区
+    const validPartitions = partitions.filter(p => p.tables && p.tables.length > 0);
+    if (validPartitions.length < partitions.length) {
+      logger.warn(`Filtered ${partitions.length - validPartitions.length} partitions with empty tables`);
+    }
+
     const filePaths: string[] = [];
 
-    for (const partition of partitions) {
+    for (const partition of validPartitions) {
       const filePath = await this.writePartition(partition);
-      filePaths.push(filePath);
+      if (filePath) {
+        filePaths.push(filePath);
+      }
     }
 
     // 写入索引文件（包含候选快照和 LLM 决策）
-    await this.writeIndex(partitions, candidateSnapshot, llmDecisions);
+    await this.writeIndex(validPartitions, candidateSnapshot, llmDecisions);
 
     return filePaths;
   }
@@ -84,7 +98,10 @@ export class PartitionWriter {
   ): Promise<string> {
     const indexPath = path.join(this.outputDir, '_index.json');
 
-    const entries: PartitionIndexEntry[] = partitions.map(p => ({
+    // 过滤空分区
+    const validPartitions = partitions.filter(p => p.tables && p.tables.length > 0);
+
+    const entries: PartitionIndexEntry[] = validPartitions.map(p => ({
       partitionId: p.partitionId,
       file: `${p.tables.find(t => t.role === 'primary')?.tableName ?? p.tables[0].tableName}.json`,
       anchorTable: p.tables.find(t => t.role === 'primary')?.tableName ?? p.tables[0].tableName,
@@ -95,7 +112,7 @@ export class PartitionWriter {
 
     const index: PartitionIndex = {
       version: '1.0.0',
-      algorithmVersion: partitions[0]?.algorithmVersion ?? '1.0.0',
+      algorithmVersion: validPartitions[0]?.algorithmVersion ?? '1.0.0',
       updatedAt: new Date().toISOString(),
       // 添加候选快照（用于增量更新）
       candidateSnapshot,
@@ -103,9 +120,9 @@ export class PartitionWriter {
       llmDecisions,
       partitions: entries,
       stats: {
-        totalPartitions: partitions.length,
+        totalPartitions: validPartitions.length,
         crossModuleCount: entries.filter(e => e.isCrossModule).length,
-        backendEntryPointCount: partitions.reduce((sum, p) => sum + p.entryPoints.length, 0),
+        backendEntryPointCount: validPartitions.reduce((sum, p) => sum + p.entryPoints.length, 0),
       },
     };
 

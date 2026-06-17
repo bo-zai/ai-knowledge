@@ -18,11 +18,24 @@ function pushList(lines: string[], items: string[], fallback: string): void {
   }
 }
 
-export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
+export function renderCapabilityMarkdown(
+  model: CapabilityDocModel,
+  options?: { functionLinkPrefix?: string; conceptLink?: string },
+): string {
   const lines: string[] = [];
+  const functionLinkPrefix = options?.functionLinkPrefix;
+  const conceptLink = options?.conceptLink;
 
   lines.push(`# ${model.title}`);
   lines.push('');
+  if (model.domainName || model.domainKey) {
+    lines.push(`> 所属业务域：${model.domainName ?? '-'}`);
+    lines.push(`> 业务域Key：${model.domainKey ?? '-'}`);
+    if (conceptLink) {
+      lines.push(`> 业务域文档：[${model.domainName ?? model.domainKey ?? '业务域'}](${conceptLink})`);
+    }
+    lines.push('');
+  }
 
   lines.push('## 1. 能力结论');
   lines.push('');
@@ -63,6 +76,10 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
       lines.push('');
       lines.push(behavior.summary);
       lines.push('');
+      if (functionLinkPrefix && behavior.functionDocName) {
+        lines.push(`- [功能文档](${functionLinkPrefix}/${behavior.functionDocName})`);
+        lines.push('');
+      }
       if (behavior.steps.length > 0) {
         behavior.steps.forEach((step, index) => {
           lines.push(`${index + 1}. ${step.step} (${evidenceRefs(step.evidenceRefs)})`);
@@ -87,7 +104,18 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
   }
   lines.push('');
 
-  lines.push('## 6. 改动定位建议');
+  lines.push('## 6. 覆盖模块');
+  lines.push('');
+  if (model.moduleSurfaces.length === 0) {
+    lines.push('- 当前知识包没有可识别的模块覆盖信息。');
+  } else {
+    for (const surface of model.moduleSurfaces) {
+      lines.push(`- ${surface.path} (${evidenceRefs(surface.evidenceRefs)})`);
+    }
+  }
+  lines.push('');
+
+  lines.push('## 7. 改动定位建议');
   lines.push('');
   if (model.codeAnchors.length === 0) {
     lines.push('- 没有可用代码锚点，计划前必须重新检索入口、服务和数据访问层。');
@@ -104,7 +132,7 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
     }
   }
 
-  lines.push('## 7. 数据与契约');
+  lines.push('## 8. 数据与契约');
   lines.push('');
   if (model.dataContracts.length === 0) {
     lines.push('- 当前知识包没有稳定 CON 对象；涉及接口、SQL、表字段或事件时必须补充契约证据。');
@@ -131,7 +159,7 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
     }
   }
 
-  lines.push('## 8. 不能猜的边界');
+  lines.push('## 9. 不能猜的边界');
   lines.push('');
   if (model.unknowns.length === 0) {
     lines.push('- 当前知识包没有 OPEN 对象；这不代表没有未知，遇到 source of truth、验证或外部系统证据缺口仍需停下确认。');
@@ -150,7 +178,7 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
     }
   }
 
-  lines.push('## 9. 验证方式');
+  lines.push('## 10. 验证方式');
   lines.push('');
   for (const validation of model.validation) {
     lines.push(`### ${validation.goal}`);
@@ -168,7 +196,7 @@ export function renderCapabilityMarkdown(model: CapabilityDocModel): string {
     lines.push('');
   }
 
-  lines.push('## 10. 证据索引');
+  lines.push('## 11. 证据索引');
   lines.push('');
   if (model.evidenceIndex.length === 0) {
     lines.push('- 本文没有可展开的 evidence index 条目；请查看 `evidence/index.jsonl` 和 debug 材料。');

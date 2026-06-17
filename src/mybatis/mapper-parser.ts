@@ -136,7 +136,7 @@ function parseSqlContent(stmt: any): SqlPart[] {
   const nestedTags = ['if', 'where', 'set', 'trim', 'choose', 'when', 'otherwise', 'foreach'];
   for (const tag of nestedTags) {
     if (stmt[tag]) {
-      const nestedParts = extractNestedSqlParts(stmt[tag]);
+      const nestedParts = extractNestedSqlParts(stmt[tag], tag);
       parts.push(...nestedParts);
     }
   }
@@ -147,11 +147,18 @@ function parseSqlContent(stmt: any): SqlPart[] {
 /**
  * Extract SQL parts from nested MyBatis tags.
  */
-function extractNestedSqlParts(nested: any): SqlPart[] {
+function extractNestedSqlParts(nested: any, parentTag?: string): SqlPart[] {
   const parts: SqlPart[] = [];
 
   const items = Array.isArray(nested) ? nested : [nested];
   for (const item of items) {
+    // 对于 <where> 和 <set> 标签，添加关键字前缀
+    if (parentTag === 'where') {
+      parts.push({ kind: 'text', value: 'where' });
+    } else if (parentTag === 'set') {
+      parts.push({ kind: 'text', value: 'set' });
+    }
+
     // Get text content
     const text = item['#text'] || '';
     if (text) {
@@ -171,7 +178,7 @@ function extractNestedSqlParts(nested: any): SqlPart[] {
     const nestedTags = ['if', 'where', 'set', 'trim', 'choose', 'when', 'otherwise', 'foreach'];
     for (const tag of nestedTags) {
       if (item[tag]) {
-        const deeperParts = extractNestedSqlParts(item[tag]);
+        const deeperParts = extractNestedSqlParts(item[tag], tag);
         parts.push(...deeperParts);
       }
     }

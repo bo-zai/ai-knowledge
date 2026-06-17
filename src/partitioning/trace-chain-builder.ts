@@ -4,7 +4,9 @@
  * 使用图数据库 CALLS 边追溯调用链：
  * Controller → Service → Mapper → Table
  *
- * 核心改动：不使用正则匹配，而是通过图数据库边关系追溯
+ * 核心改动：
+ * 1. 不使用正则匹配，而是通过图数据库边关系追溯
+ * 2. 复用 ModuleTopology 查找模块名（而非从路径推断）
  */
 
 import path from 'path';
@@ -14,6 +16,7 @@ import { getStoragePaths } from '../engine/storage/repo-manager.js';
 import { parseMapperFile, extractTablesFromSql } from '../mybatis/mapper-parser.js';
 import { resolveStatementSql } from '../mybatis/include-resolver.js';
 import { logger } from '../shared/logger.js';
+import type { ModuleTopology, ModuleInfo } from '../module/index.js';
 import type {
   EntryPoint,
   CallChainNode,
@@ -35,18 +38,49 @@ function escapeCypherString(value: string): string {
 
 /**
  * 从文件路径提取模块名
+ *
+ * 对于 Maven 多模块项目，提取真正的模块名（如 admin、app）
+ * 而非包名的最后一段
  */
 function extractModuleName(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   const parts = normalized.split('/');
+
+  // 查找 src 目录
   const srcIdx = parts.findIndex(p => p === 'src');
-  if (srcIdx >= 0 && srcIdx + 3 < parts.length && parts[srcIdx + 1] === 'main' && parts[srcIdx + 2] === 'java') {
-    // 取包名的最后一段作为模块名
-    const packageName = parts.slice(srcIdx + 3).join('.');
-    return packageName.split('.').pop() || 'unknown';
+
+  if (srcIdx > 0) {
+    // src 前面的目录就是模块名
+    // 例如：music-education-admin/src/... → 模块名是 music-education-admin
+    // 可以进一步简化：取最后一段作为模块名
+    const modulePath = parts.slice(0, srcIdx);
+    return modulePath[modulePath.length - 1] || 'unknown';
   }
+
   // 回退到目录名
   return parts[parts.length - 2] || 'unknown';
+}
+
+/**
+ * 使用 ModuleTopology 查找模块名
+ *
+ * 根据文件路径在模块拓扑中查找所属模块
+ */
+function findModuleName(filePath: string, topology: ModuleTopology): string {
+  const normalized = filePath.replace(/\\/g, '/');
+
+  // 遍历 modules，检查 filePath 是否在模块路径下
+  for (const module of topology.modules) {
+    const modulePath = module.path.replace(/\\/g, '/').replace(/\/$/, '');
+
+    // 检查文件路径是否以模块路径开头
+    if (normalized.startsWith(modulePath + '/') || normalized.includes(module.name + '/src/')) {
+      return module.name;
+    }
+  }
+
+  // 回退到路径推断
+  return extractModuleName(filePath);
 }
 
 /**
@@ -55,10 +89,44 @@ function extractModuleName(filePath: string): string {
 export class TraceChainBuilder {
   private readonly query: ReadOnlyQueryExecutor;
   private readonly repoPath: string;
+  private readonly moduleTopology?: ModuleTopology;
 
-  constructor(query: ReadOnlyQueryExecutor, repoPath: string) {
+  constructor(query: ReadOnlyQueryExecutor, repoPath: string, moduleTopology?: ModuleTopology) {
     this.query = query;
     this.repoPath = repoPath;
+    this.moduleTopology = moduleTopology;
+  }
+
+  /**
+   * 查找模块名（优先使用 ModuleTopology）
+   */
+  private getModuleName(filePath: string): string {
+    if (this.moduleTopology) {
+      return findModuleName(filePath, this.moduleTopology);
+    }
+    return extractModuleName(filePath);
+  }
+
+  /**
+   * 判断是否跨模块调用
+   *
+   * 使用 ModuleTopology 的依赖关系判断
+   */
+  private isCrossModuleCall(sourceModule: string, targetModule: string): boolean {
+    if (!this.moduleTopology) {
+      // 无拓扑信息，回退到简单判断
+      return sourceModule !== targetModule;
+    }
+
+    // source 和 target 相同 → 不是跨模块
+    if (sourceModule === targetModule) return false;
+
+    // 检查是否是正常依赖关系
+    const sourceInfo = this.moduleTopology.modules.find(m => m.name === sourceModule);
+    if (sourceInfo && sourceInfo.dependencies.includes(targetModule)) return false;
+
+    // 否则是跨模块调用
+    return true;
   }
 
   /**
@@ -116,7 +184,7 @@ export class TraceChainBuilder {
         methodName: '', // Controller 级别，方法名后续追溯时补充
         filePath,
         startLine: startLine ?? 0,
-        module: extractModuleName(filePath),
+        module: this.getModuleName(filePath),
         callChain: [],
       });
     }
@@ -163,7 +231,7 @@ export class TraceChainBuilder {
         methodName,
         filePath,
         startLine: (row.startLine as number) ?? 0,
-        module: extractModuleName(filePath),
+        module: this.getModuleName(filePath),
         callChain: [],
       });
     }
@@ -231,7 +299,7 @@ export class TraceChainBuilder {
         methodName: '', // Consumer 级别，方法名后续追溯时补充
         filePath,
         startLine: (row.startLine as number) ?? 0,
-        module: extractModuleName(filePath),
+        module: this.getModuleName(filePath),
         callChain: [],
         mqType,
         mqTopic,
@@ -367,7 +435,7 @@ export class TraceChainBuilder {
         services.push({
           className,
           filePath,
-          module: extractModuleName(filePath),
+          module: this.getModuleName(filePath),
         });
       }
     }
@@ -404,7 +472,7 @@ export class TraceChainBuilder {
         services.push({
           className,
           filePath,
-          module: extractModuleName(filePath),
+          module: this.getModuleName(filePath),
         });
       }
     }
@@ -450,7 +518,7 @@ export class TraceChainBuilder {
         className,
         filePath,
         xmlPath,
-        module: extractModuleName(filePath),
+        module: this.getModuleName(filePath),
       });
     }
 
@@ -570,7 +638,7 @@ export class TraceChainBuilder {
           return {
             className: entityName,
             filePath,
-            module: extractModuleName(filePath),
+            module: this.getModuleName(filePath),
             entityRole: 'canonical',
             tablesMapped: [tableName],
           };
@@ -619,6 +687,10 @@ export class TraceChainBuilder {
 /**
  * 创建 TraceChainBuilder 实例
  */
-export function createTraceChainBuilder(query: ReadOnlyQueryExecutor, repoPath: string): TraceChainBuilder {
-  return new TraceChainBuilder(query, repoPath);
+export function createTraceChainBuilder(
+  query: ReadOnlyQueryExecutor,
+  repoPath: string,
+  moduleTopology?: ModuleTopology
+): TraceChainBuilder {
+  return new TraceChainBuilder(query, repoPath, moduleTopology);
 }

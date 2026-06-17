@@ -538,14 +538,40 @@ export function aggregateWithLLMDecisions(
 ): DomainPartition[] {
   const partitions: DomainPartition[] = [];
 
+  // 构建入口点到 TraceResult 的映射（标准化路径格式）
+  const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+
+  const entryPointToResult = new Map<string, TraceResult>();
+  for (const result of traceResults) {
+    const ep = result.entryPoint;
+    // 使用 filePath:kind:className 作为 key（不含 methodName）
+    const entryPointKey = `${normalizePath(ep.filePath)}:${ep.kind}:${ep.className}`;
+    entryPointToResult.set(entryPointKey, result);
+  }
+
   // 构建候选 ID 到 TraceResult 的映射
   const candidateToResults = new Map<string, TraceResult[]>();
   for (const candidate of candidates) {
-    // 根据候选的 anchorTable 找到对应的 TraceResult
-    const matchingResults = traceResults.filter(r =>
-      r.tables.some(t => t.tableName === candidate.anchorTable)
-    );
-    candidateToResults.set(candidate.candidateId, matchingResults);
+    const results: TraceResult[] = [];
+
+    // 优先使用入口点匹配
+    for (const ep of candidate.entryPoints) {
+      const entryPointKey = `${normalizePath(ep.filePath)}:${ep.kind}:${ep.className}`;
+      const result = entryPointToResult.get(entryPointKey);
+      if (result) {
+        results.push(result);
+      }
+    }
+
+    // 如果入口点匹配失败，回退到 anchorTable 匹配
+    if (results.length === 0) {
+      const matchingResults = traceResults.filter(r =>
+        r.tables.some(t => t.tableName === candidate.anchorTable)
+      );
+      results.push(...matchingResults);
+    }
+
+    candidateToResults.set(candidate.candidateId, results);
   }
 
   // 根据决策合并

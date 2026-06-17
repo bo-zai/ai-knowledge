@@ -308,6 +308,31 @@ function normalizeClaimShape(item: unknown, index: number): NormalizeResult {
       hints.fieldSemantics = {};
       notes.push(`claim[${index}].objectHints.fieldSemantics: string converted to empty object`);
     }
+    if (Array.isArray(hints.fieldSemantics)) {
+      const entries = hints.fieldSemantics
+        .map((item, itemIndex) => {
+          if (typeof item === 'string') {
+            return [`field_${itemIndex + 1}`, item] as const;
+          }
+          if (item && typeof item === 'object') {
+            const record = item as Record<string, unknown>;
+            const key = typeof record.field === 'string'
+              ? record.field
+              : typeof record.name === 'string'
+                ? record.name
+                : `field_${itemIndex + 1}`;
+            return [key, record] as const;
+          }
+          return undefined;
+        })
+        .filter((entry): entry is readonly [string, unknown] => Boolean(entry));
+      hints.fieldSemantics = Object.fromEntries(entries);
+      notes.push(`claim[${index}].objectHints.fieldSemantics: array normalized to record`);
+    }
+    if (hints.schemaRef === null) {
+      delete hints.schemaRef;
+      notes.push(`claim[${index}].objectHints.schemaRef: null removed`);
+    }
 
     record.objectHints = hints;
   }

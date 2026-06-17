@@ -80,6 +80,9 @@ export interface RunCapabilityKnowledgePipelineInput {
   repoRoot: string;
   targetTerms?: string[];
   targetPaths?: string[];
+  domainKey?: string;
+  domainName?: string;
+  modulePaths?: string[];
   claimsProvider?: (bundle: EvidenceBundle) => Promise<CapabilityClaimsProviderResult>;
   llmMode?: CapabilityLlmMode;
   llmSetupError?: string;
@@ -266,13 +269,23 @@ function buildMinimalBundle(candidate: CapabilityCandidate, repoName: string): E
     docs: [],
     negativeEvidence: [],
     openQuestions: [],
+    functionCandidates: [],
   };
 }
 
 export async function runCapabilityKnowledgePipeline(
   input: RunCapabilityKnowledgePipelineInput,
 ): Promise<RunCapabilityKnowledgePipelineResult> {
-  const { repoRoot, targetTerms = [], targetPaths = [], claimsProvider, llmSetupError } = input;
+  const {
+    repoRoot,
+    targetTerms = [],
+    targetPaths = [],
+    domainKey,
+    domainName,
+    modulePaths = [],
+    claimsProvider,
+    llmSetupError,
+  } = input;
   const llmMode = input.llmMode ?? { requested: true, required: true };
 
   if (!claimsProvider) {
@@ -434,6 +447,25 @@ export async function runCapabilityKnowledgePipeline(
 
   // Step 6: 组装知识对象
   const objects = assembleCapabilityKnowledgeObjects({ bundle, claims });
+  const normalizedDomainKey = domainKey?.trim();
+  const normalizedDomainName = domainName?.trim();
+  if (normalizedDomainKey || normalizedDomainName) {
+    for (const object of objects) {
+      object.metadata = {
+        ...object.metadata,
+        ...(normalizedDomainKey ? { domainKey: normalizedDomainKey } : {}),
+        ...(normalizedDomainName ? { domainName: normalizedDomainName } : {}),
+      };
+    }
+  }
+  if (modulePaths.length > 0) {
+    for (const object of objects) {
+      object.metadata = {
+        ...object.metadata,
+        evidenceModules: modulePaths,
+      };
+    }
+  }
 
   if (objects.length === 0) {
     return emptyResult;

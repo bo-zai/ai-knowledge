@@ -20,11 +20,16 @@ import { runKnowledgeGeneratorForGroups, type LlmClaimsProvider } from '../gener
 import { callLlmForJson, generateBatchStatsReport, type LlmJsonCallResult } from '../generation/llm-json-client.js';
 import { verifyConcept, recordFailure, type VerifyResult } from '../generation/concept-verifier.js';
 import { buildEvidenceBundlesByPackage, type EvidenceGroup } from '../evidence/type-evidence-builder.js';
-import { writeKnowledgePackage } from '../packaging/knowledge-package-writer.js';
+import { writeKnowledgePackage, writeKnowledgeContributionIncremental } from '../packaging/knowledge-package-writer.js';
 import type { KnowledgePackageContribution } from '../packaging/knowledge-package-contribution.js';
+import { runCapabilityBatchPipeline } from '../knowledge/capability-batch-pipeline.js';
+import { capabilityResultToContribution } from '../knowledge/capability-knowledge-pipeline.js';
+import { buildCapabilityClaimPrompt } from '../generation/capability-claim-generator.js';
+import { parseCapabilityClaimJson } from '../generation/capability-llm-claims-provider.js';
 import { initGraphData } from '../query/prepare-generation.js';
 import { cleanupKnowledgeDirs, ensureDirectoryStructure } from '../knowledge/init-directory.js';
 import { createOpenAiClient, generateWithClient } from '../generation/llm-client.js';
+import { createOpenAiClaimsProvider } from '../generation/llm-provider-factory.js';
 import {
   groupBoundaryConfigs,
   buildBoundaryGenerationPrompt,
@@ -382,7 +387,7 @@ async function runConceptFiveLayerGeneration(
       flushLogFile();
 
       const files = processedObjects.map(obj => ({
-        path: `objects/concept/${obj.id}.yaml`,
+        path: `objects/concepts/${obj.id}.yaml`,
         content: objectToYaml(obj),
       }));
 
@@ -391,7 +396,7 @@ async function runConceptFiveLayerGeneration(
         objects: processedObjects.map(o => ({
           id: o.id,
           type: 'CONCEPT',
-          path: `objects/concept/${o.id}.yaml`,
+          path: `objects/concepts/${o.id}.yaml`,
         })),
         files,
         llmResult, // 保存 LLM 结果用于统计
@@ -674,7 +679,8 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   const outputRoot = options.out ? path.resolve(options.out) : repoPath;
 
-  // Initialize graph data
+  // Initialize graph data (reuse logic from `rkg init` command)
+  // See: src/cli/init.ts for standalone graph initialization
   const graphStatus = await initGraphData({
     repoPath,
     forceAnalyze: options.forceAnalyze,
@@ -698,14 +704,10 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   // ========== 创建共享 LLM 资源 ==========
   const sharedClient = createOpenAiClient(finalConfig);
-  const sharedClaimsProvider: LlmClaimsProvider = async (systemPrompt, userPrompt) => {
-    const result = await generateWithClient(sharedClient, finalConfig.model, systemPrompt, userPrompt);
-    return {
-      rawText: result.text,
-      model: finalConfig.model,
-      usage: { promptTokens: 0, completionTokens: result.chunks },
-    };
-  };
+  const sharedClaimsProvider: LlmClaimsProvider = createOpenAiClaimsProvider(
+    sharedClient,
+    finalConfig.model,
+  );
 
   // 只在需要生成 ARCHITECTURE 时执行
   if (scope.types.includes('ARCHITECTURE')) {
@@ -814,6 +816,80 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
         }
 
         return await runConceptFiveLayerGeneration(input, evidenceGroups, claimsProvider, finalConfig.concurrency);
+      }
+
+      if (type === 'CAPABILITY' && !target && !preparedEvidenceGroups) {
+        const batchResult = await runCapabilityBatchPipeline({
+          repoRoot: input.repoPath,
+          inventoryPromptProvider: async (systemPrompt, userPrompt) => {
+            const result = await claimsProvider(systemPrompt, userPrompt);
+            return {
+              rawText: result.rawText,
+              model: result.model,
+            };
+          },
+          onItemSucceeded: async ({ inventoryId, inventoryName, result }) => {
+            const contribution = capabilityResultToContribution(result);
+            const capabilityDocFile = contribution.files.find(file => file.path.startsWith('capabilities/') && file.path.endsWith('.md'));
+            const capabilityDocPath = capabilityDocFile?.path ?? `capabilities/${toKebabCase(result.metadata.capabilityId)}.md`;
+            const capabilityDoc = capabilityDocFile?.content ?? '';
+            const capabilityTitle = capabilityDoc.match(/^#\s+(.+)$/m)?.[1]?.trim() || result.metadata.capabilityId;
+            const capabilitySummary = capabilityDoc.match(/## 1\. 能力结论\s*\n\s*\n?([^\n]+)/)?.[1]?.trim();
+            const capabilityDocId = capabilityDocPath.split('/').pop()?.replace(/\.md$/, '') ?? toKebabCase(result.metadata.capabilityId);
+            await writeKnowledgeContributionIncremental({
+              layout: input.layout,
+              knowledge: 'CAPABILITY',
+              contribution,
+              capabilityDomain: {
+                domainKey: inventoryId,
+                domainName: inventoryName,
+                capabilityId: capabilityDocId,
+                capabilityName: capabilityTitle,
+                capabilityPath: capabilityDocPath,
+                summaryZh: capabilitySummary,
+              },
+            });
+          },
+          claimsProvider: async (bundle) => {
+            const systemPrompt = 'You are a business capability knowledge generator.';
+            const userPrompt = buildCapabilityClaimPrompt(bundle);
+            const result = await claimsProvider(
+              systemPrompt,
+              userPrompt,
+            );
+            return {
+              claims: parseCapabilityClaimJson(result.rawText),
+              debug: {
+                request: {
+                  model: result.model,
+                  systemPrompt,
+                  userPrompt,
+                },
+                response: {
+                  rawText: result.rawText,
+                },
+              },
+            };
+          },
+          model: finalConfig.model,
+        });
+
+        return [{
+          stage: 'capability',
+          files: [],
+          objects: [],
+          report: {
+            stage: 'capability',
+            ran: true,
+            succeeded: batchResult.report.succeeded,
+            failed: batchResult.report.failed,
+            details: {
+              mode: batchResult.report.mode,
+              capabilities: batchResult.report.capabilities,
+            },
+          },
+          warnings: batchResult.warnings,
+        }];
       }
 
       // Use prepared evidence groups if provided (avoids database access)

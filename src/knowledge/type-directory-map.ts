@@ -78,6 +78,7 @@ export const DIR_TO_TYPE: Record<string, AllObjectType> = {
   // 业务目录（优先返回业务类型）
   capabilities: 'CAPABILITY',
   concepts: 'CONCEPT',
+  concept: 'CONCEPT', // 兼容历史 objects/concept/* 输出
   boundaries: 'BOUNDARY',
   boundary: 'BOUNDARY',      // 单数形式兼容
   'external-systems': 'EXTERNAL',
