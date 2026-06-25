@@ -630,12 +630,13 @@ function parseLlmResponse(rawText: string): ParsedLlmResponse {
       return { objects: parsed, warnings };
     }
 
-    if (parsed.objects && Array.isArray(parsed.objects)) {
-      return { objects: parsed.objects, warnings: parsed.warnings || [] };
+    const parsedObj = parsed as Record<string, unknown>;
+    if (parsedObj.objects && Array.isArray(parsedObj.objects)) {
+      return { objects: parsedObj.objects, warnings: parsedObj.warnings as string[] || [] };
     }
 
     // Single object
-    return { objects: [parsed], warnings };
+    return { objects: [parsed as Record<string, unknown>], warnings: [] };
   }
 
   warnings.push("Failed to parse LLM response: no valid JSON object found");

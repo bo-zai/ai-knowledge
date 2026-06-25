@@ -310,6 +310,8 @@ function dataModelToMarkdown(
           many_to_many: "多对多",
           composition: "组合",
           aggregation: "聚合",
+          extends: "继承",
+          implements: "实现",
         }[relation.relation_type] || relation.relation_type;
       lines.push(
         `- **${relation.source_entity} → ${relation.target_entity}**：${typeZh}（关联字段：${relation.relation_field}）`,
@@ -409,6 +411,8 @@ function generateFallbackDataModel(bundle: DataModelAggregateBundle): string {
           many_to_many: "多对多",
           composition: "组合",
           aggregation: "聚合",
+          extends: "继承",
+          implements: "实现",
         }[relation.relation_type] || relation.relation_type;
       lines.push(
         `- **${relation.source_entity} → ${relation.target_entity}**：${typeZh}，关联字段：${relation.relation_field}`,

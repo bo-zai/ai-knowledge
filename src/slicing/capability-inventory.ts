@@ -290,10 +290,12 @@ function applyRefinedDomains(
         name: domain.name,
         targetTerms,
         targetPaths,
-        primaryObjects: domain.primaryObjects,
-        relatedEntities: domain.relatedEntities,
+        primaryObjects: dedupe(
+          functionClusters.map((cluster) => cluster.normalizedObject),
+        ).slice(0, 6),
+        relatedEntities: deriveRelatedEntities(functionClusters),
         functionClusters,
-        coreFunctionIds: domain.includedFunctionIds.filter((id) =>
+        coreFunctionIds: domain.coreFunctionIds.filter((id) =>
           clusterById.has(id),
         ),
         supportingFunctionIds: domain.supportingFunctionIds.filter((id) =>
@@ -307,7 +309,7 @@ function applyRefinedDomains(
 
       return item;
     })
-    .filter((item) => Boolean(item));
+    .filter((item): item is CapabilityInventoryItem => Boolean(item));
 }
 
 export async function discoverProjectCapabilities(

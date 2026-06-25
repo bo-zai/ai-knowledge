@@ -256,7 +256,18 @@ export function buildEvidenceBundle(candidate: CapabilityCandidate, repoName: st
     behaviorSignals: scopedBehaviors,
     testSignals: scopedTests,
     docSignals: scopedDocs,
-  });
+  }).map((cluster) => ({
+    id: cluster.clusterId,
+    canonicalName: cluster.canonicalName,
+    normalizedVerb: cluster.normalizedVerb,
+    normalizedObject: cluster.normalizedObject,
+    domainTerms: cluster.domainTerms,
+    summary: cluster.summary,
+    sourceKinds: cluster.sourceKinds,
+    isCore: cluster.isCore,
+    relevance: cluster.relevance,
+    signals: cluster.signals,
+  }));
 
   return {
     bundleId: `BUNDLE-${candidate.candidateId.replace('CAND-', '')}`,

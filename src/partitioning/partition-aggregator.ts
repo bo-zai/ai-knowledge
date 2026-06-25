@@ -11,6 +11,7 @@
 import type {
   DomainPartition,
   TableInfo,
+  TableRole,
   EntryPoint,
   MapperInfo,
   ServiceInfo,
@@ -129,16 +130,20 @@ export class PartitionAggregator {
   private buildPartitionFromCandidate(
     candidate: PartitionCandidate,
   ): DomainPartition {
-    const tables = candidate.tables.map((table) => ({
+    const tables = (candidate.tables.map((table) => ({
       ...table,
-      role:
-        table.tableName === candidate.anchorTable
-          ? "primary"
-          : table.role === "primary"
-            ? "related"
-            : table.role,
-    }));
-    const backendModules = candidate.entryPoints.reduce<BackendModule[]>(
+      role: (table.tableName === candidate.anchorTable
+        ? "primary"
+        : table.role === "primary"
+          ? "related"
+          : table.role || "related") as TableRole,
+    })) as unknown) as TableInfo[];
+    const entryPoints = candidate.entryPoints.map((ep) => ({
+      ...ep,
+      startLine: 0,
+      callChain: [],
+    })) as unknown as EntryPoint[];
+    const backendModules = entryPoints.reduce<BackendModule[]>(
       (modules, entryPoint) => {
         if (modules.some((module) => module.name === entryPoint.module)) {
           return modules;
@@ -159,11 +164,11 @@ export class PartitionAggregator {
       partitionHash: this.computePartitionHash(
         candidate.anchorTable,
         tables,
-        candidate.entryPoints as EntryPoint[],
+        entryPoints,
       ),
       algorithmVersion: this.algorithmVersion,
       tables,
-      entryPoints: candidate.entryPoints as EntryPoint[],
+      entryPoints,
       sharedResources: {
         coreLogic: candidate.services.map((service) => ({
           className: service.className,
@@ -201,7 +206,7 @@ export class PartitionAggregator {
         ),
       },
       contentHash: this.computeContentHash(
-        candidate.entryPoints as EntryPoint[],
+        entryPoints,
         candidate.mappers.map((mapper) => ({
           className: mapper.className,
           filePath: mapper.filePath,
@@ -866,7 +871,11 @@ function mergeCandidatesByDecision(
       }
 
       entryPointSet.add(entryKey);
-      mergedEntryPoints.push(entryPoint as EntryPoint);
+      mergedEntryPoints.push({
+        ...entryPoint,
+        startLine: 0,
+        callChain: [],
+      } as unknown as EntryPoint);
     }
 
     for (const mapper of candidate.mappers) {
@@ -932,7 +941,11 @@ function mergeCandidatesByDecision(
         mergedModules.push({
           name: moduleName,
           path: entryPoint.filePath.split("/").slice(0, -1).join("/"),
-          role: determineModuleRole(entryPoint as EntryPoint),
+          role: determineModuleRole({
+            ...entryPoint,
+            startLine: 0,
+            callChain: [],
+          } as unknown as EntryPoint),
         });
       }
     }
