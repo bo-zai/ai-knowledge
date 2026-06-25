@@ -45,15 +45,25 @@ export async function runPartition(
     // 运行划分
     const result = await runDomainPartitioning(config);
 
+    // 过滤空分区（用于显示摘要）
+    const validPartitions = result.partitions.filter(
+      (p) => p.tables && p.tables.length > 0,
+    );
+
     // 输出结果摘要
     console.log("\n=== Domain Partition Result ===");
     console.log(`Partition mode: ${result.partitionMode ?? "unknown"}`);
-    console.log(`Total partitions: ${result.partitions.length}`);
+    console.log(`Total partitions: ${validPartitions.length}`);
+    if (validPartitions.length < result.partitions.length) {
+      console.log(
+        `  (${result.partitions.length - validPartitions.length} empty partitions filtered)`,
+      );
+    }
     console.log(`Output directory: ${result.outputPath}`);
     console.log(`Index file: ${result.indexFilePath}`);
 
     // 显示每个 partition 的摘要
-    for (const partition of result.partitions) {
+    for (const partition of validPartitions) {
       const anchorTable = partition.tables.find(
         (t) => t.role === "primary",
       )?.tableName;

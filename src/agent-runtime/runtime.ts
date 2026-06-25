@@ -411,8 +411,10 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   });
 
   // 用于 deepagents 的 backend 包装（适配 StateBackend 接口）
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const filesystemBackend: any = backend;
+  // 注意：FileBackend 与 AnyBackendProtocol 存在接口兼容问题（ls() 返回类型不同）
+  // 这是一个已知的技术债务，需要在 DeepAgents 侧统一返回类型
+  // 暂时保留原变量名，待上游修复后移除类型断言
+  const filesystemBackend = backend;
 
   // ── 3. 计算摘要阈值 ─────────────────────────────────────────────────────
   const maxTokens = config.model.maxTokens ?? DEFAULT_CONTEXT_WINDOW;
@@ -523,7 +525,9 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
     const defaultMiddleware = [
       todoListMiddleware(),
       createFilesystemMiddleware({
-        backend: filesystemBackend,
+        // 注意：FileBackend 与 AnyBackendProtocol 存在接口兼容问题
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        backend: filesystemBackend as any,
         systemPrompt: filesystemSystemPrompt,
         toolTokenLimitBeforeEvict: thresholds.toolEvictLimit,
       }),

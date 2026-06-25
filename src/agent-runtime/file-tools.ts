@@ -5,7 +5,7 @@
  * 不包含 execute 工具（命令执行）
  */
 
-import { createFilesystemMiddleware, type AnyBackendProtocol } from "deepagents";
+import { createFilesystemMiddleware } from "deepagents";
 import { FileBackend } from "./file-backend.js";
 import { logger } from "../shared/logger.js";
 
@@ -94,9 +94,12 @@ export function createFileToolsMiddleware(config: FileToolsConfig) {
   });
 
   // 使用 DeepAgents 的 createFilesystemMiddleware
-  // backend 选项接受 AnyBackendProtocol，FileBackend 实现了 BackendProtocolV2 兼容接口
+  // 注意：FileBackend 与 AnyBackendProtocol 存在接口兼容问题（ls() 返回类型不同）
+  // 这是一个已知的技术债务，需要在 DeepAgents 侧统一返回类型
+  // 暂时使用类型断言绕过，待上游修复后移除
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const middleware = createFilesystemMiddleware({
-    backend: backend as unknown as AnyBackendProtocol,
+    backend: backend as any,
     systemPrompt: config.customSystemPrompt ?? null,
     toolTokenLimitBeforeEvict:
       config.toolTokenLimitBeforeEvict ?? DEFAULT_TOOL_TOKEN_LIMIT,

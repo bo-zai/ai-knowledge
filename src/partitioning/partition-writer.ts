@@ -65,18 +65,28 @@ export class PartitionWriter {
   ): Promise<string[]> {
     await this.ensureOutputDir();
 
-    const filePaths: string[] = [];
+    // 过滤空分区（没有表的分区不应该写入）
+    const validPartitions = partitions.filter(
+      (partition) => partition.tables && partition.tables.length > 0,
+    );
 
-    for (const partition of partitions) {
+    if (validPartitions.length < partitions.length) {
+      logger.warn(
+        `Filtered ${partitions.length - validPartitions.length} empty partitions`,
+      );
+    }
+
+    const filePaths: string[] = [];
+    for (const partition of validPartitions) {
       const filePath = await this.writePartition(partition);
       if (filePath) {
         filePaths.push(filePath);
       }
     }
 
-    // 写入索引文件（包含候选快照和 LLM 决策）
+    // 写入索引文件（只包含有效分区）
     await this.writeIndex(
-      partitions,
+      validPartitions,
       candidateSnapshot,
       llmDecisions,
       partitionMode,

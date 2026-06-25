@@ -85,9 +85,8 @@ function populateCompanionMembersOnEnclosingClass(parsed: ParsedFile): void {
       // enclosing outer class, not through the companion's own
       // type name. Overwriting restores the intended ownership.
       (def as { ownerId?: string }).ownerId = enclosing.nodeId;
-      // Mark as static-only so `ScopeResolver.isStaticOnly` (see
-      // `isKotlinStaticOnly`) can filter these out of instance-receiver
-      // dispatch (#1756). Promoting the companion method onto the
+      // Mark as static-only so downstream analysis can filter these out of
+      // instance-receiver dispatch (#1756). Promoting the companion method onto the
       // outer class lets `Foo.companionMethod()` resolve via Case 2;
       // without this marker, `fooInstance.companionMethod()` would
       // ALSO resolve to it via Case 4, which is incorrect (and a

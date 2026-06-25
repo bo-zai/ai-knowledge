@@ -244,7 +244,7 @@ function buildFlowTraces(
             normalizedObject: "capability",
             domainTerms: [],
             summary: "Repository evidence indicates a capability flow.",
-            sourceKinds: [] as FunctionCandidate["sourceKinds"],
+            sourceKinds: ["entry"] as FunctionCandidate["sourceKinds"],
             isCore: true,
             relevance: 0.65,
             signals: [],

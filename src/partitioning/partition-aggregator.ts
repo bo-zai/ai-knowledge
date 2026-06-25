@@ -520,6 +520,22 @@ export class PartitionAggregator {
   private mergeMultiplePartitions(
     partitions: DomainPartition[],
   ): DomainPartition {
+    // 防御性检查：确保至少有一个分区且有表
+    if (!partitions || partitions.length === 0) {
+      throw new Error("Cannot merge empty partitions array");
+    }
+
+    const firstPartition = partitions[0];
+    if (!firstPartition.tables || firstPartition.tables.length === 0) {
+      logger.warn(
+        `First partition ${firstPartition.partitionId} has no tables, using partitionId as anchor`,
+      );
+      // 使用分区ID作为fallback anchor
+      const anchorTable =
+        firstPartition.partitionId.replace(/^domain:/, "") || "unknown";
+      return firstPartition; // 直接返回第一个分区，不合并
+    }
+
     const anchorTable =
       partitions[0].tables.find((t) => t.role === "primary")?.tableName ??
       partitions[0].tables[0].tableName;

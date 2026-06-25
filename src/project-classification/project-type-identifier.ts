@@ -130,6 +130,12 @@ function inferProjectTypeFromEvidence(
     primaryLanguage = "typescript";
     techStack.push("React/Vue/Angular");
   }
+  // CLI 工具检测
+  if (deps.includes("commander") || deps.includes("yargs")) {
+    primaryLanguage = "typescript";
+    projectType = "cli-tool";
+    identificationEvidence.push("CLI 依赖：commander/yargs");
+  }
 
   if (
     topLevelDirectoryCount >= 6 &&
@@ -158,6 +164,9 @@ function inferProjectTypeFromEvidence(
   ) {
     projectType = "frontend-app";
     identificationEvidence.push("存在 components 目录 + UI 框架依赖");
+  } else if (tree.includes("bin/") || tree.includes("cli")) {
+    projectType = "cli-tool";
+    identificationEvidence.push("存在 bin/ 或 cli 目录");
   } else if (hasAsyncBoundaries >= 2 && hasDataLayer) {
     projectType = "backend-service";
     identificationEvidence.push("存在异步边界与数据层信号");
