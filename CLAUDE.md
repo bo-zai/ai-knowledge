@@ -75,6 +75,38 @@
 - 目录名使用 `kebab-case`，与文件命名一致
 - 避免目录名重复文件名（如 `user/user.ts`，应改为 `user/index.ts`）
 
+#### 文件大小与拆分
+
+- TypeScript 文件建议不超过 **800 行**（含注释和空行），纯逻辑代码不超过 **500-600 行**
+- React/Vue 组件文件建议不超过 **300-500 行**，超过时拆分为子组件
+- 类型定义文件（`types.ts`）按领域拆分，避免单个类型文件过大
+- 单文件应只包含 **一个核心类/模块或一组紧密相关的函数/组件**
+
+拆分时机：
+- 文件行数接近上限（超过 600 行时预警）
+- 文件包含多个松耦合的类/函数/组件
+- 文件承担多种职责
+- 新增功能与现有代码职责边界清晰
+
+拆分示例：
+
+```text
+# 拆分前：user-service.ts（900行，混杂多种职责）
+class UserService         # 用户业务逻辑
+class UserValidator       # 用户校验
+class UserRepository       # 数据访问
+function formatUser()     # 数据格式化
+
+# 拆分后：
+user/
+├── service.ts       # UserService 核心业务（~300行）
+├── validator.ts     # UserValidator 校验逻辑（~150行）
+├── repository.ts    # UserRepository 数据访问（~200行）
+├── formatter.ts     # 数据格式化（~100行）
+├── types.ts         # 用户相关类型定义
+└── index.ts         # 模块导出聚合
+```
+
 ### 解耦与抽象
 
 #### 解耦原则
