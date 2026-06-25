@@ -1,6 +1,3 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   createAgentRuntime,
   type AgentRuntime,
@@ -8,13 +5,10 @@ import {
 import { createDomainClusterTools } from "../../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../../config/defaults.js";
 import { logger } from "../../shared/logger.js";
+import { PromptLoader } from "../../shared/prompt-loader.js";
 import { withLongTaskLogging } from "../../shared/long-task-logger.js";
 import type { DomainDefinition } from "../../partitioning/types.js";
 import type { DomainAnalysisInput, DomainAnalysisResult } from "../types.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "..", "prompts");
 
 const FALLBACK_PROMPT = `
 # 业务域主分析专家
@@ -142,9 +136,8 @@ export function createDomainAnalysisAgent(
 }
 
 async function loadSystemPrompt(): Promise<string> {
-  const promptFile = path.join(PROMPTS_DIR, "domain-main-analysis.md");
   try {
-    return await fs.readFile(promptFile, "utf-8");
+    return PromptLoader.load("domain-main-analysis").raw;
   } catch (error) {
     logger.warn(
       `[DomainAnalysis] Failed to load prompt, using fallback: ${error}`,

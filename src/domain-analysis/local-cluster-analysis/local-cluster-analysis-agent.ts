@@ -1,21 +1,15 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import type { AgentRuntime } from "../../agent-runtime/runtime.js";
 import { createAgentRuntime } from "../../agent-runtime/runtime.js";
 import { createDomainClusterTools } from "../../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../../config/defaults.js";
 import { logger } from "../../shared/logger.js";
+import { PromptLoader } from "../../shared/prompt-loader.js";
 import { withLongTaskLogging } from "../../shared/long-task-logger.js";
 import type {
   LocalClusterAnalysisInput,
   LocalClusterAnalysisResult,
   LocalClusterDomainDraft,
 } from "../types.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "..", "prompts");
 
 const FALLBACK_PROMPT = `
 # Local Cluster Domain Analysis Expert
@@ -30,7 +24,7 @@ export class LocalClusterAnalysisAgent {
     input: LocalClusterAnalysisInput,
   ): Promise<LocalClusterAnalysisResult> {
     const prompt = await loadPrompt(
-      "local-cluster-analysis.md",
+      "local-cluster-analysis",
       FALLBACK_PROMPT,
     );
     const profileMap = new Map(
@@ -145,14 +139,14 @@ export function createLocalClusterAnalysisAgent(
 }
 
 export async function loadLocalClusterAnalysisPrompt(): Promise<string> {
-  return loadPrompt("local-cluster-analysis.md", FALLBACK_PROMPT);
+  return loadPrompt("local-cluster-analysis", FALLBACK_PROMPT);
 }
 
-async function loadPrompt(fileName: string, fallback: string): Promise<string> {
+async function loadPrompt(name: string, fallback: string): Promise<string> {
   try {
-    return await fs.readFile(path.join(PROMPTS_DIR, fileName), "utf-8");
+    return PromptLoader.load(name).raw;
   } catch (error) {
-    logger.warn(`Failed to load ${fileName}, using fallback: ${error}`);
+    logger.warn(`Failed to load ${name}, using fallback: ${error}`);
     return fallback;
   }
 }

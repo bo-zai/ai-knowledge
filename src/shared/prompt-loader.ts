@@ -15,17 +15,34 @@
  */
 
 import { readFile as readFileAsync } from "node:fs/promises";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fileExists } from "./fs.js";
 
 /**
- * 提示词模板目录 - 基于脚本所在目录而非运行时 cwd
+ * 探测 prompts 目录位置
+ * 支持开发模式和打包后（npm 安装）两种场景
  */
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROMPTS_DIR = join(__dirname, "..", "prompts");
+function findPromptsDirectory(): string {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+
+  const candidates = [
+    join(__dirname, "..", "prompts"),
+    join(__dirname, "..", "..", "prompts"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
+}
+
+const PROMPTS_DIR = findPromptsDirectory();
 
 /**
  * 提示词模板类

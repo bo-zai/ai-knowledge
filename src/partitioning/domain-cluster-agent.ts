@@ -4,7 +4,6 @@
  * 使用 LangGraph 工具动态探索代码库，判断候选分区是否应该合并
  */
 
-import { DynamicStructuredTool } from "@langchain/core/tools";
 import {
   createAgentRuntime,
   type AgentRuntime,
@@ -13,9 +12,7 @@ import {
 import { createDomainClusterTools } from "../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../config/defaults.js";
 import { logger } from "../shared/logger.js";
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
+import { PromptLoader } from "../shared/prompt-loader.js";
 import type {
   DomainClusterInput,
   DomainClusterResult,
@@ -23,22 +20,13 @@ import type {
   PartitionCandidate,
 } from "./types.js";
 
-// ========== 提示词加载 ==========
-
-// 使用 fileURLToPath 正确获取模块目录路径（Windows 兼容）
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "prompts");
-
 /**
  * 加载提示词文件
  */
 async function loadSystemPrompt(): Promise<string> {
-  const promptFile = path.join(PROMPTS_DIR, "domain-cluster.md");
-
   try {
-    const content = await fs.readFile(promptFile, "utf-8");
-    logger.info(`[DomainClusterAgent] Loaded prompt from: ${promptFile}`);
+    const content = PromptLoader.load("domain-cluster").raw;
+    logger.info(`[DomainClusterAgent] Loaded prompt from PromptLoader`);
     return content;
   } catch (err) {
     logger.warn(

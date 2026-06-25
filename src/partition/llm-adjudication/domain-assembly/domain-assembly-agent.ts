@@ -1,6 +1,3 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   createAgentRuntime,
   type AgentRuntime,
@@ -8,22 +5,16 @@ import {
 import { createDomainClusterTools } from "../../../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../../../config/defaults.js";
 import { logger } from "../../../shared/logger.js";
+import { PromptLoader } from "../../../shared/prompt-loader.js";
 import type { DomainDefinition } from "../../../partitioning/types.js";
 import type { DomainAssemblyInput, DomainAssemblyOutput } from "./types.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "..", "..", "prompts");
 
 export class DomainAssemblyAgent {
   constructor(private readonly agent: AgentRuntime) {}
 
   async analyze(input: DomainAssemblyInput): Promise<DomainAssemblyOutput> {
     try {
-      const systemPrompt = await fs.readFile(
-        path.join(PROMPTS_DIR, "domain-main-analysis.md"),
-        "utf-8",
-      );
+      const systemPrompt = PromptLoader.load("domain-main-analysis").raw;
       const response = await this.agent.invoke(
         {
           messages: [

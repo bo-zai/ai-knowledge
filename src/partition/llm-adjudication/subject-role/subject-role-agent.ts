@@ -1,6 +1,3 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   createAgentRuntime,
   type AgentRuntime,
@@ -8,16 +5,13 @@ import {
 import { createDomainClusterTools } from "../../../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../../../config/defaults.js";
 import { logger } from "../../../shared/logger.js";
+import { PromptLoader } from "../../../shared/prompt-loader.js";
 import type { SubjectCandidateType } from "../../../domain-analysis/types.js";
 import type {
   SubjectRoleAdjudicationInput,
   SubjectRoleAdjudicationOutput,
   SubjectRoleDecision,
 } from "./types.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "..", "..", "prompts");
 
 export class SubjectRoleAgent {
   constructor(private readonly agent: AgentRuntime) {}
@@ -26,10 +20,7 @@ export class SubjectRoleAgent {
     input: SubjectRoleAdjudicationInput,
   ): Promise<SubjectRoleAdjudicationOutput> {
     try {
-      const systemPrompt = await fs.readFile(
-        path.join(PROMPTS_DIR, "subject-candidate-analysis.md"),
-        "utf-8",
-      );
+      const systemPrompt = PromptLoader.load("subject-candidate-analysis").raw;
       const response = await this.agent.invoke(
         {
           messages: [

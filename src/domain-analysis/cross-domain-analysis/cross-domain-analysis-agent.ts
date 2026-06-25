@@ -1,22 +1,16 @@
-import fs from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import {
   createAgentRuntime,
   type AgentRuntime,
 } from "../../agent-runtime/runtime.js";
 import { createDomainClusterTools } from "../../agent-tools/domain-cluster-tools.js";
 import { LLM_DEFAULTS } from "../../config/defaults.js";
+import { PromptLoader } from "../../shared/prompt-loader.js";
 import { withLongTaskLogging } from "../../shared/long-task-logger.js";
 import type {
   CrossDomainAnalysisInput,
   CrossDomainAnalysisResult,
 } from "../types.js";
 import { logger } from "../../shared/logger.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const PROMPTS_DIR = path.join(__dirname, "..", "..", "prompts");
 
 const CROSS_DOMAIN_FALLBACK_PROMPT = `
 # 跨域关系分析专家
@@ -119,10 +113,8 @@ export function createCrossDomainAnalysisAgent(
 }
 
 async function loadSystemPrompt(): Promise<string> {
-  const promptFile = path.join(PROMPTS_DIR, "cross-domain-analysis.md");
-
   try {
-    return await fs.readFile(promptFile, "utf-8");
+    return PromptLoader.load("cross-domain-analysis").raw;
   } catch (error) {
     logger.warn(`Failed to load cross-domain prompt, using fallback: ${error}`);
     return CROSS_DOMAIN_FALLBACK_PROMPT;
