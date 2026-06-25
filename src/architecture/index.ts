@@ -25,6 +25,7 @@ export {
   saveProjectContext,
   loadProjectContext,
   buildProjectContext,
+  buildProjectContextWithEvidence,
 } from "./project-type-identifier.js";
 
 // 分析单元划分

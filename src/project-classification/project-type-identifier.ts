@@ -130,14 +130,12 @@ function inferProjectTypeFromEvidence(
     primaryLanguage = "typescript";
     techStack.push("React/Vue/Angular");
   }
-  // CLI 工具检测
+  // CLI 工具检测（优先级较高，避免被后续if-else覆盖）
   if (deps.includes("commander") || deps.includes("yargs")) {
     primaryLanguage = "typescript";
     projectType = "cli-tool";
     identificationEvidence.push("CLI 依赖：commander/yargs");
-  }
-
-  if (
+  } else if (
     topLevelDirectoryCount >= 6 &&
     hasExtensionLikeModules >= 4 &&
     entryCandidateCount <= 1

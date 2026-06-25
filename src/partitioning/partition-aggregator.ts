@@ -520,25 +520,27 @@ export class PartitionAggregator {
   private mergeMultiplePartitions(
     partitions: DomainPartition[],
   ): DomainPartition {
-    // 防御性检查：确保至少有一个分区且有表
+    // 防御性检查：确保至少有一个分区
     if (!partitions || partitions.length === 0) {
       throw new Error("Cannot merge empty partitions array");
     }
 
-    const firstPartition = partitions[0];
-    if (!firstPartition.tables || firstPartition.tables.length === 0) {
+    // 过滤掉空分区，只合并有表的分区
+    const partitionsWithTables = partitions.filter(
+      (p) => p.tables && p.tables.length > 0,
+    );
+
+    if (partitionsWithTables.length === 0) {
+      // 所有分区都是空的，返回第一个作为fallback
       logger.warn(
-        `First partition ${firstPartition.partitionId} has no tables, using partitionId as anchor`,
+        `All partitions are empty, returning first partition ${partitions[0].partitionId}`,
       );
-      // 使用分区ID作为fallback anchor
-      const anchorTable =
-        firstPartition.partitionId.replace(/^domain:/, "") || "unknown";
-      return firstPartition; // 直接返回第一个分区，不合并
+      return partitions[0];
     }
 
     const anchorTable =
-      partitions[0].tables.find((t) => t.role === "primary")?.tableName ??
-      partitions[0].tables[0].tableName;
+      partitionsWithTables[0].tables.find((t) => t.role === "primary")
+        ?.tableName ?? partitionsWithTables[0].tables[0].tableName;
 
     const mergedTables: TableInfo[] = [];
     const mergedEntryPoints: EntryPoint[] = [];
@@ -554,7 +556,7 @@ export class PartitionAggregator {
     const entitySet = new Set<string>();
     const moduleSet = new Set<string>();
 
-    for (const partition of partitions) {
+    for (const partition of partitionsWithTables) {
       for (const table of partition.tables) {
         if (!tableSet.has(table.tableName)) {
           tableSet.add(table.tableName);
