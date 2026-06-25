@@ -198,7 +198,7 @@ function describeClusterReason(
     ...new Set(
       candidateIds
         .map((candidateId) => profileMap.get(candidateId)?.profileType)
-        .filter((profileType): profileType is string => Boolean(profileType)),
+        .filter((profileType) => Boolean(profileType)),
     ),
   ];
 

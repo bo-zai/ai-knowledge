@@ -76,7 +76,7 @@ export function tsBindingScopeFor(
  * ancestor matches (e.g., a return type binding emitted outside any
  * Module scope — shouldn't happen in well-formed input).
  */
-function walkToScope(
+export function walkToScope(
   from: Scope,
   tree: ScopeTree,
   ...kinds: readonly Scope["kind"][]

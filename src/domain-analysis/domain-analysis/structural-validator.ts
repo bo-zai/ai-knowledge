@@ -589,10 +589,9 @@ function splitCoreCandidatesByMergeEvidence(params: {
   } = params;
   const independentCoreCandidateIds = coreCandidateIds.filter((candidateId) => {
     const candidate = candidateById.get(candidateId);
-    return (
-      Boolean(candidate) &&
-      isIndependentLifecycleRoot(candidate, classificationById.get(candidateId))
-    );
+    return candidate
+      ? isIndependentLifecycleRoot(candidate, classificationById.get(candidateId))
+      : false;
   });
   const dependentCoreCandidateIds = coreCandidateIds.filter(
     (candidateId) => !independentCoreCandidateIds.includes(candidateId),

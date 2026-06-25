@@ -224,5 +224,5 @@ function extractWrittenJsonPath(
     }
   }
 
-  return [];
+  return undefined;
 }

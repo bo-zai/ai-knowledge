@@ -285,26 +285,29 @@ function applyRefinedDomains(
         ]),
       ]).slice(0, 12);
 
-      return {
+      const item: CapabilityInventoryItem = {
         id: domain.id,
         name: domain.name,
-        summary: domain.summary,
         targetTerms,
         targetPaths,
-        primaryObjects: dedupe(
-          functionClusters.map((cluster) => cluster.normalizedObject),
-        ).slice(0, 6),
-        relatedEntities: deriveRelatedEntities(functionClusters),
+        primaryObjects: domain.primaryObjects,
+        relatedEntities: domain.relatedEntities,
         functionClusters,
-        coreFunctionIds: domain.coreFunctionIds.filter((id) =>
+        coreFunctionIds: domain.includedFunctionIds.filter((id) =>
           clusterById.has(id),
         ),
         supportingFunctionIds: domain.supportingFunctionIds.filter((id) =>
           clusterById.has(id),
         ),
-      } satisfies CapabilityInventoryItem;
+      };
+
+      if (domain.summary) {
+        item.summary = domain.summary;
+      }
+
+      return item;
     })
-    .filter((item): item is CapabilityInventoryItem => Boolean(item));
+    .filter((item) => Boolean(item));
 }
 
 export async function discoverProjectCapabilities(

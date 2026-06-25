@@ -39,7 +39,7 @@ function extractPackageName(
         // Degrade to "no package" so a single pathological file doesn't abort
         // same-package sibling injection for the whole run.
         logger.warn(
-          { file: filePath },
+          filePath,
           "java package-siblings: parse timed out, treating as no package",
         );
         return "";

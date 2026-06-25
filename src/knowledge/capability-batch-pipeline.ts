@@ -71,6 +71,7 @@ export async function runCapabilityBatchPipeline(input: {
   repoRoot: string;
   claimsProvider: (
     bundle: EvidenceBundle,
+    repairPrompt?: string,
   ) => Promise<CapabilityClaimsProviderResult>;
   inventoryPromptProvider?: (
     systemPrompt: string,

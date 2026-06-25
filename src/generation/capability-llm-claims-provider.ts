@@ -520,7 +520,7 @@ function normalizeClaimShape(item: unknown, index: number): NormalizeResult {
           }
           return undefined;
         })
-        .filter((entry): entry is readonly [string, unknown] => Boolean(entry));
+        .filter((entry) => Boolean(entry)) as readonly (readonly [string, unknown])[];
       hints.fieldSemantics = Object.fromEntries(entries);
       notes.push(
         `claim[${index}].objectHints.fieldSemantics: array normalized to record`,

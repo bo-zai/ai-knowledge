@@ -95,7 +95,7 @@ export const kotlinScopeResolver: ScopeResolver = {
 
   isSuperReceiver: (text) => text.trim() === "super",
 
-  isStaticOnly: isKotlinStaticOnly,
+  isStaticOnly: isKotlinStaticOnly as unknown as (text: string) => boolean,
 
   fieldFallbackOnMethodLookup: false,
   propagatesReturnTypesAcrossImports: true,

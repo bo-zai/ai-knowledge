@@ -31,7 +31,7 @@ export function buildPartitionEvidence(
         .map((relation) =>
           summarizeCandidateRelation(relation, candidate.candidateId),
         )
-        .filter(Boolean)
+        .filter((summary): summary is string => Boolean(summary))
         .slice(0, MAX_RELATION_SUMMARIES_PER_CANDIDATE);
 
       const item: PartitionAnalysisEvidenceItem = {
