@@ -58,6 +58,8 @@ export interface ModelInstanceConfig {
   apiKey: string;
   /** 最大 token 数 */
   maxTokens?: number;
+  /** 采样温度 */
+  temperature?: number;
   /** 是否启用 interleaved thinking */
   interleavedThinking?: boolean;
 }
@@ -84,6 +86,8 @@ export interface AgentRuntimeConfig {
   retryHooks?: RetryHooks;
   /** 最大重试次数（可选） */
   maxRetryAttempts?: number;
+  /** 单次 HTTP 请求超时（毫秒，可选） */
+  httpAttemptTimeoutMs?: number;
   /** 是否启用摘要（默认 true） */
   enableSummarization?: boolean;
   /** 自定义摘要提示词（可选） */
@@ -186,6 +190,7 @@ export function createModelInstance(
   config: ModelInstanceConfig,
   retryHooks?: RetryHooks,
   maxRetryAttempts?: number,
+  httpAttemptTimeoutMs?: number,
 ): ChatOpenAI {
   const apiKey = config.apiKey;
   if (!apiKey) {
@@ -203,19 +208,27 @@ export function createModelInstance(
     model: resolvedModel,
     baseUrl: config.baseUrl,
     maxTokens: config.maxTokens,
+    temperature: config.temperature ?? 0,
   });
 
   const baseFields = {
     model: resolvedModel,
     apiKey,
+    temperature: config.temperature ?? 0,
     // SDK 级别重试和超时禁用 — 统一重试 + 单次超时在 retryingFetch 中实现
     // 设置 SDK 超时会创建共享 AbortSignal，一旦触发会永久阻塞后续重试尝试
     maxRetries: 0,
     configuration: {
       baseURL: config.baseUrl,
       fetch:
-        retryHooks || maxRetryAttempts !== undefined
-          ? createRetryingFetch(retryHooks, maxRetryAttempts)
+        retryHooks ||
+        maxRetryAttempts !== undefined ||
+        httpAttemptTimeoutMs !== undefined
+          ? createRetryingFetch(
+              retryHooks,
+              maxRetryAttempts,
+              httpAttemptTimeoutMs,
+            )
           : createRetryingFetch(),
     },
   };
@@ -388,6 +401,7 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
     config.model,
     config.retryHooks,
     config.maxRetryAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS,
+    config.httpAttemptTimeoutMs,
   );
 
   // ── 2. 创建 StateBackend ─────────────────────────────────────────────────

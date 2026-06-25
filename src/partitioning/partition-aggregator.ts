@@ -3,7 +3,7 @@
  *
  * 核心逻辑：
  * 1. 按 Mapper 的 tablesOperated 合并：一个 Mapper 操作多表 → 合并为单 partition
- * 2. 按外键关系合并：oms_order_item.order_id → oms_order.id → 合并
+ * 2. 按外键关系合并：子表外键指向主表 → 合并
  * 3. 识别跨模块：同一表被不同模块追溯 → isCrossModule = true
  * 4. 支持 LLM 决策合并：根据 DomainMergeDecision 执行精确合并
  */
@@ -19,10 +19,8 @@ import type {
   BackendModule,
   TraceResult,
   CrossDomainRef,
-  ConfidenceBreakdown,
-  DomainMergeDecision,
+  DomainDefinition,
   PartitionCandidate,
-  DomainClusterInput,
 } from "./types.js";
 import { createHash } from "crypto";
 import { logger } from "../shared/logger.js";
@@ -33,61 +31,29 @@ import { logger } from "../shared/logger.js";
  * 中文域名转换为英文/拼音格式
  */
 function generatePartitionId(domainName: string, anchorTable: string): string {
-  // 中文到英文/拼音的映射表
-  const domainNameMap: Record<string, string> = {
-    教学域: "teaching",
-    商城域: "mall",
-    用户与认证域: "user_auth",
-    积分运营域: "integral",
-    新闻资讯域: "news",
-    横幅管理域: "banner",
-    订单管理域: "order",
-    支付域: "payment",
-    课程域: "course",
-    用户域: "user",
-    认证域: "auth",
-    商品域: "goods",
-    购物车域: "cart",
-    优惠券域: "coupon",
-    地址域: "address",
-    分类域: "category",
-    模板域: "template",
-    班级域: "class",
-    学生域: "student",
-    教师域: "teacher",
-    记录域: "record",
-    上传域: "upload",
-    会员域: "member",
-    首页域: "index",
-    宠物域: "pet",
-    健康域: "health",
-    运营域: "operation",
-    区域域: "region",
-    商品产品域: "goods_product",
-    课程模板域: "course_template",
-    用户课程域: "user_course",
-    用户班级域: "user_class",
-    用户时间表域: "user_timetable",
-    教学内容域: "teach_content",
-  };
+  const normalizedDomainName = domainName
+    .normalize("NFKC")
+    .trim()
+    .replace(/域$/u, "");
+  const asciiSlug = normalizedDomainName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-  // 尝试从映射表获取
-  const mappedName = domainNameMap[domainName];
-  if (mappedName) {
-    return `domain:${mappedName}`;
+  if (asciiSlug) {
+    return `domain:${asciiSlug}`;
   }
 
-  // 尝试从 domainName 提取关键词（去除"域"后缀）
-  const baseName = domainName.replace(/域$/i, "").toLowerCase();
+  const anchorSlug = anchorTable
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const domainHash = createHash("sha1")
+    .update(normalizedDomainName || anchorTable)
+    .digest("hex")
+    .slice(0, 8);
 
-  // 如果是纯英文，直接使用
-  if (/^[a-z0-9_]+$/.test(baseName)) {
-    return `domain:${baseName}`;
-  }
-
-  // 否则使用 anchorTable 作为 fallback
-  const sanitizedAnchor = anchorTable.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  return `domain:${sanitizedAnchor}`;
+  return `domain:${anchorSlug || "unknown"}_${domainHash}`;
 }
 
 /**
@@ -95,6 +61,43 @@ function generatePartitionId(domainName: string, anchorTable: string): string {
  */
 export class PartitionAggregator {
   private readonly algorithmVersion: string = "1.0.0";
+
+  aggregateCandidates(candidates: PartitionCandidate[]): DomainPartition[] {
+    const partitions = candidates
+      .filter((candidate) => this.shouldMaterializeCandidate(candidate))
+      .map((candidate) => this.buildPartitionFromCandidate(candidate));
+    const mergedPartitions = this.mergeCandidatePartitions(partitions);
+
+    for (const partition of mergedPartitions) {
+      this.computeConfidence(partition);
+      this.computeCrossDomainRefs(partition);
+    }
+
+    return mergedPartitions;
+  }
+
+  private shouldMaterializeCandidate(candidate: PartitionCandidate): boolean {
+    if (
+      candidate.anchorQuality === "low" &&
+      candidate.coreTableNames.length === 0
+    ) {
+      return false;
+    }
+
+    if (candidate.anchorTable === "unknown" || candidate.anchorTable === "id") {
+      return false;
+    }
+
+    if (
+      candidate.isInfrastructureCandidate &&
+      candidate.isAggregatorCandidate &&
+      candidate.entryPoints.length > 3
+    ) {
+      return false;
+    }
+
+    return true;
+  }
 
   /**
    * 聚合追溯结果为 DomainPartition
@@ -121,6 +124,166 @@ export class PartitionAggregator {
     }
 
     return mergedPartitions;
+  }
+
+  private buildPartitionFromCandidate(
+    candidate: PartitionCandidate,
+  ): DomainPartition {
+    const tables = candidate.tables.map((table) => ({
+      ...table,
+      role:
+        table.tableName === candidate.anchorTable
+          ? "primary"
+          : table.role === "primary"
+            ? "related"
+            : table.role,
+    }));
+    const backendModules = candidate.entryPoints.reduce<BackendModule[]>(
+      (modules, entryPoint) => {
+        if (modules.some((module) => module.name === entryPoint.module)) {
+          return modules;
+        }
+
+        modules.push({
+          name: entryPoint.module,
+          path: entryPoint.filePath.split("/").slice(0, -1).join("/"),
+          role: "entry_and_logic_provider",
+        });
+        return modules;
+      },
+      [],
+    );
+
+    return {
+      partitionId: `domain:${candidate.anchorTable}`,
+      partitionHash: this.computePartitionHash(
+        candidate.anchorTable,
+        tables,
+        candidate.entryPoints as EntryPoint[],
+      ),
+      algorithmVersion: this.algorithmVersion,
+      tables,
+      entryPoints: candidate.entryPoints as EntryPoint[],
+      sharedResources: {
+        coreLogic: candidate.services.map((service) => ({
+          className: service.className,
+          filePath: service.filePath,
+          module:
+            backendModules.find((module) =>
+              service.filePath.includes(module.name),
+            )?.name ??
+            backendModules[0]?.name ??
+            "unknown",
+        })),
+        dataLayer: candidate.mappers.map((mapper) => ({
+          className: mapper.className,
+          filePath: mapper.filePath,
+          xmlPath: mapper.xmlPath,
+          module:
+            backendModules.find((module) =>
+              mapper.filePath.includes(module.name),
+            )?.name ??
+            backendModules[0]?.name ??
+            "unknown",
+          tablesOperated: mapper.tablesOperated,
+        })),
+      },
+      backendModules,
+      confidenceBreakdown: {
+        traceDepth: candidate.callChainSummary.depth >= 4 ? 0.7 : 0.55,
+        multiEntryPoint: Math.min(
+          0.15,
+          Math.max(0, candidate.entryPoints.length - 1) * 0.05,
+        ),
+        tableRelation: Math.min(
+          0.1,
+          Math.max(0, candidate.coreTableNames.length - 1) * 0.03,
+        ),
+      },
+      contentHash: this.computeContentHash(
+        candidate.entryPoints as EntryPoint[],
+        candidate.mappers.map((mapper) => ({
+          className: mapper.className,
+          filePath: mapper.filePath,
+          xmlPath: mapper.xmlPath,
+          module: "unknown",
+          tablesOperated: mapper.tablesOperated,
+        })),
+      ),
+      lastCommitHash: "",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private mergeCandidatePartitions(
+    partitions: DomainPartition[],
+  ): DomainPartition[] {
+    const mergedPartitions: DomainPartition[] = [];
+    const consumedPartitionIds = new Set<string>();
+
+    for (const partition of partitions) {
+      if (consumedPartitionIds.has(partition.partitionId)) {
+        continue;
+      }
+
+      const mergeGroup = [partition];
+      for (const candidate of partitions) {
+        if (
+          candidate.partitionId === partition.partitionId ||
+          consumedPartitionIds.has(candidate.partitionId)
+        ) {
+          continue;
+        }
+
+        if (this.shouldConservativelyMerge(partition, candidate)) {
+          mergeGroup.push(candidate);
+          consumedPartitionIds.add(candidate.partitionId);
+        }
+      }
+
+      if (mergeGroup.length > 1) {
+        mergedPartitions.push(this.mergeMultiplePartitions(mergeGroup));
+      } else {
+        mergedPartitions.push(partition);
+      }
+
+      consumedPartitionIds.add(partition.partitionId);
+    }
+
+    return mergedPartitions;
+  }
+
+  private shouldConservativelyMerge(
+    left: DomainPartition,
+    right: DomainPartition,
+  ): boolean {
+    const leftPrimaryTable = left.tables.find(
+      (table) => table.role === "primary",
+    );
+    const rightPrimaryTable = right.tables.find(
+      (table) => table.role === "primary",
+    );
+    if (!leftPrimaryTable || !rightPrimaryTable) {
+      return false;
+    }
+
+    const sharedPrimaryTable =
+      leftPrimaryTable.tableName === rightPrimaryTable.tableName;
+    if (sharedPrimaryTable) {
+      return true;
+    }
+
+    const leftPrimaryTouchesRight = left.tables.some((table) =>
+      table.foreignKey?.includes(rightPrimaryTable.tableName),
+    );
+    const rightPrimaryTouchesLeft = right.tables.some((table) =>
+      table.foreignKey?.includes(leftPrimaryTable.tableName),
+    );
+
+    if (leftPrimaryTouchesRight && rightPrimaryTouchesLeft) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -585,55 +748,14 @@ export function createPartitionAggregator(): PartitionAggregator {
  * 使用 DomainMergeDecision 精确合并候选，而非静态规则
  */
 export function aggregateWithLLMDecisions(
-  traceResults: TraceResult[],
   candidates: PartitionCandidate[],
-  decisions: DomainMergeDecision[],
+  decisions: DomainDefinition[],
 ): DomainPartition[] {
   const partitions: DomainPartition[] = [];
 
-  // 构建入口点到 TraceResult 的映射（标准化路径格式）
-  const normalizePath = (p: string) => p.replace(/\\/g, "/").toLowerCase();
-
-  const entryPointToResult = new Map<string, TraceResult>();
-  for (const result of traceResults) {
-    const ep = result.entryPoint;
-    // 使用 filePath:kind:className 作为 key（不含 methodName）
-    const entryPointKey = `${normalizePath(ep.filePath)}:${ep.kind}:${ep.className}`;
-    entryPointToResult.set(entryPointKey, result);
-  }
-
-  // 构建候选 ID 到 TraceResult 的映射
-  const candidateToResults = new Map<string, TraceResult[]>();
-  for (const candidate of candidates) {
-    const results: TraceResult[] = [];
-
-    // 优先使用入口点匹配
-    for (const ep of candidate.entryPoints) {
-      const entryPointKey = `${normalizePath(ep.filePath)}:${ep.kind}:${ep.className}`;
-      const result = entryPointToResult.get(entryPointKey);
-      if (result) {
-        results.push(result);
-      }
-    }
-
-    // 如果入口点匹配失败，回退到 anchorTable 匹配
-    if (results.length === 0) {
-      const matchingResults = traceResults.filter((r) =>
-        r.tables.some((t) => t.tableName === candidate.anchorTable),
-      );
-      results.push(...matchingResults);
-    }
-
-    candidateToResults.set(candidate.candidateId, results);
-  }
-
   // 根据决策合并
   for (const decision of decisions) {
-    const mergedPartition = mergeCandidatesByDecision(
-      decision,
-      candidates,
-      candidateToResults,
-    );
+    const mergedPartition = mergeCandidatesByDecision(decision, candidates);
 
     if (mergedPartition) {
       // 设置置信度
@@ -660,108 +782,199 @@ export function aggregateWithLLMDecisions(
  * 根据决策合并候选
  */
 function mergeCandidatesByDecision(
-  decision: DomainMergeDecision,
+  decision: DomainDefinition,
   candidates: PartitionCandidate[],
-  candidateToResults: Map<string, TraceResult[]>,
 ): DomainPartition | null {
-  if (decision.mergeGroup.length === 0) return null;
+  const includedCandidateIds = [
+    ...decision.coreCandidateIds,
+    ...decision.supportingCandidateIds,
+  ];
+  if (includedCandidateIds.length === 0) return null;
 
-  // 收集所有涉及的 TraceResult
-  const allResults: TraceResult[] = [];
-  for (const candidateId of decision.mergeGroup) {
-    const results = candidateToResults.get(candidateId);
-    if (results) {
-      allResults.push(...results);
-    }
+  const selectedCandidates = includedCandidateIds
+    .map((candidateId) =>
+      candidates.find((candidate) => candidate.candidateId === candidateId),
+    )
+    .filter((candidate): candidate is PartitionCandidate => Boolean(candidate));
+  if (selectedCandidates.length === 0) {
+    return null;
   }
 
-  if (allResults.length === 0) return null;
-
-  // 合并数据
   const mergedTables: TableInfo[] = [];
   const mergedEntryPoints: EntryPoint[] = [];
   const mergedMappers: MapperInfo[] = [];
   const mergedServices: ServiceInfo[] = [];
-  const mergedEntities: EntityInfo[] = [];
   const mergedModules: BackendModule[] = [];
+  const crossDomainRefs: CrossDomainRef[] = [];
 
   const tableSet = new Set<string>();
   const entryPointSet = new Set<string>();
   const mapperSet = new Set<string>();
   const serviceSet = new Set<string>();
-  const entitySet = new Set<string>();
   const moduleSet = new Set<string>();
+  const includedCandidateIdSet = new Set(includedCandidateIds);
+  const allowedTableNames = new Set([
+    ...decision.coreTables,
+    ...decision.supportingTables,
+  ]);
+  const domainTokens = new Set([
+    ...extractNameTokens(decision.domainName),
+    ...[...allowedTableNames].flatMap((tableName) =>
+      extractNameTokens(tableName),
+    ),
+  ]);
 
-  for (const result of allResults) {
-    // Tables
-    for (const table of result.tables) {
+  for (const candidate of selectedCandidates) {
+    for (const table of candidate.tables) {
+      if (
+        allowedTableNames.size > 0 &&
+        !allowedTableNames.has(table.tableName)
+      ) {
+        continue;
+      }
       if (!tableSet.has(table.tableName)) {
         tableSet.add(table.tableName);
-        mergedTables.push(table);
+        mergedTables.push({
+          tableName: table.tableName,
+          role: "related",
+          tableType: table.tableType,
+          foreignKey: table.foreignKeys
+            ?.map(
+              (foreignKey) =>
+                `${foreignKey.columnName} → ${foreignKey.referencesTable}.id`,
+            )
+            .join(", "),
+        });
       }
     }
 
-    // EntryPoints
-    const entryKey = `${result.entryPoint.kind}:${result.entryPoint.className}:${result.entryPoint.filePath}`;
-    if (!entryPointSet.has(entryKey)) {
+    for (const entryPoint of candidate.entryPoints) {
+      if (
+        !shouldIncludeEntryPointForDecision(
+          candidate,
+          entryPoint,
+          allowedTableNames,
+          domainTokens,
+        )
+      ) {
+        continue;
+      }
+
+      const entryKey = `${entryPoint.kind}:${entryPoint.className}:${entryPoint.filePath}:${entryPoint.methodName}`;
+      if (entryPointSet.has(entryKey)) {
+        continue;
+      }
+
       entryPointSet.add(entryKey);
-      mergedEntryPoints.push(result.entryPoint);
+      mergedEntryPoints.push(entryPoint as EntryPoint);
     }
 
-    // Mappers
-    for (const mapper of result.mappers) {
+    for (const mapper of candidate.mappers) {
+      if (
+        allowedTableNames.size > 0 &&
+        mapper.tablesOperated.length > 0 &&
+        !mapper.tablesOperated.some((tableName) =>
+          allowedTableNames.has(tableName),
+        )
+      ) {
+        continue;
+      }
+
       if (!mapperSet.has(mapper.className)) {
         mapperSet.add(mapper.className);
-        mergedMappers.push(mapper);
+        mergedMappers.push({
+          className: mapper.className,
+          filePath: mapper.filePath,
+          xmlPath: mapper.xmlPath,
+          module: "unknown",
+          tablesOperated: mapper.tablesOperated,
+        });
       }
     }
 
-    // Services
-    for (const service of result.services) {
+    for (const service of candidate.services) {
+      if (
+        allowedTableNames.size > 0 &&
+        !shouldIncludeServiceForDecision(
+          service.className,
+          candidate,
+          domainTokens,
+        )
+      ) {
+        continue;
+      }
+
       if (!serviceSet.has(service.className)) {
         serviceSet.add(service.className);
-        mergedServices.push(service);
+        mergedServices.push({
+          className: service.className,
+          filePath: service.filePath,
+          module: "unknown",
+        });
       }
     }
 
-    // Entities
-    for (const entity of result.entities) {
-      if (!entitySet.has(entity.className)) {
-        entitySet.add(entity.className);
-        mergedEntities.push(entity);
+    for (const entryPoint of candidate.entryPoints) {
+      if (
+        !shouldIncludeEntryPointForDecision(
+          candidate,
+          entryPoint,
+          allowedTableNames,
+          domainTokens,
+        )
+      ) {
+        continue;
+      }
+
+      const moduleName = entryPoint.module;
+      if (!moduleSet.has(moduleName)) {
+        moduleSet.add(moduleName);
+        mergedModules.push({
+          name: moduleName,
+          path: entryPoint.filePath.split("/").slice(0, -1).join("/"),
+          role: determineModuleRole(entryPoint as EntryPoint),
+        });
       }
     }
 
-    // Modules
-    const moduleName = result.entryPoint.module;
-    if (!moduleSet.has(moduleName)) {
-      moduleSet.add(moduleName);
-      mergedModules.push({
-        name: moduleName,
-        path: result.entryPoint.filePath.split("/").slice(0, -1).join("/"),
-        role: determineModuleRole(result.entryPoint),
-      });
+    for (const dependency of decision.crossDomainDependencies) {
+      if (
+        !crossDomainRefs.some(
+          (item) =>
+            item.targetDomain === dependency.targetDomainHint &&
+            item.relationType === dependency.relationType,
+        )
+      ) {
+        crossDomainRefs.push({
+          targetDomain: dependency.targetDomainHint,
+          relationType: dependency.relationType,
+          evidence: dependency.evidence,
+        });
+      }
     }
+
+    appendSchemaDerivedCrossDomainRefs(
+      crossDomainRefs,
+      candidate,
+      includedCandidateIdSet,
+      candidates,
+      allowedTableNames,
+    );
   }
 
-  // 确定 anchorTable（使用第一个候选的 anchorTable）
-  const firstCandidate = candidates.find(
-    (c) => c.candidateId === decision.mergeGroup[0],
-  );
+  const firstCandidate = selectedCandidates[0];
   const anchorTable =
-    firstCandidate?.anchorTable ?? mergedTables[0]?.tableName ?? "unknown";
+    decision.coreTables[0] ??
+    firstCandidate?.anchorTable ??
+    mergedTables[0]?.tableName ??
+    "unknown";
 
-  // 设置主表角色
-  const primaryTable = mergedTables.find((t) => t.tableName === anchorTable);
-  if (primaryTable) {
-    primaryTable.role = "primary";
+  if (mergedTables.length === 0) {
+    return null;
   }
 
-  // 其他表标记为 related
   for (const table of mergedTables) {
-    if (table.tableName !== anchorTable && table.role === "primary") {
-      table.role = "related";
-    }
+    table.role = table.tableName === anchorTable ? "primary" : "related";
   }
 
   // 构建 partitionId（从 domainName 生成有效 ID）
@@ -781,9 +994,9 @@ function mergeCandidatesByDecision(
     sharedResources: {
       coreLogic: mergedServices,
       dataLayer: mergedMappers,
-      entities: mergedEntities,
     },
     backendModules: mergedModules,
+    crossDomainRefs: crossDomainRefs.length > 0 ? crossDomainRefs : undefined,
 
     confidenceBreakdown: {
       traceDepth: Math.min(
@@ -801,6 +1014,153 @@ function mergeCandidatesByDecision(
     lastCommitHash: "",
     updatedAt: new Date().toISOString(),
   };
+}
+
+function appendSchemaDerivedCrossDomainRefs(
+  refs: CrossDomainRef[],
+  candidate: PartitionCandidate,
+  includedCandidateIdSet: Set<string>,
+  allCandidates: PartitionCandidate[],
+  allowedTableNames: Set<string>,
+): void {
+  const evidence = candidate.evidence;
+  if (!evidence) {
+    return;
+  }
+
+  const candidateByTable = new Map<string, PartitionCandidate>();
+  for (const item of allCandidates) {
+    for (const table of item.tables) {
+      if (!candidateByTable.has(table.tableName)) {
+        candidateByTable.set(table.tableName, item);
+      }
+    }
+  }
+
+  const relatedRelations = [
+    ...evidence.outboundRelations,
+    ...evidence.inboundRelations,
+  ];
+
+  for (const relation of relatedRelations) {
+    const localTable = allowedTableNames.has(relation.sourceTable)
+      ? relation.sourceTable
+      : allowedTableNames.has(relation.targetTable)
+        ? relation.targetTable
+        : null;
+    if (!localTable) {
+      continue;
+    }
+
+    const remoteTable =
+      localTable === relation.sourceTable
+        ? relation.targetTable
+        : relation.sourceTable;
+    const targetCandidate = candidateByTable.get(remoteTable);
+    if (!targetCandidate) {
+      continue;
+    }
+    if (includedCandidateIdSet.has(targetCandidate.candidateId)) {
+      continue;
+    }
+
+    const relationType = mapSchemaRelationToCrossDomainRelation(
+      relation.relationType,
+    );
+    if (
+      refs.some(
+        (item) =>
+          item.targetDomain === targetCandidate.anchorTable &&
+          item.relationType === relationType,
+      )
+    ) {
+      continue;
+    }
+
+    refs.push({
+      targetDomain: targetCandidate.anchorTable,
+      relationType,
+      evidence: relation.evidence,
+    });
+  }
+}
+
+function mapSchemaRelationToCrossDomainRelation(
+  relationType: string,
+): CrossDomainRef["relationType"] {
+  switch (relationType) {
+    case "explicit_fk":
+    case "implicit_fk":
+    case "extension_table":
+      return "shared_table_reference";
+    case "aggregate_child":
+      return "aggregate_dependency";
+    case "junction_table":
+      return "junction_dependency";
+    case "weak_reference":
+      return "weak_identity_reference";
+    default:
+      return "shared_table_reference";
+  }
+}
+
+function shouldIncludeEntryPointForDecision(
+  candidate: PartitionCandidate,
+  entryPoint: PartitionCandidate["entryPoints"][number],
+  allowedTableNames: Set<string>,
+  domainTokens: Set<string>,
+): boolean {
+  if (allowedTableNames.size === 0) {
+    return true;
+  }
+
+  if (allowedTableNames.has(candidate.anchorTable)) {
+    return true;
+  }
+
+  if (candidate.entryPoints.length === 1) {
+    return true;
+  }
+
+  const entryPointTokens = new Set([
+    ...extractNameTokens(entryPoint.className),
+    ...extractNameTokens(entryPoint.methodName),
+    ...extractNameTokens(entryPoint.apiInfo?.basePath ?? ""),
+  ]);
+
+  return hasTokenOverlap(entryPointTokens, domainTokens);
+}
+
+function shouldIncludeServiceForDecision(
+  serviceClassName: string,
+  candidate: PartitionCandidate,
+  domainTokens: Set<string>,
+): boolean {
+  if (candidate.coreTableNames.length <= 1) {
+    return true;
+  }
+
+  return hasTokenOverlap(
+    new Set(extractNameTokens(serviceClassName)),
+    domainTokens,
+  );
+}
+
+function hasTokenOverlap(left: Set<string>, right: Set<string>): boolean {
+  for (const token of left) {
+    if (right.has(token)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractNameTokens(value: string): string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .split(/[^a-zA-Z0-9]+/)
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length >= 2);
 }
 
 /**

@@ -108,7 +108,7 @@ export class TableAnchorCollector {
         );
         for (const match of joinColumnMatches) {
           const columnName = match[1];
-          // 从列名推断外键关系（如 order_id → oms_order.id）
+          // 从列名推断外键关系，实际归属仍需结合已发现表集合校验。
           if (columnName.endsWith("_id")) {
             const referencedTable = this.inferTableNameFromColumn(columnName);
 
@@ -151,7 +151,7 @@ export class TableAnchorCollector {
     const shardGroups = new Map<string, TableInfo[]>();
 
     for (const table of tables) {
-      // 检测分表命名模式（如 oms_order_2024, oms_order_2025）
+      // 检测按时间后缀命名的分表。
       const shardMatch = table.tableName.match(/^(.+)_(\d{4})$/);
       if (shardMatch) {
         const baseName = shardMatch[1];
@@ -195,7 +195,7 @@ export class TableAnchorCollector {
     const result: TableInfo[] = [...tables];
 
     for (const table of tables) {
-      // 检测关联表命名模式（如 pms_product_category）
+      // 检测由两个实体名组合形成的关联表。
       const junctionMatch = table.tableName.match(/^(\w+)_(\w+)$/);
       if (junctionMatch) {
         const leftPart = junctionMatch[1];
@@ -224,7 +224,6 @@ export class TableAnchorCollector {
    * 从列名推断表名
    */
   private inferTableNameFromColumn(columnName: string): string | undefined {
-    // 如 order_id → oms_order
     if (columnName.endsWith("_id")) {
       const baseName = columnName.replace("_id", "");
       // 尝试匹配常见表名模式

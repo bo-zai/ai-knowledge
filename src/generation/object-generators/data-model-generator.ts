@@ -39,14 +39,14 @@ export function buildDataModelPrompt(input: DataModelPromptInput): {
   const system = `You must generate only JSON. Return exactly one JSON object that matches output_schema. Do not wrap the result in markdown, code fences, explanations, or additional text. You may only use supplied evidence. You may not invent entities, relations, or aggregates. All output must be Chinese except code identifiers.
 
 CRITICAL RULES:
-- aggregate_name_zh MUST be business-oriented, not table name directly (e.g., "订单聚合" not "oms_order聚合")
+- aggregate_name_zh MUST be business-oriented, not table name directly (e.g., "订单聚合" not "order_table聚合")
 - Use evidence.entity_name_zh and evidence.description_zh for entity descriptions
 - entity.role MUST match evidence.role (aggregate_root, sub_entity, associated_entity)
 - entity_relations MUST use evidence.entity_relations structure
 - cross_references only include entities NOT in current aggregate
 - Do NOT infer business meaning without evidence support
 - Prefer concise descriptions (one sentence per entity/relation)
-- Module field should match the deployable module name (e.g., mall-admin, mall-portal), not shared modules like mall-mbg
+- Module field should match the deployable module name, not shared generated-code modules.
 
 ENTITY ROLE MEANINGS:
 - aggregate_root: Primary entity, the root of the aggregate

@@ -7,21 +7,7 @@ import type { LlmClaimsProvider } from "../generation/knowledge-generator.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
 import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
 import { logger } from "../shared/logger.js";
-import {
-  queryConceptEvidenceByPackage,
-  queryDataModelEvidenceByPackage,
-  queryCapabilityEvidenceByPackage,
-  queryBoundaryEvidenceByPackage,
-  queryExternalEvidenceByPackage,
-  queryConstraintEvidenceByPackage,
-  queryRelationEvidenceByPackage,
-  queryWorkflowEvidenceByPackage,
-} from "./extractors/index.js";
-import {
-  assessGap,
-  executeLlmSupplement,
-  mergeEvidenceGroups,
-} from "./extractors/hybrid/index.js";
+import { buildPlannedEvidenceGroups } from "../knowledge-evidence/index.js";
 
 export interface BuildEvidenceInput {
   repoPath: string;
@@ -82,62 +68,22 @@ export async function buildEvidenceBundlesByPackage(
       logger.info(
         `Opening graph for ${type} evidence: ${lbugPath} (attempt ${attempt})`,
       );
-      const staticGroups = await withReadOnlyLbug(lbugPath, async (query) => {
-        switch (type) {
-          case "CONCEPT":
-            return queryConceptEvidenceByPackage(
-              repoPath,
-              lbugPath,
-              target,
-              query,
-            );
-          case "DATA_MODEL":
-            return queryDataModelEvidenceByPackage(repoPath, target, query);
-          case "CAPABILITY":
-            return queryCapabilityEvidenceByPackage(repoPath, target, query);
-          case "BOUNDARY":
-            return queryBoundaryEvidenceByPackage(repoPath, target, query);
-          case "EXTERNAL":
-            return queryExternalEvidenceByPackage(repoPath, target, query);
-          case "CONSTRAINT":
-            return queryConstraintEvidenceByPackage(repoPath, target, query);
-          case "RELATION":
-            return queryRelationEvidenceByPackage(repoPath, target, query);
-          case "WORKFLOW":
-            return queryWorkflowEvidenceByPackage(repoPath, target, query);
-          default:
-            return [];
-        }
+      const planned = await withReadOnlyLbug(lbugPath, async (query) => {
+        return buildPlannedEvidenceGroups({
+          repoPath,
+          lbugPath,
+          type,
+          target,
+          graphStatus: input.graphStatus,
+          executeQuery: query,
+          claimsProvider,
+        });
       });
 
       logger.info(
-        `Static extraction: ${staticGroups.length} evidence groups for ${type}`,
+        `Evidence planning: ${planned.groups.length} groups for ${type} from ${planned.source}`,
       );
-
-      // Hybrid extraction: check gaps and supplement with LLM if needed
-      if (claimsProvider) {
-        const gapAssessment = assessGap(type, staticGroups);
-        logger.info(`Gap assessment: ${gapAssessment.reason}`);
-
-        if (gapAssessment.needsLlmSupplement) {
-          logger.info(`Triggering LLM supplement for ${type}`);
-          const supplementResult = await executeLlmSupplement(
-            { type, repoPath, staticGroups, gapReason: gapAssessment.reason },
-            claimsProvider,
-          );
-
-          const mergedGroups = mergeEvidenceGroups(
-            staticGroups,
-            supplementResult.groups,
-          );
-          logger.info(
-            `Hybrid result: ${mergedGroups.length} groups (${staticGroups.length} static + ${supplementResult.groups.length} LLM)`,
-          );
-          return mergedGroups;
-        }
-      }
-
-      return staticGroups;
+      return planned.groups;
     } catch (error: any) {
       lastError = error instanceof Error ? error : new Error(String(error));
 

@@ -127,8 +127,6 @@ function normalizeSql(sql: string): string {
     { pattern: /(\w)where\b/gi, replacement: "$1 WHERE" },
     // Table name glued to SET
     { pattern: /(\w)set\b/gi, replacement: "$1 SET" },
-    // Table name glued to AND
-    { pattern: /(\w)and\b/gi, replacement: "$1 AND" },
   ];
 
   for (const { pattern, replacement } of keywordGluePatterns) {

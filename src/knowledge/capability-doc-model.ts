@@ -119,21 +119,147 @@ function isWeakSkeletonTerm(object: KnowledgeObject): boolean {
   );
 }
 
-function collectUsedRefs(objects: KnowledgeObject[]): Set<string> {
+function collectUsedRefs(
+  objects: KnowledgeObject[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): Set<string> {
   const refs = new Set<string>();
+  const addRef = (ref: string): void => {
+    if (shouldExcludeFlowTraceEvidence && ref.startsWith("evidence://flow/")) {
+      return;
+    }
+    refs.add(ref);
+  };
   for (const object of objects) {
-    for (const ref of object.evidencePrimary) refs.add(ref);
-    for (const ref of object.evidenceSupporting) refs.add(ref);
+    for (const ref of object.evidencePrimary) addRef(ref);
+    for (const ref of object.evidenceSupporting) addRef(ref);
   }
   return refs;
+}
+
+function collectVisibleRefs(model: {
+  terms: CapabilityDocTerm[];
+  behaviors: CapabilityDocBehavior[];
+  codeAnchors: CapabilityDocCodeAnchor[];
+  moduleSurfaces: CapabilityDocModuleSurface[];
+  dataContracts: CapabilityDocDataContract[];
+  validation: CapabilityDocValidation[];
+  unknowns: CapabilityDocUnknown[];
+}): Set<string> {
+  const refs = new Set<string>();
+  const addRefs = (items: string[]): void => {
+    for (const item of items) {
+      if (item.startsWith("evidence://")) refs.add(item);
+    }
+  };
+
+  for (const term of model.terms) addRefs(term.evidenceRefs);
+  for (const behavior of model.behaviors) {
+    addRefs(behavior.evidenceRefs);
+    for (const step of behavior.steps) addRefs(step.evidenceRefs);
+  }
+  for (const anchor of model.codeAnchors) addRefs(anchor.evidenceRefs);
+  for (const surface of model.moduleSurfaces) addRefs(surface.evidenceRefs);
+  for (const contract of model.dataContracts) {
+    addRefs(contract.evidenceRefs);
+    for (const field of contract.fields) addRefs(field.evidenceRefs);
+  }
+  for (const validation of model.validation) addRefs(validation.evidenceRefs);
+  for (const unknown of model.unknowns) addRefs(unknown.minimalNextEvidence);
+
+  return refs;
+}
+
+function sanitizeEvidenceRefs(
+  refs: string[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): string[] {
+  if (!shouldExcludeFlowTraceEvidence) return refs;
+  return refs.filter((ref) => !ref.startsWith("evidence://flow/"));
+}
+
+function containsFlowTraceReference(text: string): boolean {
+  return (
+    text.includes("evidence://flow/") || /\bPFLOW-[A-Za-z0-9-]+/.test(text)
+  );
+}
+
+function sanitizeEvidenceTextItems(
+  items: string[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): string[] {
+  if (!shouldExcludeFlowTraceEvidence) return items;
+  return items.filter((item) => !containsFlowTraceReference(item));
+}
+
+function sanitizeBehaviors(
+  behaviors: CapabilityDocBehavior[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): CapabilityDocBehavior[] {
+  return behaviors.map((behavior) => ({
+    ...behavior,
+    evidenceRefs: sanitizeEvidenceRefs(
+      behavior.evidenceRefs,
+      shouldExcludeFlowTraceEvidence,
+    ),
+    steps: behavior.steps.map((step) => ({
+      ...step,
+      evidenceRefs: sanitizeEvidenceRefs(
+        step.evidenceRefs,
+        shouldExcludeFlowTraceEvidence,
+      ),
+    })),
+  }));
+}
+
+function sanitizeValidation(
+  validation: CapabilityDocValidation[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): CapabilityDocValidation[] {
+  return validation.map((item) => ({
+    ...item,
+    checks: sanitizeEvidenceTextItems(
+      item.checks,
+      shouldExcludeFlowTraceEvidence,
+    ),
+    acceptanceOracle: sanitizeEvidenceTextItems(
+      item.acceptanceOracle,
+      shouldExcludeFlowTraceEvidence,
+    ),
+    cannotVerifyWithout: sanitizeEvidenceTextItems(
+      item.cannotVerifyWithout,
+      shouldExcludeFlowTraceEvidence,
+    ),
+    evidenceRefs: sanitizeEvidenceRefs(
+      item.evidenceRefs,
+      shouldExcludeFlowTraceEvidence,
+    ),
+  }));
+}
+
+function sanitizeUnknowns(
+  unknowns: CapabilityDocUnknown[],
+  shouldExcludeFlowTraceEvidence: boolean,
+): CapabilityDocUnknown[] {
+  return unknowns.map((unknown) => ({
+    ...unknown,
+    minimalNextEvidence: sanitizeEvidenceTextItems(
+      unknown.minimalNextEvidence,
+      shouldExcludeFlowTraceEvidence,
+    ),
+  }));
 }
 
 export function buildCapabilityDocModel(input: {
   objects: KnowledgeObject[];
   capabilityId: string;
   evidenceIndex?: EvidenceIndexItem[];
+  behaviorOverrides?: CapabilityDocBehavior[];
+  shouldExcludeFlowTraceEvidence?: boolean;
 }): CapabilityDocModel {
   const { objects, capabilityId } = input;
+  const shouldExcludeFlowTraceEvidence =
+    input.shouldExcludeFlowTraceEvidence ?? false;
   const cap =
     objects.find((o) => o.id === capabilityId) ??
     objects.find((o) => o.type === "CAP");
@@ -151,47 +277,49 @@ export function buildCapabilityDocModel(input: {
       evidenceRefs: o.evidencePrimary,
     }));
 
-  const behaviors = objects
-    .filter((o) => o.type === "FLOW")
-    .map((o) => {
-      const orderedSteps = Array.isArray(o.metadata.orderedSteps)
-        ? o.metadata.orderedSteps
-        : [];
-      const evidenceSteps = Array.isArray(o.metadata.evidenceSteps)
-        ? o.metadata.evidenceSteps
-        : [];
-      const steps: CapabilityDocBehaviorStep[] = orderedSteps
-        .map((step) => {
-          if (!step || typeof step !== "object") return undefined;
-          const record = step as Record<string, unknown>;
-          const action = asString(record.action);
-          if (!action) return undefined;
-          const evidenceRef = asString(record.evidenceRef);
-          return {
-            step: action,
-            evidenceRefs: evidenceRef ? [evidenceRef] : o.evidencePrimary,
-          };
-        })
-        .filter((step): step is CapabilityDocBehaviorStep => Boolean(step));
+  const behaviors =
+    input.behaviorOverrides ??
+    objects
+      .filter((o) => o.type === "FLOW")
+      .map((o) => {
+        const orderedSteps = Array.isArray(o.metadata.orderedSteps)
+          ? o.metadata.orderedSteps
+          : [];
+        const evidenceSteps = Array.isArray(o.metadata.evidenceSteps)
+          ? o.metadata.evidenceSteps
+          : [];
+        const steps: CapabilityDocBehaviorStep[] = orderedSteps
+          .map((step) => {
+            if (!step || typeof step !== "object") return undefined;
+            const record = step as Record<string, unknown>;
+            const action = asString(record.action);
+            if (!action) return undefined;
+            const evidenceRef = asString(record.evidenceRef);
+            return {
+              step: action,
+              evidenceRefs: evidenceRef ? [evidenceRef] : o.evidencePrimary,
+            };
+          })
+          .filter((step): step is CapabilityDocBehaviorStep => Boolean(step));
 
-      if (steps.length === 0) {
-        for (const item of evidenceSteps) {
-          if (!item || typeof item !== "object") continue;
-          const record = item as Record<string, unknown>;
-          const action = asString(record.action);
-          if (action)
-            steps.push({ step: action, evidenceRefs: o.evidencePrimary });
+        if (steps.length === 0) {
+          for (const item of evidenceSteps) {
+            if (!item || typeof item !== "object") continue;
+            const record = item as Record<string, unknown>;
+            const action = asString(record.action);
+            if (action)
+              steps.push({ step: action, evidenceRefs: o.evidencePrimary });
+          }
         }
-      }
 
-      return {
-        title: o.id,
-        summary: o.description,
-        steps,
-        evidenceRefs: o.evidencePrimary,
-        functionDocName: `${o.id}.md`,
-      };
-    });
+        return {
+          title: o.id,
+          summary: o.description,
+          steps,
+          evidenceRefs: o.evidencePrimary,
+          functionDocName: `${o.id}.md`,
+        };
+      });
 
   const codeAnchors = objects
     .filter((o) => o.type === "MOD")
@@ -292,8 +420,33 @@ export function buildCapabilityDocModel(input: {
     });
   }
 
-  const usedRefs = collectUsedRefs(objects);
+  const sanitizedBehaviors = sanitizeBehaviors(
+    behaviors,
+    shouldExcludeFlowTraceEvidence,
+  );
+  const sanitizedValidation = sanitizeValidation(
+    validation,
+    shouldExcludeFlowTraceEvidence,
+  );
+  const sanitizedUnknowns = sanitizeUnknowns(
+    unknowns,
+    shouldExcludeFlowTraceEvidence,
+  );
+  const usedRefs = collectUsedRefs(objects, shouldExcludeFlowTraceEvidence);
+  for (const ref of collectVisibleRefs({
+    terms,
+    behaviors: sanitizedBehaviors,
+    codeAnchors,
+    moduleSurfaces,
+    dataContracts,
+    validation: sanitizedValidation,
+    unknowns: sanitizedUnknowns,
+  })) {
+    usedRefs.add(ref);
+  }
+
   const evidenceIndex = (input.evidenceIndex ?? [])
+    .filter((item) => !shouldExcludeFlowTraceEvidence || item.kind !== "flow")
     .filter((item) => usedRefs.has(item.ref))
     .map((item) => ({
       ref: item.ref,
@@ -315,12 +468,12 @@ export function buildCapabilityDocModel(input: {
       (item, index, array) => array.indexOf(item) === index,
     ),
     terms,
-    behaviors,
+    behaviors: sanitizedBehaviors,
     codeAnchors,
     moduleSurfaces,
     dataContracts,
-    unknowns,
-    validation,
+    unknowns: sanitizedUnknowns,
+    validation: sanitizedValidation,
     evidenceIndex,
   };
 }

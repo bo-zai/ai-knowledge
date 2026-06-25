@@ -1,5 +1,8 @@
 import type { KnowledgeObject } from "../knowledge/capability-object-assembler.js";
-import { buildCapabilityDocModel } from "../knowledge/capability-doc-model.js";
+import {
+  buildCapabilityDocModel,
+  type CapabilityDocBehavior,
+} from "../knowledge/capability-doc-model.js";
 import { renderCapabilityMarkdown } from "./capability-markdown-renderer.js";
 import { TYPE_TO_DIR } from "../knowledge/type-directory-map.js";
 import { DEFAULT_KNOWLEDGE_DIR } from "../config/defaults.js";
@@ -72,6 +75,12 @@ export interface CapabilityLlmDebug {
     repaired: boolean;
     validationErrors: string[];
   };
+}
+
+export interface CapabilityKnowledgeFilesOptions {
+  shouldWriteFlowFunctionFiles?: boolean;
+  behaviorOverrides?: CapabilityDocBehavior[];
+  shouldExcludeFlowTraceEvidence?: boolean;
 }
 
 function buildFunctionMarkdown(input: {
@@ -429,9 +438,13 @@ export function buildCapabilityKnowledgeFiles(input: {
   evidenceIndex?: EvidenceIndexItem[];
   report?: CapabilityGenerationReport;
   debug?: CapabilityLlmDebug;
+  options?: CapabilityKnowledgeFilesOptions;
 }): Array<{ path: string; content: string }> {
-  const { objects, capabilityId, evidenceIndex, report, debug } = input;
+  const { objects, capabilityId, evidenceIndex, report, debug, options } =
+    input;
   const files: Array<{ path: string; content: string }> = [];
+  const shouldWriteFlowFunctionFiles =
+    options?.shouldWriteFlowFunctionFiles ?? true;
 
   // 生成 catalog.yaml
   files.push({
@@ -453,12 +466,18 @@ export function buildCapabilityKnowledgeFiles(input: {
     objects,
     capabilityId,
     evidenceIndex,
+    behaviorOverrides: options?.behaviorOverrides,
+    shouldExcludeFlowTraceEvidence: options?.shouldExcludeFlowTraceEvidence,
   });
   const capabilityMarkdown = renderCapabilityMarkdown(capabilityModel, {
-    functionLinkPrefix: "../functions",
+    functionLinkPrefix: shouldWriteFlowFunctionFiles
+      ? "../functions"
+      : undefined,
   });
   const compatibilityViewMarkdown = renderCapabilityMarkdown(capabilityModel, {
-    functionLinkPrefix: "../../functions",
+    functionLinkPrefix: shouldWriteFlowFunctionFiles
+      ? "../../functions"
+      : undefined,
   });
 
   // 生成主 capability Markdown
@@ -473,17 +492,19 @@ export function buildCapabilityKnowledgeFiles(input: {
     content: compatibilityViewMarkdown,
   });
 
-  for (const flowObject of objects.filter((obj) => obj.type === "FLOW")) {
-    files.push({
-      path: `functions/${flowObject.id}.md`,
-      content: buildFunctionMarkdown({
-        capabilityId,
-        capabilityTitle: capabilityModel.title,
-        flowObject,
-        evidenceIndex: evidenceIndex ?? [],
-        capabilityModel,
-      }),
-    });
+  if (shouldWriteFlowFunctionFiles) {
+    for (const flowObject of objects.filter((obj) => obj.type === "FLOW")) {
+      files.push({
+        path: `functions/${flowObject.id}.md`,
+        content: buildFunctionMarkdown({
+          capabilityId,
+          capabilityTitle: capabilityModel.title,
+          flowObject,
+          evidenceIndex: evidenceIndex ?? [],
+          capabilityModel,
+        }),
+      });
+    }
   }
 
   // 生成 evidence index

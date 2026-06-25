@@ -47,8 +47,16 @@ export type {
   CandidateGroup,
   ProjectContext,
   DomainClusterInput,
-  DomainMergeDecision,
-  DomainMergeEvidence,
+  SchemaTableKind,
+  SchemaRelationType,
+  SchemaRelationStrength,
+  SchemaRelationDirection,
+  SchemaTableNode,
+  SchemaTableEdge,
+  SchemaRelationGraph,
+  CandidateEvidence,
+  DomainDefinition,
+  DomainDependencyDefinition,
   DomainClusterResult,
   // 增量更新相关类型
   CandidateSnapshotEntry,
@@ -72,6 +80,10 @@ export {
   aggregateWithLLMDecisions,
 } from "./partition-aggregator.js";
 export { PartitionWriter, createPartitionWriter } from "./partition-writer.js";
+export {
+  buildCapabilityPartitions,
+  type CapabilityPartitioningInput,
+} from "./capability-partitioner.js";
 
 // LLM 语义分析组件
 export {
@@ -83,6 +95,10 @@ export {
   CandidateBuilder,
   createCandidateBuilder,
 } from "./candidate-builder.js";
+export {
+  SchemaRelationBuilder,
+  createSchemaRelationBuilder,
+} from "./schema-relation-builder.js";
 export {
   createCandidateValidator,
   runValidation,
@@ -97,3 +113,9 @@ export {
   createDomainPartitioner,
 } from "./domain-partitioner.js";
 export type { PartitionResult } from "./domain-partitioner.js";
+
+export { runBusinessDomainPartition } from "../partition/business-domain/index.js";
+export type {
+  BusinessDomainPartitionInput,
+  BusinessDomainPartitionResult,
+} from "../partition/business-domain/index.js";

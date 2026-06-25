@@ -15,6 +15,7 @@ export interface PartitionCliOptions {
   repo?: string;
   force?: boolean;
   verbose?: boolean;
+  concurrency?: number | string;
 }
 
 /**
@@ -37,30 +38,29 @@ export async function runPartition(
     repoPath,
     force: options.force ?? false,
     algorithmVersion: "1.0.0",
+    concurrency: normalizeConcurrencyOption(options.concurrency),
   };
 
   try {
     // 运行划分
     const result = await runDomainPartitioning(config);
 
-    // 过滤空分区（用于显示摘要）
-    const validPartitions = result.partitions.filter(
-      (p) => p.tables && p.tables.length > 0,
-    );
-
     // 输出结果摘要
     console.log("\n=== Domain Partition Result ===");
-    console.log(`Total partitions: ${validPartitions.length}`);
+    console.log(`Partition mode: ${result.partitionMode ?? "unknown"}`);
+    console.log(`Total partitions: ${result.partitions.length}`);
     console.log(`Output directory: ${result.outputPath}`);
     console.log(`Index file: ${result.indexFilePath}`);
 
     // 显示每个 partition 的摘要
-    for (const partition of validPartitions) {
-      const anchorTable =
-        partition.tables.find((t) => t.role === "primary")?.tableName ??
-        partition.tables[0].tableName;
+    for (const partition of result.partitions) {
+      const anchorTable = partition.tables.find(
+        (t) => t.role === "primary",
+      )?.tableName;
       console.log(`\nPartition: ${partition.partitionId}`);
-      console.log(`  Anchor table: ${anchorTable}`);
+      if (anchorTable) {
+        console.log(`  Anchor table: ${anchorTable}`);
+      }
       console.log(`  Tables: ${partition.tables.length}`);
       console.log(`  Entry points: ${partition.entryPoints.length}`);
       console.log(
@@ -84,4 +84,21 @@ export async function runPartition(
     await closeAllLbugResources();
     process.exit(1);
   }
+}
+
+function normalizeConcurrencyOption(
+  value: number | string | undefined,
+): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(1, Math.floor(value));
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(1, Math.floor(parsed));
+    }
+  }
+
+  return undefined;
 }

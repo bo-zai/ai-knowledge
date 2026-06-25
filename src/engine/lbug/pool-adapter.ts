@@ -651,7 +651,34 @@ export const CYPHER_WRITE_RE =
 
 /** Check if a Cypher query contains write operations */
 export function isWriteQuery(query: string): boolean {
-  return CYPHER_WRITE_RE.test(query);
+  return CYPHER_WRITE_RE.test(stripCypherStringLiterals(query));
+}
+
+function stripCypherStringLiterals(query: string): string {
+  let result = "";
+  let inSingleQuote = false;
+
+  for (let index = 0; index < query.length; index += 1) {
+    const currentChar = query[index];
+    const nextChar = query[index + 1];
+
+    if (currentChar === "'") {
+      if (inSingleQuote && nextChar === "'") {
+        index += 1;
+        continue;
+      }
+
+      inSingleQuote = !inSingleQuote;
+      result += " ";
+      continue;
+    }
+
+    if (!inSingleQuote) {
+      result += currentChar;
+    }
+  }
+
+  return result;
 }
 
 /**

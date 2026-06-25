@@ -10,9 +10,10 @@
 
 分析一组 PartitionCandidate，判断：
 
-1. 哪些候选应该合并为同一个业务域
-2. 每个业务域的名称
-3. 你的判断依据和置信度
+1. 哪些候选属于同一个业务域
+2. 每个业务域的核心候选和支撑候选
+3. 需要排除的候选和跨域依赖
+4. 你的判断依据和置信度
 
 ## 可用工具
 
@@ -376,29 +377,44 @@ Git commit message 是重要的业务语义来源，开发者通常在 commit �
 
 ### 关键规则：推理与输出必须一致
 
-这是最常见的错误模式：**reasoning 分析正确，但 mergeGroup 输出错误**。
+这是最常见的错误模式：**reasoning 分析正确，但 coreCandidateIds / supportingCandidateIds 输出错误**。
 
 ```
 ❌ 错误示例（reasoning 说不应合并，但 mergeGroup 却合并了）
 {
-  "mergeGroup": ["candidate_auth_menu", "candidate_auth_role"],
+  "coreCandidateIds": ["candidate_auth_menu", "candidate_auth_role"],
+  "supportingCandidateIds": [],
+  "excludedCandidateIds": [],
   "domainName": "用户管理域",
   "confidence": 0.65,
+  "coreTables": ["user", "auth_role"],
+  "supportingTables": [],
+  "crossDomainDependencies": [],
   "reasoning": "共享 UserService，但 AuthService 和 ProfitService 是不同业务域的核心服务，业务边界清晰，不应合并"
 }
 
-✅ 正确示例（reasoning 分析不应合并，输出两个独立决策）
+✅ 正确示例（reasoning 分析不应合并，输出两个独立域定义）
 [
   {
-    "mergeGroup": ["candidate_auth_menu"],
+    "coreCandidateIds": ["candidate_auth_menu"],
+    "supportingCandidateIds": [],
+    "excludedCandidateIds": [],
     "domainName": "认证授权域",
     "confidence": 0.85,
+    "coreTables": ["auth_menu"],
+    "supportingTables": [],
+    "crossDomainDependencies": [],
     "reasoning": "AuthController 和 UserController 处理认证授权，共享 UserService 是依赖基础服务，不代表合并"
   },
   {
-    "mergeGroup": ["candidate_auth_role"],
+    "coreCandidateIds": ["candidate_auth_role"],
+    "supportingCandidateIds": [],
+    "excludedCandidateIds": [],
     "domainName": "优惠券与收益域",
     "confidence": 0.85,
+    "coreTables": ["coupon", "profit"],
+    "supportingTables": [],
+    "crossDomainDependencies": [],
     "reasoning": "CouponController 和 ProfitController 处理优惠券和收益，有独立的业务流程，不应与认证授权合并"
   }
 ]
@@ -406,15 +422,15 @@ Git commit message 是重要的业务语义来源，开发者通常在 commit �
 
 **判断规则**：
 
-- 如果 reasoning 结论是"不应合并"、"业务边界清晰"、"各自独立" → 输出**多个独立决策**
-- 如果 reasoning 结论是"应合并"、"同一业务域" → 输出**单个合并决策**
-- reasoning 和 mergeGroup 必须**逻辑一致**
+- 如果 reasoning 结论是"不应合并"、"业务边界清晰"、"各自独立" → 输出**多个独立域定义**
+- 如果 reasoning 结论是"应合并"、"同一业务域" → 输出**单个域定义**
+- reasoning 和 coreCandidateIds/supportingCandidateIds 必须**逻辑一致**
 
 ### 其他输出要求
 
-1. 必须为每个候选输出决策：即使单独不合并的候选，也要输出
-2. 决策不能遗漏候选：所有 candidateId 必须出现在某个 mergeGroup 中
-3. mergeGroup 不能重叠：一个 candidateId 只能出现在一个 mergeGroup 中
+1. 必须为每个候选输出域定义：即使单独不合并的候选，也要输出
+2. 决策不能遗漏候选：所有 candidateId 必须出现在某个定义的 coreCandidateIds 或 supportingCandidateIds 中
+3. coreCandidateIds 与 supportingCandidateIds 不能重叠：一个 candidateId 只能归属一个业务域
 4. reasoning 必须详细：至少 50 字，说明判断依据
 5. confidence 必须有依据：根据定义范围赋值
 6. 输出格式为 JSON 数组
@@ -426,26 +442,32 @@ Git commit message 是重要的业务语义来源，开发者通常在 commit �
 ```json
 [
   {
-    "mergeGroup": ["candidate_001", "candidate_002"],
+    "coreCandidateIds": ["candidate_001", "candidate_002"],
+    "supportingCandidateIds": [],
+    "excludedCandidateIds": [],
     "domainName": "订单管理域",
     "confidence": 0.95,
+    "coreTables": ["order", "order_item"],
+    "supportingTables": ["order_log"],
     "reasoning": "Controller API 路径都属于 /api/order/*，表之间有外键关系 order_item.order_id → order.id，Git 提交历史显示订单功能演进",
-    "evidence": {
-      "sharedApiBasePath": "/api/order",
-      "foreignKeys": ["order_item.order_id → order.id"],
-      "serviceMethodComments": ["创建订单", "查询订单详情"]
-    }
+    "crossDomainDependencies": []
   },
   {
-    "mergeGroup": ["candidate_003"],
+    "coreCandidateIds": ["candidate_003"],
+    "supportingCandidateIds": [],
+    "excludedCandidateIds": [],
     "domainName": "支付域",
     "confidence": 0.9,
+    "coreTables": ["payment"],
+    "supportingTables": [],
     "reasoning": "独立业务域，虽然与订单域有外键关联 payment.order_id → order.id，但支付有独立的业务流程、Service 和 Controller",
-    "evidence": {
-      "foreignKeys": ["payment.order_id → order.id"],
-      "independentServices": ["PaymentService"],
-      "independentControllers": ["PaymentController"]
-    }
+    "crossDomainDependencies": [
+      {
+        "targetDomainHint": "订单管理域",
+        "relationType": "aggregate_dependency",
+        "evidence": ["payment.order_id → order.id"]
+      }
+    ]
   }
 ]
 ```

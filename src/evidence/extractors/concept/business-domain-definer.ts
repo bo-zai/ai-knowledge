@@ -413,7 +413,7 @@ export class BusinessDomainDefinerImpl {
     // snake_case -> 中文描述
     const parts = baseName.split("_");
 
-    // 业务术语中英文映射表（按领域分类）
+    // 仅作为通用兜底词典，优先依赖仓库自身证据而非预置行业词。
     const nameMap: Record<string, string> = {
       // === 电商领域 ===
       brand: "品牌",

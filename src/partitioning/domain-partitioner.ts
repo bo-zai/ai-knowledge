@@ -26,18 +26,22 @@ import {
 import { createPartitionWriter } from "./partition-writer.js";
 import { createTableAnchorCollector } from "./table-anchor-collector.js";
 import { createCandidateBuilder } from "./candidate-builder.js";
-import { createDomainClusterAgentSync } from "./domain-cluster-agent.js";
-import { createDomainClusterTools } from "../agent-tools/domain-cluster-tools.js";
-import { createAgentRuntime } from "../agent-runtime/runtime.js";
 import { runModule, loadModuleTopology } from "../module/index.js";
 import type { ModuleTopology } from "../module/index.js";
+import {
+  classifyRepository,
+  loadProjectContext,
+  refinePartitionModeWithTopology,
+  saveProjectContext,
+  type RepositoryClassificationContext,
+} from "../project-classification/index.js";
 import type {
   DomainPartition,
   PartitionConfig,
   TraceResult,
   MapperInfo,
   DomainClusterInput,
-  DomainMergeDecision,
+  DomainDefinition,
   PartitionIndex,
   CandidateSnapshot,
   StoredLlmDecision,
@@ -46,10 +50,17 @@ import type {
   CommitHistoryInfo,
   CommitInfo,
 } from "./types.js";
-import { getCurrentCommit } from "../engine/storage/git.js";
+import {
+  findGitRootByDotGit,
+  getCurrentCommit,
+} from "../engine/storage/git.js";
 import { logger } from "../shared/logger.js";
 import { createHash } from "crypto";
 import { LLM_DEFAULTS } from "../config/defaults.js";
+import { createOpenAiClient } from "../generation/llm-client.js";
+import { createOpenAiClaimsProvider } from "../generation/llm-provider-factory.js";
+import { buildCapabilityPartitions } from "./capability-partitioner.js";
+import { runBusinessDomainPartition } from "../partition/business-domain/index.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -60,6 +71,7 @@ export interface PartitionResult {
   partitions: DomainPartition[];
   outputPath: string;
   indexFilePath: string;
+  partitionMode?: string;
   /** 是否执行了增量更新 */
   incremental?: boolean;
   /** 更新类型 */
@@ -148,8 +160,12 @@ function checkIncrementalUpdate(
   if (previousIndex.llmDecisions && updateType === "content_change") {
     // 只有内容变化时，部分决策可复用
     for (const decision of previousIndex.llmDecisions) {
+      const decisionCandidateIds =
+        "coreCandidateIds" in decision
+          ? [...decision.coreCandidateIds, ...decision.supportingCandidateIds]
+          : [];
       // 检查决策中所有候选是否都未变化
-      const allUnchanged = decision.mergeGroup.every(
+      const allUnchanged = decisionCandidateIds.every(
         (cid) =>
           !changedCandidateIds.includes(cid) &&
           !removedCandidateIds.includes(cid),
@@ -198,27 +214,13 @@ async function collectCommitHistory(
 
   try {
     for (const candidate of candidates) {
-      const filePaths = candidate.entryPoints.map((ep) => ep.filePath);
-
-      // 查询这些文件的 commit 历史（限制最近 20 条）
-      const result = await runGitCommand(
-        repoPath,
-        `git log --oneline -20 -- ${filePaths.map((f) => `"${f}"`).join(" ")}`,
-      );
-
-      const commits: CommitInfo[] = [];
-      for (const line of result.split("\n").filter((l) => l.trim())) {
-        const match = line.match(/^([a-f0-9]+)\s+(.+)$/);
-        if (match) {
-          commits.push({
-            hash: match[1],
-            message: match[2],
-          });
-        }
-      }
+      const commits = await collectCandidateCommits(repoPath, candidate);
 
       if (commits.length > 0) {
-        candidateCommits.set(candidate.candidateId, commits);
+        candidateCommits.set(
+          candidate.candidateId,
+          summarizeCandidateCommits(commits),
+        );
       }
     }
 
@@ -235,15 +237,113 @@ async function collectCommitHistory(
   }
 }
 
-/**
- * 执行 git 命令
- */
-async function runGitCommand(
+function summarizeCandidateCommits(commits: CommitInfo[]): CommitInfo[] {
+  const highSignalCommits = commits.filter((commit) =>
+    isHighSignalCommitMessage(commit.message),
+  );
+  const selected = highSignalCommits.length > 0 ? highSignalCommits : commits;
+  return selected.slice(0, 8);
+}
+
+function isHighSignalCommitMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    normalized === "fix bug" ||
+    normalized === "update" ||
+    normalized === "merge" ||
+    normalized.includes("merge remote-tracking branch")
+  ) {
+    return false;
+  }
+
+  return HIGH_SIGNAL_COMMIT_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
+  );
+}
+
+const HIGH_SIGNAL_COMMIT_PATTERNS = [
+  /\badd(ed|ing)?\b/,
+  /\bfix(ed|ing)?\b/,
+  /\brefactor(ed|ing)?\b/,
+  /\bimplement(ed|ing)?\b/,
+  /\bsupport(ed|ing)?\b/,
+  /\bfeature\b/,
+  /\bmodule\b/,
+  /新增/,
+  /修复/,
+  /重构/,
+  /支持/,
+  /实现/,
+  /功能/,
+  /模块/,
+];
+
+async function collectCandidateCommits(
   repoPath: string,
-  command: string,
+  candidate: PartitionCandidate,
+): Promise<CommitInfo[]> {
+  const groupedFilePaths = new Map<string, string[]>();
+
+  for (const entryPoint of candidate.entryPoints) {
+    const absolutePath = path.join(repoPath, entryPoint.filePath);
+    const gitRoot = findGitRootByDotGit(absolutePath);
+    if (!gitRoot) {
+      continue;
+    }
+
+    const relativePath = path.relative(gitRoot, absolutePath);
+    if (!relativePath || relativePath.startsWith("..")) {
+      continue;
+    }
+
+    const group = groupedFilePaths.get(gitRoot) ?? [];
+    group.push(relativePath);
+    groupedFilePaths.set(gitRoot, group);
+  }
+
+  const commits: CommitInfo[] = [];
+  const seenHashes = new Set<string>();
+
+  for (const [gitRoot, filePaths] of groupedFilePaths.entries()) {
+    if (filePaths.length === 0) {
+      continue;
+    }
+
+    const result = await runGitLogCommand(gitRoot, filePaths);
+    for (const line of result.split("\n").filter((item) => item.trim())) {
+      const match = line.match(/^([a-f0-9]+)\s+(.+)$/);
+      if (!match || seenHashes.has(match[1])) {
+        continue;
+      }
+
+      seenHashes.add(match[1]);
+      commits.push({
+        hash: match[1],
+        message: match[2],
+      });
+    }
+  }
+
+  return commits;
+}
+
+async function runGitLogCommand(
+  gitRoot: string,
+  filePaths: string[],
 ): Promise<string> {
   const { execa } = await import("execa");
-  const result = await execa(command, { cwd: repoPath, shell: true });
+  const result = await execa(
+    "git",
+    ["log", "--oneline", "-20", "--", ...filePaths],
+    {
+      cwd: gitRoot,
+      windowsVerbatimArguments: false,
+    },
+  );
   return result.stdout;
 }
 
@@ -257,10 +357,16 @@ export async function runDomainPartitioning(
   const { lbugPath, storagePath } = getStoragePaths(repoPath);
   const enableLLMAnalysis = config.enableLLMAnalysis ?? true;
   const forceMode = config.force ?? false;
+  const concurrency = Math.max(1, Math.floor(config.concurrency ?? 1));
 
   logger.info(`Starting domain partitioning for: ${repoPath}`);
   logger.info(
     `LLM analysis enabled: ${enableLLMAnalysis}, Force mode: ${forceMode}`,
+  );
+
+  const repositoryContext = await loadOrClassifyRepositoryContext(repoPath);
+  logger.info(
+    `Partition mode resolved: ${repositoryContext.partitionMode} (${repositoryContext.partitionModeConfidence})`,
   );
 
   // ========== 加载模块拓扑（复用 modules.json） ==========
@@ -282,6 +388,24 @@ export async function runDomainPartitioning(
   } else {
     logger.info(
       `Using existing module topology: ${moduleTopology.moduleCount} modules, ${moduleTopology.couplingMode}`,
+    );
+  }
+
+  const refinedPartitionMode = refinePartitionModeWithTopology(
+    {
+      partitionMode: repositoryContext.partitionMode,
+      confidence: repositoryContext.partitionModeConfidence,
+      evidence: repositoryContext.partitionModeEvidence,
+    },
+    moduleTopology,
+  );
+  if (refinedPartitionMode.partitionMode !== repositoryContext.partitionMode) {
+    repositoryContext.partitionMode = refinedPartitionMode.partitionMode;
+    repositoryContext.partitionModeConfidence = refinedPartitionMode.confidence;
+    repositoryContext.partitionModeEvidence = refinedPartitionMode.evidence;
+    await saveProjectContext(repositoryContext, repoPath);
+    logger.info(
+      `Partition mode refined by module topology: ${repositoryContext.partitionMode} (${repositoryContext.partitionModeConfidence})`,
     );
   }
 
@@ -314,6 +438,30 @@ export async function runDomainPartitioning(
   const previousIndex = forceMode
     ? undefined
     : await loadPreviousIndex(outputDir);
+
+  if (repositoryContext.partitionMode === "capability-domain") {
+    const partitions = buildCapabilityPartitions({
+      repoPath,
+      moduleTopology: moduleTopology!,
+    });
+    logger.info("Using capability-domain partitioning");
+    await enrichPartitionsWithHashes(partitions, repoPath);
+    await writer.writeAllPartitions(
+      partitions,
+      undefined,
+      undefined,
+      repositoryContext.partitionMode,
+    );
+
+    return {
+      partitions,
+      outputPath: outputDir,
+      indexFilePath: path.join(outputDir, "_index.json"),
+      partitionMode: repositoryContext.partitionMode,
+      incremental: !forceMode,
+      updateType: forceMode ? "force" : "structure_change",
+    };
+  }
 
   // 使用 withReadOnlyLbug 执行追溯
   const traceResults = await withReadOnlyLbug(lbugPath, async (query) => {
@@ -446,6 +594,7 @@ export async function runDomainPartitioning(
       partitions,
       outputPath: outputDir,
       indexFilePath: path.join(outputDir, "_index.json"),
+      partitionMode: repositoryContext.partitionMode,
       incremental: true,
       updateType: "none",
     };
@@ -453,8 +602,11 @@ export async function runDomainPartitioning(
 
   // 7. LLM 语义分析（可选）
   let partitions: DomainPartition[];
-  let llmDecisions: DomainMergeDecision[] = [];
+  let llmDecisions: DomainDefinition[] = [];
   let storedDecisions: StoredLlmDecision[] = [];
+  let partitionEvidenceBundle:
+    | import("../domain-analysis/types.js").DomainEvidenceBundle
+    | undefined;
 
   if (enableLLMAnalysis && domainClusterInput.candidates.length > 1) {
     logger.info("Running LLM semantic analysis...");
@@ -466,19 +618,28 @@ export async function runDomainPartitioning(
       );
     }
 
-    llmDecisions = await runLLMAnalysis(repoPath, domainClusterInput);
+    const llmResult = await runBusinessDomainAnalysis(
+      repoPath,
+      domainClusterInput,
+      concurrency,
+    );
+    llmDecisions = llmResult.decisions;
+    partitionEvidenceBundle = llmResult.evidenceBundle;
 
     if (llmDecisions.length > 0) {
       logger.info(`LLM returned ${llmDecisions.length} decisions`);
       partitions = aggregateWithLLMDecisions(
-        traceResults,
         domainClusterInput.candidates,
         llmDecisions,
       );
+      if (llmResult.refsByPartitionId) {
+        applyCrossDomainRefs(partitions, llmResult.refsByPartitionId);
+      }
 
       // 转换为存储格式
       storedDecisions = llmDecisions.map((d) => ({
-        mergeGroup: d.mergeGroup,
+        coreCandidateIds: d.coreCandidateIds,
+        supportingCandidateIds: d.supportingCandidateIds,
         domainName: d.domainName,
         partitionId: findPartitionIdForDecision(
           partitions,
@@ -490,11 +651,17 @@ export async function runDomainPartitioning(
       }));
     } else {
       logger.warn("LLM analysis failed, falling back to static aggregation");
-      partitions = runStaticAggregation(traceResults);
+      partitions = runStaticAggregation(
+        traceResults,
+        domainClusterInput.candidates,
+      );
     }
   } else {
     logger.info("Using static aggregation (LLM disabled or only 1 candidate)");
-    partitions = runStaticAggregation(traceResults);
+    partitions = runStaticAggregation(
+      traceResults,
+      domainClusterInput.candidates,
+    );
   }
 
   // 8. 计算 fileHashes 和 lastCommitHash
@@ -518,6 +685,7 @@ export async function runDomainPartitioning(
     partitions,
     candidateSnapshot,
     storedDecisions,
+    repositoryContext.partitionMode,
   );
 
   logger.info(`Generated ${partitions.length} partitions`);
@@ -526,9 +694,37 @@ export async function runDomainPartitioning(
     partitions,
     outputPath: outputDir,
     indexFilePath: path.join(outputDir, "_index.json"),
+    partitionMode: repositoryContext.partitionMode,
     incremental: !forceMode,
     updateType: forceMode ? "force" : incrementalCheck.updateType,
   };
+}
+
+async function loadOrClassifyRepositoryContext(
+  repoPath: string,
+): Promise<RepositoryClassificationContext> {
+  const existingContext = await loadProjectContext(repoPath);
+  if (existingContext) {
+    return existingContext;
+  }
+
+  const llmTimeoutMs = LLM_DEFAULTS.timeoutSeconds * 1000;
+  const client = createOpenAiClient({
+    model: LLM_DEFAULTS.model,
+    baseUrl: LLM_DEFAULTS.baseUrl,
+    apiKey: process.env[LLM_DEFAULTS.apiKeyEnv] ?? LLM_DEFAULTS.apiKey,
+    concurrency: 1,
+    timeoutMs: llmTimeoutMs,
+    maxRetries: LLM_DEFAULTS.maxRetries,
+  });
+  const claimsProvider = createOpenAiClaimsProvider(client, LLM_DEFAULTS.model);
+  const context = await classifyRepository(
+    repoPath,
+    claimsProvider,
+    llmTimeoutMs,
+  );
+  await saveProjectContext(context, repoPath);
+  return context;
 }
 
 /**
@@ -536,21 +732,73 @@ export async function runDomainPartitioning(
  */
 function findPartitionIdForDecision(
   partitions: DomainPartition[],
-  decision: DomainMergeDecision,
+  decision: DomainDefinition,
   candidates: PartitionCandidate[],
 ): string {
-  // 查找决策中第一个候选对应的分区
-  const firstCandidateId = decision.mergeGroup[0];
-  const candidate = candidates.find((c) => c.candidateId === firstCandidateId);
-  if (!candidate) return "";
-
-  // 根据 anchorTable 查找分区
-  const partition = partitions.find((p) =>
-    p.tables.some(
-      (t) => t.role === "primary" && t.tableName === candidate.anchorTable,
-    ),
+  const includedCandidateIds = [
+    ...decision.coreCandidateIds,
+    ...decision.supportingCandidateIds,
+  ];
+  const decisionTableSet = new Set([
+    ...decision.coreTables,
+    ...decision.supportingTables,
+  ]);
+  const decisionAnchorSet = new Set(
+    includedCandidateIds
+      .map((candidateId) =>
+        candidates.find((candidate) => candidate.candidateId === candidateId),
+      )
+      .filter((candidate): candidate is PartitionCandidate =>
+        Boolean(candidate),
+      )
+      .map((candidate) => candidate.anchorTable),
   );
-  return partition?.partitionId ?? "";
+
+  const exactCandidateMatch = partitions.find((partition) => {
+    const partitionAnchorSet = new Set(
+      partition.tables
+        .filter((table) => table.role === "primary")
+        .map((table) => table.tableName),
+    );
+
+    return (
+      partitionAnchorSet.size === decisionAnchorSet.size &&
+      [...decisionAnchorSet].every((anchorTable) =>
+        partitionAnchorSet.has(anchorTable),
+      )
+    );
+  });
+  if (exactCandidateMatch) {
+    return exactCandidateMatch.partitionId;
+  }
+
+  const matched = [...partitions]
+    .map((partition) => {
+      const partitionTableSet = new Set(
+        partition.tables.map((table) => table.tableName),
+      );
+      const exactCoreMatch = decision.coreTables.every((tableName) =>
+        partitionTableSet.has(tableName),
+      );
+      const tableOverlap = [...decisionTableSet].filter((tableName) =>
+        partitionTableSet.has(tableName),
+      ).length;
+      const anchorOverlap = [...decisionAnchorSet].filter((anchorTable) =>
+        partitionTableSet.has(anchorTable),
+      ).length;
+
+      return {
+        partition,
+        score:
+          (exactCoreMatch ? 100 : 0) +
+          anchorOverlap * 10 +
+          tableOverlap * 3 -
+          Math.abs(partitionTableSet.size - decisionTableSet.size),
+      };
+    })
+    .sort((left, right) => right.score - left.score)[0];
+
+  return matched && matched.score > 0 ? matched.partition.partitionId : "";
 }
 
 /**
@@ -585,56 +833,71 @@ async function performIncrementalFileUpdate(
 /**
  * 运行 LLM 语义分析
  */
-async function runLLMAnalysis(
+async function runBusinessDomainAnalysis(
   repoPath: string,
   domainClusterInput: DomainClusterInput,
-): Promise<DomainMergeDecision[]> {
+  concurrency: number,
+): Promise<
+  import("../partition/business-domain/types.js").BusinessDomainPartitionResult
+> {
   try {
-    // 创建工具集
-    const tools = createDomainClusterTools(repoPath);
-    logger.info(`Created ${tools.length} domain cluster tools`);
-
-    // 创建 Agent Runtime
-    const agent = createAgentRuntime({
-      model: {
-        id: "domain-cluster-agent",
-        model: LLM_DEFAULTS.model,
-        baseUrl: LLM_DEFAULTS.baseUrl,
-        apiKey: process.env[LLM_DEFAULTS.apiKeyEnv] ?? LLM_DEFAULTS.apiKey,
-        maxTokens: 128_000,
+    const result = await runBusinessDomainPartition({
+      repoPath,
+      clusterInput: domainClusterInput,
+      analysisContext: {
+        repoPath,
+        projectContext: domainClusterInput.projectContext,
+        commitHistory: domainClusterInput.commitHistory,
       },
-      workspacePath: repoPath,
-      tools,
-      enableSummarization: false,
-      enableTodoList: false,
+      concurrency,
+      materializePartitions: (decisions) =>
+        aggregateWithLLMDecisions(domainClusterInput.candidates, decisions),
     });
-
-    // 创建 DomainClusterAgent
-    const clusterAgent = createDomainClusterAgentSync(repoPath, agent);
-
-    // 执行分析
-    const clusterResult = await clusterAgent.analyze(domainClusterInput);
-
-    if (!clusterResult.success) {
-      logger.error(`LLM analysis failed: ${clusterResult.error}`);
-      return [];
+    if (!result.success) {
+      logger.error(`LLM analysis failed: ${result.error}`);
+      return result;
     }
 
-    logger.info(`LLM analysis completed in ${clusterResult.executionTimeMs}ms`);
+    logger.info(`LLM analysis completed in ${result.executionTimeMs}ms`);
 
-    return clusterResult.decisions;
+    return result;
   } catch (err) {
-    logger.error("LLM analysis error:", err);
-    return [];
+    if (err instanceof Error) {
+      logger.error(`LLM analysis error: ${err.stack ?? err.message}`);
+    } else {
+      logger.error("LLM analysis error:", err);
+    }
+    return {
+      decisions: [],
+      success: false,
+      error: String(err),
+    };
+  }
+}
+
+function applyCrossDomainRefs(
+  partitions: DomainPartition[],
+  refsByPartitionId: Record<string, DomainPartition["crossDomainRefs"]>,
+): void {
+  for (const partition of partitions) {
+    const refs = refsByPartitionId[partition.partitionId];
+    if (refs && refs.length > 0) {
+      partition.crossDomainRefs = refs;
+    }
   }
 }
 
 /**
  * 运行静态聚合（fallback）
  */
-function runStaticAggregation(traceResults: TraceResult[]): DomainPartition[] {
+function runStaticAggregation(
+  traceResults: TraceResult[],
+  candidates: PartitionCandidate[],
+): DomainPartition[] {
   const aggregator = createPartitionAggregator();
-  return aggregator.aggregate(traceResults);
+  return candidates.length > 0
+    ? aggregator.aggregateCandidates(candidates)
+    : aggregator.aggregate(traceResults);
 }
 
 /**

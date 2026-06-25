@@ -88,6 +88,7 @@ export interface ServiceInfo {
   filePath: string;
   module: string;
   polymorphismGroup?: string;
+  calledMethodNames?: string[];
 }
 
 export interface MapperInfo {
@@ -96,6 +97,8 @@ export interface MapperInfo {
   xmlPath?: string;
   module: string;
   tablesOperated?: string[];
+  calledMethodNames?: string[];
+  operations?: ("select" | "insert" | "update" | "delete")[];
 }
 
 export interface EntityInfo {
@@ -178,11 +181,16 @@ export interface NoEntryTable {
 export type CrossDomainRelationType =
   | "service_call"
   | "frontend_component"
-  | "shared_table";
+  | "shared_table"
+  | "shared_table_reference"
+  | "aggregate_dependency"
+  | "junction_dependency"
+  | "weak_identity_reference";
 
 export interface CrossDomainRef {
   targetDomain: string;
   relationType: CrossDomainRelationType;
+  evidence?: string[];
 }
 
 // ========== 置信度 ==========
@@ -246,6 +254,7 @@ export interface PartitionIndex {
   version: string;
   algorithmVersion: string;
   updatedAt: string;
+  partitionMode?: string;
   /** 候选快照（用于增量更新） */
   candidateSnapshot?: CandidateSnapshot;
   /** 存储的 LLM 决策（用于增量更新参考） */
@@ -283,6 +292,8 @@ export interface PartitionConfig {
   algorithmVersion?: string;
   /** 是否启用 LLM 语义分析（默认 true） */
   enableLLMAnalysis?: boolean;
+  /** 并发度，仅对可并发的批量 LLM 任务生效，默认 1 */
+  concurrency?: number;
 }
 
 // ========== LLM 语义分析相关类型 ==========
@@ -293,12 +304,22 @@ export interface PartitionConfig {
 export interface PartitionCandidate {
   candidateId: string;
   anchorTable: string;
+  anchorQuality: "high" | "medium" | "low";
+  isInfrastructureCandidate: boolean;
+  isAggregatorCandidate: boolean;
+  coreTableNames: string[];
+  supportingTableNames: string[];
+  ownedTableNames: string[];
+  dependencyTableNames: string[];
 
   /** 入口点详情 */
   entryPoints: {
     kind: EntryPointKind;
     className: string;
+    methodName: string;
     filePath: string;
+    module: string;
+    isAggregatorLike: boolean;
     /** Controller 的 API 信息（预提取） */
     apiInfo?: {
       basePath?: string;
@@ -353,6 +374,91 @@ export interface PartitionCandidate {
     depth: number;
     pathCount: number;
   };
+
+  evidence?: CandidateEvidence;
+}
+
+export type SchemaTableKind =
+  | "business_entity"
+  | "junction"
+  | "extension"
+  | "log"
+  | "config"
+  | "dict"
+  | "unknown";
+
+export type SchemaRelationType =
+  | "explicit_fk"
+  | "implicit_fk"
+  | "aggregate_child"
+  | "junction_table"
+  | "extension_table"
+  | "weak_reference"
+  | "audit_or_log"
+  | "config_or_dict";
+
+export type SchemaRelationStrength = "strong" | "medium" | "weak";
+export type SchemaRelationDirection = "outbound" | "bidirectional";
+
+export interface SchemaTableNode {
+  tableName: string;
+  normalizedName: string;
+  tableKind: SchemaTableKind;
+  nameTokens: string[];
+}
+
+export interface SchemaTableEdge {
+  sourceTable: string;
+  targetTable: string;
+  relationType: SchemaRelationType;
+  strength: SchemaRelationStrength;
+  direction: SchemaRelationDirection;
+  evidence: string[];
+}
+
+export interface SchemaRelationGraph {
+  tables: SchemaTableNode[];
+  relations: SchemaTableEdge[];
+}
+
+export interface CandidateEvidence {
+  candidateId: string;
+  anchorTable: string;
+  suggestedName: string;
+  entryPointSummaries: string[];
+  coreTables: string[];
+  supportingTables: string[];
+  ownedTables: string[];
+  dependencyTables: string[];
+  coreServices: string[];
+  coreMappers: string[];
+  internalRelations: SchemaTableEdge[];
+  outboundRelations: SchemaTableEdge[];
+  inboundRelations: SchemaTableEdge[];
+  relatedCandidateIds: string[];
+  businessTerms: string[];
+  commitHighlights: string[];
+}
+
+export interface PartitionAnalysisEvidenceItem {
+  candidateId: string;
+  anchorTable: string;
+  suggestedDomainName: string;
+  entryPointSummaries: string[];
+  coreTables: string[];
+  supportingTables: string[];
+  ownedTables: string[];
+  dependencyTables: string[];
+  relatedCandidateIds: string[];
+  relatedRelationSummaries: string[];
+  businessTerms: string[];
+  commitHighlights: string[];
+}
+
+export interface PartitionAnalysisEvidence {
+  candidateItems: PartitionAnalysisEvidenceItem[];
+  schemaHighlights: string[];
+  projectDocumentHighlights: string[];
 }
 
 /**
@@ -363,6 +469,8 @@ export interface CandidateRelation {
   candidateIdB: string;
   /** 共享的表 */
   sharedTables: string[];
+  /** 共享的核心表 */
+  sharedCoreTables: string[];
   /** 共享的 Service */
   sharedServices: string[];
   /** 共享的 Mapper */
@@ -406,10 +514,14 @@ export interface DomainClusterInput {
   candidateRelations: CandidateRelation[];
   /** 候选的分组提示 */
   candidateGroups: CandidateGroup[];
+  /** 表关系图 */
+  schemaRelationGraph: SchemaRelationGraph;
   /** 项目上下文 */
   projectContext: ProjectContext;
   /** Git commit 历史（可选，辅助分析） */
   commitHistory?: CommitHistoryInfo;
+  /** 供 LLM 快速消费的精简证据 */
+  analysisEvidence?: PartitionAnalysisEvidence;
 }
 
 /**
@@ -437,41 +549,31 @@ export interface CommitInfo {
 /**
  * DomainMergeEvidence - 合并决策的证据
  */
-export interface DomainMergeEvidence {
-  /** 共享的 API 基路径 */
-  sharedApiBasePath?: string;
-  /** 外键关系列表 */
-  foreignKeys?: string[];
-  /** Service 方法注释 */
-  serviceMethodComments?: string[];
-  /** 独立的 Service */
-  independentServices?: string[];
-  /** 独立的 Controller */
-  independentControllers?: string[];
-  /** 共享的通用 Mapper（需特殊处理） */
-  sharedCommonMapper?: string;
-  /** 独立的 Mapper */
-  independentMappers?: string[];
-  /** 业务语义关键词 */
-  businessKeywords?: string[];
-  /** Git 提交历史证据 */
-  gitHistoryEvidence?: string[];
+export interface DomainDependencyDefinition {
+  targetDomainHint: string;
+  relationType: CrossDomainRelationType;
+  evidence: string[];
 }
 
-/**
- * DomainMergeDecision - LLM Agent 输出
- */
-export interface DomainMergeDecision {
-  /** 要合并的 candidateId 列表 */
-  mergeGroup: string[];
+export interface DomainDefinition {
   /** 业务域名称 */
   domainName: string;
   /** 置信度 0-1 */
   confidence: number;
+  /** 域内核心候选 */
+  coreCandidateIds: string[];
+  /** 域内支撑候选 */
+  supportingCandidateIds: string[];
+  /** 明确排除候选 */
+  excludedCandidateIds: string[];
+  /** 核心表 */
+  coreTables: string[];
+  /** 支撑表 */
+  supportingTables: string[];
+  /** 跨域依赖 */
+  crossDomainDependencies: DomainDependencyDefinition[];
   /** 判断依据（人类可读） */
   reasoning: string;
-  /** 支持判断的证据 */
-  evidence?: DomainMergeEvidence;
 }
 
 /**
@@ -479,7 +581,7 @@ export interface DomainMergeDecision {
  */
 export interface DomainClusterResult {
   /** 所有合并决策 */
-  decisions: DomainMergeDecision[];
+  decisions: DomainDefinition[];
   /** Agent 是否成功执行 */
   success: boolean;
   /** 错误信息（如果失败） */
@@ -525,8 +627,10 @@ export interface CandidateSnapshot {
  * 用于增量更新时作为参考输入
  */
 export interface StoredLlmDecision {
-  /** 要合并的 candidateId 列表 */
-  mergeGroup: string[];
+  /** 域内核心候选 */
+  coreCandidateIds: string[];
+  /** 域内支撑候选 */
+  supportingCandidateIds: string[];
   /** 业务域名称 */
   domainName: string;
   /** 生成的 partitionId */

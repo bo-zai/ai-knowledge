@@ -21,15 +21,20 @@ import {
   buildCapabilityDomainRefinePrompt,
   parseCapabilityDomainRefineResponse,
 } from "./capability-domain-refiner.js";
+import type { EvidenceBundle } from "../evidence/evidence-bundle-schema.js";
+import type { FlowCandidate } from "../knowledge-evidence/capability-clustering/types.js";
 import {
   findBestMatchingDomain,
   loadDomainRegistry,
   type DomainRegistryEntry,
 } from "../packaging/domain-registry.js";
+import { buildPlannedCapabilityInventory } from "../knowledge-evidence/index.js";
 
 export interface CapabilityInventoryItem {
   id: string;
   name: string;
+  domainKey?: string;
+  domainName?: string;
   summary?: string;
   targetTerms: string[];
   targetPaths: string[];
@@ -38,6 +43,8 @@ export interface CapabilityInventoryItem {
   functionClusters: FunctionCluster[];
   coreFunctionIds: string[];
   supportingFunctionIds: string[];
+  evidenceBundle?: EvidenceBundle;
+  flowCandidates?: FlowCandidate[];
 }
 
 type PromptProvider = (
@@ -399,5 +406,10 @@ export async function buildCapabilityInventory(
   repoRoot: string,
   promptProvider?: PromptProvider,
 ): Promise<CapabilityInventoryItem[]> {
+  const planned = await buildPlannedCapabilityInventory(repoRoot);
+  if (planned.inventory.length > 0) {
+    return planned.inventory;
+  }
+
   return discoverProjectCapabilities(repoRoot, promptProvider);
 }

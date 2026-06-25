@@ -19,7 +19,7 @@ import { fileURLToPath } from "url";
 import type {
   DomainClusterInput,
   DomainClusterResult,
-  DomainMergeDecision,
+  DomainDefinition,
   PartitionCandidate,
 } from "./types.js";
 
@@ -144,6 +144,37 @@ export class DomainClusterAgent {
    * 构建输入消息
    */
   private buildInputMessage(input: DomainClusterInput): string {
+    const compactCandidates = input.candidates.map((candidate) => ({
+      candidateId: candidate.candidateId,
+      anchorTable: candidate.anchorTable,
+      anchorQuality: candidate.anchorQuality,
+      isInfrastructureCandidate: candidate.isInfrastructureCandidate,
+      isAggregatorCandidate: candidate.isAggregatorCandidate,
+      coreTables: candidate.coreTableNames,
+      supportingTables: candidate.supportingTableNames,
+      entryPoints: candidate.entryPoints.map((entryPoint) => ({
+        className: entryPoint.className,
+        methodName: entryPoint.methodName,
+        module: entryPoint.module,
+        apiBasePath: entryPoint.apiInfo?.basePath,
+      })),
+      services: candidate.services.map((service) => service.className),
+      mappers: candidate.mappers.map((mapper) => ({
+        className: mapper.className,
+        tablesOperated: mapper.tablesOperated,
+      })),
+      callChainSummary: candidate.callChainSummary,
+    }));
+    const compactSchemaRelations = input.schemaRelationGraph.relations
+      .slice(0, 80)
+      .map((relation) => ({
+        sourceTable: relation.sourceTable,
+        targetTable: relation.targetTable,
+        relationType: relation.relationType,
+        strength: relation.strength,
+        evidence: relation.evidence,
+      }));
+
     // 构建 commit 历史部分
     let commitHistorySection = "";
     if (input.commitHistory && input.commitHistory.candidateCommits.size > 0) {
@@ -174,39 +205,43 @@ export class DomainClusterAgent {
 - 是否有领域文档: ${input.projectContext.hasDomainDocs ? "是" : "否"}
 
 ## 候选列表
-${JSON.stringify(input.candidates, null, 2)}
+${JSON.stringify(compactCandidates, null, 2)}
 
 ## 候选关系
-${JSON.stringify(input.candidateRelations, null, 2)}
+${JSON.stringify(input.candidateRelations.slice(0, 120), null, 2)}
 
 ## 预分组
-${JSON.stringify(input.candidateGroups, null, 2)}
+${JSON.stringify(input.candidateGroups.slice(0, 80), null, 2)}
+
+## Schema 关系图
+${JSON.stringify(compactSchemaRelations, null, 2)}
+${input.analysisEvidence ? `\n## 精简证据视图\n${JSON.stringify(input.analysisEvidence, null, 2)}\n` : ""}
 ${commitHistorySection}
-请输出 JSON 数组格式的合并决策。
+请输出 JSON 数组格式的业务域定义结果。
 `;
   }
 
   /**
    * 解析决策
    */
-  private parseDecisions(content: string): DomainMergeDecision[] {
+  private parseDecisions(content: string): DomainDefinition[] {
     try {
       // 尝试直接解析 JSON
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]) as DomainMergeDecision[];
+        return this.normalizeDecisions(JSON.parse(jsonMatch[0]));
       }
 
       // 尝试解析 markdown 代码块中的 JSON
       const codeBlockMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
       if (codeBlockMatch) {
-        return JSON.parse(codeBlockMatch[1]) as DomainMergeDecision[];
+        return this.normalizeDecisions(JSON.parse(codeBlockMatch[1]));
       }
 
       // 尝试解析 markdown 代码块（无语言标记）
       const plainCodeBlockMatch = content.match(/```\s*([\s\S]*?)\s*```/);
       if (plainCodeBlockMatch) {
-        return JSON.parse(plainCodeBlockMatch[1]) as DomainMergeDecision[];
+        return this.normalizeDecisions(JSON.parse(plainCodeBlockMatch[1]));
       }
 
       logger.warn("No valid JSON found in response");
@@ -217,15 +252,57 @@ ${commitHistorySection}
     }
   }
 
+  private normalizeDecisions(value: unknown): DomainDefinition[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value.map((item, index) => this.normalizeDecision(item, index));
+  }
+
+  private normalizeDecision(value: unknown, index: number): DomainDefinition {
+    const item = isRecord(value) ? value : {};
+    const coreTables = toStringArray(item.coreTables);
+    const supportingTables = toStringArray(item.supportingTables);
+    const coreCandidateIds = toStringArray(item.coreCandidateIds);
+    const supportingCandidateIds = toStringArray(item.supportingCandidateIds);
+
+    return {
+      domainName:
+        typeof item.domainName === "string" && item.domainName.trim()
+          ? item.domainName.trim()
+          : `未命名域_${index + 1}`,
+      confidence:
+        typeof item.confidence === "number" && Number.isFinite(item.confidence)
+          ? Math.max(0, Math.min(1, item.confidence))
+          : 0.5,
+      coreCandidateIds,
+      supportingCandidateIds,
+      excludedCandidateIds: toStringArray(item.excludedCandidateIds),
+      coreTables,
+      supportingTables,
+      crossDomainDependencies: normalizeCrossDomainDependencies(
+        item.crossDomainDependencies,
+      ),
+      reasoning:
+        typeof item.reasoning === "string" && item.reasoning.trim()
+          ? item.reasoning.trim()
+          : "LLM 未提供完整判断依据，已做结构归一化处理",
+    };
+  }
+
   /**
    * 验证决策完整性
    */
   private validateDecisions(
-    decisions: DomainMergeDecision[],
+    decisions: DomainDefinition[],
     candidates: PartitionCandidate[],
   ): { valid: boolean; error?: string } {
     const allCandidateIds = candidates.map((c) => c.candidateId);
-    const decisionIds = decisions.flatMap((d) => d.mergeGroup);
+    const decisionIds = decisions.flatMap((decision) => [
+      ...decision.coreCandidateIds,
+      ...decision.supportingCandidateIds,
+    ]);
 
     // 检查是否有遗漏
     const missing = allCandidateIds.filter((id) => !decisionIds.includes(id));
@@ -252,7 +329,7 @@ ${commitHistorySection}
       if (decision.confidence < 0 || decision.confidence > 1) {
         return {
           valid: false,
-          error: `Invalid confidence for ${decision.mergeGroup.join(",")}`,
+          error: `Invalid confidence for ${decision.domainName}`,
         };
       }
     }
@@ -264,10 +341,13 @@ ${commitHistorySection}
    * 修复决策（添加遗漏的候选）
    */
   private fixDecisions(
-    decisions: DomainMergeDecision[],
+    decisions: DomainDefinition[],
     candidates: PartitionCandidate[],
-  ): DomainMergeDecision[] {
-    const decisionIds = decisions.flatMap((d) => d.mergeGroup);
+  ): DomainDefinition[] {
+    const decisionIds = decisions.flatMap((decision) => [
+      ...decision.coreCandidateIds,
+      ...decision.supportingCandidateIds,
+    ]);
     const missing = candidates.filter(
       (c) => !decisionIds.includes(c.candidateId),
     );
@@ -275,14 +355,88 @@ ${commitHistorySection}
     // 为每个遗漏的候选创建单独决策
     for (const candidate of missing) {
       decisions.push({
-        mergeGroup: [candidate.candidateId],
-        domainName: `${candidate.anchorTable}域`,
+        domainName: candidate.anchorTable,
         confidence: 0.3,
+        coreCandidateIds: [candidate.candidateId],
+        supportingCandidateIds: [],
+        excludedCandidateIds: [],
+        coreTables: candidate.coreTableNames,
+        supportingTables: candidate.supportingTableNames,
+        crossDomainDependencies: [],
         reasoning: "无法判断，Agent 未输出决策，自动生成独立决策",
       });
     }
 
     return decisions;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeCrossDomainDependencies(
+  value: unknown,
+): DomainDefinition["crossDomainDependencies"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) {
+        return undefined;
+      }
+
+      const targetDomainHint =
+        typeof item.targetDomainHint === "string" ? item.targetDomainHint : "";
+      const relationType =
+        typeof item.relationType === "string" ? item.relationType : "";
+      const normalizedRelationType =
+        normalizeDependencyRelationType(relationType);
+
+      if (!targetDomainHint || !normalizedRelationType) {
+        return undefined;
+      }
+
+      return {
+        targetDomainHint,
+        relationType: normalizedRelationType,
+        evidence: toStringArray(item.evidence),
+      };
+    })
+    .filter(
+      (item): item is DomainDefinition["crossDomainDependencies"][number] =>
+        Boolean(item),
+    );
+}
+
+function normalizeDependencyRelationType(
+  value: string,
+):
+  | DomainDefinition["crossDomainDependencies"][number]["relationType"]
+  | undefined {
+  switch (value) {
+    case "service_call":
+    case "frontend_component":
+    case "shared_table":
+    case "shared_table_reference":
+    case "aggregate_dependency":
+    case "junction_dependency":
+    case "weak_identity_reference":
+      return value;
+    case "reference":
+    case "weak_reference":
+      return "weak_identity_reference";
+    default:
+      return undefined;
   }
 }
 
@@ -324,6 +478,7 @@ export async function createDomainClusterAgent(
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
       maxTokens: config.maxTokens,
+      temperature: 0,
     },
     workspacePath,
     tools,

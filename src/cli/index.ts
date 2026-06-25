@@ -93,6 +93,10 @@ program
     "Target repository path (overrides positional argument)",
   )
   .option("--force", "Force re-partition even if partitions exist")
+  .option(
+    "--concurrency <number>",
+    "Maximum concurrency for candidate profiling and local cluster analysis (default: 1)",
+  )
   .option("--verbose", "Enable verbose logging")
   .action(async (path, options) => {
     const { runPartition } = await import("./partition.js");

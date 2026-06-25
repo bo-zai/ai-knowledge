@@ -48,7 +48,7 @@ export async function writeKnowledgePackage(input: {
   const report = {
     knowledge: input.knowledge,
     target: input.target ?? null,
-    stages: Object.fromEntries(contributions.map((c) => [c.stage, c.report])),
+    stages: buildStageReports(contributions),
     warnings: contributions.flatMap((c) => c.warnings),
   };
   const internalDir = path.join(layout.packageRoot, ".internal");
@@ -60,6 +60,52 @@ export async function writeKnowledgePackage(input: {
     JSON.stringify(report, null, 2) + "\n",
     "utf-8",
   );
+}
+
+function buildStageReports(
+  contributions: KnowledgePackageContribution[],
+): Record<string, unknown> {
+  const reports = new Map<
+    string,
+    {
+      stage: string;
+      ran: boolean;
+      succeeded: number;
+      failed: number;
+      contributionCount: number;
+      objectCount: number;
+      fileCount: number;
+      details: {
+        contributions: KnowledgePackageContribution["report"][];
+      };
+    }
+  >();
+
+  for (const contribution of contributions) {
+    const existing = reports.get(contribution.stage) ?? {
+      stage: contribution.stage,
+      ran: false,
+      succeeded: 0,
+      failed: 0,
+      contributionCount: 0,
+      objectCount: 0,
+      fileCount: 0,
+      details: {
+        contributions: [],
+      },
+    };
+
+    existing.ran = existing.ran || contribution.report.ran;
+    existing.succeeded += contribution.report.succeeded;
+    existing.failed += contribution.report.failed;
+    existing.contributionCount += 1;
+    existing.objectCount += contribution.objects.length;
+    existing.fileCount += contribution.files.length;
+    existing.details.contributions.push(contribution.report);
+    reports.set(contribution.stage, existing);
+  }
+
+  return Object.fromEntries(reports);
 }
 
 export async function writeKnowledgeContributionIncremental(input: {
@@ -171,6 +217,9 @@ function projectRawObjectFile(
 
   const fileName = parts[2] ?? "";
   const id = fileName.replace(/\.(md|yaml)$/, "");
+  if (dirName === "capabilities" && id.startsWith("CAP-")) {
+    return undefined;
+  }
   const projectedDir = layout.knowledgeDirs[dirName as KnowledgeDir];
   if (!projectedDir) return undefined;
 
@@ -271,8 +320,7 @@ async function loadExistingMarkdownObjects(
 
 async function rebuildPackageViews(layout: PackageLayout): Promise<void> {
   let objectsByType = await loadExistingMarkdownObjects(layout);
-  let registry = await loadDomainRegistry(layout.packageRoot);
-  registry = buildDomainRegistryFromObjects(objectsByType, registry);
+  let registry = buildDomainRegistryFromObjects(objectsByType);
   await saveDomainRegistry(layout.packageRoot, sortDomainRegistry(registry));
 
   await rewriteConceptDocuments(layout, registry);
@@ -908,15 +956,10 @@ function buildDomainRegistryFromObjects(
     KnowledgeDir,
     Array<{ id: string; type: KnowledgeType | LegacyType; content: string }>
   >,
-  previous: DomainRegistry,
 ): DomainRegistry {
   const registry: DomainRegistry = {
     updatedAt: new Date().toISOString(),
-    domains: previous.domains.map((domain) => ({
-      ...domain,
-      capabilityRefs: [...domain.capabilityRefs],
-      concept: domain.concept ? { ...domain.concept } : undefined,
-    })),
+    domains: [],
   };
 
   for (const obj of (objectsByType.concepts ?? []).filter(

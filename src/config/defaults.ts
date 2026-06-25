@@ -40,6 +40,8 @@ export const LLM_DEFAULTS = {
   timeoutSeconds: 300,
   /** 短超时场景（过滤、验证等） */
   shortTimeoutSeconds: 120,
+  /** Agent 模式下单次 HTTP 请求超时 */
+  httpAttemptTimeoutSeconds: 300,
   maxRetries: 3,
 };
 

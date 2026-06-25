@@ -35,11 +35,14 @@ export const DEFAULT_RETRY_MAX_ATTEMPTS = 6;
  */
 export const RETRY_BASE_DELAY_MS = 1000;
 
+import { LLM_DEFAULTS } from "../config/defaults.js";
+
 /**
- * 单次请求超时（毫秒）
+ * 默认单次请求超时（毫秒）
  * 防止半开连接/停滞连接（TCP 保持但无数据流的情况）
  */
-export const PER_ATTEMPT_TIMEOUT_MS = 60_000;
+export const DEFAULT_PER_ATTEMPT_TIMEOUT_MS =
+  LLM_DEFAULTS.httpAttemptTimeoutSeconds * 1000;
 
 /**
  * Promise sleep 函数，支持 AbortSignal
@@ -106,6 +109,8 @@ export interface RetryConfig {
   maxAttempts: number;
   /** 重试钩子 */
   hooks?: RetryHooks;
+  /** 单次请求超时（毫秒） */
+  attemptTimeoutMs?: number;
 }
 
 /**
@@ -114,6 +119,7 @@ export interface RetryConfig {
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxAttempts: DEFAULT_RETRY_MAX_ATTEMPTS,
   hooks: undefined,
+  attemptTimeoutMs: DEFAULT_PER_ATTEMPT_TIMEOUT_MS,
 };
 
 /**
@@ -139,6 +145,7 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
 export function createRetryingFetch(
   hooks?: RetryHooks,
   maxAttempts: number = DEFAULT_RETRY_MAX_ATTEMPTS,
+  attemptTimeoutMs: number = DEFAULT_PER_ATTEMPT_TIMEOUT_MS,
 ): typeof fetch {
   const totalAttempts = Math.max(1, maxAttempts);
   const maxRetries = totalAttempts - 1;
@@ -166,7 +173,7 @@ export function createRetryingFetch(
         attemptCtrl.abort(
           new DOMException("Per-attempt timeout", "TimeoutError"),
         );
-      }, PER_ATTEMPT_TIMEOUT_MS);
+      }, attemptTimeoutMs);
 
       const cleanup = (): void => {
         clearTimeout(timeoutHandle);
@@ -223,7 +230,7 @@ export function createRetryingFetch(
         const isTimeout = err instanceof Error && err.name === "TimeoutError";
         const rawMsg = err instanceof Error ? err.message : String(err);
         const reason = isTimeout
-          ? `timeout after ${PER_ATTEMPT_TIMEOUT_MS}ms`
+          ? `timeout after ${attemptTimeoutMs}ms`
           : rawMsg;
 
         lastError = err;

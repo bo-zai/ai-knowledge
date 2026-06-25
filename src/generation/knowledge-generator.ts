@@ -169,8 +169,15 @@ export async function runKnowledgeGenerator(
 
   // Convert to contribution
   // ID 优先级：1. 显式 id 字段（英文） 2. aliases 中的英文名 3. name 字段 4. 时间戳备用
-  const objects: KnowledgeObject[] = parsed.objects.map(
-    (obj: Record<string, unknown>) => {
+  const sourceObjects = normalizeParsedObjects(
+    type,
+    evidenceBundle,
+    parsed.objects.length > 0
+      ? parsed.objects
+      : buildFallbackObjects(type, evidenceBundle),
+  );
+  const objects: KnowledgeObject[] = sourceObjects.map(
+    (obj: Record<string, unknown>, index: number) => {
       // 尝试从 aliases 中提取英文名（ASCII字符）
       // 确保 aliases 是数组（LLM 可能返回字符串）
       const aliasesRaw = obj.aliases;
@@ -181,17 +188,29 @@ export async function runKnowledgeGenerator(
           : undefined;
       const englishAlias = aliases?.find((a) => /^[\w\-]+$/.test(a));
 
+      const stableConceptId = getStablePartitionConceptId(
+        type,
+        evidenceBundle,
+        index,
+        sourceObjects.length,
+      );
       const id =
+        stableConceptId ||
         extractEnglishId(obj.id as string) ||
         englishAlias ||
         extractEnglishId(obj[getNameField(type)] as string) ||
         `obj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-      return {
+      const enriched = enrichObjectForType(type, obj, id);
+      const knowledgeObject: KnowledgeObject = {
         id,
         type,
-        ...enrichObjectForType(type, obj, id),
+        ...enriched,
+        ...(stableConceptId ? { domain_key: stableConceptId } : {}),
       };
+      return stableConceptId
+        ? constrainPartitionConceptObject(knowledgeObject, evidenceBundle)
+        : knowledgeObject;
     },
   );
 
@@ -216,7 +235,7 @@ export async function runKnowledgeGenerator(
       stage: stageName,
       ran: true,
       succeeded: objects.length,
-      failed: parsed.warnings.length > 0 ? 1 : 0,
+      failed: objects.length === 0 ? 1 : 0,
       details: {
         model: llmResult.model,
         objectCount: objects.length,
@@ -225,6 +244,223 @@ export async function runKnowledgeGenerator(
     },
     warnings: parsed.warnings,
   };
+}
+
+function normalizeParsedObjects(
+  type: KnowledgeType,
+  bundle: EvidenceBundle,
+  objects: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  if (!isPartitionScopedConcept(type, bundle) || objects.length <= 1) {
+    return objects;
+  }
+
+  return [mergeKnowledgeObjects(objects)];
+}
+
+function buildFallbackObjects(
+  type: KnowledgeType,
+  bundle: EvidenceBundle,
+): Record<string, unknown>[] {
+  if (!isPartitionScopedConcept(type, bundle)) {
+    return [];
+  }
+
+  const primaryName = getPrimaryDomainName(bundle);
+  const conceptName = humanizeIdentifier(primaryName);
+  const evidence = [
+    ...bundle.entryPoints.map(
+      (entry) => entry.sourceLocation ?? entry.location,
+    ),
+    ...bundle.dataContracts.map(
+      (contract) => contract.location || contract.name,
+    ),
+  ].filter((item, index, array) => item && array.indexOf(item) === index);
+
+  return [
+    {
+      concept_name: conceptName,
+      domain_name: conceptName,
+      aliases: [
+        toStableKebabId(primaryName),
+        primaryName,
+        ...bundle.capabilityHints.nameCandidates.slice(0, 3),
+      ].filter((item, index, array) => item && array.indexOf(item) === index),
+      summary_zh: `${conceptName}是由当前分区证据识别出的业务域，后续可基于代码入口、数据契约和调用链继续补充业务细节。`,
+      business_meaning_zh: `${conceptName}聚合了该分区内高相关的入口点与数据契约，用于作为 concept/capability 知识生成的稳定业务边界。`,
+      code_manifestation: [
+        ...bundle.entryPoints.map((entry) => ({
+          kind: entry.kind,
+          name: entry.name,
+          location: entry.sourceLocation ?? entry.location,
+        })),
+        ...bundle.dataContracts.map((contract) => ({
+          kind: contract.kind,
+          name: contract.name,
+          location: contract.location,
+        })),
+      ],
+      evidence,
+      tags: ["自动兜底", "待回检"],
+    },
+  ];
+}
+
+function constrainPartitionConceptObject(
+  obj: KnowledgeObject,
+  bundle: EvidenceBundle,
+): KnowledgeObject {
+  return {
+    ...obj,
+    code_manifestation: buildEvidenceManifestation(bundle),
+    evidence: buildEvidenceLocations(bundle),
+  };
+}
+
+function buildEvidenceManifestation(
+  bundle: EvidenceBundle,
+): Array<Record<string, string>> {
+  return [
+    ...bundle.entryPoints.map((entry) => ({
+      kind: entry.kind,
+      name: entry.name,
+      location: formatEntryLocation(entry),
+    })),
+    ...bundle.dataContracts.map((contract) => ({
+      kind: contract.kind,
+      name: contract.name,
+      location: contract.location,
+    })),
+  ];
+}
+
+function buildEvidenceLocations(bundle: EvidenceBundle): string[] {
+  return mergeArrays(
+    bundle.entryPoints.map(formatEntryLocation),
+    bundle.dataContracts.map((contract) => contract.location || contract.name),
+  ).filter(
+    (item): item is string => typeof item === "string" && item.length > 0,
+  );
+}
+
+function formatEntryLocation(
+  entry: EvidenceBundle["entryPoints"][number],
+): string {
+  const location = entry.sourceLocation ?? entry.location;
+  const methodName = entry.name.includes(".")
+    ? entry.name.slice(entry.name.lastIndexOf(".") + 1)
+    : "";
+  return methodName ? `${location}#${methodName}` : location;
+}
+
+function getPrimaryDomainName(bundle: EvidenceBundle): string {
+  const primaryContract = bundle.dataContracts.find(
+    (contract) =>
+      contract.kind === "table" &&
+      (contract.customData?.tableRole === "primary" ||
+        contract.customData?.source === "partition"),
+  );
+  return (
+    primaryContract?.name ??
+    bundle.capabilityHints.nameCandidates[0] ??
+    bundle.candidateId.replace(/^CAND-CONCEPT-domain-/, "")
+  );
+}
+
+function humanizeIdentifier(value: string): string {
+  return toStableKebabId(value).split("-").filter(Boolean).join(" ");
+}
+
+function isPartitionScopedConcept(
+  type: KnowledgeType,
+  bundle: EvidenceBundle,
+): boolean {
+  return (
+    type === "CONCEPT" && bundle.candidateId.startsWith("CAND-CONCEPT-domain-")
+  );
+}
+
+function mergeKnowledgeObjects(
+  objects: Record<string, unknown>[],
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...objects[0] };
+
+  for (const obj of objects.slice(1)) {
+    for (const [key, value] of Object.entries(obj)) {
+      const existing = merged[key];
+      if (Array.isArray(existing) || Array.isArray(value)) {
+        merged[key] = mergeArrays(
+          Array.isArray(existing)
+            ? existing
+            : existing === undefined
+              ? []
+              : [existing],
+          Array.isArray(value) ? value : value === undefined ? [] : [value],
+        );
+        continue;
+      }
+
+      if (existing === undefined || existing === null || existing === "") {
+        merged[key] = value;
+      }
+    }
+  }
+
+  return merged;
+}
+
+function mergeArrays(left: unknown[], right: unknown[]): unknown[] {
+  const seen = new Set<string>();
+  const merged: unknown[] = [];
+  for (const item of [...left, ...right]) {
+    const key = typeof item === "string" ? item : JSON.stringify(item);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function getStablePartitionConceptId(
+  type: KnowledgeType,
+  bundle: EvidenceBundle,
+  objectIndex: number,
+  objectCount: number,
+): string | undefined {
+  if (
+    type !== "CONCEPT" ||
+    !bundle.candidateId.startsWith("CAND-CONCEPT-domain-")
+  ) {
+    return undefined;
+  }
+
+  const primaryContract = bundle.dataContracts.find(
+    (contract) =>
+      contract.kind === "table" &&
+      (contract.customData?.tableRole === "primary" ||
+        contract.customData?.source === "partition"),
+  );
+  const base = toStableKebabId(
+    primaryContract?.name ??
+      bundle.candidateId.replace(/^CAND-CONCEPT-domain-/, ""),
+  );
+
+  if (!base) {
+    return undefined;
+  }
+
+  return objectCount > 1 ? `${base}-${objectIndex + 1}` : base;
+}
+
+function toStableKebabId(value: string): string {
+  return value
+    .replace(/^domain[:_-]+/, "")
+    .replace(/_[a-f0-9]{8}$/i, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
 }
 
 /**
@@ -262,10 +498,9 @@ export async function runKnowledgeGeneratorForGroups(
       logger.debug(
         `Processing group ${idx + 1}/${groupsToProcess.length}: ${group.groupId}`,
       );
-      const result = await runKnowledgeGenerator(
-        input,
-        group.bundle,
-        claimsProvider,
+      const result = await runWithTimeout(
+        () => runKnowledgeGenerator(input, group.bundle, claimsProvider),
+        TASK_TIMEOUT_MS,
       );
       // Add groupId to report details
       result.report.details = {
@@ -281,19 +516,7 @@ export async function runKnowledgeGeneratorForGroups(
   );
 
   // 执行所有任务（受并发限制）
-  // Add timeout protection - if tasks don't complete in reasonable time, continue
-  const TASK_TIMEOUT_MS = 180_000; // 3 minutes per group
-
-  const results = await Promise.allSettled(
-    tasks.map((task) =>
-      Promise.race([
-        task,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Task timeout")), TASK_TIMEOUT_MS),
-        ),
-      ]),
-    ),
-  );
+  const results = await Promise.allSettled(tasks);
 
   logger.debug(`All ${results.length} tasks completed`);
 
@@ -328,6 +551,30 @@ export async function runKnowledgeGeneratorForGroups(
   }
 
   return contributions;
+}
+
+const TASK_TIMEOUT_MS = 300_000;
+
+async function runWithTimeout<T>(
+  taskFactory: () => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      taskFactory(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Task timeout")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 function getPhaseForType(type: KnowledgeType): PromptConfig["phase"] {
@@ -371,22 +618,13 @@ interface ParsedLlmResponse {
 function parseLlmResponse(rawText: string): ParsedLlmResponse {
   const warnings: string[] = [];
 
-  // Extract JSON from response
-  let jsonText = rawText.trim();
-
-  // Remove markdown code blocks if present
-  if (jsonText.startsWith("```json")) {
-    jsonText = jsonText.slice(7);
-  } else if (jsonText.startsWith("```")) {
-    jsonText = jsonText.slice(3);
-  }
-  if (jsonText.endsWith("```")) {
-    jsonText = jsonText.slice(0, -3);
-  }
-  jsonText = jsonText.trim();
-
-  try {
-    const parsed = JSON.parse(jsonText);
+  for (const jsonText of extractJsonCandidates(rawText)) {
+    const parsed =
+      tryParseJson(jsonText) ??
+      tryParseJson(escapeControlCharsInJsonStrings(jsonText));
+    if (!parsed) {
+      continue;
+    }
 
     if (Array.isArray(parsed)) {
       return { objects: parsed, warnings };
@@ -398,12 +636,153 @@ function parseLlmResponse(rawText: string): ParsedLlmResponse {
 
     // Single object
     return { objects: [parsed], warnings };
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    warnings.push(`Failed to parse LLM response: ${msg}`);
-    warnings.push(`Raw response (first 500 chars): ${rawText.slice(0, 500)}`);
-    return { objects: [], warnings };
   }
+
+  warnings.push("Failed to parse LLM response: no valid JSON object found");
+  warnings.push(`Raw response (first 500 chars): ${rawText.slice(0, 500)}`);
+  return { objects: [], warnings };
+}
+
+function tryParseJson(jsonText: string): unknown | undefined {
+  try {
+    return JSON.parse(jsonText);
+  } catch {
+    return undefined;
+  }
+}
+
+function extractJsonCandidates(rawText: string): string[] {
+  const trimmed = rawText.trim();
+  const candidates: string[] = [];
+  const fenceRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let fenceMatch: RegExpExecArray | null;
+  while ((fenceMatch = fenceRegex.exec(trimmed)) !== null) {
+    if (fenceMatch[1]?.trim()) {
+      candidates.push(fenceMatch[1].trim());
+    }
+  }
+
+  for (let index = 0; index < trimmed.length; index++) {
+    const char = trimmed[index];
+    if (char !== "{" && char !== "[") {
+      continue;
+    }
+    const end = findJsonEnd(trimmed, index);
+    if (end <= index) {
+      continue;
+    }
+    const candidate = trimmed.slice(index, end + 1).trim();
+    if (looksLikeKnowledgeJson(candidate)) {
+      candidates.push(candidate);
+    }
+  }
+
+  candidates.push(trimmed);
+  return [...new Set(candidates)].sort(scoreJsonCandidate);
+}
+
+function scoreJsonCandidate(left: string, right: string): number {
+  return getJsonCandidateScore(right) - getJsonCandidateScore(left);
+}
+
+function getJsonCandidateScore(candidate: string): number {
+  let score = 0;
+  for (const token of [
+    '"objects"',
+    '"concept_name"',
+    '"domain_name"',
+    '"name_zh"',
+    '"summary_zh"',
+    '"type"',
+  ]) {
+    if (candidate.includes(token)) {
+      score += 10;
+    }
+  }
+  if (candidate.trim().startsWith("{") || candidate.trim().startsWith("[")) {
+    score += 2;
+  }
+  return score;
+}
+
+function looksLikeKnowledgeJson(candidate: string): boolean {
+  return getJsonCandidateScore(candidate) >= 10;
+}
+
+function findJsonEnd(text: string, start: number): number {
+  const opening = text[start];
+  const closing = opening === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index++) {
+    const char = text[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) {
+      continue;
+    }
+    if (char === opening) {
+      depth++;
+    } else if (char === closing) {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return text.length - 1;
+}
+
+function escapeControlCharsInJsonStrings(jsonText: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (const char of jsonText) {
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      result += char;
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      result += char;
+      inString = !inString;
+      continue;
+    }
+    if (inString && char === "\n") {
+      result += "\\n";
+      continue;
+    }
+    if (inString && char === "\r") {
+      result += "\\r";
+      continue;
+    }
+    if (inString && char === "\t") {
+      result += "\\t";
+      continue;
+    }
+    result += char;
+  }
+
+  return result;
 }
 
 function objectToYaml(obj: KnowledgeObject): string {
@@ -444,11 +823,22 @@ function objectToMarkdown(obj: KnowledgeObject): string {
   const timestamp = new Date().toISOString();
 
   // 标题行
-  const nameZh = (obj as any).name_zh || (obj as any).summary_zh || obj.id;
+  const nameZh =
+    (obj as any).concept_name ||
+    (obj as any).name_zh ||
+    (obj as any).domain_name ||
+    (obj as any).summary_zh ||
+    obj.id;
   lines.push(`# ${nameZh}`);
   lines.push("");
   lines.push(`> 类型：${obj.type}`);
   lines.push(`> 生成时间：${timestamp}`);
+  if (obj.type === "CONCEPT") {
+    const domainName = (obj as any).domain_name || nameZh;
+    const domainKey = (obj as any).domain_key || obj.id;
+    lines.push(`> 业务域名：${domainName}`);
+    lines.push(`> 业务域Key：${domainKey}`);
+  }
   lines.push("");
 
   // 一句话定位
@@ -481,7 +871,10 @@ function objectToMarkdown(obj: KnowledgeObject): string {
       key === "name_zh" ||
       key === "summary_zh" ||
       key === "aliases" ||
-      key === "tags"
+      key === "tags" ||
+      key === "concept_name" ||
+      key === "domain_name" ||
+      key === "domain_key"
     )
       continue;
 

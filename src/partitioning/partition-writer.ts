@@ -39,16 +39,7 @@ export class PartitionWriter {
    * 写入单个 Partition JSON 文件
    */
   async writePartition(partition: DomainPartition): Promise<string> {
-    // 防止空 tables 导致的错误
-    if (!partition.tables || partition.tables.length === 0) {
-      logger.warn(`Partition ${partition.partitionId} has no tables, skipping`);
-      return "";
-    }
-
-    const anchorTable =
-      partition.tables.find((t) => t.role === "primary")?.tableName ??
-      partition.tables[0].tableName;
-    const fileName = `${anchorTable}.json`;
+    const fileName = this.getPartitionFileName(partition);
     const filePath = path.join(this.outputDir, fileName);
 
     // 精简 JSON：移除未填充的字段
@@ -70,22 +61,13 @@ export class PartitionWriter {
     partitions: DomainPartition[],
     candidateSnapshot?: CandidateSnapshot,
     llmDecisions?: StoredLlmDecision[],
+    partitionMode?: string,
   ): Promise<string[]> {
     await this.ensureOutputDir();
 
-    // 过滤空分区
-    const validPartitions = partitions.filter(
-      (p) => p.tables && p.tables.length > 0,
-    );
-    if (validPartitions.length < partitions.length) {
-      logger.warn(
-        `Filtered ${partitions.length - validPartitions.length} partitions with empty tables`,
-      );
-    }
-
     const filePaths: string[] = [];
 
-    for (const partition of validPartitions) {
+    for (const partition of partitions) {
       const filePath = await this.writePartition(partition);
       if (filePath) {
         filePaths.push(filePath);
@@ -93,7 +75,12 @@ export class PartitionWriter {
     }
 
     // 写入索引文件（包含候选快照和 LLM 决策）
-    await this.writeIndex(validPartitions, candidateSnapshot, llmDecisions);
+    await this.writeIndex(
+      partitions,
+      candidateSnapshot,
+      llmDecisions,
+      partitionMode,
+    );
 
     return filePaths;
   }
@@ -105,20 +92,14 @@ export class PartitionWriter {
     partitions: DomainPartition[],
     candidateSnapshot?: CandidateSnapshot,
     llmDecisions?: StoredLlmDecision[],
+    partitionMode?: string,
   ): Promise<string> {
     const indexPath = path.join(this.outputDir, "_index.json");
 
-    // 过滤空分区
-    const validPartitions = partitions.filter(
-      (p) => p.tables && p.tables.length > 0,
-    );
-
-    const entries: PartitionIndexEntry[] = validPartitions.map((p) => ({
+    const entries: PartitionIndexEntry[] = partitions.map((p) => ({
       partitionId: p.partitionId,
-      file: `${p.tables.find((t) => t.role === "primary")?.tableName ?? p.tables[0].tableName}.json`,
-      anchorTable:
-        p.tables.find((t) => t.role === "primary")?.tableName ??
-        p.tables[0].tableName,
+      file: this.getPartitionFileName(p),
+      anchorTable: this.getPartitionAnchor(p),
       tableCount: p.tables.length,
       entryPointCount: p.entryPoints.length,
       isCrossModule: p.backendModules.length > 1,
@@ -126,17 +107,18 @@ export class PartitionWriter {
 
     const index: PartitionIndex = {
       version: "1.0.0",
-      algorithmVersion: validPartitions[0]?.algorithmVersion ?? "1.0.0",
+      algorithmVersion: partitions[0]?.algorithmVersion ?? "1.0.0",
       updatedAt: new Date().toISOString(),
+      partitionMode,
       // 添加候选快照（用于增量更新）
       candidateSnapshot,
       // 添加 LLM 决策（用于增量更新参考）
       llmDecisions,
       partitions: entries,
       stats: {
-        totalPartitions: validPartitions.length,
+        totalPartitions: partitions.length,
         crossModuleCount: entries.filter((e) => e.isCrossModule).length,
-        backendEntryPointCount: validPartitions.reduce(
+        backendEntryPointCount: partitions.reduce(
           (sum, p) => sum + p.entryPoints.length,
           0,
         ),
@@ -259,6 +241,24 @@ export class PartitionWriter {
     result.updatedAt = partition.updatedAt;
 
     return result;
+  }
+
+  private getPartitionFileName(partition: DomainPartition): string {
+    const anchorTable = this.getPartitionAnchor(partition);
+    if (anchorTable) {
+      return `${anchorTable}.json`;
+    }
+
+    return `${partition.partitionId.replace(/[:/\\]+/g, "_")}.json`;
+  }
+
+  private getPartitionAnchor(partition: DomainPartition): string {
+    return (
+      partition.tables.find((t) => t.role === "primary")?.tableName ??
+      partition.tables[0]?.tableName ??
+      partition.backendModules[0]?.name ??
+      partition.partitionId.replace(/[:/\\]+/g, "_")
+    );
   }
 
   /**

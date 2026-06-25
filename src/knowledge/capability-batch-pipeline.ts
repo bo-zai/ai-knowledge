@@ -3,12 +3,20 @@ import {
   runCapabilityKnowledgePipeline,
   type CapabilityClaimsProviderResult,
 } from "./capability-knowledge-pipeline.js";
+import { buildCapabilityKnowledgeFiles } from "../packaging/capability-knowledge-writer.js";
+import type { CapabilityDocBehavior } from "./capability-doc-model.js";
 import type { EvidenceBundle } from "../evidence/evidence-bundle-schema.js";
 import type {
   KnowledgePackageFile,
   KnowledgePackageObjectRef,
 } from "../packaging/knowledge-package-contribution.js";
 import { TYPE_TO_DIR } from "./type-directory-map.js";
+import {
+  appendCapabilityFlowNavigationSection,
+  buildCapabilityFlowBehaviors,
+  buildCapabilityFlowNavigationFiles,
+  toKnowledgePackageFiles,
+} from "../knowledge-evidence/capability-flow/index.js";
 
 export interface CapabilityBatchItemReport {
   id: string;
@@ -44,6 +52,12 @@ function rewriteCapabilityFilePath(
 ): string | undefined {
   if (path === "catalog.yaml") return undefined;
   if (path === "reports/generation.json") return undefined;
+  if (path.startsWith("capabilities/") && path.endsWith(".md")) {
+    return `capabilities/${inventoryId}.md`;
+  }
+  if (path.startsWith("views/capabilities/") && path.endsWith(".md")) {
+    return `views/capabilities/${inventoryId}.md`;
+  }
   if (path === "reports/capability-generation.json") {
     return `reports/capabilities/${inventoryId}.json`;
   }
@@ -65,6 +79,9 @@ export async function runCapabilityBatchPipeline(input: {
   onItemSucceeded?: (item: {
     inventoryId: string;
     inventoryName: string;
+    domainKey?: string;
+    domainName?: string;
+    files: KnowledgePackageFile[];
     result: Awaited<ReturnType<typeof runCapabilityKnowledgePipeline>>;
   }) => Promise<void>;
   model?: string;
@@ -99,38 +116,81 @@ export async function runCapabilityBatchPipeline(input: {
         repoRoot: input.repoRoot,
         targetTerms: item.targetTerms,
         targetPaths: item.targetPaths,
-        domainKey: item.id,
-        domainName: item.name,
+        domainKey: item.domainKey ?? item.id,
+        domainName: item.domainName ?? item.name,
         modulePaths: item.targetPaths,
+        evidenceBundle: item.evidenceBundle,
         claimsProvider: input.claimsProvider,
         llmMode: { requested: true, required: true, model: input.model },
+        shouldWriteLlmFlowFunctionFiles: false,
       });
       console.log(
         `[DEBUG] runCapabilityBatchPipeline: runCapabilityKnowledgePipeline completed for ${item.name}`,
       );
 
-      if (input.onItemSucceeded) {
-        await input.onItemSucceeded({
-          inventoryId: item.id,
-          inventoryName: item.name,
-          result,
-        });
-      }
-
-      const primaryDoc = result.files.find(
+      const sourcePrimaryDoc = result.files.find(
         (file) =>
           file.path.startsWith("capabilities/") && file.path.endsWith(".md"),
       )?.path;
-      const compatibilityView = result.files.find(
+      const sourceCompatibilityView = result.files.find(
         (file) =>
           file.path.startsWith("views/capabilities/") &&
           file.path.endsWith(".md"),
       )?.path;
+      const primaryDoc = sourcePrimaryDoc
+        ? rewriteCapabilityFilePath(sourcePrimaryDoc, item.id)
+        : undefined;
+      const compatibilityView = sourceCompatibilityView
+        ? rewriteCapabilityFilePath(sourceCompatibilityView, item.id)
+        : undefined;
+      const capabilityTitle =
+        extractCapabilityTitle(result.files) ?? result.metadata.capabilityId;
+      const flowFiles = item.evidenceBundle
+        ? buildCapabilityFlowNavigationFiles({
+            capabilityId: result.metadata.capabilityId,
+            capabilityTitle,
+            domainKey: item.domainKey,
+            domainName: item.domainName,
+            flows: item.flowCandidates ?? [],
+            evidenceBundle: item.evidenceBundle,
+            evidenceIndex: result.evidenceIndex,
+          })
+        : [];
+      const behaviorOverrides = buildCapabilityFlowBehaviors({
+        flows: item.flowCandidates ?? [],
+        flowFiles,
+        evidenceIndex: result.evidenceIndex,
+      });
+      const rewrittenCapabilityContent = buildRewrittenCapabilityContent({
+        result,
+        behaviorOverrides,
+      });
+      const itemFiles: KnowledgePackageFile[] = [];
 
       for (const file of result.files) {
         const rewritten = rewriteCapabilityFilePath(file.path, item.id);
         if (!rewritten) continue;
-        files.push({ path: rewritten, content: file.content });
+        itemFiles.push({
+          path: rewritten,
+          content: appendFlowLinksIfCapabilityFile({
+            path: rewritten,
+            content: rewrittenCapabilityContent.get(file.path) ?? file.content,
+            flowFiles,
+          }),
+        });
+      }
+      itemFiles.push(...toKnowledgePackageFiles(flowFiles));
+      files.push(...itemFiles);
+
+      if (input.onItemSucceeded) {
+        await input.onItemSucceeded({
+          inventoryId: item.id,
+          inventoryName: item.name,
+          domainKey: item.domainKey,
+          domainName: item.domainName,
+          files: itemFiles,
+          result,
+        });
       }
 
       objects.push(
@@ -184,4 +244,68 @@ export async function runCapabilityBatchPipeline(input: {
   });
 
   return { files, objects, report, warnings };
+}
+
+function buildRewrittenCapabilityContent(input: {
+  result: Awaited<ReturnType<typeof runCapabilityKnowledgePipeline>>;
+  behaviorOverrides: CapabilityDocBehavior[];
+}): Map<string, string> {
+  const files = buildCapabilityKnowledgeFiles({
+    objects: input.result.objects,
+    capabilityId: input.result.metadata.capabilityId,
+    evidenceIndex: input.result.evidenceIndex,
+    report: input.result.report,
+    debug: input.result.debug,
+    options: {
+      shouldWriteFlowFunctionFiles: false,
+      behaviorOverrides: input.behaviorOverrides,
+      shouldExcludeFlowTraceEvidence: true,
+    },
+  });
+  return new Map(
+    files
+      .filter(
+        (file) =>
+          (file.path.startsWith("capabilities/") ||
+            file.path.startsWith("views/capabilities/")) &&
+          file.path.endsWith(".md"),
+      )
+      .map((file) => [file.path, file.content]),
+  );
+}
+
+function extractCapabilityTitle(
+  files: Array<{ path: string; content: string }>,
+): string | undefined {
+  const capabilityFile = files.find(
+    (file) =>
+      file.path.startsWith("capabilities/") && file.path.endsWith(".md"),
+  );
+  return capabilityFile?.content.match(/^#\s+(.+)$/m)?.[1]?.trim();
+}
+
+function appendFlowLinksIfCapabilityFile(input: {
+  path: string;
+  content: string;
+  flowFiles: ReturnType<typeof buildCapabilityFlowNavigationFiles>;
+}): string {
+  if (input.flowFiles.length === 0) return input.content;
+  if (input.path.startsWith("capabilities/") && input.path.endsWith(".md")) {
+    return appendCapabilityFlowNavigationSection({
+      markdown: input.content,
+      flows: input.flowFiles,
+      linkPrefix: "../functions",
+    });
+  }
+  if (
+    input.path.startsWith("views/capabilities/") &&
+    input.path.endsWith(".md")
+  ) {
+    return appendCapabilityFlowNavigationSection({
+      markdown: input.content,
+      flows: input.flowFiles,
+      linkPrefix: "../../functions",
+    });
+  }
+  return input.content;
 }

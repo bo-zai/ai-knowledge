@@ -39,6 +39,10 @@ function escapeCypherString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
+function buildCypherStringList(values: string[]): string {
+  return `[${values.map((value) => `'${escapeCypherString(value)}'`).join(", ")}]`;
+}
+
 /**
  * 从文件路径提取模块名
  *
@@ -170,14 +174,17 @@ export class TraceChainBuilder {
    * 发现 Controller 入口点
    */
   private async discoverControllers(): Promise<EntryPoint[]> {
-    // 查询按名称模式匹配的节点
     const cypher = `
-      MATCH (c:Class)
+      MATCH (c:Class)-[:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
       WHERE c.name CONTAINS 'Controller'
       AND NOT c.filePath CONTAINS 'test'
       AND NOT c.filePath CONTAINS 'spec'
-      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine
-      LIMIT 100
+      RETURN c.name AS className,
+        c.filePath AS filePath,
+        m.name AS methodName,
+        m.startLine AS startLine,
+        m.annotations AS annotations
+      LIMIT 500
     `;
 
     const rows = await this.query(cypher);
@@ -186,18 +193,20 @@ export class TraceChainBuilder {
     for (const row of rows) {
       const className = row.className as string;
       const filePath = row.filePath as string;
+      const methodName = row.methodName as string;
       const startLine = row.startLine as number | undefined;
+      const annotations = row.annotations as string[] | undefined;
 
-      if (!filePath || !className) continue;
+      if (!filePath || !className || !methodName) continue;
+      if (!this.isControllerMethod(annotations, methodName)) continue;
 
-      // 确定客户端类型
       const clientType = this.determineClientType(className, filePath);
 
       entryPoints.push({
         kind: "controller",
         clientType,
         className,
-        methodName: "", // Controller 级别，方法名后续追溯时补充
+        methodName,
         filePath,
         startLine: startLine ?? 0,
         module: this.getModuleName(filePath),
@@ -260,13 +269,17 @@ export class TraceChainBuilder {
    * 发现 MQ Consumer 入口点
    */
   private async discoverMqConsumers(): Promise<EntryPoint[]> {
-    // 查询所有 Class 节点，在代码中过滤 annotations
     const cypher = `
-      MATCH (c:Class)
+      MATCH (c:Class)-[:CodeRelation {type: 'HAS_METHOD'}]->(m:Method)
       WHERE NOT c.filePath CONTAINS 'test'
       AND NOT c.filePath CONTAINS 'spec'
-      RETURN c.name AS className, c.filePath AS filePath, c.startLine AS startLine, c.annotations AS annotations
-      LIMIT 100
+      RETURN c.name AS className,
+        c.filePath AS filePath,
+        c.annotations AS classAnnotations,
+        m.name AS methodName,
+        m.startLine AS startLine,
+        m.annotations AS methodAnnotations
+      LIMIT 500
     `;
 
     const rows = await this.query(cypher);
@@ -275,16 +288,19 @@ export class TraceChainBuilder {
     for (const row of rows) {
       const className = row.className as string;
       const filePath = row.filePath as string;
-      const annotations = row.annotations as string[] | undefined;
+      const classAnnotations = row.classAnnotations as string[] | undefined;
+      const methodAnnotations = row.methodAnnotations as string[] | undefined;
+      const methodName = row.methodName as string;
+      const startLine = row.startLine as number | undefined;
 
-      if (!filePath || !className) continue;
-
-      // 检查是否是 MQ Consumer
-      // annotations 可能不存在，需要安全检查
-      if (!annotations || annotations.length === 0) continue;
+      if (!filePath || !className || !methodName) continue;
 
       let mqType: string | undefined;
       let mqTopic: string | undefined;
+      const annotations = [
+        ...(classAnnotations ?? []),
+        ...(methodAnnotations ?? []),
+      ];
 
       for (const ann of annotations) {
         if (ann.includes("RocketMQMessageListener")) {
@@ -313,9 +329,9 @@ export class TraceChainBuilder {
       entryPoints.push({
         kind: "mq_consumer",
         className,
-        methodName: "", // Consumer 级别，方法名后续追溯时补充
+        methodName,
         filePath,
-        startLine: (row.startLine as number) ?? 0,
+        startLine: startLine ?? 0,
         module: this.getModuleName(filePath),
         callChain: [],
         mqType,
@@ -341,6 +357,25 @@ export class TraceChainBuilder {
       return "admin";
     if (lowerClass.includes("api") || lowerPath.includes("/api/")) return "api";
     return "web";
+  }
+
+  private isControllerMethod(
+    annotations: string[] | undefined,
+    methodName: string,
+  ): boolean {
+    if (
+      annotations?.some((annotation) =>
+        /(RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)/.test(
+          annotation,
+        ),
+      )
+    ) {
+      return true;
+    }
+
+    return /^(get|list|page|create|save|update|delete|remove|query|find)/i.test(
+      methodName,
+    );
   }
 
   /**
@@ -417,15 +452,20 @@ export class TraceChainBuilder {
     if (entryPoint.kind === "controller") {
       const escapedClass = escapeCypherString(entryPoint.className);
       const escapedPath = escapeCypherString(entryPoint.filePath);
+      const escapedMethod = escapeCypherString(entryPoint.methodName);
 
       const cypher = `
         MATCH (controller:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(ctrlMethod:Method)
-        WHERE controller.name = '${escapedClass}' AND controller.filePath = '${escapedPath}'
+        WHERE controller.name = '${escapedClass}'
+        AND controller.filePath = '${escapedPath}'
+        AND ctrlMethod.name = '${escapedMethod}'
         MATCH (ctrlMethod)-[call:CodeRelation {type: 'CALLS'}]->(serviceMethod:Method)
         MATCH (serviceClass:Class)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(serviceMethod)
         WHERE serviceClass.name =~ '.*Service.*'
         AND NOT serviceClass.filePath CONTAINS 'test'
-        RETURN DISTINCT serviceClass.name AS className, serviceClass.filePath AS filePath
+        RETURN DISTINCT serviceClass.name AS className,
+          serviceClass.filePath AS filePath,
+          serviceMethod.name AS methodName
         LIMIT 10
       `;
 
@@ -434,6 +474,7 @@ export class TraceChainBuilder {
       for (const row of rows) {
         const className = row.className as string;
         const filePath = row.filePath as string;
+        const methodName = row.methodName as string | undefined;
 
         if (!filePath || !className) continue;
 
@@ -461,10 +502,28 @@ export class TraceChainBuilder {
           });
         }
 
+        const existingService = services.find(
+          (service) =>
+            service.className === className && service.filePath === filePath,
+        );
+        if (existingService) {
+          if (
+            methodName &&
+            !existingService.calledMethodNames?.includes(methodName)
+          ) {
+            existingService.calledMethodNames = [
+              ...(existingService.calledMethodNames ?? []),
+              methodName,
+            ];
+          }
+          continue;
+        }
+
         services.push({
           className,
           filePath,
           module: this.getModuleName(filePath),
+          calledMethodNames: methodName ? [methodName] : undefined,
         });
       }
     }
@@ -472,15 +531,21 @@ export class TraceChainBuilder {
     // 如果是 Scheduled 或 MQ Consumer，类似逻辑
     if (entryPoint.kind === "scheduled" || entryPoint.kind === "mq_consumer") {
       const escapedClass = escapeCypherString(entryPoint.className);
+      const escapedPath = escapeCypherString(entryPoint.filePath);
+      const escapedMethod = escapeCypherString(entryPoint.methodName);
 
       const cypher = `
         MATCH (entryClass:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(entryMethod:Method)
         WHERE entryClass.name = '${escapedClass}'
+        AND entryClass.filePath = '${escapedPath}'
+        AND entryMethod.name = '${escapedMethod}'
         MATCH (entryMethod)-[call:CodeRelation {type: 'CALLS'}]->(serviceMethod:Method)
         MATCH (serviceClass:Class)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(serviceMethod)
         WHERE serviceClass.name =~ '.*Service.*'
         AND NOT serviceClass.filePath CONTAINS 'test'
-        RETURN DISTINCT serviceClass.name AS className, serviceClass.filePath AS filePath
+        RETURN DISTINCT serviceClass.name AS className,
+          serviceClass.filePath AS filePath,
+          serviceMethod.name AS methodName
         LIMIT 5
       `;
 
@@ -489,6 +554,7 @@ export class TraceChainBuilder {
       for (const row of rows) {
         const className = row.className as string;
         const filePath = row.filePath as string;
+        const methodName = row.methodName as string | undefined;
 
         if (!filePath || !className) continue;
 
@@ -498,10 +564,28 @@ export class TraceChainBuilder {
           role: "core_logic",
         });
 
+        const existingService = services.find(
+          (service) =>
+            service.className === className && service.filePath === filePath,
+        );
+        if (existingService) {
+          if (
+            methodName &&
+            !existingService.calledMethodNames?.includes(methodName)
+          ) {
+            existingService.calledMethodNames = [
+              ...(existingService.calledMethodNames ?? []),
+              methodName,
+            ];
+          }
+          continue;
+        }
+
         services.push({
           className,
           filePath,
           module: this.getModuleName(filePath),
+          calledMethodNames: methodName ? [methodName] : undefined,
         });
       }
     }
@@ -520,14 +604,23 @@ export class TraceChainBuilder {
     const escapedClass = escapeCypherString(service.className);
     const escapedPath = escapeCypherString(service.filePath);
 
+    const calledMethodFilter =
+      service.calledMethodNames && service.calledMethodNames.length > 0
+        ? `AND serviceMethod.name IN ${buildCypherStringList(service.calledMethodNames)}`
+        : "";
+
     const cypher = `
       MATCH (serviceClass:Class)-[hm:CodeRelation {type: 'HAS_METHOD'}]->(serviceMethod:Method)
       WHERE serviceClass.name = '${escapedClass}' AND serviceClass.filePath = '${escapedPath}'
+      ${calledMethodFilter}
       MATCH (serviceMethod)-[call:CodeRelation {type: 'CALLS'}]->(mapperMethod:Method)
       MATCH (mapperNode)-[hm2:CodeRelation {type: 'HAS_METHOD'}]->(mapperMethod)
       WHERE mapperNode.name =~ '.*(Mapper|Dao|Repository).*'
       AND NOT mapperNode.filePath CONTAINS 'test'
-      RETURN DISTINCT mapperNode.name AS className, mapperNode.filePath AS filePath, labels(mapperNode) AS nodeLabels
+      RETURN DISTINCT mapperNode.name AS className,
+        mapperNode.filePath AS filePath,
+        mapperMethod.name AS methodName,
+        labels(mapperNode) AS nodeLabels
       LIMIT 10
     `;
 
@@ -536,6 +629,7 @@ export class TraceChainBuilder {
     for (const row of rows) {
       const className = row.className as string;
       const filePath = row.filePath as string;
+      const methodName = row.methodName as string | undefined;
 
       if (!filePath || !className) continue;
 
@@ -545,11 +639,29 @@ export class TraceChainBuilder {
       // 查找 Mapper XML
       const xmlPath = await this.findMapperXml(filePath, className);
 
+      const existingMapper = mappers.find(
+        (mapper) =>
+          mapper.className === className && mapper.filePath === filePath,
+      );
+      if (existingMapper) {
+        if (
+          methodName &&
+          !existingMapper.calledMethodNames?.includes(methodName)
+        ) {
+          existingMapper.calledMethodNames = [
+            ...(existingMapper.calledMethodNames ?? []),
+            methodName,
+          ];
+        }
+        continue;
+      }
+
       mappers.push({
         className,
         filePath,
         xmlPath,
         module: this.getModuleName(filePath),
+        calledMethodNames: methodName ? [methodName] : undefined,
       });
     }
 
@@ -573,11 +685,20 @@ export class TraceChainBuilder {
       }
 
       const tables: TableInfo[] = [];
+      const statementIds =
+        mapper.calledMethodNames && mapper.calledMethodNames.length > 0
+          ? new Set(mapper.calledMethodNames)
+          : undefined;
+      const selectedStatements = mapperDoc.statements.filter((stmt) =>
+        statementIds ? statementIds.has(stmt.id) : true,
+      );
+      const operations = new Set<"select" | "insert" | "update" | "delete">();
 
-      for (const stmt of mapperDoc.statements) {
+      for (const stmt of selectedStatements) {
         // 使用 resolveStatementSql 正确处理动态 SQL 和 include
         const resolved = resolveStatementSql(stmt, mapperDoc);
         const sqlText = resolved.sql;
+        operations.add(stmt.type);
 
         const extractedTables = extractTablesFromSql(sqlText);
 
@@ -594,6 +715,7 @@ export class TraceChainBuilder {
 
       // 更新 mapper.tablesOperated
       mapper.tablesOperated = tables.map((t) => t.tableName);
+      mapper.operations = [...operations];
 
       return tables;
     } catch {

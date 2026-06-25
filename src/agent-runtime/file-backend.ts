@@ -47,6 +47,8 @@ export interface WriteResult {
   error?: string;
   /** 文件路径（成功时） */
   path?: string;
+  /** 外部存储已持久化，返回 null 表示无需更新 LangGraph state */
+  filesUpdate?: null;
 }
 
 /**
@@ -57,6 +59,37 @@ export interface EditResult {
   error?: string;
   /** 文件路径（成功时） */
   path?: string;
+  /** 外部存储已持久化，返回 null 表示无需更新 LangGraph state */
+  filesUpdate?: null;
+  /** 替换次数，便于上层判断编辑是否生效 */
+  occurrences?: number;
+}
+
+export interface RawFileData {
+  content: string | Uint8Array;
+  mimeType: string;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface LsResult {
+  error?: string;
+  files?: FileInfo[];
+}
+
+export interface ReadRawResult {
+  error?: string;
+  data?: RawFileData;
+}
+
+export interface GlobResult {
+  error?: string;
+  files?: FileInfo[];
+}
+
+export interface GrepResult {
+  error?: string;
+  matches?: GrepMatch[];
 }
 
 /**
@@ -243,6 +276,21 @@ export class FileBackend {
     }
   }
 
+  /**
+   * 兼容 deepagents v1 backend 协议
+   */
+  async lsInfo(dirPath: string = "/"): Promise<FileInfo[]> {
+    return this.ls(dirPath);
+  }
+
+  /**
+   * 兼容 deepagents v2 backend 协议
+   */
+  async lsResult(dirPath: string = "/"): Promise<LsResult> {
+    const files = await this.ls(dirPath);
+    return { files };
+  }
+
   // ── read_file：读取文件 ───────────────────────────────────────────
 
   /**
@@ -358,6 +406,13 @@ export class FileBackend {
     }
   }
 
+  /**
+   * 兼容 deepagents v1 backend 协议
+   */
+  async read(filePath: string, offset = 0, limit = 500): Promise<string> {
+    return this.read_file(filePath, offset, limit);
+  }
+
   // ── write_file：写入文件 ──────────────────────────────────────────
 
   /**
@@ -412,12 +467,19 @@ export class FileBackend {
       }
 
       logger.info("write_file 完成", { path: filePath, size: contentSize });
-      return { path: filePath };
+      return { path: filePath, filesUpdate: null };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error("write_file 失败", { path: filePath, error: msg });
       return { error: `写入文件 '${filePath}' 失败: ${msg}` };
     }
+  }
+
+  /**
+   * 兼容 deepagents 协议
+   */
+  async write(filePath: string, content: string): Promise<WriteResult> {
+    return this.write_file(filePath, content);
   }
 
   // ── edit_file：编辑文件 ───────────────────────────────────────────
@@ -477,7 +539,9 @@ export class FileBackend {
 
       // 执行替换
       let newContent: string;
+      let occurrences = 0;
       if (replaceAll) {
+        occurrences = this.countOccurrences(content, oldString);
         newContent = content.replace(
           new RegExp(this.escapeRegExp(oldString), "g"),
           newString,
@@ -490,6 +554,7 @@ export class FileBackend {
             error: `找到 ${count} 个匹配。请使用更具体的上下文确保唯一匹配，或设置 replaceAll=true 替换所有匹配。`,
           };
         }
+        occurrences = count;
         newContent = content.replace(oldString, newString);
       }
 
@@ -509,12 +574,24 @@ export class FileBackend {
       }
 
       logger.info("edit_file 完成", { path: filePath, replaceAll });
-      return { path: filePath };
+      return { path: filePath, filesUpdate: null, occurrences };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       logger.error("edit_file 失败", { path: filePath, error: msg });
       return { error: `编辑文件 '${filePath}' 失败: ${msg}` };
     }
+  }
+
+  /**
+   * 兼容 deepagents 协议
+   */
+  async edit(
+    filePath: string,
+    oldString: string,
+    newString: string,
+    replaceAll = false,
+  ): Promise<EditResult> {
+    return this.edit_file(filePath, oldString, newString, replaceAll);
   }
 
   /**
@@ -603,6 +680,13 @@ export class FileBackend {
       logger.error("glob 失败", { pattern, error: msg });
       return [{ path: `错误: glob 搜索失败: ${msg}`, is_dir: false }];
     }
+  }
+
+  /**
+   * 兼容 deepagents v1 backend 协议
+   */
+  async globInfo(pattern: string, searchPath = "/"): Promise<FileInfo[]> {
+    return this.glob(pattern, searchPath);
   }
 
   // ── grep：文件内容搜索 ────────────────────────────────────────────
@@ -741,5 +825,86 @@ export class FileBackend {
       encoding: this.encoding,
       virtualMode: this.virtualMode,
     };
+  }
+
+  /**
+   * 兼容 deepagents v1 backend 协议
+   */
+  async grepRaw(
+    pattern: string,
+    dirPath: string | null = "/",
+    globPattern: string | null = null,
+  ): Promise<GrepMatch[] | string> {
+    try {
+      return await this.grep(pattern, dirPath ?? "/", globPattern ?? undefined);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /**
+   * 兼容 deepagents v2 backend 协议
+   */
+  async readRaw(filePath: string): Promise<ReadRawResult> {
+    const resolvedPath = this.resolvePath(filePath);
+
+    try {
+      const stat = await fs.stat(resolvedPath);
+      if (!stat.isFile()) {
+        return { error: `'${filePath}' 不是文件` };
+      }
+
+      const content = await fs.readFile(resolvedPath);
+      const isTextLike = this.isTextLike(content);
+
+      return {
+        data: {
+          content: isTextLike ? content.toString(this.encoding) : content,
+          mimeType: isTextLike ? "text/plain" : "application/octet-stream",
+          created_at: stat.birthtime.toISOString(),
+          modified_at: stat.mtime.toISOString(),
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { error: message };
+    }
+  }
+
+  /**
+   * 兼容 deepagents v2 backend 协议
+   */
+  async globResult(pattern: string, searchPath = "/"): Promise<GlobResult> {
+    const files = await this.glob(pattern, searchPath);
+    return { files };
+  }
+
+  /**
+   * 兼容 deepagents v2 backend 协议
+   */
+  async grepResult(
+    pattern: string,
+    dirPath: string | null = "/",
+    globPattern: string | null = null,
+  ): Promise<GrepResult> {
+    const matches = await this.grep(
+      pattern,
+      dirPath ?? "/",
+      globPattern ?? undefined,
+    );
+    return { matches };
+  }
+
+  private isTextLike(buffer: Uint8Array): boolean {
+    const sample = buffer.subarray(0, 1024);
+    for (const byte of sample) {
+      if (byte === 9 || byte === 10 || byte === 13) {
+        continue;
+      }
+      if (byte < 32 || byte === 127) {
+        return false;
+      }
+    }
+    return true;
   }
 }

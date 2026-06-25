@@ -14,6 +14,8 @@ import {
 } from "./db-bundle-builder.js";
 import type { EntityRelationType } from "../schemas/data-model.js";
 
+const TECHNICAL_NAMESPACE_MAX_LENGTH = 4;
+
 export interface DataModelAggregateBundle {
   /** 聚合名称（建议的业务名称） */
   suggested_aggregate_name: string;
@@ -447,30 +449,31 @@ export async function buildAggregateBundle(
 
 /**
  * 从聚合根推断聚合名称
- *
- * 例如：
- * - pms_product → 商品聚合
- * - oms_order → 订单聚合
- * - ums_admin → 用户聚合
  */
 function inferAggregateName(
   aggregateRoot: string,
   entities: AggregateEntityInfo[],
 ): string {
-  // 获取聚合根的描述
   const rootEntity = entities.find((e) => e.entity_name === aggregateRoot);
   if (rootEntity && rootEntity.entity_name_zh) {
-    // 如果描述中已有"聚合"字样，直接使用
     if (rootEntity.entity_name_zh.includes("聚合")) {
       return rootEntity.entity_name_zh;
     }
     return `${rootEntity.entity_name_zh}聚合`;
   }
 
-  // 从表名推断
-  // pms_product → 商品, oms_order → 订单, ums_admin → 用户
-  const tableName = aggregateRoot.replace(/^(pms_|oms_|ums_|sms_)/, "");
+  const tableName = stripTechnicalNamespacePrefix(aggregateRoot);
   return `${tableName}聚合`;
+}
+
+function stripTechnicalNamespacePrefix(identifier: string): string {
+  const parts = identifier.split("_").filter(Boolean);
+  if (parts.length < 2) return identifier;
+  const [firstPart, ...restParts] = parts;
+  if (!firstPart || firstPart.length > TECHNICAL_NAMESPACE_MAX_LENGTH) {
+    return identifier;
+  }
+  return restParts.join("_");
 }
 
 /**

@@ -327,73 +327,74 @@ function cleanSql(sql: string): string {
  */
 export function extractTablesFromSql(sql: string): string[] {
   const tables: string[] = [];
+  const normalizedSql = sql.replace(/\s+/g, " ");
 
   // Match FROM table
-  const fromMatches = sql.match(
-    /FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  const fromMatches = normalizedSql.match(
+    /\bFROM\s+[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?(?:\.[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?)?/gi,
   );
   if (fromMatches) {
     for (const match of fromMatches) {
       const tableName = match.replace(/FROM\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
-        tables.push(tableName.toLowerCase());
+        tables.push(normalizeExtractedTableName(tableName));
       }
     }
   }
 
   // Match JOIN table
-  const joinMatches = sql.match(
-    /JOIN\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  const joinMatches = normalizedSql.match(
+    /\bJOIN\s+[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?(?:\.[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?)?/gi,
   );
   if (joinMatches) {
     for (const match of joinMatches) {
       const tableName = match.replace(/JOIN\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
-        tables.push(tableName.toLowerCase());
+        tables.push(normalizeExtractedTableName(tableName));
       }
     }
   }
 
   // Match INSERT INTO table
-  const insertMatches = sql.match(
-    /INSERT\s+INTO\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  const insertMatches = normalizedSql.match(
+    /\bINSERT\s+INTO\s+[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?(?:\.[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?)?/gi,
   );
   if (insertMatches) {
     for (const match of insertMatches) {
       const tableName = match.replace(/INSERT\s+INTO\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
-        tables.push(tableName.toLowerCase());
+        tables.push(normalizeExtractedTableName(tableName));
       }
     }
   }
 
   // Match UPDATE table
-  const updateMatches = sql.match(
-    /UPDATE\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  const updateMatches = normalizedSql.match(
+    /\bUPDATE\s+[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?(?:\.[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?)?/gi,
   );
   if (updateMatches) {
     for (const match of updateMatches) {
       const tableName = match.replace(/UPDATE\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
-        tables.push(tableName.toLowerCase());
+        tables.push(normalizeExtractedTableName(tableName));
       }
     }
   }
 
   // Match DELETE FROM table
-  const deleteMatches = sql.match(
-    /DELETE\s+FROM\s+[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?/gi,
+  const deleteMatches = normalizedSql.match(
+    /\bDELETE\s+FROM\s+[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?(?:\.[`"]?[a-zA-Z_][a-zA-Z0-9_]*[`"]?)?/gi,
   );
   if (deleteMatches) {
     for (const match of deleteMatches) {
       const tableName = match.replace(/DELETE\s+FROM\s+/i, "").split(".")[0];
       if (tableName && !isSqlKeyword(tableName)) {
-        tables.push(tableName.toLowerCase());
+        tables.push(normalizeExtractedTableName(tableName));
       }
     }
   }
 
-  return tables;
+  return [...new Set(tables)];
 }
 
 /**
@@ -515,6 +516,10 @@ function isSqlKeyword(word: string): boolean {
     "join",
   ];
   return keywords.includes(word.toLowerCase());
+}
+
+function normalizeExtractedTableName(value: string): string {
+  return value.replace(/[`"]/g, "").toLowerCase();
 }
 
 /**
