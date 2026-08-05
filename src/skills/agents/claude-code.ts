@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type {
   Agent,
+  BusinessSubagentInitConfig,
   SkillInitConfig,
   SkillInitResult,
   SkillFile,
@@ -17,6 +18,8 @@ import {
   renderBusinessSubagentFiles,
   renderClaudeBusinessAgentSection,
 } from "../business-subagents.js";
+
+const BUSINESS_SUBAGENT_ROLES = ["pm", "tech-lead", "qa"] as const;
 
 export const CLAUDE_CODE_AGENT: Agent = {
   name: "Claude Code",
@@ -36,10 +39,10 @@ export const CLAUDE_CODE_AGENT: Agent = {
     try {
       await fs.access(useKnowledgePath);
       for (const businessSubagent of config?.businessSubagents ?? []) {
-        const businessFiles =
-          await renderBusinessSubagentFiles(businessSubagent);
-        for (const file of businessFiles) {
-          await fs.access(getBusinessSubagentDiskPath(repoPath, file.filename));
+        for (const filename of getExpectedBusinessSubagentFilenames(
+          businessSubagent,
+        )) {
+          await fs.access(getBusinessSubagentDiskPath(repoPath, filename));
         }
       }
       return true;
@@ -170,3 +173,24 @@ export const CLAUDE_CODE_AGENT: Agent = {
     return newContent;
   },
 };
+
+function getExpectedBusinessSubagentFilenames(
+  config: BusinessSubagentInitConfig,
+): string[] {
+  const domain = normalizeBusinessSubagentDomain(config.domain);
+
+  return BUSINESS_SUBAGENT_ROLES.map(
+    (role) => `.claude/agents/${domain}-${role}.md`,
+  );
+}
+
+function normalizeBusinessSubagentDomain(value: string): string {
+  return value
+    .trim()
+    .replaceAll("_", "-")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
