@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getBusinessSubagentDiskPath,
   normalizeBusinessSubagentConfig,
   renderBusinessSubagentFiles,
   renderClaudeBusinessAgentSection,
@@ -87,5 +88,19 @@ describe("business subagent rendering", () => {
         domainName: "",
       }),
     ).toThrow("business domain name is required");
+  });
+
+  it("rejects unsafe disk paths", () => {
+    const repoPath = "D:\\workspace\\repo";
+
+    expect(() =>
+      getBusinessSubagentDiskPath(repoPath, "..\\evil.md"),
+    ).toThrow("unsafe business subagent path");
+    expect(() =>
+      getBusinessSubagentDiskPath(repoPath, "C:\\evil.md"),
+    ).toThrow("unsafe business subagent path");
+    expect(() =>
+      getBusinessSubagentDiskPath(repoPath, "\\\\server\\share\\evil.md"),
+    ).toThrow("unsafe business subagent path");
   });
 });

@@ -1,6 +1,5 @@
 ---
 name: {{domain}}-tech-lead
-role: tech
 description: {{domainName}} technical lead agent。用于讨论 {{domain}} domain 的架构、模块边界、代码实现、接口、数据模型、迁移、性能、technical design、architecture、implementation risk。关键词：{{keywords}}
 tools: mcp__business_knowledge__search,mcp__business_knowledge__get
 ---

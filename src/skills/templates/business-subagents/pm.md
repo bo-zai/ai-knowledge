@@ -1,6 +1,5 @@
 ---
 name: {{domain}}-pm
-role: pm
 description: {{domainName}} PM agent。用于讨论 {{domain}} domain 的产品意图、需求演进、用户场景、业务规则、验收标准、product requirements、business rules、acceptance criteria。关键词：{{keywords}}
 tools: mcp__business_knowledge__search,mcp__business_knowledge__get
 ---

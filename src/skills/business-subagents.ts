@@ -12,7 +12,12 @@ const __dirname = path.dirname(__filename);
 export type NormalizedBusinessSubagentConfig =
   Required<BusinessSubagentInitConfig>;
 
-const TEMPLATE_DIR = path.join(__dirname, "templates", "business-subagents");
+const TEMPLATE_DIR_CANDIDATES = [
+  path.join(__dirname, "templates", "business-subagents"),
+  path.join(__dirname, "..", "skills", "templates", "business-subagents"),
+] as const;
+
+let resolvedTemplateDir: string | null = null;
 
 const TEMPLATE_NAMES = {
   pm: "pm.md",
@@ -86,12 +91,13 @@ export function getBusinessSubagentDiskPath(
   repoPath: string,
   filename: string,
 ): string {
-  const normalized = filename.replaceAll("/", path.sep);
+  const normalized = toSafeRelativePath(filename);
   return path.join(repoPath, normalized);
 }
 
 async function loadBusinessSubagentTemplate(filename: string): Promise<string> {
-  const templatePath = path.join(TEMPLATE_DIR, filename);
+  const templateDir = await getBusinessSubagentTemplateDir();
+  const templatePath = path.join(templateDir, filename);
   return fs.readFile(templatePath, "utf-8");
 }
 
@@ -129,4 +135,42 @@ function renderTemplate(
     .replaceAll("{{domainName}}", config.domainName)
     .replaceAll("{{keywords}}", keywords)
     .replaceAll("{{paths}}", paths);
+}
+
+async function getBusinessSubagentTemplateDir(): Promise<string> {
+  if (resolvedTemplateDir) {
+    return resolvedTemplateDir;
+  }
+
+  for (const templateDir of TEMPLATE_DIR_CANDIDATES) {
+    try {
+      await fs.access(templateDir);
+      resolvedTemplateDir = templateDir;
+      return templateDir;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error("business subagent templates are missing");
+}
+
+function toSafeRelativePath(filename: string): string {
+  const normalized = filename.replaceAll("\\", "/");
+
+  if (
+    normalized.startsWith("/") ||
+    normalized.startsWith("//") ||
+    /^[a-zA-Z]:/.test(normalized)
+  ) {
+    throw new Error("unsafe business subagent path");
+  }
+
+  const segments = normalized.split("/");
+
+  if (segments.some((segment) => segment === "..")) {
+    throw new Error("unsafe business subagent path");
+  }
+
+  return segments.filter((segment) => segment.length > 0).join(path.sep);
 }

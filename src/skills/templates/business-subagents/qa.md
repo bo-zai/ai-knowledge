@@ -1,6 +1,5 @@
 ---
 name: {{domain}}-qa
-role: qa
 description: {{domainName}} QA/test agent。用于讨论 {{domain}} domain 的测试策略、验收用例、回归范围、缺陷风险、release risk、test plan、regression testing、acceptance test。关键词：{{keywords}}
 tools: mcp__business_knowledge__search,mcp__business_knowledge__get
 ---
