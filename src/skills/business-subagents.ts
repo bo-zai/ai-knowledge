@@ -95,6 +95,18 @@ export function getBusinessSubagentDiskPath(
   return path.join(repoPath, normalized);
 }
 
+export function getExpectedBusinessSubagentFilenames(
+  input: BusinessSubagentInitConfig,
+): string[] {
+  const config = normalizeBusinessSubagentConfig(input);
+
+  return [
+    `.claude/agents/${config.domain}-pm.md`,
+    `.claude/agents/${config.domain}-tech-lead.md`,
+    `.claude/agents/${config.domain}-qa.md`,
+  ];
+}
+
 async function loadBusinessSubagentTemplate(filename: string): Promise<string> {
   const templateDir = await getBusinessSubagentTemplateDir();
   const templatePath = path.join(templateDir, filename);

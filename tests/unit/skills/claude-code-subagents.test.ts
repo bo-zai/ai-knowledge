@@ -31,7 +31,7 @@ describe("Claude Code business subagent initialization", () => {
       repoPath,
       businessSubagents: [
         {
-          domain: "order",
+          domain: "Order_Service",
           domainName: "订单",
           aliases: ["checkout", "refund"],
           paths: ["src/order/**"],
@@ -41,22 +41,24 @@ describe("Claude Code business subagent initialization", () => {
 
     expect(result.success).toBe(true);
     expect(result.files.map((file) => file.filename)).toContain(
-      ".claude/agents/order-pm.md",
+      ".claude/agents/order-service-pm.md",
     );
     expect(result.files.map((file) => file.filename)).toContain(
-      ".claude/agents/order-tech-lead.md",
+      ".claude/agents/order-service-tech-lead.md",
     );
     expect(result.files.map((file) => file.filename)).toContain(
-      ".claude/agents/order-qa.md",
+      ".claude/agents/order-service-qa.md",
     );
     await expect(
-      fs.access(path.join(repoPath, ".claude", "agents", "order-pm.md")),
+      fs.access(path.join(repoPath, ".claude", "agents", "order-service-pm.md")),
     ).resolves.toBeUndefined();
     await expect(
-      fs.access(path.join(repoPath, ".claude", "agents", "order-tech-lead.md")),
+      fs.access(
+        path.join(repoPath, ".claude", "agents", "order-service-tech-lead.md"),
+      ),
     ).resolves.toBeUndefined();
     await expect(
-      fs.access(path.join(repoPath, ".claude", "agents", "order-qa.md")),
+      fs.access(path.join(repoPath, ".claude", "agents", "order-service-qa.md")),
     ).resolves.toBeUndefined();
   });
 
@@ -65,7 +67,7 @@ describe("Claude Code business subagent initialization", () => {
 
     const initialized = await CLAUDE_CODE_AGENT.isInitialized(repoPath, {
       repoPath,
-      businessSubagents: [{ domain: "order", domainName: "订单" }],
+      businessSubagents: [{ domain: "Order_Service", domainName: "订单" }],
     });
 
     expect(initialized).toBe(false);
@@ -74,12 +76,12 @@ describe("Claude Code business subagent initialization", () => {
   it("reports initialized when requested business subagents exist", async () => {
     await CLAUDE_CODE_AGENT.initialize({
       repoPath,
-      businessSubagents: [{ domain: "order", domainName: "订单" }],
+      businessSubagents: [{ domain: "Order_Service", domainName: "订单" }],
     });
 
     const initialized = await CLAUDE_CODE_AGENT.isInitialized(repoPath, {
       repoPath,
-      businessSubagents: [{ domain: "order", domainName: "订单" }],
+      businessSubagents: [{ domain: "Order_Service", domainName: "订单" }],
     });
 
     expect(initialized).toBe(true);

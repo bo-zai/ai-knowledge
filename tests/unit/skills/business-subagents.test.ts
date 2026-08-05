@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getExpectedBusinessSubagentFilenames,
   getBusinessSubagentDiskPath,
   normalizeBusinessSubagentConfig,
   renderBusinessSubagentFiles,
@@ -38,7 +39,7 @@ describe("business subagent rendering", () => {
 
   it("renders three Claude Code subagent files", async () => {
     const files = await renderBusinessSubagentFiles({
-      domain: "order",
+      domain: "Order_Service",
       domainName: "订单",
       aliases: ["checkout", "refund"],
       paths: ["src/order/**"],
@@ -46,14 +47,27 @@ describe("business subagent rendering", () => {
 
     expect(files).toHaveLength(3);
     expect(files.map((file) => file.filename)).toEqual([
-      ".claude/agents/order-pm.md",
-      ".claude/agents/order-tech-lead.md",
-      ".claude/agents/order-qa.md",
+      ".claude/agents/order-service-pm.md",
+      ".claude/agents/order-service-tech-lead.md",
+      ".claude/agents/order-service-qa.md",
     ]);
-    expect(files[0]?.content).toContain("name: order-pm");
+    expect(files[0]?.content).toContain("name: order-service-pm");
     expect(files[0]?.content).toContain("你是 订单 的 PM agent。");
     expect(files[1]?.content).toContain("role: tech");
     expect(files[2]?.content).toContain("role: qa");
+  });
+
+  it("builds expected Claude Code subagent filenames", () => {
+    expect(
+      getExpectedBusinessSubagentFilenames({
+        domain: "Order_Service",
+        domainName: "订单",
+      }),
+    ).toEqual([
+      ".claude/agents/order-service-pm.md",
+      ".claude/agents/order-service-tech-lead.md",
+      ".claude/agents/order-service-qa.md",
+    ]);
   });
 
   it("renders CLAUDE.md orchestration rules for a domain", async () => {
