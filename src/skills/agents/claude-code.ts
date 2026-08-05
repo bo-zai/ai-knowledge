@@ -12,6 +12,11 @@ import type {
   SkillInitResult,
   SkillFile,
 } from "./types.js";
+import {
+  getBusinessSubagentDiskPath,
+  renderBusinessSubagentFiles,
+  renderClaudeBusinessAgentSection,
+} from "../business-subagents.js";
 
 export const CLAUDE_CODE_AGENT: Agent = {
   name: "Claude Code",
@@ -21,12 +26,22 @@ export const CLAUDE_CODE_AGENT: Agent = {
     return path.join(repoPath, ".claude", "skills");
   },
 
-  async isInitialized(repoPath: string): Promise<boolean> {
+  async isInitialized(
+    repoPath: string,
+    config?: SkillInitConfig,
+  ): Promise<boolean> {
     const skillDir = this.getSkillDir(repoPath);
     const useKnowledgePath = path.join(skillDir, "use-knowledge", "SKILL.md");
 
     try {
       await fs.access(useKnowledgePath);
+      for (const businessSubagent of config?.businessSubagents ?? []) {
+        const businessFiles =
+          await renderBusinessSubagentFiles(businessSubagent);
+        for (const file of businessFiles) {
+          await fs.access(getBusinessSubagentDiskPath(repoPath, file.filename));
+        }
+      }
       return true;
     } catch {
       return false;
@@ -56,6 +71,20 @@ export const CLAUDE_CODE_AGENT: Agent = {
         content: USE_KNOWLEDGE_SKILL,
       });
 
+      for (const businessSubagent of config.businessSubagents ?? []) {
+        const businessFiles =
+          await renderBusinessSubagentFiles(businessSubagent);
+        for (const file of businessFiles) {
+          const filePath = getBusinessSubagentDiskPath(
+            config.repoPath,
+            file.filename,
+          );
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          await fs.writeFile(filePath, file.content, "utf-8");
+          files.push(file);
+        }
+      }
+
       return {
         agentName: this.name,
         skillDir,
@@ -73,7 +102,10 @@ export const CLAUDE_CODE_AGENT: Agent = {
     }
   },
 
-  async generateAgentsMd(repoPath: string): Promise<string | null> {
+  async generateAgentsMd(
+    repoPath: string,
+    config?: SkillInitConfig,
+  ): Promise<string | null> {
     // Claude Code 使用 CLAUDE.md 作为系统提示词
     const claudeMdPath = path.join(repoPath, "CLAUDE.md");
     let existingContent = "";
@@ -110,15 +142,29 @@ export const CLAUDE_CODE_AGENT: Agent = {
 - 接手新项目时，快速建立全局认知
 `;
 
-    // 如果已存在，检查是否包含 skill 说明
-    if (existingContent.includes("use-knowledge")) {
-      return null; // 已包含，不需要更新
+    const sections: string[] = [];
+
+    if (!existingContent.includes("use-knowledge")) {
+      sections.push(skillSection);
+    }
+
+    for (const businessSubagent of config?.businessSubagents ?? []) {
+      const businessSection =
+        await renderClaudeBusinessAgentSection(businessSubagent);
+      const heading = businessSection.split(/\r?\n/, 1)[0] ?? "";
+      if (!existingContent.includes(heading)) {
+        sections.push(businessSection);
+      }
+    }
+
+    if (sections.length === 0) {
+      return null;
     }
 
     // 合并内容
     const newContent = existingContent
-      ? `${existingContent}\n${skillSection}`
-      : `# 项目编码指南\n${skillSection}`;
+      ? `${existingContent}\n${sections.join("\n")}`
+      : `# 项目编码指南\n${sections.join("\n")}`;
 
     await fs.writeFile(claudeMdPath, newContent, "utf-8");
     return newContent;

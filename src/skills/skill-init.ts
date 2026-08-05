@@ -93,7 +93,10 @@ export async function initializeSkills(
 
       // 更新 AGENTS.md（如果需要）
       if (config.updateAgentsMd && agent.generateAgentsMd) {
-        const agentsMdContent = await agent.generateAgentsMd(config.repoPath);
+        const agentsMdContent = await agent.generateAgentsMd(
+          config.repoPath,
+          config,
+        );
         if (agentsMdContent) {
           logger.info(`${agent.name}: AGENTS.md updated`);
           agentsMdUpdated = true;

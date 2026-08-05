@@ -44,7 +44,10 @@ export interface Agent {
    * @param repoPath 项目根目录
    * @returns AGENTS.md 内容，如果不需要则返回 null
    */
-  generateAgentsMd?(repoPath: string): Promise<string | null>;
+  generateAgentsMd?(
+    repoPath: string,
+    config?: SkillInitConfig,
+  ): Promise<string | null>;
 }
 
 /**
