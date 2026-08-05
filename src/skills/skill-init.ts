@@ -67,7 +67,7 @@ export async function initializeSkills(
   // 遍历每个 Agent 执行初始化
   for (const agent of agents) {
     // 检查是否已初始化
-    const isInitialized = await agent.isInitialized(config.repoPath);
+    const isInitialized = await agent.isInitialized(config.repoPath, config);
 
     if (isInitialized && !config.force) {
       logger.info(`${agent.name}: skills already initialized, skipping`);
@@ -130,11 +130,13 @@ export async function initializeSkills(
 export async function needsSkillInitialization(
   repoPath: string,
   agentIds?: string[],
+  config?: Omit<SkillInitConfig, "repoPath">,
 ): Promise<boolean> {
   const agents = agentIds ? getAgentsByIds(agentIds) : DEFAULT_AGENTS;
+  const fullConfig: SkillInitConfig = { repoPath, ...config };
 
   for (const agent of agents) {
-    const isInitialized = await agent.isInitialized(repoPath);
+    const isInitialized = await agent.isInitialized(repoPath, fullConfig);
     if (!isInitialized) {
       return true;
     }

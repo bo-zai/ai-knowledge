@@ -24,9 +24,13 @@ export interface Agent {
   /**
    * 检查 skill 是否已初始化
    * @param repoPath 项目根目录
+   * @param config 初始化配置
    * @returns true 表示已初始化
    */
-  isInitialized(repoPath: string): Promise<boolean>;
+  isInitialized(
+    repoPath: string,
+    config?: SkillInitConfig,
+  ): Promise<boolean>;
 
   /**
    * 初始化 skill 目录结构
@@ -50,6 +54,9 @@ export interface SkillInitConfig {
   /** 项目根目录 */
   repoPath: string;
 
+  /** 业务域 subagent 初始化配置 */
+  businessSubagents?: BusinessSubagentInitConfig[];
+
   /** 是否强制重新初始化 */
   force?: boolean;
 
@@ -58,6 +65,23 @@ export interface SkillInitConfig {
 
   /** 是否 verbose 输出 */
   verbose?: boolean;
+}
+
+/**
+ * 业务域 subagent 初始化配置
+ */
+export interface BusinessSubagentInitConfig {
+  /** 业务域英文短名，例如 order */
+  domain: string;
+
+  /** 业务域中文名，例如 订单 */
+  domainName: string;
+
+  /** 业务域别名或触发关键词 */
+  aliases?: string[];
+
+  /** 业务域相关路径 glob，用于写入编排规则 */
+  paths?: string[];
 }
 
 /**
