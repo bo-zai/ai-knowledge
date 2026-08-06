@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const skillMocks = vi.hoisted(() => ({
   initializeSkills: vi.fn(),
@@ -21,6 +21,10 @@ describe("runInitSkills", () => {
       failed: 0,
       agentsMdUpdated: false,
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("passes a business subagent config when only aliases and paths are provided", async () => {
