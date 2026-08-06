@@ -125,7 +125,9 @@ async function expectFileContents(repo: string): Promise<void> {
   const claudeMd = await fs.readFile(path.join(repo, "CLAUDE.md"), "utf-8");
   expect(claudeMd).toContain("业务域 Agent 协作规则：订单（order）");
   expect(claudeMd).toContain("checkout");
+  expect(claudeMd).toContain("refund");
   expect(claudeMd).toContain("src/order/**");
+  expect(claudeMd).toContain("src/checkout/**");
 }
 
 async function createTempRepo(): Promise<string> {
