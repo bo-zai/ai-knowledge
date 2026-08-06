@@ -73,6 +73,25 @@ describe("init-skills business subagents", () => {
   });
 });
 
+describe("isKnownNativeModuleBlocker", () => {
+  it("matches the known Ladybug native module load failure", () => {
+    expect(
+      isKnownNativeModuleBlocker({
+        message:
+          "Error: ERR_DLOPEN_FAILED at @ladybugdb/core lbug_native.js lbugjs.node",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not match unrelated native module load failures", () => {
+    expect(
+      isKnownNativeModuleBlocker({
+        message: "Error: ERR_DLOPEN_FAILED at unrelated-native.node",
+      }),
+    ).toBe(false);
+  });
+});
+
 async function runBuiltCli(repo: string) {
   try {
     const result = await execa("node", [
@@ -154,9 +173,13 @@ function isKnownNativeModuleBlocker(error: unknown): boolean {
     .filter(Boolean)
     .join("\n");
 
-  return (
-    output.includes("@ladybugdb") ||
+  const hasKnownModuleIdentity =
+    output.includes("@ladybugdb") || output.includes("lbug");
+  const hasNativeLoadFailureSignal =
+    output.includes("ERR_DLOPEN_FAILED") ||
+    output.includes("lbugjs.node") ||
     output.includes("lbug_native") ||
-    output.includes("ERR_DLOPEN_FAILED")
-  );
+    output.includes("process.dlopen");
+
+  return hasKnownModuleIdentity && hasNativeLoadFailureSignal;
 }
