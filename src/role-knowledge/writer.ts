@@ -26,7 +26,7 @@ export async function writeRoleKnowledge(input: {
   const index: RoleIndex = {
     schemaVersion: "role-knowledge/v1",
     role: input.role,
-    status: input.status === "blocked" ? "rejected" : "draft",
+    status: input.status === "blocked" ? "rejected" : "validated",
     domain: {
       domainKey: input.domain,
       domainName: input.domainName,
