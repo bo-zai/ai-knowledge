@@ -1,4 +1,8 @@
 import { Command } from "commander";
+import path from "node:path";
+import { DEFAULT_KNOWLEDGE_DIR } from "../config/defaults.js";
+import { loadDomainRegistry } from "../packaging/domain-registry.js";
+import { buildRoleKnowledgeReport } from "../role-knowledge/reports.js";
 import { runRoleKnowledgePipeline } from "../role-knowledge/pipeline.js";
 
 export function buildRoleKnowledgeCommand(): Command {
@@ -9,8 +13,14 @@ export function buildRoleKnowledgeCommand(): Command {
   command
     .command("discover-domains")
     .option("--repo <path>", "Target repository path")
-    .action(async () => {
-      // Minimal implementation for now.
+    .action(async (options) => {
+      const repoPath = options.repo ?? process.cwd();
+      const registry = await loadDomainRegistry(
+        path.join(repoPath, DEFAULT_KNOWLEDGE_DIR),
+      );
+      for (const domain of registry.domains) {
+        console.log(`${domain.domainKey}\t${domain.domainName}`);
+      }
     });
 
   command
@@ -31,7 +41,7 @@ export function buildRoleKnowledgeCommand(): Command {
             .map((item: string) => item.trim())
             .filter(Boolean)
         : [];
-      await runRoleKnowledgePipeline({
+      const result = await runRoleKnowledgePipeline({
         repoPath: options.repo ?? process.cwd(),
         outputRoot: options.repo ?? process.cwd(),
         roles: roles as Array<"pm" | "tech-lead" | "qa">,
@@ -41,13 +51,34 @@ export function buildRoleKnowledgeCommand(): Command {
         includeCode: Boolean(options.includeCode),
         llm: { enabled: false },
       });
+      console.log(buildRoleKnowledgeReport(result.reports));
     });
 
   command
     .command("status")
     .option("--repo <path>", "Target repository path")
-    .action(async () => {
-      // Minimal implementation for now.
+    .action(async (options) => {
+      const repoPath = options.repo ?? process.cwd();
+      const registry = await loadDomainRegistry(
+        path.join(repoPath, DEFAULT_KNOWLEDGE_DIR),
+      );
+      for (const domain of registry.domains) {
+        const refs = domain.roleKnowledgeRefs;
+        if (!refs) {
+          console.log(`${domain.domainKey}\tno-role-knowledge`);
+          continue;
+        }
+        console.log(
+          [
+            domain.domainKey,
+            refs.pm?.status ? `pm:${refs.pm.status}` : "pm:missing",
+            refs.techLead?.status
+              ? `tech-lead:${refs.techLead.status}`
+              : "tech-lead:missing",
+            refs.qa?.status ? `qa:${refs.qa.status}` : "qa:missing",
+          ].join("\t"),
+        );
+      }
     });
 
   return command;
