@@ -44,4 +44,25 @@ describe("runInitSkills", () => {
       undefined,
     );
   });
+
+  it("passes a business subagent config when a business option is present as an empty string", async () => {
+    await runInitSkills({
+      repo: ".",
+      businessDomain: "",
+    });
+
+    expect(skillMocks.initializeSkills).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessSubagents: [
+          {
+            domain: "",
+            domainName: "",
+            aliases: [],
+            paths: [],
+          },
+        ],
+      }),
+      undefined,
+    );
+  });
 });

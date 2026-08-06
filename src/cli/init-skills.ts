@@ -55,10 +55,10 @@ function parseCommaList(value: string | undefined): string[] {
 
 function hasBusinessSubagentOptions(options: InitSkillsOptions): boolean {
   return Boolean(
-    options.businessDomain ||
-      options.businessDomainName ||
-      options.businessDomainAliases ||
-      options.businessDomainPaths,
+    options.businessDomain !== undefined ||
+      options.businessDomainName !== undefined ||
+      options.businessDomainAliases !== undefined ||
+      options.businessDomainPaths !== undefined,
   );
 }
 
