@@ -77,6 +77,19 @@ program
   )
   .option("--force", "Force re-initialization even if skills exist")
   .option("--no-update-agents-md", "Skip updating AGENTS.md")
+  .option("--business-domain <domain>", "Business domain id, for example order")
+  .option(
+    "--business-domain-name <name>",
+    "Business domain display name, for example 订单",
+  )
+  .option(
+    "--business-domain-aliases <aliases>",
+    "Comma-separated business domain aliases and trigger keywords",
+  )
+  .option(
+    "--business-domain-paths <paths>",
+    "Comma-separated source path globs related to this business domain",
+  )
   .option("--verbose", "Enable verbose logging")
   .action(async (path, options) => {
     const { runInitSkills } = await import("./init-skills.js");

@@ -30,6 +30,27 @@ export interface InitSkillsOptions {
 
   /** 是否 verbose 输出 */
   verbose?: boolean;
+
+  /** Business domain id */
+  businessDomain?: string;
+
+  /** Business domain display name */
+  businessDomainName?: string;
+
+  /** Comma-separated business domain aliases */
+  businessDomainAliases?: string;
+
+  /** Comma-separated business domain source path globs */
+  businessDomainPaths?: string;
+}
+
+function parseCommaList(value: string | undefined): string[] {
+  return value
+    ? value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
 }
 
 /**
@@ -59,10 +80,23 @@ export async function runInitSkills(options: InitSkillsOptions): Promise<void> {
     }
   }
 
+  const businessSubagents =
+    options.businessDomain || options.businessDomainName
+      ? [
+          {
+            domain: options.businessDomain ?? "",
+            domainName: options.businessDomainName ?? "",
+            aliases: parseCommaList(options.businessDomainAliases),
+            paths: parseCommaList(options.businessDomainPaths),
+          },
+        ]
+      : undefined;
+
   // 执行初始化
   const summary: SkillInitSummary = await initializeSkills(
     {
       repoPath,
+      businessSubagents,
       force: options.force,
       updateAgentsMd: options.updateAgentsMd ?? true,
       verbose: options.verbose,
