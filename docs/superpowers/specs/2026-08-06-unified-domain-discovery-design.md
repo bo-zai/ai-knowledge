@@ -133,13 +133,49 @@ type DomainRecord = {
 
 ```text
 document chunk
+  -> document embedding retrieval
   -> product/business evidence
   -> unified domain
   -> ai-knowledge capability/concept/workflow
   -> code evidence
 ```
 
-需求文档通常不会描述接口、类名、表字段或方法名，因此直接从文档向代码做字符串或向量匹配会不稳定。统一 domain discovery 要在业务域级别关联文档与代码，再由已有 `ai-knowledge` 连接到实现证据。
+需求文档通常不会描述接口、类名、表字段或方法名，因此直接从文档向代码做字符串或向量匹配会不稳定。文档 embedding 的职责是召回候选业务域、历史文档 chunk、已有 `ai-knowledge` 对象和实现侧 evidence，不直接决定事实归属。统一 domain discovery 要在业务域级别关联文档与代码，再由已有 `ai-knowledge` 连接到实现证据。
+
+## Evidence Embedding
+
+当前代码侧已有 embedding 管线，包括 embedding model、批量 embedding、content hash 增量判断和 LadybugDB 向量检索。文档侧必须复用同一套 embedding 能力，避免出现代码和文档使用不同模型、不同维度或不同检索语义的问题。
+
+建议将当前代码专用 embedding 扩展为统一 evidence embedding：
+
+```ts
+type EvidenceEmbedding = {
+  id: string;
+  sourceType: "code" | "document" | "knowledge" | "git";
+  sourceId: string;
+  chunkIndex: number;
+  content: string;
+  contentHash: string;
+  path?: string;
+  titlePath?: string[];
+  domainKey?: string;
+  embedding: number[];
+};
+```
+
+文档 chunk embedding 的用途：
+
+- 召回相似历史需求 chunk。
+- 召回已有 `ai-knowledge` capability/concept/workflow/boundary。
+- 召回代码侧实现 evidence 候选。
+- 辅助 LLM 做统一业务域归并和冲突识别。
+
+约束：
+
+- 文档、代码、知识对象必须使用同一个 embedding 配置和维度。
+- 向量检索只做候选召回，最终 domain 归属必须由 LLM 基于证据判断。
+- 每条 embedding 必须保留 `sourceType`、`sourceId`、`path`、`titlePath` 和 `contentHash`。
+- 文档未变化时复用已有 embedding，避免重复计算。
 
 ## 与 ai-knowledge 的关系
 
@@ -179,6 +215,8 @@ ai-knowledge/
       commits.jsonl
     code/
       domain-signals.jsonl
+    embeddings/
+      evidence-embeddings.jsonl
   roles/
     pm/
       domains/{domain}/
@@ -230,18 +268,21 @@ rkg domains status
 ### Phase 1: 统一模型与 evidence 存储
 
 - 增加 document/code/git evidence 数据模型。
+- 将现有代码 embedding 能力抽象为 evidence embedding 接口。
 - 扩展 domain registry schema。
 - 保留现有代码侧 discovery 作为 fallback。
 
 ### Phase 2: 文档 evidence 接入
 
 - 支持 `.md` 文档扫描与 chunk。
+- 为文档 chunk 生成 embedding，并复用现有 embedding model、batch embed 和 content hash。
 - 引入可插拔 document parser provider。
 - 为 `.docx/.doc` 预留 provider 接口。
 
 ### Phase 3: LLM 统一业务域发现
 
 - 构建 evidence package。
+- 使用 evidence embedding 召回文档、知识对象和代码候选。
 - 增加 LLM domain discovery provider。
 - 输出 confirmed/doc_only/code_only/candidate/conflict。
 
