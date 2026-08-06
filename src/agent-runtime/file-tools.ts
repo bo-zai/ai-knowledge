@@ -9,6 +9,8 @@ import { createFilesystemMiddleware } from "deepagents";
 import { FileBackend } from "./file-backend.js";
 import { logger } from "../shared/logger.js";
 
+type FileToolsMiddleware = ReturnType<typeof createFilesystemMiddleware>;
+
 // ── 类型定义 ──────────────────────────────────────────────────────
 
 /**
@@ -79,7 +81,9 @@ const DEFAULT_HUMAN_MESSAGE_TOKEN_LIMIT = 50000;
  * });
  * ```
  */
-export function createFileToolsMiddleware(config: FileToolsConfig) {
+export function createFileToolsMiddleware(
+  config: FileToolsConfig,
+): FileToolsMiddleware {
   // 创建 FileBackend 实例
   const backend = new FileBackend({
     rootDir: config.rootDir,

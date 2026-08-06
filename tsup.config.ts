@@ -80,7 +80,7 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   dts: false,
-  splitting: false,
+  splitting: true,
   banner: { js: "#!/usr/bin/env node --no-deprecation" },
   onSuccess: copyAssets,
   external: [

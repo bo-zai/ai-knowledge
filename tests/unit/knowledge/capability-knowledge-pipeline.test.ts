@@ -25,6 +25,19 @@ const validFlowClaim: CandidateClaim = {
   unsupportedParts: [],
   blockedDecisions: [],
   source: "llm",
+  objectHints: {
+    subject: "DB knowledge generation",
+    orderedSteps: [
+      {
+        action: "Collect MyBatis evidence",
+        evidenceRef: "evidence://module/MOD-001",
+      },
+      {
+        action: "Assemble DB knowledge objects",
+        evidenceRef: "evidence://module/MOD-001",
+      },
+    ],
+  },
 };
 
 const validModClaim: CandidateClaim = {

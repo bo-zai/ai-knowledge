@@ -137,7 +137,7 @@ describe("buildCapabilityKnowledgeFiles", () => {
     expect(viewFile).toBeDefined();
   });
 
-  it("capability view includes fixed 10 sections", () => {
+  it("capability view includes fixed 11 sections", () => {
     const files = buildCapabilityKnowledgeFiles({
       objects,
       capabilityId: "CAP-DB-KNOWLEDGE-GENERATION",
@@ -151,11 +151,12 @@ describe("buildCapabilityKnowledgeFiles", () => {
     expect(viewFile?.content).toContain("## 3. 业务术语");
     expect(viewFile?.content).toContain("## 4. 当前行为");
     expect(viewFile?.content).toContain("## 5. 入口与代码位置");
-    expect(viewFile?.content).toContain("## 6. 改动定位建议");
-    expect(viewFile?.content).toContain("## 7. 数据与契约");
-    expect(viewFile?.content).toContain("## 8. 不能猜的边界");
-    expect(viewFile?.content).toContain("## 9. 验证方式");
-    expect(viewFile?.content).toContain("## 10. 证据索引");
+    expect(viewFile?.content).toContain("## 6. 覆盖模块");
+    expect(viewFile?.content).toContain("## 7. 改动定位建议");
+    expect(viewFile?.content).toContain("## 8. 数据与契约");
+    expect(viewFile?.content).toContain("## 9. 不能猜的边界");
+    expect(viewFile?.content).toContain("## 10. 验证方式");
+    expect(viewFile?.content).toContain("## 11. 证据索引");
   });
 
   it("generates primary capability Markdown under capabilities/", () => {
@@ -248,12 +249,12 @@ describe("buildCapabilityView", () => {
     expect(view).toContain("Test capability");
     expect(view).toContain("Test flow");
     expect(view).toContain("Test unknown");
-    expect(view).toContain("## 9. 验证方式");
+    expect(view).toContain("## 10. 验证方式");
     // 验证章节不为空（不能是 "(none)"）
     expect(view).not.toContain("## Validation\n- (none)");
   });
 
-  it("builds capability view using fixed 10 sections", () => {
+  it("builds capability view using fixed 11 sections", () => {
     const view = buildCapabilityView(objects, "CAP-TEST");
 
     expect(view).toContain("## 1. 能力结论");
@@ -261,11 +262,12 @@ describe("buildCapabilityView", () => {
     expect(view).toContain("## 3. 业务术语");
     expect(view).toContain("## 4. 当前行为");
     expect(view).toContain("## 5. 入口与代码位置");
-    expect(view).toContain("## 6. 改动定位建议");
-    expect(view).toContain("## 7. 数据与契约");
-    expect(view).toContain("## 8. 不能猜的边界");
-    expect(view).toContain("## 9. 验证方式");
-    expect(view).toContain("## 10. 证据索引");
+    expect(view).toContain("## 6. 覆盖模块");
+    expect(view).toContain("## 7. 改动定位建议");
+    expect(view).toContain("## 8. 数据与契约");
+    expect(view).toContain("## 9. 不能猜的边界");
+    expect(view).toContain("## 10. 验证方式");
+    expect(view).toContain("## 11. 证据索引");
   });
 
   it("includes navigation summary", () => {

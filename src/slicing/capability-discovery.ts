@@ -10,7 +10,6 @@ import type {
   ModuleCluster,
 } from "./capability-candidate-schema.js";
 import {
-  withReadOnlyLbug,
   type ReadOnlyQueryExecutor,
 } from "../engine/lbug/read-only-session.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
@@ -927,6 +926,9 @@ export async function discoverCapabilities(
   const { lbugPath } = getStoragePaths(repoRoot);
   console.log(`[DEBUG] discoverCapabilities: lbugPath=${lbugPath}`);
   try {
+    const { withReadOnlyLbug } = await import(
+      "../engine/lbug/read-only-session.js"
+    );
     return await withReadOnlyLbug(lbugPath, async (query) => {
       const classCountRows = await query(
         `MATCH (c:Class) RETURN count(c) AS cnt`,

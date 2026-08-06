@@ -1,7 +1,4 @@
-import {
-  withReadOnlyLbug,
-  type ReadOnlyQueryExecutor,
-} from "../engine/lbug/read-only-session.js";
+import type { ReadOnlyQueryExecutor } from "../engine/lbug/read-only-session.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
 import type {
   EntrySignal,
@@ -317,6 +314,9 @@ export async function discoverProjectCapabilities(
   promptProvider?: PromptProvider,
 ): Promise<CapabilityInventoryItem[]> {
   const { lbugPath } = getStoragePaths(repoRoot);
+  const { withReadOnlyLbug } = await import(
+    "../engine/lbug/read-only-session.js"
+  );
 
   return withReadOnlyLbug(lbugPath, async (query) => {
     const countRows = await query(`MATCH (c:Class) RETURN count(c) AS cnt`);

@@ -43,6 +43,7 @@ import { LLM_DEFAULTS } from "../config/defaults.js";
  */
 export const DEFAULT_PER_ATTEMPT_TIMEOUT_MS =
   LLM_DEFAULTS.httpAttemptTimeoutSeconds * 1000;
+export const PER_ATTEMPT_TIMEOUT_MS = DEFAULT_PER_ATTEMPT_TIMEOUT_MS;
 
 /**
  * Promise sleep 函数，支持 AbortSignal

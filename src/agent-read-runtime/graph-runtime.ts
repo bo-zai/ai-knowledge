@@ -132,7 +132,7 @@ export function parseKnowledgeReadAgentOutput(
   for (const candidate of candidates) {
     const repaired = repairJson(candidate);
     try {
-      const parsed = JSON.parse(repaired);
+      const parsed = normalizeKnowledgeReadJson(JSON.parse(repaired));
       const output = KnowledgeReadAgentOutputSchema.parse(parsed);
       return {
         answer: output.answer,
@@ -153,6 +153,66 @@ export function parseKnowledgeReadAgentOutput(
   throw new Error(
     "Agent output is not valid JSON after all extraction attempts",
   );
+}
+
+function normalizeKnowledgeReadJson(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const candidate = value as Record<string, unknown>;
+  if (!Array.isArray(candidate.evidence_refs)) return candidate;
+
+  return {
+    ...candidate,
+    evidence_refs: candidate.evidence_refs.map((ref) =>
+      normalizeEvidenceRefJson(ref),
+    ),
+  };
+}
+
+function normalizeEvidenceRefJson(value: unknown): unknown {
+  if (typeof value === "string") {
+    const match = value.trim().match(/^(.+?):(\d+)(?:\s*[-:]\s*(\d+))?$/);
+    if (!match) {
+      return {
+        file: value,
+        start_line: 1,
+        end_line: 1,
+        note: "Repository evidence",
+      };
+    }
+    const start = Number(match[2]);
+    const end = Number(match[3] ?? match[2]);
+    return {
+      file: match[1],
+      start_line: start,
+      end_line: Math.max(start, end),
+      note: "Repository evidence",
+    };
+  }
+  if (!value || typeof value !== "object") return value;
+  const ref = value as Record<string, unknown>;
+  const lineRange = parseLineRange(ref.lines);
+
+  return {
+    ...ref,
+    file: ref.file ?? ref.path,
+    start_line: ref.start_line ?? lineRange?.start,
+    end_line: ref.end_line ?? lineRange?.end,
+    note: ref.note ?? "Repository evidence",
+  };
+}
+
+function parseLineRange(value: unknown): { start: number; end: number } | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return { start: value, end: value };
+  }
+  if (typeof value !== "string") return null;
+  const match = value.trim().match(/^(\d+)(?:\s*[-:]\s*(\d+))?$/);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2] ?? match[1]);
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start <= 0 || end <= 0) return null;
+  return { start, end: Math.max(start, end) };
 }
 
 /**
@@ -263,6 +323,7 @@ function repairJson(text: string): string {
 
   // 移除控制字符（保留换行和制表符）
   repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+  repaired = escapeRawWhitespaceInStrings(repaired);
 
   // 修复未加引号的键名（简单情况）
   // 例如：{name: "value"} → {"name": "value"}
@@ -272,6 +333,45 @@ function repairJson(text: string): string {
   );
 
   return repaired;
+}
+
+function escapeRawWhitespaceInStrings(text: string): string {
+  let result = "";
+  let inString = false;
+  let escaping = false;
+
+  for (const char of text) {
+    if (escaping) {
+      result += char;
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      result += char;
+      escaping = true;
+      continue;
+    }
+    if (char === '"') {
+      result += char;
+      inString = !inString;
+      continue;
+    }
+    if (inString && char === "\n") {
+      result += "\\n";
+      continue;
+    }
+    if (inString && char === "\r") {
+      result += "\\r";
+      continue;
+    }
+    if (inString && char === "\t") {
+      result += "\\t";
+      continue;
+    }
+    result += char;
+  }
+
+  return result;
 }
 
 function buildRepairPrompt(

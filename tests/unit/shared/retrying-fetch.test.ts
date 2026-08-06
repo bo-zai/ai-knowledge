@@ -7,6 +7,7 @@ import {
   createRetryingFetch,
   DEFAULT_RETRY_MAX_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
+  DEFAULT_PER_ATTEMPT_TIMEOUT_MS,
   PER_ATTEMPT_TIMEOUT_MS,
 } from "../../../src/shared/retrying-fetch.js";
 
@@ -212,10 +213,11 @@ describe("retrying-fetch", () => {
 
       const retryingFetch = createRetryingFetch(undefined, 2);
       const promise = retryingFetch("https://example.com");
+      const assertion = expect(promise).rejects.toThrow("Network error");
 
       await vi.runAllTimersAsync();
 
-      await expect(promise).rejects.toThrow("Network error");
+      await assertion;
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
@@ -332,7 +334,7 @@ describe("retrying-fetch", () => {
     });
 
     it("PER_ATTEMPT_TIMEOUT_MS 默认值正确", () => {
-      expect(PER_ATTEMPT_TIMEOUT_MS).toBe(60000);
+      expect(PER_ATTEMPT_TIMEOUT_MS).toBe(DEFAULT_PER_ATTEMPT_TIMEOUT_MS);
     });
   });
 });

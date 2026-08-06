@@ -9,10 +9,7 @@
 import fs, { access } from "fs/promises";
 import path from "path";
 import type { CallerEvidence } from "./types.js";
-import {
-  withReadOnlyLbug,
-  type ReadOnlyQueryExecutor,
-} from "../engine/lbug/read-only-session.js";
+import type { ReadOnlyQueryExecutor } from "../engine/lbug/read-only-session.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
 
 /**
@@ -29,6 +26,9 @@ export async function resolveCallerEvidence(args: {
   try {
     const { lbugPath } = getStoragePaths(repoPath);
     await access(lbugPath); // Only use graph if DB already exists
+    const { withReadOnlyLbug } = await import(
+      "../engine/lbug/read-only-session.js"
+    );
     return await withReadOnlyLbug(lbugPath, async (query) => {
       const classRows = await query(
         `MATCH (c:Class) WHERE c.name = '${escapeCypherString(mapperClass)}' RETURN count(c) AS cnt`,

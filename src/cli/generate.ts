@@ -36,10 +36,7 @@ import {
   recordFailure,
   type VerifyResult,
 } from "../generation/concept-verifier.js";
-import {
-  buildEvidenceBundlesByPackage,
-  type EvidenceGroup,
-} from "../evidence/type-evidence-builder.js";
+import type { EvidenceGroup } from "../evidence/type-evidence-builder.js";
 import {
   writeKnowledgePackage,
   writeKnowledgeContributionIncremental,
@@ -49,12 +46,10 @@ import { runCapabilityBatchPipeline } from "../knowledge/capability-batch-pipeli
 import { capabilityResultToContribution } from "../knowledge/capability-knowledge-pipeline.js";
 import { buildCapabilityClaimPrompt } from "../generation/capability-claim-generator.js";
 import { parseCapabilityClaimJson } from "../generation/capability-llm-claims-provider.js";
-import { initGraphData } from "../query/prepare-generation.js";
 import {
   cleanupKnowledgeDirs,
   ensureDirectoryStructure,
 } from "../knowledge/init-directory.js";
-import { closeAllLbugResources } from "../engine/lbug/pool-adapter.js";
 import {
   createOpenAiClient,
   generateWithClient,
@@ -78,7 +73,6 @@ import {
   type PromptConfig,
 } from "../generation/prompt-framework.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
-import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
 import { toKebabCase } from "../knowledge/type-directory-map.js";
 import pLimit from "p-limit";
 import {
@@ -123,6 +117,9 @@ async function runConceptFiveLayerGeneration(
 ): Promise<KnowledgePackageContribution[]> {
   const { repoPath, verbose } = input;
   const { lbugPath } = getStoragePaths(repoPath);
+  const { withReadOnlyLbug } = await import(
+    "../engine/lbug/read-only-session.js"
+  );
 
   logger.info("CONCEPT: Starting five-layer generation process");
 
@@ -592,6 +589,9 @@ async function runBoundaryTwoStageGeneration(
 ): Promise<KnowledgePackageContribution[]> {
   const { repoPath, verbose } = input;
   const { lbugPath } = getStoragePaths(repoPath);
+  const { withReadOnlyLbug } = await import(
+    "../engine/lbug/read-only-session.js"
+  );
 
   // 查询配置文件列表
   const configFiles = await withReadOnlyLbug(lbugPath, async (query) => {
@@ -847,6 +847,7 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
   // Initialize graph data (reuse logic from `rkg init` command)
   // See: src/cli/init.ts for standalone graph initialization
+  const { initGraphData } = await import("../query/prepare-generation.js");
   const graphStatus = await initGraphData({
     repoPath,
     forceAnalyze: options.forceAnalyze,
@@ -979,6 +980,10 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
   }
 
   // ========== 构建编排依赖 ==========
+
+  const { buildEvidenceBundlesByPackage } = await import(
+    "../evidence/type-evidence-builder.js"
+  );
 
   // Build deps for orchestration
   const deps: GenerateOrchestrationDeps = {
@@ -1222,6 +1227,9 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
     `ai-knowledge generated at ${path.join(outputRoot, DEFAULT_KNOWLEDGE_DIR)}`,
   );
   closeLogFile();
+  const { closeAllLbugResources } = await import(
+    "../engine/lbug/pool-adapter.js"
+  );
   await closeAllLbugResources();
   process.exit(0);
 }

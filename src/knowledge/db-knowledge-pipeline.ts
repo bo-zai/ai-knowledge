@@ -2,7 +2,6 @@ import type OpenAI from "openai";
 import type { ModelConfig } from "../config/model-config.js";
 import path from "path";
 import { logger } from "../shared/logger.js";
-import { discoverSlices } from "../query/index-service.js";
 import { buildSlicePlan } from "../slicing/build-slice-plan.js";
 import {
   buildRepoEvidenceBundle,
@@ -911,6 +910,7 @@ export async function runDbKnowledgePipeline(
   if (!mockMode && shouldQueryAdditionalSlices(sliceFilter)) {
     try {
       logger.info("Running additional slice discovery...");
+      const { discoverSlices } = await import("../query/index-service.js");
       const discovered = await discoverSlices(repoPath);
       sliceSeeds = {
         routes: discovered.routes.map((r) => `${r.method} ${r.path}`),

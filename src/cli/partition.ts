@@ -5,9 +5,7 @@
  */
 
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
-import { runDomainPartitioning } from "../partitioning/index.js";
 import { logger, setLogLevel } from "../shared/logger.js";
-import { closeAllLbugResources } from "../engine/lbug/pool-adapter.js";
 import type { PartitionConfig } from "../partitioning/types.js";
 
 export interface PartitionCliOptions {
@@ -43,6 +41,7 @@ export async function runPartition(
 
   try {
     // 运行划分
+    const { runDomainPartitioning } = await import("../partitioning/index.js");
     const result = await runDomainPartitioning(config);
 
     // 过滤空分区（用于显示摘要）
@@ -86,11 +85,17 @@ export async function runPartition(
     }
 
     console.log("\n✓ Partition completed successfully");
+    const { closeAllLbugResources } = await import(
+      "../engine/lbug/pool-adapter.js"
+    );
     await closeAllLbugResources();
     process.exit(0);
   } catch (err) {
     logger.error(`Partition failed: ${err}`);
     console.error(`\n✗ Partition failed: ${err}`);
+    const { closeAllLbugResources } = await import(
+      "../engine/lbug/pool-adapter.js"
+    );
     await closeAllLbugResources();
     process.exit(1);
   }

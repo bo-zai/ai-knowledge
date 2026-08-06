@@ -14,6 +14,7 @@ export type NormalizedBusinessSubagentConfig =
 
 const TEMPLATE_DIR_CANDIDATES = [
   path.join(__dirname, "templates", "business-subagents"),
+  path.join(__dirname, "skills", "templates", "business-subagents"),
   path.join(__dirname, "..", "skills", "templates", "business-subagents"),
 ] as const;
 

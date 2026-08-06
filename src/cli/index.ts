@@ -1,6 +1,5 @@
 import { Command } from "commander";
 import { ALL_KNOWLEDGE_TYPES } from "../schemas/knowledge-type.js";
-import { getSupportedAgentIds } from "../skills/index.js";
 
 const program = new Command();
 
@@ -10,7 +9,7 @@ const knowledgeOptions = [
   "phase1",
   "phase2",
 ].join(", ");
-const agentOptions = getSupportedAgentIds().join(", ");
+const agentOptions = "claude-code, codex, devagent, cmbcowork";
 
 program
   .name("rkg")

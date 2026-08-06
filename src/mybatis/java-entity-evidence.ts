@@ -9,7 +9,6 @@
 import fs, { access } from "fs/promises";
 import path from "path";
 import type { ResultMapDef, EntityEvidence } from "./types.js";
-import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
 
 /**
@@ -63,6 +62,9 @@ async function resolveEntityFromGraph(
   try {
     const { lbugPath } = getStoragePaths(repoPath);
     await access(lbugPath); // Only use graph if DB already exists
+    const { withReadOnlyLbug } = await import(
+      "../engine/lbug/read-only-session.js"
+    );
     const graphResult = await withReadOnlyLbug(lbugPath, async (query) => {
       const escapedClass = escapeCypherString(className);
       const classRows = await query(

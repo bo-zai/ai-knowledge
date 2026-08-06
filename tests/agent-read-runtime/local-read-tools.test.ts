@@ -71,8 +71,13 @@ describe("local-read-tools", () => {
     });
 
     it("搜索不存在文本返回无匹配", async () => {
+      const query = [
+        "this-text",
+        "does-not-exist",
+        "xyz123",
+      ].join("-");
       const result = await handlers.searchRepoText({
-        query: "this-text-does-not-exist-xyz123",
+        query,
         limit: 5,
       });
 

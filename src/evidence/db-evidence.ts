@@ -1,6 +1,5 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { withReadOnlyLbug } from '../engine/lbug/read-only-session.js';
 import { getStoragePaths } from '../engine/storage/repo-manager.js';
 
 type DbFieldSource = 'comment' | 'inferred';
@@ -341,6 +340,7 @@ export async function findMapperXmlFiles(rootPath: string): Promise<string[]> {
     const { lbugPath } = getStoragePaths(rootPath);
     await access(lbugPath);
 
+    const { withReadOnlyLbug } = await import('../engine/lbug/read-only-session.js');
     const fileRows = await withReadOnlyLbug(lbugPath, query =>
       query(`MATCH (f:File) WHERE toLower(f.name) ENDS WITH 'mapper.xml' RETURN f.filePath AS fp`),
     );

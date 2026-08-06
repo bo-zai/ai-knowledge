@@ -5,7 +5,6 @@ import type { GenerateTarget } from "../knowledge/generate-scope.js";
 import type { ReadOnlyQueryExecutor } from "../engine/lbug/read-only-session.js";
 import type { LlmClaimsProvider } from "../generation/knowledge-generator.js";
 import { getStoragePaths } from "../engine/storage/repo-manager.js";
-import { withReadOnlyLbug } from "../engine/lbug/read-only-session.js";
 import { logger } from "../shared/logger.js";
 import { buildPlannedEvidenceGroups } from "../knowledge-evidence/index.js";
 
@@ -67,6 +66,9 @@ export async function buildEvidenceBundlesByPackage(
     try {
       logger.info(
         `Opening graph for ${type} evidence: ${lbugPath} (attempt ${attempt})`,
+      );
+      const { withReadOnlyLbug } = await import(
+        "../engine/lbug/read-only-session.js"
       );
       const planned = await withReadOnlyLbug(lbugPath, async (query) => {
         return buildPlannedEvidenceGroups({

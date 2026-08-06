@@ -14,8 +14,43 @@ import { logger } from "../shared/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/** Skill 模板目录（相对于 skills 模块根目录） */
-const TEMPLATE_DIR = path.join(__dirname, "..", "skills", "templates");
+/** Skill 模板目录候选，兼容 src、dist/cli 以及 dist split chunk 布局。 */
+const TEMPLATE_DIR_CANDIDATES = [
+  path.join(__dirname, "templates"),
+  path.join(__dirname, "skills", "templates"),
+  path.join(__dirname, "..", "skills", "templates"),
+] as const;
+
+let resolvedTemplateDir: string | null = null;
+
+async function getTemplateDir(): Promise<string> {
+  if (resolvedTemplateDir) return resolvedTemplateDir;
+
+  for (const templateDir of TEMPLATE_DIR_CANDIDATES) {
+    try {
+      await fs.access(templateDir);
+      resolvedTemplateDir = templateDir;
+      return templateDir;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return TEMPLATE_DIR_CANDIDATES[0];
+}
+
+function getTemplateDirSync(): string {
+  if (resolvedTemplateDir) return resolvedTemplateDir;
+
+  for (const templateDir of TEMPLATE_DIR_CANDIDATES) {
+    if (fsSync.existsSync(templateDir)) {
+      resolvedTemplateDir = templateDir;
+      return templateDir;
+    }
+  }
+
+  return TEMPLATE_DIR_CANDIDATES[0];
+}
 
 /**
  * 加载 skill 模板内容
@@ -24,7 +59,8 @@ const TEMPLATE_DIR = path.join(__dirname, "..", "skills", "templates");
  * @returns skill 内容（SKILL.md 文件内容）
  */
 export async function loadSkillTemplate(skillName: string): Promise<string> {
-  const skillPath = path.join(TEMPLATE_DIR, skillName, "SKILL.md");
+  const templateDir = await getTemplateDir();
+  const skillPath = path.join(templateDir, skillName, "SKILL.md");
 
   try {
     const content = await fs.readFile(skillPath, "utf-8");
@@ -41,7 +77,8 @@ export async function loadSkillTemplate(skillName: string): Promise<string> {
  * 注意：使用 fsSync.readFileSync 而不是 require
  */
 export function loadSkillTemplateSync(skillName: string): string {
-  const skillPath = path.join(TEMPLATE_DIR, skillName, "SKILL.md");
+  const templateDir = getTemplateDirSync();
+  const skillPath = path.join(templateDir, skillName, "SKILL.md");
 
   try {
     const content = fsSync.readFileSync(skillPath, "utf-8");
@@ -57,7 +94,8 @@ export function loadSkillTemplateSync(skillName: string): string {
  */
 export async function getAvailableSkillTemplates(): Promise<string[]> {
   try {
-    const entries = await fs.readdir(TEMPLATE_DIR, { withFileTypes: true });
+    const templateDir = await getTemplateDir();
+    const entries = await fs.readdir(templateDir, { withFileTypes: true });
     return entries.filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     // 目录不存在或读取失败
