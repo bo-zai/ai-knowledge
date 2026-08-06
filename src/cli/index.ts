@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { ALL_KNOWLEDGE_TYPES } from "../schemas/knowledge-type.js";
+import { buildRoleKnowledgeCommand } from "./role-knowledge.js";
 
 const program = new Command();
 
@@ -18,6 +19,7 @@ program
   .helpOption("-h, --help", "display help for command");
 
 program
+  .addCommand(buildRoleKnowledgeCommand())
   .command("init [path]")
   .description(
     "Initialize graph data (run embedded analysis). If no path specified, uses current directory.",

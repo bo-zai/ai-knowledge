@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { RoleKnowledgeRef } from "../role-knowledge/types.js";
 
 export interface DomainCapabilityRef {
   capabilityId: string;
@@ -15,11 +16,18 @@ export interface DomainConceptRef {
   summaryZh?: string;
 }
 
+export interface DomainRoleKnowledgeRefs {
+  pm?: RoleKnowledgeRef;
+  techLead?: RoleKnowledgeRef;
+  qa?: RoleKnowledgeRef;
+}
+
 export interface DomainRegistryEntry {
   domainKey: string;
   domainName: string;
   concept?: DomainConceptRef;
   capabilityRefs: DomainCapabilityRef[];
+  roleKnowledgeRefs?: DomainRoleKnowledgeRefs;
 }
 
 export interface DomainRegistry {
@@ -85,6 +93,10 @@ function uniqueCapabilities(
     }
   }
   return [...grouped.values()];
+}
+
+function normalizeRoleKey(role: keyof DomainRoleKnowledgeRefs): string {
+  return role === "techLead" ? "tech-lead" : role;
 }
 
 function splitDomainTerms(value: string): string[] {
@@ -236,6 +248,45 @@ export function upsertCapabilityDomain(
       summaryZh: capability.summaryZh,
     },
   ]);
+  return entry;
+}
+
+export function upsertRoleKnowledgeRef(
+  registry: DomainRegistry,
+  input: {
+    domainKey?: string;
+    domainName: string;
+    role: keyof DomainRoleKnowledgeRefs;
+    indexPath: string;
+    generatedAt: string;
+    status: RoleKnowledgeRef["status"];
+    confidence?: RoleKnowledgeRef["confidence"];
+    summary?: string;
+  },
+): DomainRegistryEntry {
+  const domainKey = deriveDomainKey({
+    domainKey: input.domainKey,
+    domainName: input.domainName,
+  });
+  let entry = registry.domains.find((item) => item.domainKey === domainKey);
+  if (!entry) {
+    entry = {
+      domainKey,
+      domainName: input.domainName ?? domainKey,
+      capabilityRefs: [],
+    };
+    registry.domains.push(entry);
+  }
+
+  entry.roleKnowledgeRefs ??= {};
+  const roleKey = input.role;
+  entry.roleKnowledgeRefs[roleKey] = {
+    indexPath: input.indexPath,
+    generatedAt: input.generatedAt,
+    status: input.status,
+    confidence: input.confidence,
+    summary: input.summary,
+  };
   return entry;
 }
 

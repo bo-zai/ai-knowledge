@@ -93,6 +93,12 @@ export interface PackageLayout {
   reportsDir: string; // {packageRoot}/.internal/reports (生成报告)
 }
 
+export interface RoleKnowledgeLayout {
+  roleRoot: string;
+  roleDirs: Record<"pm" | "tech-lead" | "qa" | "_review", string>;
+  internalRoleKnowledgeDir: string;
+}
+
 /**
  * 判断是否为全量生成（需要删除整个知识库）
  *
@@ -261,6 +267,42 @@ export async function ensureDirectoryStructure(
     indexMdPath,
     knowledgeDirs,
     reportsDir,
+  };
+}
+
+export async function ensureRoleKnowledgeStructure(
+  packageRoot: string,
+): Promise<RoleKnowledgeLayout> {
+  if (path.basename(packageRoot) !== DEFAULT_KNOWLEDGE_DIR) {
+    throw new Error(
+      `Refusing to initialize invalid package root: ${packageRoot} (basename must be '${DEFAULT_KNOWLEDGE_DIR}')`,
+    );
+  }
+
+  const roleRoot = path.join(packageRoot, "roles");
+  const roleDirs = {
+    pm: path.join(roleRoot, "pm"),
+    "tech-lead": path.join(roleRoot, "tech-lead"),
+    qa: path.join(roleRoot, "qa"),
+    _review: path.join(roleRoot, "_review"),
+  } as const;
+
+  await fs.mkdir(roleRoot, { recursive: true });
+  for (const dir of Object.values(roleDirs)) {
+    await fs.mkdir(dir, { recursive: true });
+  }
+
+  const internalRoleKnowledgeDir = path.join(
+    packageRoot,
+    ".internal",
+    "role-knowledge",
+  );
+  await fs.mkdir(internalRoleKnowledgeDir, { recursive: true });
+
+  return {
+    roleRoot,
+    roleDirs,
+    internalRoleKnowledgeDir,
   };
 }
 
