@@ -71,6 +71,36 @@ describe("init-skills business subagents", () => {
       await fs.rm(repo, { recursive: true, force: true });
     }
   });
+
+  it("updates CLAUDE.md on a rerun when business subagent files already exist", async () => {
+    const repo = await createTempRepo();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      await runInitSkills({
+        repo,
+        agents: "claude-code",
+        businessDomain: "order",
+        businessDomainName: "订单",
+        updateAgentsMd: false,
+      });
+
+      await expect(fileExists(repo, "CLAUDE.md")).resolves.toBe(false);
+
+      await runInitSkills({
+        repo,
+        agents: "claude-code",
+        businessDomain: "order",
+        businessDomainName: "订单",
+      });
+
+      const claudeMd = await fs.readFile(path.join(repo, "CLAUDE.md"), "utf-8");
+      expect(claudeMd).toContain("业务域 Agent 协作规则：订单（order）");
+    } finally {
+      logSpy.mockRestore();
+      await fs.rm(repo, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("isKnownNativeModuleBlocker", () => {

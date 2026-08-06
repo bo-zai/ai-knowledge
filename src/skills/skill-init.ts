@@ -77,6 +77,18 @@ export async function initializeSkills(
         files: [],
         success: true,
       });
+
+      if (config.updateAgentsMd && agent.generateAgentsMd) {
+        const agentsMdContent = await agent.generateAgentsMd(
+          config.repoPath,
+          config,
+        );
+        if (agentsMdContent) {
+          logger.info(`${agent.name}: AGENTS.md updated`);
+          agentsMdUpdated = true;
+        }
+      }
+
       continue;
     }
 
