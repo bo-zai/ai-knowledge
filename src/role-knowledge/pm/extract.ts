@@ -1,14 +1,17 @@
 import type { DocumentChunk } from "../chunking.js";
 import type { RoleClaim } from "../types.js";
 
-export function extractPmClaims(chunks: DocumentChunk[]): RoleClaim[] {
+export function extractPmClaims(
+  chunks: DocumentChunk[],
+  domain?: { domainKey: string; domainName: string },
+): RoleClaim[] {
   const now = new Date().toISOString();
   return chunks.map((chunk, index) => ({
     id: `${chunk.id}-pm-${String(index + 1).padStart(3, "0")}`,
     role: "pm",
     domain: {
-      domainKey: chunk.domain_candidates[0]?.domainKey ?? "unknown",
-      domainName: chunk.domain_candidates[0]?.domainKey ?? "unknown",
+      domainKey: domain?.domainKey ?? chunk.domain_candidates[0]?.domainKey ?? "unknown",
+      domainName: domain?.domainName ?? chunk.domain_candidates[0]?.domainKey ?? "unknown",
       tags: [],
     },
     claim: chunk.text.trim(),

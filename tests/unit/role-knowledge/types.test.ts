@@ -11,6 +11,7 @@ import type {
 import {
   roleClaimSchema,
   roleIndexSchema,
+  roleReadProtocolSchema,
   type RoleClaimInput,
   type RoleIndexInput,
 } from "../../../src/role-knowledge/schemas.js";
@@ -69,7 +70,7 @@ const claim: RoleClaim = {
 describe("role knowledge foundational types", () => {
   it("exports stable role, status, confidence, and ref unions", () => {
     expectTypeOf<Role>().toEqualTypeOf<
-      "pm" | "tech-lead" | "qa" | "review"
+      "pm" | "tech-lead" | "qa"
     >();
     expectTypeOf<RoleKnowledgeStatus>().toEqualTypeOf<
       "draft" | "validated" | "rejected" | "stale"
@@ -79,6 +80,37 @@ describe("role knowledge foundational types", () => {
       indexPath?: string;
       generatedAt?: string;
     }>();
+  });
+
+  it("parses the on-disk role read protocol index", () => {
+    const parsed = roleReadProtocolSchema.parse({
+      schema_version: 1,
+      domain: "checkout",
+      domain_name: "Checkout",
+      role: "pm",
+      status: "generated",
+      generated_at: "2026-08-06T00:00:00.000Z",
+      confidence: "high",
+      base_knowledge_refs: ["capabilities/checkout.md"],
+      read_profiles: {
+        default: ["current/overview.md"],
+        trace: ["evolution/timeline.md"],
+        evidence: ["evidence/claims.jsonl"],
+        review: ["review/open-questions.md"],
+      },
+      warnings: [],
+      role_index: {
+        schemaVersion: "role-knowledge/v1",
+        role: "pm",
+        status: "validated",
+        domain,
+        claims: [claim],
+        generatedAt: "2026-08-06T00:00:00.000Z",
+        updatedAt: "2026-08-06T00:00:00.000Z",
+      },
+    });
+
+    expect(parsed.role_index.claims[0].domain.domainKey).toBe("checkout");
   });
 
   it("parses a role claim with source, knowledge, role, and validation refs", () => {

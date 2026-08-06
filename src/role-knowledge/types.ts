@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const RoleSchema = z.enum(["pm", "tech-lead", "qa", "review"]);
+export const RoleSchema = z.enum(["pm", "tech-lead", "qa"]);
 export type Role = z.infer<typeof RoleSchema>;
 
 export const RoleKnowledgeStatusSchema = z.enum([
@@ -105,3 +105,23 @@ export const RoleIndexSchema = z.object({
   updatedAt: z.string().min(1),
 });
 export type RoleIndex = z.infer<typeof RoleIndexSchema>;
+
+export const RoleReadProtocolSchema = z.object({
+  schema_version: z.literal(1),
+  domain: z.string().min(1),
+  domain_name: z.string().min(1),
+  role: RoleSchema,
+  status: z.enum(["generated", "partial", "needs_review", "blocked"]),
+  generated_at: z.string().min(1),
+  confidence: ConfidenceSchema,
+  base_knowledge_refs: z.array(z.string()).default([]),
+  read_profiles: z.object({
+    default: z.array(z.string()),
+    trace: z.array(z.string()),
+    evidence: z.array(z.string()),
+    review: z.array(z.string()),
+  }),
+  warnings: z.array(z.string()).default([]),
+  role_index: RoleIndexSchema,
+});
+export type RoleReadProtocol = z.infer<typeof RoleReadProtocolSchema>;

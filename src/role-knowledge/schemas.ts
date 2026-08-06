@@ -6,6 +6,7 @@ import {
   KnowledgeObjectRefSchema,
   RoleClaimSchema,
   RoleIndexSchema,
+  RoleReadProtocolSchema,
   RoleKnowledgeRefSchema,
   RoleKnowledgeStatusSchema,
   RoleSchema,
@@ -15,6 +16,7 @@ import {
 
 export const roleClaimSchema = RoleClaimSchema;
 export const roleIndexSchema = RoleIndexSchema;
+export const roleReadProtocolSchema = RoleReadProtocolSchema;
 
 export {
   ClaimRelationSchema,
@@ -23,6 +25,7 @@ export {
   KnowledgeObjectRefSchema,
   RoleKnowledgeRefSchema,
   RoleKnowledgeStatusSchema,
+  RoleReadProtocolSchema,
   RoleSchema,
   RoleValidationSchema,
   SourceRefSchema,
@@ -30,3 +33,4 @@ export {
 
 export type RoleClaimInput = z.infer<typeof roleClaimSchema>;
 export type RoleIndexInput = z.infer<typeof roleIndexSchema>;
+export type RoleReadProtocolInput = z.infer<typeof roleReadProtocolSchema>;

@@ -50,7 +50,7 @@ export async function discoverDomains(input: {
     );
 
   const knowledgeRefDomains = input.knowledgeObjects
-    .map((item) => item.path.split("/")[1] ?? "unknown")
+    .map((item) => inferDomainKeyFromKnowledgePath(item.path))
     .filter((domain) => domain && domain !== "unknown");
   const enriched = [...new Set(knowledgeRefDomains)]
     .filter((domainKey) => !input.registry.domains.some((domain) => domain.domainKey === domainKey))
@@ -68,4 +68,10 @@ export async function discoverDomains(input: {
     candidates,
     ignored: [],
   };
+}
+
+function inferDomainKeyFromKnowledgePath(refPath: string): string {
+  const file = refPath.replace(/\\/g, "/").split("/").pop() ?? "";
+  const base = file.replace(/\.[^.]+$/, "");
+  return base.split("-")[0] || "unknown";
 }

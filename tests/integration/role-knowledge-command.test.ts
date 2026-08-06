@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { execa } from "execa";
 import { describe, expect, it } from "vitest";
+import { roleReadProtocolSchema } from "../../src/role-knowledge/schemas.js";
 
 describe("role knowledge command", () => {
   it("generates pm role knowledge from an existing domain registry", async () => {
@@ -39,6 +40,7 @@ describe("role knowledge command", () => {
       join(repo, "ai-knowledge", "roles", "pm", "domains", "order", "index.json"),
       "utf-8",
     );
+    const parsedIndex = roleReadProtocolSchema.parse(JSON.parse(index));
     const registry = await readFile(
       join(repo, "ai-knowledge", ".internal", "domain-registry.json"),
       "utf-8",
@@ -47,6 +49,36 @@ describe("role knowledge command", () => {
     expect(result.stdout).toContain("order pm generated");
     expect(index).toContain("read_profiles");
     expect(index).toContain('"status": "generated"');
+    expect(index).toContain('"domainKey": "order"');
+    expect(parsedIndex.role_index.claims[0].domain.domainKey).toBe("order");
     expect(registry).toContain("roleKnowledgeRefs");
+  });
+
+  it("generates partial role knowledge from existing capability objects without registry", async () => {
+    const repo = await mkdtemp(join(tmpdir(), "role-knowledge-enriched-"));
+    const capabilities = join(repo, "ai-knowledge", "capabilities");
+    await mkdir(capabilities, { recursive: true });
+    await writeFile(
+      join(capabilities, "order-cancel.md"),
+      "# 订单取消\n",
+      "utf-8",
+    );
+
+    const result = await execa("node", [
+      "dist/cli/index.js",
+      "role-knowledge",
+      "generate",
+      "--repo",
+      repo,
+      "--role",
+      "pm",
+    ]);
+    const index = await readFile(
+      join(repo, "ai-knowledge", "roles", "pm", "domains", "order", "index.json"),
+      "utf-8",
+    );
+
+    expect(result.stdout).toContain("order pm partial");
+    expect(roleReadProtocolSchema.parse(JSON.parse(index)).status).toBe("partial");
   });
 });
