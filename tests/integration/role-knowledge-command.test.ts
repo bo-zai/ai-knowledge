@@ -46,6 +46,7 @@ describe("role knowledge command", () => {
 
     expect(result.stdout).toContain("order pm generated");
     expect(index).toContain("read_profiles");
+    expect(index).toContain('"status": "generated"');
     expect(registry).toContain("roleKnowledgeRefs");
   });
 });
