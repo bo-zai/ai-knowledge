@@ -53,6 +53,15 @@ function parseCommaList(value: string | undefined): string[] {
     : [];
 }
 
+function hasBusinessSubagentOptions(options: InitSkillsOptions): boolean {
+  return Boolean(
+    options.businessDomain ||
+      options.businessDomainName ||
+      options.businessDomainAliases ||
+      options.businessDomainPaths,
+  );
+}
+
 /**
  * 运行 init-skills 命令
  */
@@ -81,7 +90,7 @@ export async function runInitSkills(options: InitSkillsOptions): Promise<void> {
   }
 
   const businessSubagents =
-    options.businessDomain || options.businessDomainName
+    hasBusinessSubagentOptions(options)
       ? [
           {
             domain: options.businessDomain ?? "",
