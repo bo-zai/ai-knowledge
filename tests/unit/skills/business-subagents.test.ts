@@ -53,10 +53,19 @@ describe("business subagent rendering", () => {
     ]);
     expect(files[0]?.content).toContain("name: order-service-pm");
     expect(files[0]?.content).toContain("你是 订单 的 PM agent。");
+    expect(files[0]?.content).toContain(
+      "ai-knowledge/roles/pm/domains/order-service/index.json",
+    );
     expect(files[0]?.content).not.toContain("mcp__business_knowledge");
     expect(files[1]?.content).toContain("role: tech");
+    expect(files[1]?.content).toContain(
+      "ai-knowledge/roles/tech-lead/domains/order-service/index.json",
+    );
     expect(files[1]?.content).not.toContain("mcp__business_knowledge");
     expect(files[2]?.content).toContain("role: qa");
+    expect(files[2]?.content).toContain(
+      "ai-knowledge/roles/qa/domains/order-service/index.json",
+    );
     expect(files[2]?.content).not.toContain("mcp__business_knowledge");
   });
 

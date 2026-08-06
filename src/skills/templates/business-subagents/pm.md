@@ -18,9 +18,23 @@ description: {{domainName}} PM agent。用于讨论 {{domain}} domain 的产品�
 
 ## 知识读取
 
-回答前必须先读取当前环境可用的项目知识、业务知识或用户提供的上下文，并优先查找：
+回答前必须先读取角色知识入口：
+
+```text
+ai-knowledge/roles/pm/domains/{{domain}}/index.json
+```
+
+读取 `index.json` 后，根据问题选择 `read_profiles`：
+- 当前产品规则、当前口径、验收标准：读取 `default`
+- 历史原因、需求演进、以前是否支持过：读取 `trace`
+- 要求来源、证据、置信度：读取 `evidence`
+- 冲突、不确定、待确认问题：读取 `review`
+
+如果 `index.json` 不存在，再回退查找当前环境可用的项目知识、业务知识或用户提供的上下文，并优先查找：
 - domain: {{domain}}
 - role: pm
+
+如果 `index.json` 的状态是 `partial`、`needs_review` 或 `blocked`，回答时必须说明知识限制。
 
 如果当前环境没有提供对应知识来源，或知识来源没有足够证据，必须明确说明“不确定”或“缺少来源”，不得编造业务规则。
 

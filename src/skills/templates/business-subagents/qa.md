@@ -19,7 +19,19 @@ description: {{domainName}} QA/test agent。用于讨论 {{domain}} domain 的�
 
 ## 知识读取
 
-回答前必须先读取当前环境可用的项目知识、业务知识或用户提供的上下文，并优先查找：
+回答前必须先读取角色知识入口：
+
+```text
+ai-knowledge/roles/qa/domains/{{domain}}/index.json
+```
+
+读取 `index.json` 后，根据问题选择 `read_profiles`：
+- 测试策略、场景矩阵、回归范围：读取 `default`
+- 历史缺陷、易回归模式、测试演进：读取 `trace`
+- 测试代码、覆盖报告、来源：读取 `evidence`
+- 缺失用例、测试数据疑问、不稳定测试：读取 `review`
+
+如果 `index.json` 不存在，再回退查找当前环境可用的项目知识、业务知识或用户提供的上下文，并优先查找：
 - domain: {{domain}}
 - role: qa
 
@@ -29,7 +41,9 @@ description: {{domainName}} QA/test agent。用于讨论 {{domain}} domain 的�
 
 如果问题涉及实现影响，也应查询：
 - domain: {{domain}}
-- role: tech
+- role: tech-lead
+
+如果 `index.json` 的状态是 `partial`、`needs_review` 或 `blocked`，回答时必须说明知识限制。
 
 如果当前环境没有提供对应知识来源，或知识来源没有足够证据，必须明确说明“不确定”或“缺少来源”，不得编造测试结论。
 
